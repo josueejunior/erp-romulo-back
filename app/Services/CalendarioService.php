@@ -15,8 +15,9 @@ class CalendarioService
      */
     public function getCalendarioDisputas(?Carbon $dataInicio = null, ?Carbon $dataFim = null): Collection
     {
+        // Se não especificado, buscar disputas dos próximos 60 dias
         $dataInicio = $dataInicio ?? Carbon::now();
-        $dataFim = $dataFim ?? Carbon::now()->addDays(30);
+        $dataFim = $dataFim ?? Carbon::now()->addDays(60);
 
         $processos = Processo::where('status', 'participacao')
             ->whereBetween('data_hora_sessao_publica', [$dataInicio, $dataFim])
@@ -39,9 +40,9 @@ class CalendarioService
                 'identificador' => $processo->identificador,
                 'modalidade' => $processo->modalidade,
                 'numero_modalidade' => $processo->numero_modalidade,
-                'orgao' => $processo->orgao->razao_social,
-                'uasg' => $processo->orgao->uasg,
-                'setor' => $processo->setor->nome,
+                'orgao' => $processo->orgao ? $processo->orgao->razao_social : null,
+                'uasg' => $processo->orgao ? $processo->orgao->uasg : null,
+                'setor' => $processo->setor ? $processo->setor->nome : null,
                 'data_hora_sessao' => $processo->data_hora_sessao_publica,
                 'horario_sessao' => $processo->horario_sessao_publica,
                 'objeto_resumido' => $processo->objeto_resumido,
