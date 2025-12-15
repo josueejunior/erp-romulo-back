@@ -15,6 +15,10 @@ class OrgaoResource extends JsonResource
             'razao_social' => $this->razao_social,
             'cnpj' => $this->cnpj,
             'email' => $this->email,
+            'telefone' => $this->telefone,
+            'endereco' => $this->endereco,
+            'observacoes' => $this->observacoes,
+            'setors' => $this->whenLoaded('setors'),
         ];
     }
 }

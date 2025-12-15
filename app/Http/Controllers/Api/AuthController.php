@@ -143,7 +143,7 @@ class AuthController extends Controller
      */
     private function findTenantByUserEmail(string $email): ?Tenant
     {
-        $tenants = Tenant::all();
+        $tenants = Tenant::where('status', 'ativa')->get();
         $foundTenant = null;
 
         foreach ($tenants as $tenant) {
@@ -153,7 +153,14 @@ class AuthController extends Controller
                     tenancy()->end();
                 }
 
-                tenancy()->initialize($tenant);
+                // Verificar se o banco do tenant existe antes de tentar inicializar
+                try {
+                    tenancy()->initialize($tenant);
+                } catch (\Exception $e) {
+                    // Se não conseguir inicializar (banco não existe), pular este tenant
+                    \Log::warning("Erro ao inicializar tenant {$tenant->id}: " . $e->getMessage());
+                    continue;
+                }
                 
                 $user = User::where('email', $email)->first();
                 
@@ -163,15 +170,20 @@ class AuthController extends Controller
                     tenancy()->end();
                     break;
                 }
+                
+                // Finalizar após verificar este tenant
+                tenancy()->end();
             } catch (\Exception $e) {
-                // Se houver erro ao inicializar o tenant, continuar para o próximo
+                // Se houver erro, registrar e continuar para o próximo tenant
+                \Log::warning("Erro ao buscar usuário no tenant {$tenant->id}: " . $e->getMessage());
+                
+                // Garantir que o tenancy está finalizado
                 if (tenancy()->initialized) {
-                    tenancy()->end();
-                }
-            } finally {
-                // Garantir que o tenancy está finalizado se não encontrou
-                if (!$foundTenant && tenancy()->initialized) {
-                    tenancy()->end();
+                    try {
+                        tenancy()->end();
+                    } catch (\Exception $endException) {
+                        // Ignorar erro ao finalizar
+                    }
                 }
             }
         }

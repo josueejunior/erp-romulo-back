@@ -11,9 +11,12 @@ class SetorResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'orgao_id' => $this->orgao_id,
             'nome' => $this->nome,
             'email' => $this->email,
             'telefone' => $this->telefone,
+            'observacoes' => $this->observacoes,
+            'orgao' => $this->whenLoaded('orgao'),
         ];
     }
 }

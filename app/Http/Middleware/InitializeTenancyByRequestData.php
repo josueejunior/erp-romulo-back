@@ -15,10 +15,16 @@ class InitializeTenancyByRequestData extends IdentificationMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
+        // Verificar se já há tenancy inicializado
+        if (tenancy()->initialized) {
+            return $next($request);
+        }
+
         // Verificar se há tenant_id no header ou no request
         $tenantId = $request->header('X-Tenant-ID') 
             ?? $request->input('tenant_id')
-            ?? $request->bearerToken() ? $this->getTenantIdFromToken($request) : null;
+            ?? $this->getTenantIdFromToken($request)
+            ?? $this->getTenantIdFromUser($request);
 
         if (!$tenantId) {
             return response()->json([
@@ -46,13 +52,29 @@ class InitializeTenancyByRequestData extends IdentificationMiddleware
     {
         // Tentar extrair do token Sanctum
         $user = $request->user();
-        if ($user && $request->user()->currentAccessToken()) {
+        if ($user && method_exists($user, 'currentAccessToken') && $user->currentAccessToken()) {
             // Verificar se há tenant_id nos abilities do token
-            $abilities = $request->user()->currentAccessToken()->abilities;
+            $abilities = $user->currentAccessToken()->abilities;
             if (isset($abilities['tenant_id'])) {
                 return $abilities['tenant_id'];
             }
         }
+        return null;
+    }
+
+    /**
+     * Tentar obter tenant_id do usuário autenticado através de sessão ou cookies
+     */
+    protected function getTenantIdFromUser(Request $request): ?string
+    {
+        // Se o usuário está autenticado, buscar o tenant pela sessão
+        // Isso é um fallback caso o header não esteja presente
+        if ($request->user()) {
+            // Tentar buscar o tenant_id da sessão ou cookie se disponível
+            return $request->session()->get('tenant_id') 
+                ?? $request->cookie('tenant_id');
+        }
+        
         return null;
     }
 }

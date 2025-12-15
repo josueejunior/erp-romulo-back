@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\AutorizacaoFornecimentoController as ApiAutorizacao
 use App\Http\Controllers\Api\EmpenhoController as ApiEmpenhoController;
 use App\Http\Controllers\Api\NotaFiscalController as ApiNotaFiscalController;
 use App\Http\Controllers\Api\OrgaoController as ApiOrgaoController;
+use App\Http\Controllers\Api\SetorController as ApiSetorController;
 use App\Http\Controllers\Api\FornecedorController as ApiFornecedorController;
 use App\Http\Controllers\Api\DocumentoHabilitacaoController as ApiDocumentoHabilitacaoController;
 use App\Http\Controllers\Api\DashboardController as ApiDashboardController;
@@ -31,10 +32,11 @@ use App\Http\Controllers\Api\CalendarioDisputasController as ApiCalendarioDisput
 |
 */
 
-// Rotas públicas (central)
+// Rotas públicas (central) - Gerenciamento de Tenants/Empresas
 Route::post('/tenants', [\App\Http\Controllers\Api\TenantController::class, 'store']);
 Route::get('/tenants', [\App\Http\Controllers\Api\TenantController::class, 'index']);
 Route::get('/tenants/{tenant}', [\App\Http\Controllers\Api\TenantController::class, 'show']);
+Route::put('/tenants/{tenant}', [\App\Http\Controllers\Api\TenantController::class, 'update']);
 
 // Rotas públicas (autenticação)
 Route::post('/auth/login', [AuthController::class, 'login']);
@@ -89,8 +91,13 @@ Route::middleware(['auth:sanctum', 'tenancy'])->group(function () {
     
     // Cadastros
     Route::apiResource('orgaos', ApiOrgaoController::class);
+    Route::apiResource('setors', ApiSetorController::class);
     Route::apiResource('fornecedores', ApiFornecedorController::class);
     Route::apiResource('documentos-habilitacao', ApiDocumentoHabilitacaoController::class);
+    
+    // Debug/Correção de roles
+    Route::get('/user/roles', [\App\Http\Controllers\Api\FixUserRolesController::class, 'getCurrentUserRoles']);
+    Route::post('/user/fix-role', [\App\Http\Controllers\Api\FixUserRolesController::class, 'fixCurrentUserRole']);
     
     // Relatórios
     Route::get('/relatorios/financeiro', [ApiRelatorioFinanceiroController::class, 'index']);

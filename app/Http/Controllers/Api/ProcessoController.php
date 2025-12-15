@@ -42,9 +42,20 @@ class ProcessoController extends Controller
     {
         // Verificar permissão
         if (!PermissionHelper::canCreateProcess()) {
-            return response()->json([
-                'message' => 'Você não tem permissão para criar processos.'
-            ], 403);
+            $user = \Illuminate\Support\Facades\Auth::user();
+            $roles = $user ? $user->getRoleNames()->toArray() : [];
+            
+            // Limpar cache de permissões e tentar novamente
+            app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+            
+            if (!PermissionHelper::canCreateProcess()) {
+                return response()->json([
+                    'message' => 'Você não tem permissão para criar processos. É necessário ter a role "Administrador" ou "Operacional".',
+                    'user_roles' => $roles,
+                    'user_email' => $user ? $user->email : null,
+                    'help' => 'Use POST /api/user/fix-role com {"role": "Administrador"} para corrigir'
+                ], 403);
+            }
         }
 
         $validated = $request->validate([
