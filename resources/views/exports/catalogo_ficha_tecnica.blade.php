@@ -33,6 +33,9 @@
     <div>
         <h2>Especificações Técnicas dos Itens</h2>
         @foreach($itens as $item)
+        @php
+            $orcamentoEscolhido = $item->orcamentos->firstWhere('fornecedor_escolhido', true);
+        @endphp
         <div class="item">
             <div class="item-header">
                 Item {{ $item->numero_item }} - {{ $item->especificacao_tecnica }}
@@ -44,12 +47,12 @@
                 <p><strong>Marca/Modelo de Referência:</strong> {{ $item->marca_modelo_referencia }}</p>
                 @endif
 
-                @if($item->orcamentoEscolhido && $item->orcamentoEscolhido->marca_modelo)
-                <p><strong>Marca/Modelo Oferecido:</strong> {{ $item->orcamentoEscolhido->marca_modelo }}</p>
+                @if($orcamentoEscolhido && $orcamentoEscolhido->marca_modelo)
+                <p><strong>Marca/Modelo Oferecido:</strong> {{ $orcamentoEscolhido->marca_modelo }}</p>
                 @endif
 
-                @if($item->orcamentoEscolhido && $item->orcamentoEscolhido->ajustes_especificacao)
-                <p><strong>Ajustes na Especificação:</strong> {{ $item->orcamentoEscolhido->ajustes_especificacao }}</p>
+                @if($orcamentoEscolhido && $orcamentoEscolhido->ajustes_especificacao)
+                <p><strong>Ajustes na Especificação:</strong> {{ $orcamentoEscolhido->ajustes_especificacao }}</p>
                 @endif
 
                 <p><strong>Especificação Técnica Completa:</strong></p>

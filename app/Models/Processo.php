@@ -161,7 +161,14 @@ class Processo extends Model
      */
     public function getNomeEmpresaAttribute(): string
     {
-        $tenant = \Stancl\Tenancy\Facades\Tenancy::tenant();
-        return $tenant ? $tenant->razao_social : 'Empresa não identificada';
+        try {
+            if (tenancy()->initialized) {
+                $tenant = tenant();
+                return $tenant ? ($tenant->razao_social ?? 'Empresa não identificada') : 'Empresa não identificada';
+            }
+        } catch (\Exception $e) {
+            // Se houver erro ao obter tenant, retornar valor padrão
+        }
+        return 'Empresa não identificada';
     }
 }

@@ -21,8 +21,7 @@ class ExportacaoService
                 $query->orderBy('numero_item');
             },
             'itens.orcamentos' => function ($query) {
-                $query->where('fornecedor_escolhido', true)
-                    ->with(['fornecedor', 'formacaoPreco']);
+                $query->with(['fornecedor', 'formacaoPreco']);
             }
         ]);
 
@@ -52,8 +51,7 @@ class ExportacaoService
                 $query->orderBy('numero_item');
             },
             'itens.orcamentos' => function ($query) {
-                $query->where('fornecedor_escolhido', true)
-                    ->with(['fornecedor', 'formacaoPreco']);
+                $query->with(['fornecedor', 'formacaoPreco']);
             }
         ]);
 

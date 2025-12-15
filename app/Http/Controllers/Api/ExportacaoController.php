@@ -21,10 +21,11 @@ class ExportacaoController extends Controller
      */
     public function propostaComercial(Processo $processo)
     {
-        // Permitir exportação em participação e julgamento
-        if (!in_array($processo->status, ['participacao', 'julgamento_habilitacao'])) {
+        // Permitir exportação em qualquer status, exceto arquivado/perdido
+        // Conforme especificação: pode ser gerada na fase de participação e julgamento
+        if (in_array($processo->status, ['arquivado', 'perdido'])) {
             return response()->json([
-                'message' => 'Apenas processos em participação ou julgamento podem ter proposta comercial exportada.'
+                'message' => 'Não é possível exportar proposta comercial para processos arquivados ou perdidos.'
             ], 403);
         }
 
@@ -41,10 +42,11 @@ class ExportacaoController extends Controller
      */
     public function catalogoFichaTecnica(Processo $processo)
     {
-        // Permitir exportação em participação e julgamento
-        if (!in_array($processo->status, ['participacao', 'julgamento_habilitacao'])) {
+        // Permitir exportação em qualquer status, exceto arquivado/perdido
+        // Conforme especificação: pode ser gerada na fase de participação e julgamento
+        if (in_array($processo->status, ['arquivado', 'perdido'])) {
             return response()->json([
-                'message' => 'Apenas processos em participação ou julgamento podem ter catálogo exportado.'
+                'message' => 'Não é possível exportar catálogo/ficha técnica para processos arquivados ou perdidos.'
             ], 403);
         }
 
