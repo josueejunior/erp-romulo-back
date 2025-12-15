@@ -14,6 +14,9 @@ class DocumentoHabilitacaoController extends Controller
     {
         $query = DocumentoHabilitacao::query();
 
+        // Filtrar apenas documentos não deletados (soft deletes)
+        // O campo 'ativo' não existe na migration, então usamos apenas soft deletes
+
         if ($request->search) {
             $query->where(function($q) use ($request) {
                 $q->where('tipo', 'like', "%{$request->search}%")
@@ -25,6 +28,12 @@ class DocumentoHabilitacaoController extends Controller
             $query->whereNotNull('data_validade')
                   ->where('data_validade', '>=', now())
                   ->where('data_validade', '<=', now()->addDays(30));
+        }
+
+        // Se não for paginação, retornar todos
+        if ($request->boolean('todos')) {
+            $documentos = $query->orderBy('tipo', 'asc')->get();
+            return response()->json($documentos);
         }
 
         $documentos = $query->orderBy('data_validade', 'asc')->paginate(15);

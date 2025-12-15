@@ -37,6 +37,10 @@ php artisan cache:clear || true
 php artisan route:clear || true
 php artisan view:clear || true
 
+# IMPORTANTE: Limpar cache de rotas após qualquer mudança nas rotas
+echo "🔄 Atualizando cache de rotas..."
+php artisan route:cache || php artisan route:clear || true
+
 # Gerar chave da aplicação se não existir
 if [ ! -f .env ]; then
     echo "📝 Criando arquivo .env..."

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Carbon\Carbon;
 
@@ -60,6 +61,11 @@ class DocumentoHabilitacao extends Model
         }
         $data = Carbon::parse($this->data_validade);
         return Carbon::now()->diffInDays($data, false);
+    }
+
+    public function processoDocumentos(): HasMany
+    {
+        return $this->hasMany(ProcessoDocumento::class);
     }
 }
 

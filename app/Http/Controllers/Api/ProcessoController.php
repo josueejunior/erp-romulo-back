@@ -217,7 +217,20 @@ class ProcessoController extends Controller
 
         $processo = Processo::create($validated);
 
-        return new ProcessoResource($processo->load(['orgao', 'setor']));
+        // Salvar documentos de habilitação selecionados
+        if ($request->has('documentos_habilitacao')) {
+            $documentos = $request->input('documentos_habilitacao', []);
+            foreach ($documentos as $docId => $docData) {
+                $processo->documentos()->create([
+                    'documento_habilitacao_id' => $docId,
+                    'exigido' => $docData['exigido'] ?? true,
+                    'disponivel_envio' => $docData['disponivel_envio'] ?? false,
+                    'observacoes' => $docData['observacoes'] ?? null,
+                ]);
+            }
+        }
+
+        return new ProcessoResource($processo->load(['orgao', 'setor', 'documentos.documentoHabilitacao']));
     }
 
     public function show(Processo $processo)
@@ -266,7 +279,27 @@ class ProcessoController extends Controller
 
         $processo->update($validated);
 
-        return new ProcessoResource($processo->load(['orgao', 'setor']));
+        // Atualizar documentos de habilitação selecionados
+        if ($request->has('documentos_habilitacao')) {
+            // Remover documentos não selecionados
+            $documentosSelecionados = array_keys($request->input('documentos_habilitacao', []));
+            $processo->documentos()->whereNotIn('documento_habilitacao_id', $documentosSelecionados)->delete();
+
+            // Adicionar/atualizar documentos selecionados
+            $documentos = $request->input('documentos_habilitacao', []);
+            foreach ($documentos as $docId => $docData) {
+                $processo->documentos()->updateOrCreate(
+                    ['documento_habilitacao_id' => $docId],
+                    [
+                        'exigido' => $docData['exigido'] ?? true,
+                        'disponivel_envio' => $docData['disponivel_envio'] ?? false,
+                        'observacoes' => $docData['observacoes'] ?? null,
+                    ]
+                );
+            }
+        }
+
+        return new ProcessoResource($processo->load(['orgao', 'setor', 'documentos.documentoHabilitacao']));
     }
 
     public function destroy(Processo $processo)
