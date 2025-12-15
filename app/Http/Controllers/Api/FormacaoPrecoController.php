@@ -44,7 +44,7 @@ class FormacaoPrecoController extends Controller
             'frete' => 'required|numeric|min:0',
             'percentual_impostos' => 'required|numeric|min:0|max:100',
             'percentual_margem' => 'required|numeric|min:0|max:100',
-            'preco_minimo' => 'required|numeric|min:0',
+            'preco_minimo' => 'nullable|numeric|min:0', // Calculado automaticamente se não fornecido
             'preco_recomendado' => 'nullable|numeric|min:0',
             'observacoes' => 'nullable|string',
         ]);
@@ -53,6 +53,11 @@ class FormacaoPrecoController extends Controller
         $validated['valor_impostos'] = ($custoTotal * $validated['percentual_impostos']) / 100;
         $custoComImpostos = $custoTotal + $validated['valor_impostos'];
         $validated['valor_margem'] = ($custoComImpostos * $validated['percentual_margem']) / 100;
+        
+        // Calcular preço mínimo se não fornecido
+        if (!isset($validated['preco_minimo']) || $validated['preco_minimo'] == 0) {
+            $validated['preco_minimo'] = $custoComImpostos + $validated['valor_margem'];
+        }
 
         $validated['processo_item_id'] = $item->id;
         $validated['orcamento_id'] = $orcamento->id;
@@ -61,6 +66,12 @@ class FormacaoPrecoController extends Controller
             ['orcamento_id' => $orcamento->id],
             $validated
         );
+
+        // Atualizar valor mínimo de venda no item se o orçamento for o escolhido
+        if ($orcamento->fornecedor_escolhido) {
+            $item->valor_minimo_venda = $validated['preco_minimo'];
+            $item->save();
+        }
 
         return new FormacaoPrecoResource($formacaoPreco);
     }
@@ -84,7 +95,7 @@ class FormacaoPrecoController extends Controller
             'frete' => 'required|numeric|min:0',
             'percentual_impostos' => 'required|numeric|min:0|max:100',
             'percentual_margem' => 'required|numeric|min:0|max:100',
-            'preco_minimo' => 'required|numeric|min:0',
+            'preco_minimo' => 'nullable|numeric|min:0', // Calculado automaticamente se não fornecido
             'preco_recomendado' => 'nullable|numeric|min:0',
             'observacoes' => 'nullable|string',
         ]);
@@ -93,8 +104,19 @@ class FormacaoPrecoController extends Controller
         $validated['valor_impostos'] = ($custoTotal * $validated['percentual_impostos']) / 100;
         $custoComImpostos = $custoTotal + $validated['valor_impostos'];
         $validated['valor_margem'] = ($custoComImpostos * $validated['percentual_margem']) / 100;
+        
+        // Calcular preço mínimo se não fornecido
+        if (!isset($validated['preco_minimo']) || $validated['preco_minimo'] == 0) {
+            $validated['preco_minimo'] = $custoComImpostos + $validated['valor_margem'];
+        }
 
         $formacaoPreco->update($validated);
+
+        // Atualizar valor mínimo de venda no item se o orçamento for o escolhido
+        if ($orcamento->fornecedor_escolhido) {
+            $item->valor_minimo_venda = $validated['preco_minimo'];
+            $item->save();
+        }
 
         return new FormacaoPrecoResource($formacaoPreco);
     }

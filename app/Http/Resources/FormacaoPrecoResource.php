@@ -19,6 +19,7 @@ class FormacaoPrecoResource extends JsonResource
             'valor_margem' => (float) $this->valor_margem,
             'preco_minimo' => (float) $this->preco_minimo,
             'preco_recomendado' => $this->preco_recomendado ? (float) $this->preco_recomendado : null,
+            'observacoes' => $this->observacoes,
         ];
     }
 }

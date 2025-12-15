@@ -18,7 +18,9 @@ class OrcamentoResource extends JsonResource
             'frete_incluido' => $this->frete_incluido,
             'custo_total' => (float) $this->custo_total,
             'marca_modelo' => $this->marca_modelo,
+            'ajustes_especificacao' => $this->ajustes_especificacao,
             'fornecedor_escolhido' => $this->fornecedor_escolhido,
+            'observacoes' => $this->observacoes,
             'formacao_preco' => new FormacaoPrecoResource($this->whenLoaded('formacaoPreco')),
         ];
     }

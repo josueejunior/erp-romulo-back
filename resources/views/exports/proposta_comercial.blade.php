@@ -47,15 +47,40 @@
             </thead>
             <tbody>
                 @foreach($itens as $item)
+                @php
+                    $orcamentoEscolhido = $item->orcamentos->firstWhere('fornecedor_escolhido', true);
+                    $formacaoPreco = $orcamentoEscolhido?->formacaoPreco;
+                    
+                    // Prioridade: valor negociado > valor final sessão > preço mínimo formação > valor estimado
+                    $valorUnitario = $item->valor_negociado 
+                        ?? $item->valor_final_sessao 
+                        ?? $formacaoPreco?->preco_minimo 
+                        ?? $item->valor_estimado 
+                        ?? 0;
+                    
+                    $marcaModelo = $orcamentoEscolhido?->marca_modelo 
+                        ?? $item->marca_modelo_referencia 
+                        ?? '-';
+                @endphp
                 <tr>
                     <td>{{ $item->numero_item }}</td>
                     <td>{{ number_format($item->quantidade, 2, ',', '.') }}</td>
                     <td>{{ $item->unidade }}</td>
                     <td>{{ $item->especificacao_tecnica }}</td>
-                    <td>{{ $item->marca_modelo_referencia ?? '-' }}</td>
-                    <td>R$ {{ number_format($item->valor_negociado ?? $item->valor_final_sessao ?? $item->valor_estimado ?? 0, 2, ',', '.') }}</td>
-                    <td>R$ {{ number_format(($item->valor_negociado ?? $item->valor_final_sessao ?? $item->valor_estimado ?? 0) * $item->quantidade, 2, ',', '.') }}</td>
+                    <td>{{ $marcaModelo }}</td>
+                    <td>R$ {{ number_format($valorUnitario, 2, ',', '.') }}</td>
+                    <td>R$ {{ number_format($valorUnitario * $item->quantidade, 2, ',', '.') }}</td>
                 </tr>
+                @if($orcamentoEscolhido && $orcamentoEscolhido->fornecedor)
+                <tr style="background-color: #f9f9f9;">
+                    <td colspan="7" style="font-size: 11px; color: #666;">
+                        <strong>Fornecedor:</strong> {{ $orcamentoEscolhido->fornecedor->razao_social }}
+                        @if($formacaoPreco && $formacaoPreco->preco_minimo)
+                            | <strong>Preço Mínimo Calculado:</strong> R$ {{ number_format($formacaoPreco->preco_minimo, 2, ',', '.') }}
+                        @endif
+                    </td>
+                </tr>
+                @endif
                 @endforeach
             </tbody>
         </table>

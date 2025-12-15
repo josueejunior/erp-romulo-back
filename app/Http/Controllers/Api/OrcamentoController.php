@@ -96,7 +96,7 @@ class OrcamentoController extends Controller
         $validated['frete'] = $validated['frete'] ?? 0;
         $validated['frete_incluido'] = $request->has('frete_incluido');
 
-        if ($request->has('fornecedor_escolhido')) {
+        if ($request->has('fornecedor_escolhido') && $request->boolean('fornecedor_escolhido')) {
             $item->orcamentos()->where('id', '!=', $orcamento->id)->update(['fornecedor_escolhido' => false]);
             $validated['fornecedor_escolhido'] = true;
         } else {
@@ -104,7 +104,19 @@ class OrcamentoController extends Controller
         }
 
         $orcamento->update($validated);
+        $orcamento->refresh();
         $orcamento->load(['fornecedor', 'transportadora', 'formacaoPreco']);
+        
+        // Se o orçamento foi marcado como escolhido e tem formação de preço, atualizar valor mínimo no item
+        if ($validated['fornecedor_escolhido'] && $orcamento->formacaoPreco) {
+            $item->valor_minimo_venda = $orcamento->formacaoPreco->preco_minimo;
+            $item->calcularValorMinimoVenda(); // Usar método do modelo se existir
+            $item->save();
+        } elseif (!$validated['fornecedor_escolhido']) {
+            // Se foi desmarcado, limpar valor mínimo
+            $item->valor_minimo_venda = null;
+            $item->save();
+        }
 
         return new OrcamentoResource($orcamento);
     }

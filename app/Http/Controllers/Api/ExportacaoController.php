@@ -21,17 +21,19 @@ class ExportacaoController extends Controller
      */
     public function propostaComercial(Processo $processo)
     {
-        if ($processo->status !== 'julgamento_habilitacao') {
+        // Permitir exportação em participação e julgamento
+        if (!in_array($processo->status, ['participacao', 'julgamento_habilitacao'])) {
             return response()->json([
-                'message' => 'Apenas processos em julgamento podem ter proposta comercial exportada.'
+                'message' => 'Apenas processos em participação ou julgamento podem ter proposta comercial exportada.'
             ], 403);
         }
 
         $html = $this->exportacaoService->gerarPropostaComercial($processo);
 
-        // Retornar HTML (você pode converter para PDF usando dompdf, snappy, etc)
+        // Retornar HTML (pode ser convertido para PDF no frontend ou usando dompdf)
         return response($html)
-            ->header('Content-Type', 'text/html; charset=utf-8');
+            ->header('Content-Type', 'text/html; charset=utf-8')
+            ->header('Content-Disposition', 'inline; filename="proposta_comercial_' . $processo->id . '.html"');
     }
 
     /**
@@ -39,16 +41,18 @@ class ExportacaoController extends Controller
      */
     public function catalogoFichaTecnica(Processo $processo)
     {
-        if ($processo->status !== 'julgamento_habilitacao') {
+        // Permitir exportação em participação e julgamento
+        if (!in_array($processo->status, ['participacao', 'julgamento_habilitacao'])) {
             return response()->json([
-                'message' => 'Apenas processos em julgamento podem ter catálogo exportado.'
+                'message' => 'Apenas processos em participação ou julgamento podem ter catálogo exportado.'
             ], 403);
         }
 
         $html = $this->exportacaoService->gerarCatalogoFichaTecnica($processo);
 
         return response($html)
-            ->header('Content-Type', 'text/html; charset=utf-8');
+            ->header('Content-Type', 'text/html; charset=utf-8')
+            ->header('Content-Disposition', 'inline; filename="catalogo_ficha_tecnica_' . $processo->id . '.html"');
     }
 }
 

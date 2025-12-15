@@ -18,8 +18,7 @@ class ExportacaoService
             'orgao',
             'setor',
             'itens' => function ($query) {
-                $query->whereIn('status_item', ['aceito', 'aceito_habilitado', 'pendente'])
-                    ->orderBy('numero_item');
+                $query->orderBy('numero_item');
             },
             'itens.orcamentos' => function ($query) {
                 $query->where('fornecedor_escolhido', true)
@@ -37,7 +36,7 @@ class ExportacaoService
             'itens' => $processo->itens,
         ];
 
-        // Retornar HTML para conversão em PDF (você pode usar dompdf, snappy, etc)
+        // Retornar HTML para conversão em PDF
         return View::make('exports.proposta_comercial', $dados)->render();
     }
 
@@ -50,8 +49,7 @@ class ExportacaoService
             'orgao',
             'setor',
             'itens' => function ($query) {
-                $query->whereIn('status_item', ['aceito', 'aceito_habilitado', 'pendente'])
-                    ->orderBy('numero_item');
+                $query->orderBy('numero_item');
             },
             'itens.orcamentos' => function ($query) {
                 $query->where('fornecedor_escolhido', true)
