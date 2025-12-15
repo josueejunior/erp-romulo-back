@@ -11,13 +11,30 @@ use Illuminate\Http\Request;
 
 class OrcamentoController extends Controller
 {
-    public function index(Processo $processo, ProcessoItem $item)
+    public function index(Request $request, Processo $processo, ProcessoItem $item)
     {
+        // Verificar se o item pertence ao processo
         if ($item->processo_id !== $processo->id) {
-            return response()->json(['message' => 'Item não pertence a este processo.'], 404);
+            return response()->json([
+                'message' => 'Item não pertence a este processo.',
+                'item_processo_id' => $item->processo_id,
+                'processo_id' => $processo->id,
+            ], 404);
         }
 
-        $orcamentos = $item->orcamentos()->with(['fornecedor', 'transportadora'])->get();
+        // Carregar orçamentos com relacionamentos
+        $orcamentos = $item->orcamentos()
+            ->with(['fornecedor', 'transportadora', 'formacaoPreco'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        // Log para debug (remover em produção se necessário)
+        \Log::info('Orçamentos carregados', [
+            'processo_id' => $processo->id,
+            'item_id' => $item->id,
+            'total_orcamentos' => $orcamentos->count(),
+        ]);
+
         return OrcamentoResource::collection($orcamentos);
     }
 

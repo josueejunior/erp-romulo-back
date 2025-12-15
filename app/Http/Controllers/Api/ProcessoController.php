@@ -25,6 +25,8 @@ class ProcessoController extends Controller
             'orgao',
             'setor',
             'itens.formacoesPreco',
+            'itens.orcamentos.fornecedor',
+            'itens.orcamentos.transportadora',
             'itens.orcamentos.formacaoPreco',
             'documentos.documentoHabilitacao',
             'empenhos',
@@ -487,6 +489,32 @@ class ProcessoController extends Controller
         return response()->json([
             'message' => 'Processo marcado como vencido com sucesso!',
             'processo' => new ProcessoResource($processo->fresh()),
+        ]);
+    }
+
+    public function moverParaJulgamento(Request $request, Processo $processo)
+    {
+        // Verificar permissão
+        if (!PermissionHelper::canMarkProcessStatus()) {
+            return response()->json([
+                'message' => 'Você não tem permissão para alterar o status do processo.'
+            ], 403);
+        }
+
+        // Validar transição de status
+        $validacao = $this->statusService->podeAlterarStatus($processo, 'julgamento_habilitacao');
+        if (!$validacao['pode']) {
+            return response()->json([
+                'message' => $validacao['motivo']
+            ], 400);
+        }
+
+        // Alterar para julgamento_habilitacao
+        $resultado = $this->statusService->alterarStatus($processo, 'julgamento_habilitacao');
+
+        return response()->json([
+            'message' => 'Processo movido para fase de Julgamento e Habilitação com sucesso!',
+            'processo' => new ProcessoResource($processo->fresh()->load(['orgao', 'setor', 'itens'])),
         ]);
     }
 

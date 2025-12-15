@@ -60,6 +60,11 @@ class ProcessoListResource extends JsonResource
             'resultado' => $resultado,
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at?->format('Y-m-d H:i:s'),
+            // Incluir itens com orçamentos quando carregados
+            'itens' => $this->when(
+                $this->relationLoaded('itens'),
+                fn() => \App\Http\Resources\ProcessoItemResource::collection($this->itens)
+            ),
         ];
     }
 

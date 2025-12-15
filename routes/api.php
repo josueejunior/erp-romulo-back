@@ -70,6 +70,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/processos-resumo', [ApiProcessoController::class, 'resumo']);
         Route::get('/processos/exportar', [ApiProcessoController::class, 'exportar']);
         Route::apiResource('processos', ApiProcessoController::class);
+        Route::post('/processos/{processo}/mover-julgamento', [ApiProcessoController::class, 'moverParaJulgamento']);
         Route::post('/processos/{processo}/marcar-vencido', [ApiProcessoController::class, 'marcarVencido']);
         Route::post('/processos/{processo}/marcar-perdido', [ApiProcessoController::class, 'marcarPerdido']);
         Route::get('/processos/{processo}/sugerir-status', [ApiProcessoController::class, 'sugerirStatus']);
@@ -85,13 +86,19 @@ Route::prefix('v1')->group(function () {
         Route::get('/processos/{processo}/saldo-empenhado', [ApiSaldoController::class, 'saldoEmpenhado']);
         
         // Itens do Processo
-        Route::apiResource('processos.itens', ApiProcessoItemController::class)->shallow();
+        Route::apiResource('processos.itens', ApiProcessoItemController::class)
+            ->parameters(['itens' => 'item'])
+            ->shallow();
         
         // Orçamentos
-        Route::apiResource('processos.itens.orcamentos', ApiOrcamentoController::class)->shallow();
+        Route::apiResource('processos.itens.orcamentos', ApiOrcamentoController::class)
+            ->parameters(['itens' => 'item'])
+            ->shallow();
         
         // Formação de Preços
-        Route::apiResource('processos.itens.orcamentos.formacao-preco', ApiFormacaoPrecoController::class)->shallow();
+        Route::apiResource('processos.itens.orcamentos.formacao-preco', ApiFormacaoPrecoController::class)
+            ->parameters(['itens' => 'item'])
+            ->shallow();
         
         // Disputa
         Route::get('/processos/{processo}/disputa', [ApiDisputaController::class, 'show']);
