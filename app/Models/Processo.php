@@ -102,7 +102,11 @@ class Processo extends Model
 
     public function getIdentificadorAttribute(): string
     {
-        $orgao = $this->orgao->uasg ?? $this->orgao->razao_social;
+        if (!$this->orgao) {
+            return $this->numero_modalidade ?? 'Sem identificação';
+        }
+        
+        $orgao = $this->orgao->uasg ?? $this->orgao->razao_social ?? 'Órgão não identificado';
         return "{$this->numero_modalidade} ({$orgao})";
     }
 

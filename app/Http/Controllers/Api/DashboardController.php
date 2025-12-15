@@ -19,7 +19,16 @@ class DashboardController extends Controller
             ->where('data_hora_sessao_publica', '>=', now())
             ->orderBy('data_hora_sessao_publica', 'asc')
             ->limit(5)
-            ->get(['id', 'numero_modalidade', 'data_hora_sessao_publica', 'objeto_resumido']);
+            ->select(['id', 'numero_modalidade', 'data_hora_sessao_publica', 'objeto_resumido'])
+            ->get()
+            ->map(function($processo) {
+                return [
+                    'id' => $processo->id,
+                    'numero_modalidade' => $processo->numero_modalidade,
+                    'data_hora_sessao_publica' => $processo->data_hora_sessao_publica,
+                    'objeto_resumido' => $processo->objeto_resumido,
+                ];
+            });
 
         $documentosVencendo = DocumentoHabilitacao::whereNotNull('data_validade')
             ->where('data_validade', '>=', now())
