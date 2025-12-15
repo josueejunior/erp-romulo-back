@@ -40,6 +40,10 @@ class OrgaoController extends Controller
             'cnpj' => 'nullable|string|max:18',
             'email' => 'nullable|email|max:255',
             'telefone' => 'nullable|string|max:20',
+            'telefones' => 'nullable|array',
+            'telefones.*' => 'string|max:20',
+            'emails' => 'nullable|array',
+            'emails.*' => 'email|max:255',
             'endereco' => 'nullable|string',
             'observacoes' => 'nullable|string',
         ]);
@@ -70,6 +74,10 @@ class OrgaoController extends Controller
             'cnpj' => 'nullable|string|max:18',
             'email' => 'nullable|email|max:255',
             'telefone' => 'nullable|string|max:20',
+            'telefones' => 'nullable|array',
+            'telefones.*' => 'string|max:20',
+            'emails' => 'nullable|array',
+            'emails.*' => 'email|max:255',
             'endereco' => 'nullable|string',
             'observacoes' => 'nullable|string',
         ]);

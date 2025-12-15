@@ -196,7 +196,7 @@ class ProcessoController extends Controller
 
         $validated = $request->validate([
             'orgao_id' => 'required|exists:orgaos,id',
-            'setor_id' => 'required|exists:setors,id',
+            'setor_id' => 'nullable|exists:setors,id',
             'modalidade' => 'required|in:dispensa,pregao',
             'numero_modalidade' => 'required|string',
             'numero_processo_administrativo' => 'nullable|string',
@@ -260,7 +260,7 @@ class ProcessoController extends Controller
 
         $validated = $request->validate([
             'orgao_id' => 'required|exists:orgaos,id',
-            'setor_id' => 'required|exists:setors,id',
+            'setor_id' => 'nullable|exists:setors,id',
             'modalidade' => 'required|in:dispensa,pregao',
             'numero_modalidade' => 'required|string',
             'numero_processo_administrativo' => 'nullable|string',

@@ -51,6 +51,20 @@ class SetorController extends Controller
             'observacoes' => 'nullable|string',
         ]);
 
+        // Validar que o nome do setor é único para o órgão
+        $exists = Setor::where('orgao_id', $validated['orgao_id'])
+            ->where('nome', $validated['nome'])
+            ->exists();
+
+        if ($exists) {
+            return response()->json([
+                'message' => 'Já existe um setor com este nome para este órgão.',
+                'errors' => [
+                    'nome' => ['Já existe um setor com este nome para este órgão.']
+                ]
+            ], 422);
+        }
+
         $setor = Setor::create($validated);
         $setor->load('orgao');
 
@@ -76,6 +90,21 @@ class SetorController extends Controller
             'telefone' => 'nullable|string|max:20',
             'observacoes' => 'nullable|string',
         ]);
+
+        // Validar que o nome do setor é único para o órgão (exceto o próprio setor)
+        $exists = Setor::where('orgao_id', $setor->orgao_id)
+            ->where('nome', $validated['nome'])
+            ->where('id', '!=', $setor->id)
+            ->exists();
+
+        if ($exists) {
+            return response()->json([
+                'message' => 'Já existe um setor com este nome para este órgão.',
+                'errors' => [
+                    'nome' => ['Já existe um setor com este nome para este órgão.']
+                ]
+            ], 422);
+        }
 
         $setor->update($validated);
         $setor->load('orgao');
