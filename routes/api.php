@@ -68,6 +68,7 @@ Route::prefix('v1')->group(function () {
         
         // Processos
         Route::get('/processos-resumo', [ApiProcessoController::class, 'resumo']);
+        Route::get('/processos/exportar', [ApiProcessoController::class, 'exportar']);
         Route::apiResource('processos', ApiProcessoController::class);
         Route::post('/processos/{processo}/marcar-vencido', [ApiProcessoController::class, 'marcarVencido']);
         Route::post('/processos/{processo}/marcar-perdido', [ApiProcessoController::class, 'marcarPerdido']);

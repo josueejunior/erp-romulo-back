@@ -9,6 +9,7 @@ use App\Models\Orgao;
 use App\Services\ProcessoStatusService;
 use App\Helpers\PermissionHelper;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ProcessoController extends Controller
 {
@@ -313,6 +314,149 @@ class ProcessoController extends Controller
         $processo->delete();
 
         return response()->json(null, 204);
+    }
+
+    /**
+     * Exporta lista de processos em CSV
+     */
+    public function exportar(Request $request)
+    {
+        // Aplicar os mesmos filtros do index
+        $query = Processo::with([
+            'orgao',
+            'setor',
+            'itens',
+        ]);
+
+        // Filtro de status
+        if ($request->status) {
+            $query->where('status', $request->status);
+        }
+
+        // Filtro de modalidade
+        if ($request->modalidade) {
+            $query->where('modalidade', $request->modalidade);
+        }
+
+        // Filtro de órgão
+        if ($request->orgao_id) {
+            $query->where('orgao_id', $request->orgao_id);
+        }
+
+        // Filtro de período (sessão)
+        if ($request->periodo_sessao_inicio) {
+            $query->where('data_hora_sessao_publica', '>=', $request->periodo_sessao_inicio);
+        }
+        if ($request->periodo_sessao_fim) {
+            $query->where('data_hora_sessao_publica', '<=', $request->periodo_sessao_fim);
+        }
+
+        // Filtro: somente com alerta
+        if ($request->boolean('somente_alerta')) {
+            $query->where(function($q) {
+                $q->where(function($q2) {
+                    $q2->where('status', 'participacao')
+                       ->where('data_hora_sessao_publica', '<=', now());
+                })
+                ->orWhere(function($q2) {
+                    $q2->where('status', 'julgamento_habilitacao')
+                       ->where('updated_at', '<=', now()->subDays(7));
+                })
+                ->orWhereHas('empenhos', function($q2) {
+                    $q2->where('situacao', 'atrasado');
+                });
+            });
+        }
+
+        // Busca livre
+        if ($request->search) {
+            $query->where(function($q) use ($request) {
+                $q->where('numero_modalidade', 'like', "%{$request->search}%")
+                  ->orWhere('numero_processo_administrativo', 'like', "%{$request->search}%")
+                  ->orWhere('objeto_resumido', 'like', "%{$request->search}%")
+                  ->orWhereHas('orgao', function($q2) use ($request) {
+                      $q2->where('uasg', 'like', "%{$request->search}%")
+                         ->orWhere('razao_social', 'like', "%{$request->search}%");
+                  });
+            });
+        }
+
+        // Buscar todos os processos (sem paginação)
+        $processos = $query->orderBy('created_at', 'desc')->get();
+
+        // Gerar CSV
+        $filename = 'processos_' . date('Y-m-d_His') . '.csv';
+        
+        $headers = [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ];
+
+        $callback = function() use ($processos) {
+            $file = fopen('php://output', 'w');
+            
+            // BOM para UTF-8 (Excel)
+            fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
+            
+            // Cabeçalhos
+            fputcsv($file, [
+                'ID',
+                'Nº Modalidade',
+                'Nº Processo Admin',
+                'Modalidade',
+                'Órgão',
+                'UASG',
+                'Setor',
+                'Objeto',
+                'Status',
+                'SRP',
+                'Data Sessão Pública',
+                'Horário Sessão',
+                'Link Edital',
+                'Portal',
+                'Nº Edital',
+                'Valor Total Estimado',
+                'Data Criação',
+                'Data Atualização',
+            ], ';');
+
+            // Dados
+            foreach ($processos as $processo) {
+                // Calcular valor total estimado
+                $valorTotal = $processo->itens->sum(function($item) {
+                    return $item->valor_estimado_total ?? ($item->valor_estimado * $item->quantidade ?? 0);
+                });
+
+                fputcsv($file, [
+                    $processo->id,
+                    $processo->numero_modalidade,
+                    $processo->numero_processo_administrativo ?? '',
+                    ucfirst($processo->modalidade),
+                    $processo->orgao->razao_social ?? '',
+                    $processo->orgao->uasg ?? '',
+                    $processo->setor->nome ?? '',
+                    $processo->objeto_resumido,
+                    ucfirst(str_replace('_', ' ', $processo->status)),
+                    $processo->srp ? 'Sim' : 'Não',
+                    $processo->data_hora_sessao_publica 
+                        ? $processo->data_hora_sessao_publica->format('d/m/Y') 
+                        : '',
+                    $processo->horario_sessao_publica 
+                        ? $processo->horario_sessao_publica->format('H:i') 
+                        : '',
+                    $processo->link_edital ?? '',
+                    $processo->portal ?? '',
+                    $processo->numero_edital ?? '',
+                    number_format($valorTotal, 2, ',', '.'),
+                    $processo->created_at->format('d/m/Y H:i'),
+                    $processo->updated_at->format('d/m/Y H:i'),
+                ], ';');
+            }
+
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
     }
 
     public function marcarVencido(Request $request, Processo $processo)
