@@ -6,9 +6,150 @@ use App\Http\Controllers\Controller;
 use App\Models\Processo;
 use App\Models\Contrato;
 use Illuminate\Http\Request;
+use Carbon\Carbon;
 
 class ContratoController extends Controller
 {
+    /**
+     * Lista todos os contratos (não apenas de um processo)
+     * Com filtros, indicadores e paginação
+     */
+    public function listarTodos(Request $request)
+    {
+        $query = Contrato::with([
+            'processo.orgao',
+            'processo.setor',
+            'empenhos',
+            'autorizacoesFornecimento'
+        ]);
+
+        // Filtro: busca (número do contrato, processo, órgão)
+        if ($request->busca) {
+            $query->where(function($q) use ($request) {
+                $q->where('numero', 'like', "%{$request->busca}%")
+                  ->orWhereHas('processo', function($p) use ($request) {
+                      $p->where('numero_modalidade', 'like', "%{$request->busca}%")
+                        ->orWhere('numero_processo_administrativo', 'like', "%{$request->busca}%");
+                  })
+                  ->orWhereHas('processo.orgao', function($o) use ($request) {
+                      $o->where('razao_social', 'like', "%{$request->busca}%")
+                        ->orWhere('uasg', 'like', "%{$request->busca}%");
+                  });
+            });
+        }
+
+        // Filtro: órgão
+        if ($request->orgao_id) {
+            $query->whereHas('processo', function($q) use ($request) {
+                $q->where('orgao_id', $request->orgao_id);
+            });
+        }
+
+        // Filtro: tipo (SRP ou não)
+        if ($request->has('srp')) {
+            $query->whereHas('processo', function($q) use ($request) {
+                $q->where('srp', $request->boolean('srp'));
+            });
+        }
+
+        // Filtro: status
+        if ($request->situacao) {
+            $query->where('situacao', $request->situacao);
+        }
+
+        // Filtro: vigência
+        if ($request->vigente !== null) {
+            $query->where('vigente', $request->boolean('vigente'));
+        }
+
+        // Filtro: vigência a vencer (30/60/90 dias)
+        if ($request->vencer_em) {
+            $dias = (int)$request->vencer_em;
+            $dataLimite = Carbon::now()->addDays($dias);
+            $query->where('data_fim', '<=', $dataLimite)
+                  ->where('data_fim', '>=', Carbon::now())
+                  ->where('vigente', true);
+        }
+
+        // Filtro: somente com alerta
+        if ($request->boolean('somente_alerta')) {
+            $hoje = Carbon::now();
+            $query->where(function($q) use ($hoje) {
+                // Vigência vencendo em até 30 dias
+                $q->where(function($sub) use ($hoje) {
+                    $sub->where('data_fim', '<=', $hoje->copy()->addDays(30))
+                        ->where('data_fim', '>=', $hoje)
+                        ->where('vigente', true);
+                })
+                // Saldo baixo (menor que 10% do valor total)
+                ->orWhereRaw('saldo < (valor_total * 0.1)')
+                // Contrato vencido mas ainda com saldo
+                ->orWhere(function($sub) use ($hoje) {
+                    $sub->where('data_fim', '<', $hoje)
+                        ->where('saldo', '>', 0);
+                });
+            });
+        }
+
+        // Calcular indicadores ANTES da paginação
+        $totalQuery = clone $query;
+        $indicadores = $this->calcularIndicadores($totalQuery);
+
+        // Ordenação
+        $ordenacao = $request->ordenacao ?? 'data_fim';
+        $direcao = $request->direcao ?? 'asc';
+        $query->orderBy($ordenacao, $direcao);
+
+        // Paginação
+        $perPage = $request->per_page ?? 15;
+        $contratos = $query->paginate($perPage);
+
+        return response()->json([
+            'data' => $contratos->items(),
+            'indicadores' => $indicadores,
+            'pagination' => [
+                'current_page' => $contratos->currentPage(),
+                'last_page' => $contratos->lastPage(),
+                'per_page' => $contratos->perPage(),
+                'total' => $contratos->total(),
+            ]
+        ]);
+    }
+
+    /**
+     * Calcula indicadores dos contratos
+     */
+    private function calcularIndicadores($query)
+    {
+        $hoje = Carbon::now();
+        $trintaDias = $hoje->copy()->addDays(30);
+
+        $todos = $query->get();
+
+        return [
+            'contratos_ativos' => $todos->where('vigente', true)->count(),
+            'contratos_a_vencer' => $todos->where('vigente', true)
+                ->filter(function($c) use ($trintaDias, $hoje) {
+                    return $c->data_fim && 
+                           $c->data_fim->between($hoje, $trintaDias);
+                })->count(),
+            'saldo_total_contratado' => $todos->sum('valor_total'),
+            'saldo_ja_faturado' => $todos->sum('valor_empenhado'),
+            'saldo_restante' => $todos->sum('saldo'),
+            'margem_media' => $this->calcularMargemMedia($todos),
+        ];
+    }
+
+    /**
+     * Calcula margem média dos contratos
+     */
+    private function calcularMargemMedia($contratos)
+    {
+        // TODO: Implementar cálculo de margem quando tiver dados de custos
+        // Por enquanto retorna 0
+        return 0;
+    }
+
     public function index(Processo $processo)
     {
         $contratos = $processo->contratos()->with(['empenhos', 'autorizacoesFornecimento'])->get();

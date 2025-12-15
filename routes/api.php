@@ -101,6 +101,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/processos/{processo}/julgamento', [ApiJulgamentoController::class, 'update']);
         
         // Contratos
+        Route::get('/contratos', [ApiContratoController::class, 'listarTodos']); // Lista todos os contratos
         Route::apiResource('processos.contratos', ApiContratoController::class)->shallow();
         
         // Autorizações de Fornecimento
