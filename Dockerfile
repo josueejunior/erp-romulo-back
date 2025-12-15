@@ -34,6 +34,13 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 # ---------------------------------------------------------
 WORKDIR /var/www/html
 
+# Copiar arquivos do Composer primeiro (para cache de layers)
+COPY composer.json composer.lock* ./
+
+# Instalar dependências (será sobrescrito pelo volume, mas útil para build)
+RUN composer install --no-interaction --prefer-dist --no-dev --optimize-autoloader --no-scripts || true
+
+# Copiar resto dos arquivos
 COPY . /var/www/html
 
 # ---------------------------------------------------------
@@ -46,12 +53,6 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 # Permissões (simples, para dev)
 # ---------------------------------------------------------
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
-
-# ---------------------------------------------------------
-# Instala dependências PHP
-# ---------------------------------------------------------
-RUN composer install --no-interaction --prefer-dist --no-dev \
-    && php artisan config:clear || true
 
 # ---------------------------------------------------------
 # Variáveis de ambiente padrão (podem ser sobrescritas no compose)

@@ -3,6 +3,20 @@ set -e
 
 echo "🚀 Iniciando aplicação ERP Licitações..."
 
+# Verificar e instalar dependências do Composer
+if [ ! -d "vendor" ] || [ ! -f "vendor/autoload.php" ]; then
+    echo "📦 Instalando dependências do Composer..."
+    if [ -f "composer.json" ]; then
+        composer install --no-interaction --prefer-dist --no-dev --optimize-autoloader
+        echo "✅ Dependências instaladas!"
+    else
+        echo "❌ Erro: arquivo composer.json não encontrado!"
+        exit 1
+    fi
+else
+    echo "✅ Dependências já instaladas"
+fi
+
 # Função para aguardar PostgreSQL estar pronto
 wait_for_postgres() {
     echo "⏳ Aguardando PostgreSQL estar disponível..."
