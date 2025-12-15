@@ -28,11 +28,23 @@ class ExportacaoService
         // Calcular validade proporcional
         $validadeProposta = $this->calcularValidadeProposta($processo);
 
+        // Obter nome da empresa do tenant atual
+        $nomeEmpresa = 'Empresa não identificada';
+        try {
+            if (tenancy()->initialized) {
+                $tenant = tenant();
+                $nomeEmpresa = $tenant ? ($tenant->razao_social ?? 'Empresa não identificada') : 'Empresa não identificada';
+            }
+        } catch (\Exception $e) {
+            // Se houver erro, manter valor padrão
+        }
+
         $dados = [
             'processo' => $processo,
             'validade_proposta' => $validadeProposta,
             'data_elaboracao' => Carbon::now()->format('d/m/Y H:i'),
             'itens' => $processo->itens,
+            'nome_empresa' => $nomeEmpresa,
         ];
 
         // Retornar HTML para conversão em PDF
@@ -55,10 +67,22 @@ class ExportacaoService
             }
         ]);
 
+        // Obter nome da empresa do tenant atual
+        $nomeEmpresa = 'Empresa não identificada';
+        try {
+            if (tenancy()->initialized) {
+                $tenant = tenant();
+                $nomeEmpresa = $tenant ? ($tenant->razao_social ?? 'Empresa não identificada') : 'Empresa não identificada';
+            }
+        } catch (\Exception $e) {
+            // Se houver erro, manter valor padrão
+        }
+
         $dados = [
             'processo' => $processo,
             'data_elaboracao' => Carbon::now()->format('d/m/Y H:i'),
             'itens' => $processo->itens,
+            'nome_empresa' => $nomeEmpresa,
         ];
 
         return View::make('exports.catalogo_ficha_tecnica', $dados)->render();

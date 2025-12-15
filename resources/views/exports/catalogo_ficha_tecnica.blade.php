@@ -74,7 +74,7 @@
     </div>
 
     <div class="footer">
-        <p><strong>Empresa:</strong> {{ $processo->nome_empresa }}</p>
+        <p><strong>Empresa:</strong> {{ $nome_empresa ?? 'Empresa não identificada' }}</p>
         <p>Este documento foi gerado automaticamente pelo sistema em {{ $data_elaboracao }}</p>
     </div>
 </body>
