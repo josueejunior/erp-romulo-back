@@ -29,8 +29,13 @@ if [ ! -f .env ]; then
     cp .env.example .env || true
 fi
 
-# Verificar se APP_KEY existe
-if ! grep -q "APP_KEY=" .env || grep -q "APP_KEY=$" .env; then
+# Verificar se APP_KEY existe e está preenchido
+if [ -f .env ]; then
+    if ! grep -q "^APP_KEY=base64:" .env 2>/dev/null; then
+        echo "🔑 Gerando chave da aplicação..."
+        php artisan key:generate --force || true
+    fi
+else
     echo "🔑 Gerando chave da aplicação..."
     php artisan key:generate --force || true
 fi
