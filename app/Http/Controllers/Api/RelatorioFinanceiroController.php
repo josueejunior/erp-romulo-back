@@ -6,11 +6,19 @@ use App\Http\Controllers\Controller;
 use App\Models\Processo;
 use App\Models\CustoIndireto;
 use Illuminate\Http\Request;
+use App\Helpers\PermissionHelper;
 
 class RelatorioFinanceiroController extends Controller
 {
     public function index(Request $request)
     {
+        // RBAC: apenas usuários autorizados podem ver relatórios financeiros
+        if (!PermissionHelper::canViewFinancialReports()) {
+            return response()->json([
+                'message' => 'Você não tem permissão para visualizar relatórios financeiros.',
+            ], 403);
+        }
+
         $query = Processo::where('status', 'execucao')
             ->with(['itens', 'contratos', 'empenhos', 'notasFiscais']);
 

@@ -20,6 +20,8 @@ class Orgao extends Model
         'cep',
         'email',
         'telefone',
+        'emails',
+        'telefones',
         'observacoes',
     ];
 
@@ -31,5 +33,13 @@ class Orgao extends Model
     public function processos(): HasMany
     {
         return $this->hasMany(Processo::class);
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'emails' => 'array',
+            'telefones' => 'array',
+        ];
     }
 }

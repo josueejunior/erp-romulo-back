@@ -20,22 +20,157 @@ class ProcessoController extends Controller
     }
     public function index(Request $request)
     {
-        $query = Processo::with(['orgao', 'setor']);
+        $query = Processo::with([
+            'orgao',
+            'setor',
+            'itens.formacoesPreco',
+            'itens.orcamentos.formacaoPreco',
+            'documentos.documentoHabilitacao',
+            'empenhos',
+            'contratos',
+        ]);
 
+        // Filtro de status
         if ($request->status) {
             $query->where('status', $request->status);
         }
 
-        if ($request->search) {
-            $query->where(function($q) use ($request) {
-                $q->where('numero_modalidade', 'like', "%{$request->search}%")
-                  ->orWhere('objeto_resumido', 'like', "%{$request->search}%");
+        // Filtro de modalidade
+        if ($request->modalidade) {
+            $query->where('modalidade', $request->modalidade);
+        }
+
+        // Filtro de órgão
+        if ($request->orgao_id) {
+            $query->where('orgao_id', $request->orgao_id);
+        }
+
+        // Filtro de período (sessão)
+        if ($request->periodo_sessao_inicio) {
+            $query->where('data_hora_sessao_publica', '>=', $request->periodo_sessao_inicio);
+        }
+        if ($request->periodo_sessao_fim) {
+            $query->where('data_hora_sessao_publica', '<=', $request->periodo_sessao_fim);
+        }
+
+        // Filtro: somente com alerta
+        if ($request->boolean('somente_alerta')) {
+            $query->where(function($q) {
+                $q->where(function($q2) {
+                    $q2->where('status', 'participacao')
+                       ->where('data_hora_sessao_publica', '<=', now());
+                })
+                ->orWhere(function($q2) {
+                    $q2->where('status', 'julgamento_habilitacao')
+                       ->where('updated_at', '<=', now()->subDays(7));
+                })
+                ->orWhereHas('empenhos', function($q2) {
+                    $q2->where('situacao', 'atrasado');
+                })
+                ->orWhereHas('documentos.documentoHabilitacao', function($q2) {
+                    $q2->where('data_validade', '<', now());
+                });
             });
         }
 
-        $processos = $query->orderBy('created_at', 'desc')->paginate(15);
+        // Busca livre
+        if ($request->search) {
+            $query->where(function($q) use ($request) {
+                $q->where('numero_modalidade', 'like', "%{$request->search}%")
+                  ->orWhere('numero_processo_administrativo', 'like', "%{$request->search}%")
+                  ->orWhere('objeto_resumido', 'like', "%{$request->search}%")
+                  ->orWhereHas('orgao', function($q2) use ($request) {
+                      $q2->where('uasg', 'like', "%{$request->search}%")
+                         ->orWhere('razao_social', 'like', "%{$request->search}%");
+                  });
+            });
+        }
 
-        return ProcessoResource::collection($processos);
+        // Ordenação
+        $orderBy = $request->order_by ?? 'created_at';
+        $orderDir = $request->order_dir ?? 'desc';
+        $query->orderBy($orderBy, $orderDir);
+
+        $processos = $query->paginate($request->per_page ?? 15);
+
+        return \App\Http\Resources\ProcessoListResource::collection($processos);
+    }
+
+    /**
+     * Retorna resumo estatístico dos processos
+     */
+    public function resumo(Request $request)
+    {
+        $query = Processo::query();
+
+        // Aplicar mesmos filtros da listagem (exceto paginação)
+        if ($request->modalidade) {
+            $query->where('modalidade', $request->modalidade);
+        }
+        if ($request->orgao_id) {
+            $query->where('orgao_id', $request->orgao_id);
+        }
+        if ($request->periodo_sessao_inicio) {
+            $query->where('data_hora_sessao_publica', '>=', $request->periodo_sessao_inicio);
+        }
+        if ($request->periodo_sessao_fim) {
+            $query->where('data_hora_sessao_publica', '<=', $request->periodo_sessao_fim);
+        }
+
+        $totalParticipacao = (clone $query)->where('status', 'participacao')->count();
+        $totalJulgamento = (clone $query)->where('status', 'julgamento_habilitacao')->count();
+        $totalExecucao = (clone $query)->where('status', 'execucao')->count();
+        
+        // Processos com alerta
+        $totalComAlerta = (clone $query)->where(function($q) {
+            $q->where(function($q2) {
+                $q2->where('status', 'participacao')
+                   ->where('data_hora_sessao_publica', '<=', now());
+            })
+            ->orWhere(function($q2) {
+                $q2->where('status', 'julgamento_habilitacao')
+                   ->where('updated_at', '<=', now()->subDays(7));
+            })
+            ->orWhereHas('empenhos', function($q2) {
+                $q2->where('situacao', 'atrasado');
+            })
+            ->orWhereHas('documentos.documentoHabilitacao', function($q2) {
+                $q2->where('data_validade', '<', now());
+            });
+        })->count();
+
+        // Valor total em execução
+        $processosExecucao = (clone $query)
+            ->where('status', 'execucao')
+            ->with(['itens' => function($q) {
+                $q->whereIn('status_item', ['aceito', 'aceito_habilitado']);
+            }])
+            ->get();
+        
+        $valorTotalExecucao = $processosExecucao->sum(function($processo) {
+            return $processo->itens->sum(function($item) {
+                return $item->valor_negociado ?? $item->valor_final_sessao ?? $item->valor_estimado ?? 0;
+            });
+        });
+
+        // Lucro estimado (simplificado - receita - custos diretos)
+        $lucroEstimado = 0;
+        foreach ($processosExecucao as $processo) {
+            $receita = $processo->itens->sum(function($item) {
+                return $item->valor_negociado ?? $item->valor_final_sessao ?? $item->valor_estimado ?? 0;
+            });
+            $custos = $processo->notasFiscais()->where('tipo', 'entrada')->sum('valor') ?? 0;
+            $lucroEstimado += ($receita - $custos);
+        }
+
+        return response()->json([
+            'participacao' => $totalParticipacao,
+            'julgamento' => $totalJulgamento,
+            'execucao' => $totalExecucao,
+            'com_alerta' => $totalComAlerta,
+            'valor_total_execucao' => round($valorTotalExecucao, 2),
+            'lucro_estimado' => round($lucroEstimado, 2),
+        ]);
     }
 
     public function store(Request $request)

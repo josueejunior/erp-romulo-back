@@ -1,0 +1,26 @@
+services:
+  app:
+    build: .
+    container_name: erp-licitacoes-app
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Usa Postgres EXTERNO já rodando no IP 172.22.0.2 (porta 5434)
+      DB_CONNECTION: pgsql
+      DB_HOST: 172.22.0.2
+      DB_PORT: 5434
+      DB_DATABASE: ${DB_DATABASE:-erp_licitacoes}
+      DB_USERNAME: ${DB_USERNAME:-erp_user}
+      DB_PASSWORD: ${DB_PASSWORD:-erp123}
+    ports:
+      - '8001:8000'
+    volumes:
+      - .:/var/www/html
+    networks:
+      - shared
+
+networks:
+  shared:
+    external: true
+    name: bridge

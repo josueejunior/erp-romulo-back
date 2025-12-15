@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\DocumentoHabilitacao;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use App\Helpers\PermissionHelper;
 
 class DocumentoHabilitacaoController extends Controller
 {
@@ -33,6 +34,12 @@ class DocumentoHabilitacaoController extends Controller
 
     public function store(Request $request)
     {
+        if (!PermissionHelper::canManageDocuments()) {
+            return response()->json([
+                'message' => 'Você não tem permissão para cadastrar documentos de habilitação.',
+            ], 403);
+        }
+
         $validated = $request->validate([
             'tipo' => 'required|string|max:255',
             'numero' => 'nullable|string|max:255',
@@ -62,6 +69,12 @@ class DocumentoHabilitacaoController extends Controller
 
     public function update(Request $request, DocumentoHabilitacao $documentoHabilitacao)
     {
+        if (!PermissionHelper::canManageDocuments()) {
+            return response()->json([
+                'message' => 'Você não tem permissão para editar documentos de habilitação.',
+            ], 403);
+        }
+
         $validated = $request->validate([
             'tipo' => 'required|string|max:255',
             'numero' => 'nullable|string|max:255',
@@ -89,6 +102,12 @@ class DocumentoHabilitacaoController extends Controller
 
     public function destroy(DocumentoHabilitacao $documentoHabilitacao)
     {
+        if (!PermissionHelper::canManageDocuments()) {
+            return response()->json([
+                'message' => 'Você não tem permissão para excluir documentos de habilitação.',
+            ], 403);
+        }
+
         if ($documentoHabilitacao->processoDocumentos()->count() > 0) {
             return response()->json([
                 'message' => 'Não é possível excluir um documento que está vinculado a processos.'

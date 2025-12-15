@@ -16,9 +16,17 @@ class Contrato extends Model
         'numero',
         'data_inicio',
         'data_fim',
+        'data_assinatura',
         'valor_total',
         'saldo',
+        'valor_empenhado',
+        'condicoes_comerciais',
+        'condicoes_tecnicas',
+        'locais_entrega',
+        'prazos_contrato',
+        'regras_contrato',
         'situacao',
+        'vigente',
         'observacoes',
     ];
 
@@ -27,8 +35,11 @@ class Contrato extends Model
         return [
             'data_inicio' => 'date',
             'data_fim' => 'date',
+            'data_assinatura' => 'date',
             'valor_total' => 'decimal:2',
             'saldo' => 'decimal:2',
+            'valor_empenhado' => 'decimal:2',
+            'vigente' => 'boolean',
         ];
     }
 
@@ -50,7 +61,15 @@ class Contrato extends Model
     public function atualizarSaldo(): void
     {
         $totalEmpenhos = $this->empenhos()->sum('valor');
+        $this->valor_empenhado = $totalEmpenhos;
         $this->saldo = $this->valor_total - $totalEmpenhos;
+        
+        // Atualizar vigência baseado nas datas
+        $hoje = now();
+        if ($this->data_fim && $hoje->isAfter($this->data_fim)) {
+            $this->vigente = false;
+        }
+        
         $this->save();
     }
 }

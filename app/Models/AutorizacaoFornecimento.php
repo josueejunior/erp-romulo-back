@@ -18,9 +18,17 @@ class AutorizacaoFornecimento extends Model
         'contrato_id',
         'numero',
         'data',
+        'data_adjudicacao',
+        'data_homologacao',
+        'data_fim_vigencia',
+        'condicoes_af',
+        'itens_arrematados',
         'valor',
         'saldo',
+        'valor_empenhado',
         'situacao',
+        'situacao_detalhada',
+        'vigente',
         'observacoes',
     ];
 
@@ -28,8 +36,13 @@ class AutorizacaoFornecimento extends Model
     {
         return [
             'data' => 'date',
+            'data_adjudicacao' => 'date',
+            'data_homologacao' => 'date',
+            'data_fim_vigencia' => 'date',
             'valor' => 'decimal:2',
             'saldo' => 'decimal:2',
+            'valor_empenhado' => 'decimal:2',
+            'vigente' => 'boolean',
         ];
     }
 
@@ -51,7 +64,26 @@ class AutorizacaoFornecimento extends Model
     public function atualizarSaldo(): void
     {
         $totalEmpenhos = $this->empenhos()->sum('valor');
+        $this->valor_empenhado = $totalEmpenhos;
         $this->saldo = $this->valor - $totalEmpenhos;
+        
+        // Atualizar situação detalhada
+        if ($totalEmpenhos == 0) {
+            $this->situacao_detalhada = 'aguardando_empenho';
+        } elseif ($totalEmpenhos < $this->valor) {
+            $this->situacao_detalhada = 'parcialmente_atendida';
+        } elseif ($this->saldo <= 0) {
+            $this->situacao_detalhada = 'concluida';
+        } else {
+            $this->situacao_detalhada = 'atendendo_empenho';
+        }
+        
+        // Atualizar vigência
+        $hoje = now();
+        if ($this->data_fim_vigencia && $hoje->isAfter($this->data_fim_vigencia)) {
+            $this->vigente = false;
+        }
+        
         $this->save();
     }
 }

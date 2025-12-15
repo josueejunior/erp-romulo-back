@@ -18,7 +18,16 @@ class NotaFiscal extends Model
         'serie',
         'data_emissao',
         'fornecedor_id',
+        'transportadora',
+        'numero_cte',
+        'data_entrega_prevista',
+        'data_entrega_realizada',
+        'situacao_logistica',
         'valor',
+        'custo_produto',
+        'custo_frete',
+        'custo_total',
+        'comprovante_pagamento',
         'arquivo',
         'situacao',
         'data_pagamento',
@@ -29,8 +38,13 @@ class NotaFiscal extends Model
     {
         return [
             'data_emissao' => 'date',
+            'data_entrega_prevista' => 'date',
+            'data_entrega_realizada' => 'date',
             'data_pagamento' => 'date',
             'valor' => 'decimal:2',
+            'custo_produto' => 'decimal:2',
+            'custo_frete' => 'decimal:2',
+            'custo_total' => 'decimal:2',
         ];
     }
 

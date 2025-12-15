@@ -17,8 +17,11 @@ class Empenho extends Model
         'autorizacao_fornecimento_id',
         'numero',
         'data',
+        'data_recebimento',
+        'prazo_entrega_calculado',
         'valor',
         'concluido',
+        'situacao',
         'data_entrega',
         'observacoes',
     ];
@@ -27,6 +30,8 @@ class Empenho extends Model
     {
         return [
             'data' => 'date',
+            'data_recebimento' => 'date',
+            'prazo_entrega_calculado' => 'date',
             'data_entrega' => 'date',
             'valor' => 'decimal:2',
             'concluido' => 'boolean',
@@ -56,6 +61,7 @@ class Empenho extends Model
     public function concluir(): void
     {
         $this->concluido = true;
+        $this->situacao = 'concluido';
         $this->data_entrega = now();
         $this->save();
 
@@ -66,5 +72,36 @@ class Empenho extends Model
         if ($this->autorizacao_fornecimento_id) {
             $this->autorizacaoFornecimento->atualizarSaldo();
         }
+    }
+
+    /**
+     * Atualiza a situação do empenho baseado em prazos
+     */
+    public function atualizarSituacao(): void
+    {
+        if ($this->concluido) {
+            $this->situacao = 'concluido';
+            $this->save();
+            return;
+        }
+
+        if (!$this->data_recebimento || !$this->prazo_entrega_calculado) {
+            $this->situacao = 'aguardando_entrega';
+            $this->save();
+            return;
+        }
+
+        $hoje = now();
+        $prazo = \Carbon\Carbon::parse($this->prazo_entrega_calculado);
+
+        if ($hoje->isAfter($prazo) && !$this->data_entrega) {
+            $this->situacao = 'atrasado';
+        } elseif ($this->data_entrega) {
+            $this->situacao = 'atendido';
+        } else {
+            $this->situacao = 'em_atendimento';
+        }
+
+        $this->save();
     }
 }

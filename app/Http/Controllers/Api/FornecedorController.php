@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\FornecedorResource;
 use App\Models\Fornecedor;
 use Illuminate\Http\Request;
+use App\Helpers\PermissionHelper;
 
 class FornecedorController extends Controller
 {
@@ -21,6 +22,10 @@ class FornecedorController extends Controller
             });
         }
 
+        if ($request->boolean('apenas_transportadoras')) {
+            $query->where('is_transportadora', true);
+        }
+
         $fornecedores = $query->orderBy('razao_social')->paginate(15);
 
         return FornecedorResource::collection($fornecedores);
@@ -28,6 +33,12 @@ class FornecedorController extends Controller
 
     public function store(Request $request)
     {
+        if (!PermissionHelper::canManageMasterData()) {
+            return response()->json([
+                'message' => 'Você não tem permissão para cadastrar fornecedores.',
+            ], 403);
+        }
+
         $validated = $request->validate([
             'razao_social' => 'required|string|max:255',
             'cnpj' => 'nullable|string|max:18',
@@ -54,6 +65,12 @@ class FornecedorController extends Controller
 
     public function update(Request $request, Fornecedor $fornecedor)
     {
+        if (!PermissionHelper::canManageMasterData()) {
+            return response()->json([
+                'message' => 'Você não tem permissão para editar fornecedores.',
+            ], 403);
+        }
+
         $validated = $request->validate([
             'razao_social' => 'required|string|max:255',
             'cnpj' => 'nullable|string|max:18',
@@ -75,6 +92,12 @@ class FornecedorController extends Controller
 
     public function destroy(Fornecedor $fornecedor)
     {
+        if (!PermissionHelper::canManageMasterData()) {
+            return response()->json([
+                'message' => 'Você não tem permissão para excluir fornecedores.',
+            ], 403);
+        }
+
         if ($fornecedor->orcamentos()->count() > 0) {
             return response()->json([
                 'message' => 'Não é possível excluir um fornecedor que possui orçamentos vinculados.'

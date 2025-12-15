@@ -19,6 +19,7 @@ class ProcessoItem extends Model
         'marca_modelo_referencia',
         'exige_atestado',
         'quantidade_minima_atestado',
+        'quantidade_atestado_cap_tecnica',
         'valor_estimado',
         'valor_final_sessao',
         'valor_negociado',
@@ -59,5 +60,25 @@ class ProcessoItem extends Model
     public function getOrcamentoEscolhidoAttribute(): ?Orcamento
     {
         return $this->orcamentos()->where('fornecedor_escolhido', true)->first();
+    }
+
+    public function vinculos(): HasMany
+    {
+        return $this->hasMany(ProcessoItemVinculo::class);
+    }
+
+    public function vinculosContrato(): HasMany
+    {
+        return $this->hasMany(ProcessoItemVinculo::class)->whereNotNull('contrato_id');
+    }
+
+    public function vinculosAF(): HasMany
+    {
+        return $this->hasMany(ProcessoItemVinculo::class)->whereNotNull('autorizacao_fornecimento_id');
+    }
+
+    public function vinculosEmpenho(): HasMany
+    {
+        return $this->hasMany(ProcessoItemVinculo::class)->whereNotNull('empenho_id');
     }
 }

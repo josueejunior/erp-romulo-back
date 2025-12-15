@@ -144,10 +144,41 @@ class TenantController extends Controller
             'logo' => 'nullable|string|max:255',
         ]);
 
+        // Regra de negócio: CNPJ não pode ser alterado após definido
+        if (array_key_exists('cnpj', $validated)) {
+            $novoCnpj = $validated['cnpj'] ?? null;
+            $cnpjAtual = $tenant->cnpj;
+
+            if ($cnpjAtual && $novoCnpj && $novoCnpj !== $cnpjAtual) {
+                return response()->json([
+                    'message' => 'O CNPJ da empresa não pode ser alterado. Caso seja necessário, crie uma nova empresa.',
+                    'current_cnpj' => $cnpjAtual,
+                ], 422);
+            }
+        }
+
         $tenant->update($validated);
 
         return response()->json([
             'message' => 'Empresa atualizada com sucesso!',
+            'tenant' => $tenant,
+        ]);
+    }
+
+    /**
+     * "Excluir" um tenant (empresa)
+     * Regra de negócio: nunca excluir de fato, apenas inativar.
+     */
+    public function destroy(Tenant $tenant)
+    {
+        // Se já estiver inativa, não faz nada destrutivo
+        if ($tenant->status !== 'inativa') {
+            $tenant->status = 'inativa';
+            $tenant->save();
+        }
+
+        return response()->json([
+            'message' => 'Empresa inativada com sucesso!',
             'tenant' => $tenant,
         ]);
     }

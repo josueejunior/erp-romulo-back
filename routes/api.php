@@ -19,7 +19,12 @@ use App\Http\Controllers\Api\FornecedorController as ApiFornecedorController;
 use App\Http\Controllers\Api\DocumentoHabilitacaoController as ApiDocumentoHabilitacaoController;
 use App\Http\Controllers\Api\DashboardController as ApiDashboardController;
 use App\Http\Controllers\Api\RelatorioFinanceiroController as ApiRelatorioFinanceiroController;
+use App\Http\Controllers\Api\TenantController;
 use App\Http\Controllers\Api\CalendarioDisputasController as ApiCalendarioDisputasController;
+use App\Http\Controllers\Api\CalendarioController as ApiCalendarioController;
+use App\Http\Controllers\Api\ExportacaoController as ApiExportacaoController;
+use App\Http\Controllers\Api\SaldoController as ApiSaldoController;
+use App\Http\Controllers\Api\UserController as ApiUserController;
 
 /*
 |--------------------------------------------------------------------------
@@ -32,73 +37,103 @@ use App\Http\Controllers\Api\CalendarioDisputasController as ApiCalendarioDisput
 |
 */
 
-// Rotas públicas (central) - Gerenciamento de Tenants/Empresas
-Route::post('/tenants', [\App\Http\Controllers\Api\TenantController::class, 'store']);
-Route::get('/tenants', [\App\Http\Controllers\Api\TenantController::class, 'index']);
-Route::get('/tenants/{tenant}', [\App\Http\Controllers\Api\TenantController::class, 'show']);
-Route::put('/tenants/{tenant}', [\App\Http\Controllers\Api\TenantController::class, 'update']);
+Route::prefix('v1')->group(function () {
+    // Rotas públicas (central) - Gerenciamento de Tenants/Empresas
+    Route::post('/tenants', [TenantController::class, 'store']);
+    Route::get('/tenants', [TenantController::class, 'index']);
+    Route::get('/tenants/{tenant}', [TenantController::class, 'show']);
+    Route::put('/tenants/{tenant}', [TenantController::class, 'update']);
+    Route::delete('/tenants/{tenant}', [TenantController::class, 'destroy']);
 
-// Rotas públicas (autenticação)
-Route::post('/auth/login', [AuthController::class, 'login']);
-Route::post('/auth/register', [AuthController::class, 'register']);
+    // Rotas públicas (autenticação)
+    Route::post('/auth/login', [AuthController::class, 'login']);
+    Route::post('/auth/register', [AuthController::class, 'register']);
 
-// Rotas autenticadas
-Route::middleware(['auth:sanctum', 'tenancy'])->group(function () {
-    Route::post('/auth/logout', [AuthController::class, 'logout']);
-    Route::get('/auth/user', [AuthController::class, 'user']);
-    
-    // Dashboard
-    Route::get('/dashboard', [ApiDashboardController::class, 'index']);
-    
-    // Calendário de Disputas
-    Route::get('/calendario/disputas', [ApiCalendarioDisputasController::class, 'index']);
-    Route::get('/calendario/eventos', [ApiCalendarioDisputasController::class, 'eventos']);
-    
-    // Processos
-    Route::apiResource('processos', ApiProcessoController::class);
-    Route::post('/processos/{processo}/marcar-vencido', [ApiProcessoController::class, 'marcarVencido']);
-    Route::post('/processos/{processo}/marcar-perdido', [ApiProcessoController::class, 'marcarPerdido']);
-    Route::get('/processos/{processo}/sugerir-status', [ApiProcessoController::class, 'sugerirStatus']);
-    
-    // Itens do Processo
-    Route::apiResource('processos.itens', ApiProcessoItemController::class)->shallow();
-    
-    // Orçamentos
-    Route::apiResource('processos.itens.orcamentos', ApiOrcamentoController::class)->shallow();
-    
-    // Formação de Preços
-    Route::apiResource('processos.itens.orcamentos.formacao-preco', ApiFormacaoPrecoController::class)->shallow();
-    
-    // Disputa
-    Route::get('/processos/{processo}/disputa', [ApiDisputaController::class, 'show']);
-    Route::put('/processos/{processo}/disputa', [ApiDisputaController::class, 'update']);
-    
-    // Julgamento
-    Route::get('/processos/{processo}/julgamento', [ApiJulgamentoController::class, 'show']);
-    Route::put('/processos/{processo}/julgamento', [ApiJulgamentoController::class, 'update']);
-    
-    // Contratos
-    Route::apiResource('processos.contratos', ApiContratoController::class)->shallow();
-    
-    // Autorizações de Fornecimento
-    Route::apiResource('processos.autorizacoes-fornecimento', ApiAutorizacaoFornecimentoController::class)->shallow();
-    
-    // Empenhos
-    Route::apiResource('processos.empenhos', ApiEmpenhoController::class)->shallow();
-    
-    // Notas Fiscais
-    Route::apiResource('processos.notas-fiscais', ApiNotaFiscalController::class)->shallow();
-    
-    // Cadastros
-    Route::apiResource('orgaos', ApiOrgaoController::class);
-    Route::apiResource('setors', ApiSetorController::class);
-    Route::apiResource('fornecedores', ApiFornecedorController::class);
-    Route::apiResource('documentos-habilitacao', ApiDocumentoHabilitacaoController::class);
-    
-    // Debug/Correção de roles
-    Route::get('/user/roles', [\App\Http\Controllers\Api\FixUserRolesController::class, 'getCurrentUserRoles']);
-    Route::post('/user/fix-role', [\App\Http\Controllers\Api\FixUserRolesController::class, 'fixCurrentUserRole']);
-    
-    // Relatórios
-    Route::get('/relatorios/financeiro', [ApiRelatorioFinanceiroController::class, 'index']);
+    // Rotas autenticadas
+    Route::middleware(['auth:sanctum', 'tenancy', 'throttle:60,1'])->group(function () {
+        Route::post('/auth/logout', [AuthController::class, 'logout']);
+        Route::get('/auth/user', [AuthController::class, 'user']);
+        
+        // Dashboard
+        Route::get('/dashboard', [ApiDashboardController::class, 'index']);
+        
+        // Calendário de Disputas (legado)
+        Route::get('/calendario/disputas', [ApiCalendarioDisputasController::class, 'index']);
+        Route::get('/calendario/eventos', [ApiCalendarioDisputasController::class, 'eventos']);
+        
+        // Calendário (novo)
+        Route::get('/calendario/disputas-novo', [ApiCalendarioController::class, 'disputas']);
+        Route::get('/calendario/julgamento', [ApiCalendarioController::class, 'julgamento']);
+        Route::get('/calendario/avisos-urgentes', [ApiCalendarioController::class, 'avisosUrgentes']);
+        
+        // Processos
+        Route::get('/processos-resumo', [ApiProcessoController::class, 'resumo']);
+        Route::apiResource('processos', ApiProcessoController::class);
+        Route::post('/processos/{processo}/marcar-vencido', [ApiProcessoController::class, 'marcarVencido']);
+        Route::post('/processos/{processo}/marcar-perdido', [ApiProcessoController::class, 'marcarPerdido']);
+        Route::get('/processos/{processo}/sugerir-status', [ApiProcessoController::class, 'sugerirStatus']);
+        
+        // Exportação
+        Route::get('/processos/{processo}/exportar/proposta-comercial', [ApiExportacaoController::class, 'propostaComercial']);
+        Route::get('/processos/{processo}/exportar/catalogo-ficha-tecnica', [ApiExportacaoController::class, 'catalogoFichaTecnica']);
+        
+        // Saldo
+        Route::get('/processos/{processo}/saldo', [ApiSaldoController::class, 'show']);
+        Route::get('/processos/{processo}/saldo-vencido', [ApiSaldoController::class, 'saldoVencido']);
+        Route::get('/processos/{processo}/saldo-vinculado', [ApiSaldoController::class, 'saldoVinculado']);
+        Route::get('/processos/{processo}/saldo-empenhado', [ApiSaldoController::class, 'saldoEmpenhado']);
+        
+        // Itens do Processo
+        Route::apiResource('processos.itens', ApiProcessoItemController::class)->shallow();
+        
+        // Orçamentos
+        Route::apiResource('processos.itens.orcamentos', ApiOrcamentoController::class)->shallow();
+        
+        // Formação de Preços
+        Route::apiResource('processos.itens.orcamentos.formacao-preco', ApiFormacaoPrecoController::class)->shallow();
+        
+        // Disputa
+        Route::get('/processos/{processo}/disputa', [ApiDisputaController::class, 'show']);
+        Route::put('/processos/{processo}/disputa', [ApiDisputaController::class, 'update']);
+        
+        // Julgamento
+        Route::get('/processos/{processo}/julgamento', [ApiJulgamentoController::class, 'show']);
+        Route::put('/processos/{processo}/julgamento', [ApiJulgamentoController::class, 'update']);
+        
+        // Contratos
+        Route::apiResource('processos.contratos', ApiContratoController::class)->shallow();
+        
+        // Autorizações de Fornecimento
+        Route::apiResource('processos.autorizacoes-fornecimento', ApiAutorizacaoFornecimentoController::class)->shallow();
+        
+        // Empenhos
+        Route::apiResource('processos.empenhos', ApiEmpenhoController::class)->shallow();
+        
+        // Notas Fiscais
+        Route::apiResource('processos.notas-fiscais', ApiNotaFiscalController::class)->shallow();
+        
+        // Cadastros
+        Route::apiResource('orgaos', ApiOrgaoController::class);
+        Route::apiResource('setors', ApiSetorController::class);
+        Route::apiResource('fornecedores', ApiFornecedorController::class)
+            ->parameters(['fornecedores' => 'fornecedor']);
+        Route::apiResource('documentos-habilitacao', ApiDocumentoHabilitacaoController::class);
+        
+        // Debug/Correção de roles
+        Route::get('/user/roles', [\App\Http\Controllers\Api\FixUserRolesController::class, 'getCurrentUserRoles']);
+        Route::post('/user/fix-role', [\App\Http\Controllers\Api\FixUserRolesController::class, 'fixCurrentUserRole']);
+        
+        // Relatórios
+        Route::get('/relatorios/financeiro', [ApiRelatorioFinanceiroController::class, 'index']);
+
+        // Usuários
+        Route::apiResource('users', ApiUserController::class);
+    });
+});
+
+// Fallback para 404 em JSON
+Route::fallback(function () {
+    return response()->json([
+        'message' => 'Rota não encontrada.',
+    ], 404);
 });
