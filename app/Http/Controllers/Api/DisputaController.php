@@ -5,10 +5,21 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Processo;
 use App\Models\ProcessoItem;
+use App\Services\DisputaService;
+use App\Services\ProcessoStatusService;
+use App\Helpers\PermissionHelper;
 use Illuminate\Http\Request;
 
 class DisputaController extends Controller
 {
+    protected DisputaService $disputaService;
+    protected ProcessoStatusService $statusService;
+
+    public function __construct(DisputaService $disputaService, ProcessoStatusService $statusService)
+    {
+        $this->disputaService = $disputaService;
+        $this->statusService = $statusService;
+    }
     public function show(Processo $processo)
     {
         if ($processo->isEmExecucao()) {
@@ -42,6 +53,13 @@ class DisputaController extends Controller
 
     public function update(Request $request, Processo $processo)
     {
+        // Verificar permissão
+        if (!PermissionHelper::canEditProcess()) {
+            return response()->json([
+                'message' => 'Você não tem permissão para registrar disputas.'
+            ], 403);
+        }
+
         if ($processo->isEmExecucao()) {
             return response()->json([
                 'message' => 'Não é possível editar disputa de processos em execução.'
@@ -53,24 +71,25 @@ class DisputaController extends Controller
             'itens.*.id' => 'required|exists:processo_itens,id',
             'itens.*.valor_final_sessao' => 'nullable|numeric|min:0',
             'itens.*.classificacao' => 'nullable|integer|min:1',
+            'itens.*.observacoes' => 'nullable|string',
         ]);
 
-        foreach ($validated['itens'] as $itemData) {
-            $item = ProcessoItem::find($itemData['id']);
-            if ($item && $item->processo_id === $processo->id) {
-                $item->update([
-                    'valor_final_sessao' => $itemData['valor_final_sessao'] ?? null,
-                    'classificacao' => $itemData['classificacao'] ?? null,
-                ]);
-            }
-        }
+        // Registrar resultados usando o serviço
+        $processo = $this->disputaService->registrarResultados($processo, $validated['itens']);
+
+        // Verificar se deve sugerir mudança de status
+        $sugerirJulgamento = $this->statusService->deveSugerirJulgamento($processo);
 
         $processo->load('itens');
 
         return response()->json([
             'message' => 'Disputa registrada com sucesso!',
             'processo' => $processo,
+            'sugerir_julgamento' => $sugerirJulgamento,
         ]);
     }
 }
+
+
+
 

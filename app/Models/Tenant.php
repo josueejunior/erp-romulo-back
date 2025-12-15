@@ -19,6 +19,29 @@ class Tenant extends BaseTenant implements TenantWithDatabase
             'cnpj',
             'email',
             'status',
+            'endereco',
+            'cidade',
+            'estado',
+            'cep',
+            'telefones',
+            'emails_adicionais',
+            'banco',
+            'agencia',
+            'conta',
+            'tipo_conta',
+            'pix',
+            'representante_legal_nome',
+            'representante_legal_cpf',
+            'representante_legal_cargo',
+            'logo',
+        ];
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'telefones' => 'array',
+            'emails_adicionais' => 'array',
         ];
     }
 }

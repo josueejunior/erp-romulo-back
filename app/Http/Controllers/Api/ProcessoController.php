@@ -6,10 +6,18 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\ProcessoResource;
 use App\Models\Processo;
 use App\Models\Orgao;
+use App\Services\ProcessoStatusService;
+use App\Helpers\PermissionHelper;
 use Illuminate\Http\Request;
 
 class ProcessoController extends Controller
 {
+    protected ProcessoStatusService $statusService;
+
+    public function __construct(ProcessoStatusService $statusService)
+    {
+        $this->statusService = $statusService;
+    }
     public function index(Request $request)
     {
         $query = Processo::with(['orgao', 'setor']);
@@ -32,6 +40,13 @@ class ProcessoController extends Controller
 
     public function store(Request $request)
     {
+        // Verificar permissão
+        if (!PermissionHelper::canCreateProcess()) {
+            return response()->json([
+                'message' => 'Você não tem permissão para criar processos.'
+            ], 403);
+        }
+
         $validated = $request->validate([
             'orgao_id' => 'required|exists:orgaos,id',
             'setor_id' => 'required|exists:setors,id',
@@ -121,19 +136,80 @@ class ProcessoController extends Controller
         return response()->json(null, 204);
     }
 
-    public function marcarVencido(Processo $processo)
+    public function marcarVencido(Request $request, Processo $processo)
     {
-        $processo->status = 'execucao';
-        $processo->save();
+        // Verificar permissão
+        if (!PermissionHelper::canMarkProcessStatus()) {
+            return response()->json([
+                'message' => 'Você não tem permissão para marcar processos como vencidos.'
+            ], 403);
+        }
 
-        return new ProcessoResource($processo);
+        // Validar transição de status
+        $validacao = $this->statusService->podeAlterarStatus($processo, 'vencido');
+        if (!$validacao['pode']) {
+            return response()->json([
+                'message' => $validacao['motivo']
+            ], 400);
+        }
+
+        // Alterar para vencido
+        $resultado = $this->statusService->alterarStatus($processo, 'vencido');
+        
+        // Se confirmado vencido, mudar para execucao
+        if ($request->boolean('confirmar_execucao', true)) {
+            $resultado = $this->statusService->alterarStatus($processo, 'execucao');
+        }
+
+        return response()->json([
+            'message' => 'Processo marcado como vencido com sucesso!',
+            'processo' => new ProcessoResource($processo->fresh()),
+        ]);
     }
 
-    public function marcarPerdido(Processo $processo)
+    public function marcarPerdido(Request $request, Processo $processo)
     {
-        $processo->status = 'perdido';
-        $processo->save();
+        // Verificar permissão
+        if (!PermissionHelper::canMarkProcessStatus()) {
+            return response()->json([
+                'message' => 'Você não tem permissão para marcar processos como perdidos.'
+            ], 403);
+        }
 
-        return new ProcessoResource($processo);
+        // Validar transição de status
+        $validacao = $this->statusService->podeAlterarStatus($processo, 'perdido');
+        if (!$validacao['pode']) {
+            return response()->json([
+                'message' => $validacao['motivo']
+            ], 400);
+        }
+
+        // Alterar para perdido
+        $resultado = $this->statusService->alterarStatus($processo, 'perdido');
+        
+        // Se confirmado perdido, arquivar
+        if ($request->boolean('arquivar', true)) {
+            $resultado = $this->statusService->alterarStatus($processo, 'arquivado');
+        }
+
+        return response()->json([
+            'message' => 'Processo marcado como perdido com sucesso!',
+            'processo' => new ProcessoResource($processo->fresh()),
+        ]);
+    }
+
+    /**
+     * Sugerir próximo status baseado nas regras de negócio
+     */
+    public function sugerirStatus(Processo $processo)
+    {
+        $sugestao = $this->statusService->sugerirProximoStatus($processo);
+        
+        return response()->json([
+            'sugerir_status' => $sugestao,
+            'status_atual' => $processo->status,
+            'deve_sugerir_julgamento' => $this->statusService->deveSugerirJulgamento($processo),
+            'deve_sugerir_perdido' => $this->statusService->deveSugerirPerdido($processo),
+        ]);
     }
 }

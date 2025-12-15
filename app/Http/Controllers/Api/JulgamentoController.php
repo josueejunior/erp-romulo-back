@@ -5,10 +5,21 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Processo;
 use App\Models\ProcessoItem;
+use App\Services\DisputaService;
+use App\Services\ProcessoStatusService;
+use App\Helpers\PermissionHelper;
 use Illuminate\Http\Request;
 
 class JulgamentoController extends Controller
 {
+    protected DisputaService $disputaService;
+    protected ProcessoStatusService $statusService;
+
+    public function __construct(DisputaService $disputaService, ProcessoStatusService $statusService)
+    {
+        $this->disputaService = $disputaService;
+        $this->statusService = $statusService;
+    }
     public function show(Processo $processo)
     {
         if ($processo->isEmExecucao()) {
@@ -41,6 +52,13 @@ class JulgamentoController extends Controller
 
     public function update(Request $request, Processo $processo)
     {
+        // Verificar permissão
+        if (!PermissionHelper::canEditProcess()) {
+            return response()->json([
+                'message' => 'Você não tem permissão para editar julgamentos.'
+            ], 403);
+        }
+
         if ($processo->isEmExecucao()) {
             return response()->json([
                 'message' => 'Não é possível editar julgamento de processos em execução.'
@@ -55,27 +73,40 @@ class JulgamentoController extends Controller
             'itens.*.chance_arremate' => 'nullable|in:baixa,media,alta',
             'itens.*.chance_percentual' => 'nullable|integer|min:0|max:100',
             'itens.*.lembretes' => 'nullable|string',
+            'itens.*.observacoes' => 'nullable|string',
         ]);
 
+        // Atualizar julgamento usando o serviço
         foreach ($validated['itens'] as $itemData) {
             $item = ProcessoItem::find($itemData['id']);
             if ($item && $item->processo_id === $processo->id) {
-                $item->update([
-                    'status_item' => $itemData['status_item'],
-                    'valor_negociado' => $itemData['valor_negociado'] ?? null,
-                    'chance_arremate' => $itemData['chance_arremate'] ?? null,
-                    'chance_percentual' => $itemData['chance_percentual'] ?? null,
-                    'lembretes' => $itemData['lembretes'] ?? null,
-                ]);
+                $this->disputaService->registrarJulgamento(
+                    $item,
+                    $itemData['status_item'],
+                    $itemData['classificacao'] ?? null,
+                    $itemData['chance_arremate'] ?? null,
+                    $itemData['chance_percentual'] ?? null,
+                    $itemData['valor_negociado'] ?? null,
+                    $itemData['lembretes'] ?? null,
+                    $itemData['observacoes'] ?? null
+                );
             }
         }
 
         $processo->load('itens');
+        $processo->refresh();
+
+        // Verificar se deve sugerir mudança de status
+        $sugerirPerdido = $this->statusService->deveSugerirPerdido($processo);
 
         return response()->json([
             'message' => 'Julgamento atualizado com sucesso!',
             'processo' => $processo,
+            'sugerir_perdido' => $sugerirPerdido,
         ]);
     }
 }
+
+
+
 

@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\FornecedorController as ApiFornecedorController;
 use App\Http\Controllers\Api\DocumentoHabilitacaoController as ApiDocumentoHabilitacaoController;
 use App\Http\Controllers\Api\DashboardController as ApiDashboardController;
 use App\Http\Controllers\Api\RelatorioFinanceiroController as ApiRelatorioFinanceiroController;
+use App\Http\Controllers\Api\CalendarioDisputasController as ApiCalendarioDisputasController;
 
 /*
 |--------------------------------------------------------------------------
@@ -47,10 +48,15 @@ Route::middleware(['auth:sanctum', 'tenancy'])->group(function () {
     // Dashboard
     Route::get('/dashboard', [ApiDashboardController::class, 'index']);
     
+    // Calendário de Disputas
+    Route::get('/calendario/disputas', [ApiCalendarioDisputasController::class, 'index']);
+    Route::get('/calendario/eventos', [ApiCalendarioDisputasController::class, 'eventos']);
+    
     // Processos
     Route::apiResource('processos', ApiProcessoController::class);
     Route::post('/processos/{processo}/marcar-vencido', [ApiProcessoController::class, 'marcarVencido']);
     Route::post('/processos/{processo}/marcar-perdido', [ApiProcessoController::class, 'marcarPerdido']);
+    Route::get('/processos/{processo}/sugerir-status', [ApiProcessoController::class, 'sugerirStatus']);
     
     // Itens do Processo
     Route::apiResource('processos.itens', ApiProcessoItemController::class)->shallow();

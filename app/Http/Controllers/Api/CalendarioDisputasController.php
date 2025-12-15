@@ -1,0 +1,150 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\Processo;
+use App\Services\ProcessoStatusService;
+use Illuminate\Http\Request;
+
+class CalendarioDisputasController extends Controller
+{
+    protected ProcessoStatusService $statusService;
+
+    public function __construct(ProcessoStatusService $statusService)
+    {
+        $this->statusService = $statusService;
+    }
+
+    /**
+     * Retorna processos para o calendário de disputas
+     * Inclui preço mínimo por item
+     */
+    public function index(Request $request)
+    {
+        $query = Processo::whereIn('status', ['participacao', 'julgamento_habilitacao'])
+            ->with([
+                'orgao:id,uasg,razao_social',
+                'setor:id,orgao_id,nome',
+                'itens' => function($query) {
+                    $query->select('id', 'processo_id', 'numero_item', 'especificacao_tecnica', 'quantidade', 'unidade')
+                        ->with(['formacoesPreco' => function($q) {
+                            $q->select('id', 'processo_item_id', 'preco_minimo')
+                              ->orderBy('preco_minimo', 'asc');
+                        }]);
+                }
+            ]);
+
+        // Filtrar por período
+        if ($request->data_inicio) {
+            $query->where('data_hora_sessao_publica', '>=', $request->data_inicio);
+        }
+
+        if ($request->data_fim) {
+            $query->where('data_hora_sessao_publica', '<=', $request->data_fim);
+        }
+
+        // Filtrar por status
+        if ($request->status) {
+            $query->where('status', $request->status);
+        }
+
+        $processos = $query->orderBy('data_hora_sessao_publica', 'asc')->get();
+
+        // Formatar resposta com preço mínimo por item
+        $processosFormatados = $processos->map(function($processo) {
+            $itens = $processo->itens->map(function($item) {
+                // Pegar menor preço mínimo das formações de preço
+                $precoMinimo = $item->formacoesPreco->min('preco_minimo') ?? $item->valor_estimado;
+
+                return [
+                    'id' => $item->id,
+                    'numero_item' => $item->numero_item,
+                    'especificacao_tecnica' => $item->especificacao_tecnica,
+                    'quantidade' => $item->quantidade,
+                    'unidade' => $item->unidade,
+                    'preco_minimo' => $precoMinimo,
+                    'valor_estimado' => $item->valor_estimado,
+                ];
+            });
+
+            // Verificar se deve sugerir mudança de status
+            $sugerirJulgamento = $this->statusService->deveSugerirJulgamento($processo);
+
+            return [
+                'id' => $processo->id,
+                'identificador' => $processo->identificador,
+                'numero_modalidade' => $processo->numero_modalidade,
+                'modalidade' => $processo->modalidade,
+                'status' => $processo->status,
+                'data_hora_sessao_publica' => $processo->data_hora_sessao_publica?->format('Y-m-d H:i:s'),
+                'data_hora_sessao_publica_formatted' => $processo->data_hora_sessao_publica?->format('d/m/Y H:i'),
+                'orgao' => [
+                    'id' => $processo->orgao->id,
+                    'uasg' => $processo->orgao->uasg,
+                    'razao_social' => $processo->orgao->razao_social,
+                ],
+                'setor' => [
+                    'id' => $processo->setor->id,
+                    'nome' => $processo->setor->nome,
+                ],
+                'objeto_resumido' => $processo->objeto_resumido,
+                'itens' => $itens,
+                'sugerir_julgamento' => $sugerirJulgamento,
+            ];
+        });
+
+        return response()->json([
+            'processos' => $processosFormatados,
+            'total' => $processosFormatados->count(),
+        ]);
+    }
+
+    /**
+     * Retorna eventos do calendário em formato de eventos
+     */
+    public function eventos(Request $request)
+    {
+        $query = Processo::whereIn('status', ['participacao', 'julgamento_habilitacao'])
+            ->with(['orgao:id,uasg,razao_social', 'itens.formacoesPreco']);
+
+        if ($request->data_inicio) {
+            $query->where('data_hora_sessao_publica', '>=', $request->data_inicio);
+        }
+
+        if ($request->data_fim) {
+            $query->where('data_hora_sessao_publica', '<=', $request->data_fim);
+        }
+
+        $processos = $query->orderBy('data_hora_sessao_publica', 'asc')->get();
+
+        $eventos = $processos->map(function($processo) {
+            $dataHora = $processo->data_hora_sessao_publica;
+            
+            // Calcular menor preço mínimo entre todos os itens
+            $precoMinimoTotal = $processo->itens->flatMap(function($item) {
+                return $item->formacoesPreco->pluck('preco_minimo');
+            })->filter()->min();
+
+            return [
+                'id' => $processo->id,
+                'title' => $processo->identificador,
+                'start' => $dataHora?->format('Y-m-d\TH:i:s'),
+                'end' => $dataHora?->addHour()?->format('Y-m-d\TH:i:s'),
+                'backgroundColor' => $processo->status === 'participacao' ? '#3b82f6' : '#10b981',
+                'borderColor' => $processo->status === 'participacao' ? '#2563eb' : '#059669',
+                'extendedProps' => [
+                    'processo_id' => $processo->id,
+                    'modalidade' => $processo->modalidade,
+                    'status' => $processo->status,
+                    'orgao' => $processo->orgao->uasg ?? $processo->orgao->razao_social,
+                    'preco_minimo' => $precoMinimoTotal,
+                    'quantidade_itens' => $processo->itens->count(),
+                ],
+            ];
+        });
+
+        return response()->json($eventos);
+    }
+}
+
