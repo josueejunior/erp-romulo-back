@@ -15,47 +15,92 @@ return new class extends Migration
         $driver = DB::connection()->getDriverName();
         
         if ($driver === 'pgsql') {
-            // PostgreSQL: Criar novo tipo ENUM e alterar coluna
-            // Primeiro, descobrir o nome do tipo ENUM atual
-            $enumType = DB::selectOne("
-                SELECT t.typname 
-                FROM pg_type t 
-                JOIN pg_attribute a ON a.atttypid = t.oid 
-                JOIN pg_class c ON a.attrelid = c.oid 
+            // PostgreSQL: Verificar o tipo atual da coluna
+            $columnInfo = DB::selectOne("
+                SELECT 
+                    t.typname as type_name,
+                    a.attname as column_name,
+                    pg_get_expr(adbin, adrelid) as default_value
+                FROM pg_attribute a
+                JOIN pg_class c ON a.attrelid = c.oid
+                JOIN pg_type t ON a.atttypid = t.oid
+                LEFT JOIN pg_attrdef ad ON a.attrelid = ad.adrelid AND a.attnum = ad.adnum
                 WHERE c.relname = 'processos' 
                 AND a.attname = 'status'
+                AND a.attnum > 0
+                AND NOT a.attisdropped
             ");
             
-            $oldTypeName = $enumType ? $enumType->typname : 'processos_status';
-            $newTypeName = $oldTypeName . '_new';
+            $typeName = $columnInfo ? $columnInfo->type_name : null;
             
-            // Criar novo tipo ENUM com todos os valores
-            DB::statement("
-                CREATE TYPE {$newTypeName} AS ENUM (
-                    'participacao',
-                    'julgamento_habilitacao',
-                    'vencido',
-                    'perdido',
-                    'execucao',
-                    'pagamento',
-                    'encerramento',
-                    'arquivado'
-                )
-            ");
-            
-            // Alterar coluna para usar o novo tipo
-            DB::statement("
-                ALTER TABLE processos 
-                ALTER COLUMN status TYPE {$newTypeName} 
-                USING status::text::{$newTypeName}
-            ");
-            
-            // Remover tipo antigo e renomear novo tipo
-            DB::statement("DROP TYPE IF EXISTS {$oldTypeName} CASCADE");
-            DB::statement("ALTER TYPE {$newTypeName} RENAME TO {$oldTypeName}");
-            
-            // Restaurar default
-            DB::statement("ALTER TABLE processos ALTER COLUMN status SET DEFAULT 'participacao'::{$oldTypeName}");
+            // Se for varchar, text ou character varying, criar tipo ENUM e converter
+            // Também verificar se o tipo não é um ENUM (não começa com processos_status)
+            if (!$typeName || $typeName === 'varchar' || $typeName === 'text' || $typeName === 'character varying' || strpos($typeName, 'status') === false) {
+                // Criar novo tipo ENUM
+                DB::statement("
+                    CREATE TYPE processos_status_new AS ENUM (
+                        'participacao',
+                        'julgamento_habilitacao',
+                        'vencido',
+                        'perdido',
+                        'execucao',
+                        'pagamento',
+                        'encerramento',
+                        'arquivado'
+                    )
+                ");
+                
+                // Remover default temporariamente
+                DB::statement("ALTER TABLE processos ALTER COLUMN status DROP DEFAULT");
+                
+                // Alterar coluna para usar o novo tipo ENUM
+                DB::statement("
+                    ALTER TABLE processos 
+                    ALTER COLUMN status TYPE processos_status_new 
+                    USING status::text::processos_status_new
+                ");
+                
+                // Restaurar default
+                DB::statement("ALTER TABLE processos ALTER COLUMN status SET DEFAULT 'participacao'::processos_status_new");
+                
+                // Renomear tipo
+                DB::statement("ALTER TYPE processos_status_new RENAME TO processos_status");
+            } else {
+                // Se já for ENUM, adicionar novos valores
+                $oldTypeName = $typeName ?: 'processos_status';
+                $newTypeName = $oldTypeName . '_new';
+                
+                // Criar novo tipo ENUM com todos os valores
+                DB::statement("
+                    CREATE TYPE {$newTypeName} AS ENUM (
+                        'participacao',
+                        'julgamento_habilitacao',
+                        'vencido',
+                        'perdido',
+                        'execucao',
+                        'pagamento',
+                        'encerramento',
+                        'arquivado'
+                    )
+                ");
+                
+                // Remover default temporariamente
+                DB::statement("ALTER TABLE processos ALTER COLUMN status DROP DEFAULT");
+                
+                // Alterar coluna para usar o novo tipo
+                DB::statement("
+                    ALTER TABLE processos 
+                    ALTER COLUMN status TYPE {$newTypeName} 
+                    USING status::text::{$newTypeName}
+                ");
+                
+                // Remover tipo antigo e renomear novo tipo
+                DB::statement("DROP TYPE IF EXISTS {$oldTypeName} CASCADE");
+                DB::statement("ALTER TYPE {$newTypeName} RENAME TO {$oldTypeName}");
+                
+                // Restaurar default
+                DB::statement("ALTER TABLE processos ALTER COLUMN status SET DEFAULT 'participacao'::{$oldTypeName}");
+            }
         } else {
             // MySQL/MariaDB: Usar sintaxe MODIFY COLUMN
             DB::statement("ALTER TABLE processos MODIFY COLUMN status ENUM(
