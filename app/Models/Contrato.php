@@ -29,6 +29,7 @@ class Contrato extends Model
         'vigente',
         'observacoes',
         'arquivo_contrato',
+        'numero_cte',
     ];
 
     protected function casts(): array

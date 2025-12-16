@@ -30,6 +30,7 @@ class AutorizacaoFornecimento extends Model
         'situacao_detalhada',
         'vigente',
         'observacoes',
+        'numero_cte',
     ];
 
     protected function casts(): array

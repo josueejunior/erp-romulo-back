@@ -24,6 +24,7 @@ class Empenho extends Model
         'situacao',
         'data_entrega',
         'observacoes',
+        'numero_cte',
     ];
 
     protected function casts(): array
