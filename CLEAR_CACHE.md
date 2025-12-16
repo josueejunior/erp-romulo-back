@@ -41,3 +41,4 @@ docker exec -it erp-licitacoes-app php artisan route:list --path=api/v1/contrato
 2. Verifique se a rota está dentro do middleware de autenticação
 3. Verifique se você está autenticado (a rota requer `auth:sanctum`)
 
+

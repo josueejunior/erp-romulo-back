@@ -171,3 +171,4 @@ docker exec -it erp-licitacoes-app php artisan tenants:seed
 - Verifique se as migrations estão em `database/migrations/tenant/`
 - Verifique a configuração em `config/tenancy.php` → `migration_parameters`
 
+

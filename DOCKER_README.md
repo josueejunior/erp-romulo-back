@@ -237,3 +237,4 @@ Após iniciar os containers, verifique:
 - Os seeds são executados apenas se `RUN_SEEDS=true` (padrão)
 - O script aguarda automaticamente o PostgreSQL estar pronto antes de executar migrations
 
+
