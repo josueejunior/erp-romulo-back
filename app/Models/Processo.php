@@ -27,6 +27,8 @@ class Processo extends Model
         'horario_sessao_publica',
         'endereco_entrega',
         'local_entrega_detalhado',
+        'forma_entrega',
+        'prazo_entrega',
         'forma_prazo_entrega',
         'prazos_detalhados',
         'prazo_pagamento',
@@ -99,6 +101,11 @@ class Processo extends Model
     public function notasFiscais(): HasMany
     {
         return $this->hasMany(NotaFiscal::class);
+    }
+
+    public function orcamentos(): HasMany
+    {
+        return $this->hasMany(Orcamento::class);
     }
 
     public function getIdentificadorAttribute(): string

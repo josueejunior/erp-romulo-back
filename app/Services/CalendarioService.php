@@ -32,9 +32,13 @@ class CalendarioService
             ->with([
                 'orgao',
                 'setor',
-                'itens.orcamentos.formacaoPreco',
-                'itens.orcamentos' => function ($query) {
-                    $query->where('fornecedor_escolhido', true);
+                'itens' => function ($query) {
+                    $query->with([
+                        'orcamentos.formacaoPreco',
+                        'orcamentos.fornecedor',
+                        'orcamentoItens.orcamento.fornecedor',
+                        'orcamentoItens.formacaoPreco'
+                    ]);
                 }
             ])
             ->orderBy('data_hora_sessao_publica')
@@ -76,22 +80,39 @@ class CalendarioService
         $precos = [];
 
         foreach ($processo->itens as $item) {
-            $orcamentoEscolhido = $item->orcamentoEscolhido;
-            
+            // Primeiro tentar buscar na estrutura antiga (compatibilidade)
+            $orcamentoEscolhido = $item->orcamentos->firstWhere('fornecedor_escolhido', true);
+            $formacao = null;
+            $fornecedorNome = null;
+
             if ($orcamentoEscolhido && $orcamentoEscolhido->formacaoPreco) {
                 $formacao = $orcamentoEscolhido->formacaoPreco;
+                $fornecedorNome = $orcamentoEscolhido->fornecedor->razao_social ?? 'N/A';
+            } else {
+                // Se não encontrou na estrutura antiga, buscar na nova (orcamento_itens)
+                $orcamentoItemEscolhido = $item->orcamentoItens->firstWhere('fornecedor_escolhido', true);
+                if ($orcamentoItemEscolhido) {
+                    if ($orcamentoItemEscolhido->formacaoPreco) {
+                        $formacao = $orcamentoItemEscolhido->formacaoPreco;
+                    }
+                    $fornecedorNome = $orcamentoItemEscolhido->orcamento->fornecedor->razao_social ?? 'N/A';
+                }
+            }
+
+            if ($formacao) {
                 $precos[] = [
                     'item_numero' => $item->numero_item,
                     'descricao' => substr($item->especificacao_tecnica, 0, 50) . '...',
                     'preco_minimo' => $formacao->preco_minimo,
                     'preco_recomendado' => $formacao->preco_recomendado,
-                    'fornecedor' => $orcamentoEscolhido->fornecedor->razao_social ?? 'N/A',
+                    'fornecedor' => $fornecedorNome ?? 'N/A',
                 ];
             } else {
+                // Se não tem orçamento escolhido, usar valor estimado como fallback
                 $precos[] = [
                     'item_numero' => $item->numero_item,
                     'descricao' => substr($item->especificacao_tecnica, 0, 50) . '...',
-                    'preco_minimo' => null,
+                    'preco_minimo' => $item->valor_estimado,
                     'preco_recomendado' => null,
                     'fornecedor' => 'Nenhum orçamento escolhido',
                 ];

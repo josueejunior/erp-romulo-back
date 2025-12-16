@@ -76,6 +76,11 @@ class ProcessoItem extends Model
         return $this->hasMany(Orcamento::class);
     }
 
+    public function orcamentoItens(): HasMany
+    {
+        return $this->hasMany(OrcamentoItem::class);
+    }
+
     public function formacoesPreco(): HasMany
     {
         return $this->hasMany(FormacaoPreco::class);
@@ -83,7 +88,20 @@ class ProcessoItem extends Model
 
     public function getOrcamentoEscolhidoAttribute(): ?Orcamento
     {
-        return $this->orcamentos()->where('fornecedor_escolhido', true)->first();
+        // Primeiro tentar buscar na estrutura antiga (compatibilidade)
+        $orcamentoAntigo = $this->orcamentos()->where('fornecedor_escolhido', true)->first();
+        if ($orcamentoAntigo) {
+            return $orcamentoAntigo;
+        }
+
+        // Se não encontrar, buscar na nova estrutura (orcamento_itens)
+        $orcamentoItem = $this->orcamentoItens()->where('fornecedor_escolhido', true)->first();
+        if ($orcamentoItem) {
+            // Retornar o orçamento relacionado
+            return $orcamentoItem->orcamento;
+        }
+
+        return null;
     }
 
     public function vinculos(): HasMany

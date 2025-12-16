@@ -91,7 +91,11 @@ Route::prefix('v1')->group(function () {
             ->parameters(['itens' => 'item'])
             ->shallow();
         
-        // Orçamentos
+        // Orçamentos (por processo - múltiplos itens)
+        Route::post('/processos/{processo}/orcamentos', [ApiOrcamentoController::class, 'storeByProcesso']);
+        Route::get('/processos/{processo}/orcamentos', [ApiOrcamentoController::class, 'indexByProcesso']);
+        
+        // Orçamentos (por item - compatibilidade)
         Route::apiResource('processos.itens.orcamentos', ApiOrcamentoController::class)
             ->parameters(['itens' => 'item'])
             ->shallow();
