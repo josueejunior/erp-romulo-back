@@ -1152,9 +1152,9 @@
 				<div class="pdf24_05 pdf24_06">
 					<div class="pdf24_01 pdf24_07" style="left:21.06em;top:8.029em;"><span class="pdf24_08 pdf24_09 pdf24_10" style="word-spacing:-0.0089em;">INSIRA SUA LOGO AQUI!!!! &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:22.88em;top:9.6954em;"><span class="pdf24_11 pdf24_09 pdf24_12" style="word-spacing:-0.0156em;">PROPOSTA COMERCIAL &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:22.24em;top:10.5754em;"><span class="pdf24_13 pdf24_09 pdf24_14" style="word-spacing:-0.0006em;">Dispensa Eletrônica nº. {{ $processo->numero_modalidade ?? 'N/A' }}/{{ date('Y') }} &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:18.46em;top:12.9454em;"><span class="pdf24_13 pdf24_09 pdf24_15" style="word-spacing:-0.0005em;">{{ ($processo->orgao->uasg ?? '') . ($processo->orgao->uasg && $processo->orgao->razao_social ? ' - ' : '') . ($processo->orgao->razao_social ?? 'N/A') . ($processo->orgao->estado ? ' - ' . $processo->orgao->estado : '') }} &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:14.3197em;"><span class="pdf24_16 pdf24_09 pdf24_17" style="word-spacing:0.0048em;">A empresa </span><span class="pdf24_18 pdf24_09 pdf24_19" style="word-spacing:0.0138em;">{{ $nome_empresa }}{{ $nome_fantasia ? ' (' . $nome_fantasia . ')' : '' }} </span><span class="pdf24_16 pdf24_09 pdf24_20" style="word-spacing:0.0082em;">inscrita no CNPJ sob o n° </span><span class="pdf24_18 pdf24_09 pdf24_21">{{ $cnpj_empresa ?: 'N/A' }}</span><span class="pdf24_16 pdf24_09 pdf24_22" style="word-spacing:0.0102em;">, sediada na </span><span class="pdf24_18 pdf24_09 pdf24_23" style="word-spacing:0.0138em;">{{ $endereco_completo ?: 'N/A' }}</span><span class="pdf24_16 pdf24_09 pdf24_24" style="word-spacing:0.019em;">, abaixo &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:22.24em;top:10.5754em;"><span class="pdf24_13 pdf24_09 pdf24_14" style="word-spacing:-0.0006em;">Dispensa Eletrônica nº. 0/2025 &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:18.46em;top:12.9454em;"><span class="pdf24_13 pdf24_09 pdf24_15" style="word-spacing:-0.0005em;">UASG - NOME DO ORGÃO - UF &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:14.3197em;"><span class="pdf24_16 pdf24_09 pdf24_17" style="word-spacing:0.0048em;">A empresa </span><span class="pdf24_18 pdf24_09 pdf24_19" style="word-spacing:0.0138em;">RAZÃO SOCIAL (NOME FANTASIA) </span><span class="pdf24_16 pdf24_09 pdf24_20" style="word-spacing:0.0082em;">inscrita no CNPJ sob o n° </span><span class="pdf24_18 pdf24_09 pdf24_21">00.000.000/0001-00</span><span class="pdf24_16 pdf24_09 pdf24_22" style="word-spacing:0.0102em;">, sediada na </span><span class="pdf24_18 pdf24_09 pdf24_23" style="word-spacing:0.0138em;">ENDEREÇO COMPLETO</span><span class="pdf24_16 pdf24_09 pdf24_24" style="word-spacing:0.019em;">, abaixo &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:15.1197em;"><span class="pdf24_16 pdf24_09 pdf24_25" style="word-spacing:0.0045em;">assinada por seu representante legal, interessada na participação da presente dispensa eletrônica, propõe a esse órgão o fornecimento do objeto &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:15.9097em;"><span class="pdf24_16 pdf24_09 pdf24_17" style="word-spacing:0.0056em;">deste ato convocatório, de acordo com a presente proposta comercial, nas seguintes condições. &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:38.7198em;top:17.2531em;"><span class="pdf24_26 pdf24_09 pdf24_27">VALOR &nbsp;</span></div>
@@ -1163,74 +1163,44 @@
 					<div class="pdf24_01 pdf24_07" style="left:7.79em;top:17.6131em;"><span class="pdf24_26 pdf24_09 pdf24_30">QTD &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:10.33em;top:17.6131em;"><span class="pdf24_26 pdf24_09 pdf24_31">UNID &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:20.26em;top:17.6131em;"><span class="pdf24_26 pdf24_09 pdf24_32">DESCRIÇÃO &nbsp;</span></div>
-					@php
-						$valorTotalGeral = 0;
-						$topInicial = 18.7497;
-						$incrementoTop = 1.5;
-					@endphp
-					@foreach($itens as $index => $item)
-						@php
-							$orcamentoEscolhido = $item->orcamentos->firstWhere('fornecedor_escolhido', true);
-							$formacaoPreco = $orcamentoEscolhido?->formacaoPreco;
-							
-							// Prioridade: valor negociado > valor final sessão > preço mínimo formação > valor estimado
-							$valorUnitario = $item->valor_negociado 
-								?? $item->valor_final_sessao 
-								?? $formacaoPreco?->preco_minimo 
-								?? $item->valor_estimado 
-								?? 0;
-							
-							$valorTotalItem = $valorUnitario * $item->quantidade;
-							$valorTotalGeral += $valorTotalItem;
-							
-							$marcaModelo = $orcamentoEscolhido?->marca_modelo 
-								?? $item->marca_modelo_referencia 
-								?? '';
-							
-							$especificacaoCompleta = $item->especificacao_tecnica;
-							if ($marcaModelo) {
-								$especificacaoCompleta .= ' - ' . $marcaModelo;
-							}
-							
-							$topPos = $topInicial + ($index * $incrementoTop);
-						@endphp
-						<div class="pdf24_01 pdf24_07" style="left:5.76em;top:{{ $topPos }}em;"><span class="pdf24_39 pdf24_09 pdf24_22">{{ $item->numero_item ?? ($index + 1) }}</span></div>
-						<div class="pdf24_01 pdf24_07" style="left:8.06em;top:{{ $topPos }}em;"><span class="pdf24_39 pdf24_09 pdf24_40">{{ $item->quantidade ?? 0 }} &nbsp;</span></div>
-						<div class="pdf24_01 pdf24_07" style="left:10.27em;top:{{ $topPos }}em;"><span class="pdf24_39 pdf24_09 pdf24_41">{{ $item->unidade ?? 'UNID' }} &nbsp;</span></div>
-						<div class="pdf24_01 pdf24_07" style="left:12.44em;top:{{ $topPos }}em;"><span class="pdf24_33 pdf24_09 pdf24_34" style="word-spacing:0.0181em;">{{ $especificacaoCompleta }} &nbsp;</span></div>
-						<div class="pdf24_01 pdf24_07" style="left:32.2592em;top:{{ $topPos }}em;"><span class="pdf24_33 pdf24_09 pdf24_38">{{ $marcaModelo ?: '-' }} &nbsp;</span></div>
-						<div class="pdf24_01 pdf24_07" style="left:37.85em;top:{{ $topPos - 0.08 }}em;"><span class="pdf24_42 pdf24_43 pdf24_44">R$ {{ number_format($valorUnitario, 2, ',', '.') }} &nbsp;</span></div>
-						<div class="pdf24_01 pdf24_07" style="left:42.4797em;top:{{ $topPos }}em;"><span class="pdf24_36 pdf24_09 pdf24_37">R$ {{ number_format($valorTotalItem, 2, ',', '.') }} &nbsp;</span></div>
-					@endforeach
-					@php
-						$topTotal = $topInicial + (count($itens) * $incrementoTop) + 0.5;
-					@endphp
-					<div class="pdf24_01 pdf24_07" style="left:19.65em;top:{{ $topTotal }}em;"><span class="pdf24_26 pdf24_09 pdf24_45" style="word-spacing:0.0094em;">Valor Total &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:37.84em;top:{{ $topTotal - 0.05 }}em;"><span class="pdf24_46 pdf24_09 pdf24_37">R$ {{ number_format($valorTotalGeral, 2, ',', '.') }} &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:12.44em;top:18.7931em;"><span class="pdf24_33 pdf24_09 pdf24_34" style="word-spacing:0.0181em;">ESPECIFICAÇÃO COMPLETA DO ITEM &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:33.5398em;top:17.6131em;"><span class="pdf24_26 pdf24_09 pdf24_35">MARCA &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:42.6997em;top:17.6131em;"><span class="pdf24_26 pdf24_09 pdf24_31" style="word-spacing:0.0051em;">VALOR TOTAL &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:42.4797em;top:18.7931em;"><span class="pdf24_36 pdf24_09 pdf24_37">R$ &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:32.2592em;top:18.7931em;"><span class="pdf24_33 pdf24_09 pdf24_38">MARCA/MODELO &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:46.6998em;top:18.7931em;"><span class="pdf24_36 pdf24_09 pdf24_22">-</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:5.76em;top:18.7497em;"><span class="pdf24_39 pdf24_09 pdf24_22">1</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:8.06em;top:18.7497em;"><span class="pdf24_39 pdf24_09 pdf24_40">12 &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:10.27em;top:18.7497em;"><span class="pdf24_39 pdf24_09 pdf24_41">UNID &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:37.85em;top:18.673em;"><span class="pdf24_42 pdf24_43 pdf24_44">R$ &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:40.69em;top:18.673em;"><span class="pdf24_42 pdf24_43 pdf24_22">-</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:19.65em;top:20.1731em;"><span class="pdf24_26 pdf24_09 pdf24_45" style="word-spacing:0.0094em;">Valor Total &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:37.84em;top:20.1297em;"><span class="pdf24_46 pdf24_09 pdf24_37">R$ &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:46.04em;top:20.1297em;"><span class="pdf24_46 pdf24_09 pdf24_22">-</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:7.21em;top:21.5054em;"><span class="pdf24_47 pdf24_09 pdf24_28">Observação: &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:22.3197em;"><span class="pdf24_16 pdf24_09 pdf24_48">OBSERVAÇÃO: &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:23.1097em;"><span class="pdf24_16 pdf24_09 pdf24_49" style="word-spacing:0.0075em;">• O preço acima inclui todos os custos de impostos, seguros, encargos sociais e demais despesas diretas e indiretas incidentes sobre o item objeto &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:23.8997em;"><span class="pdf24_16 pdf24_09 pdf24_50" style="word-spacing:0.0034em;">da presente dispensa eletrônica. &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:24.6897em;"><span class="pdf24_16 pdf24_09 pdf24_51" style="word-spacing:0.0062em;">• Prazo de entrega será conforme condições do Edital/Termo de Referência. &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:25.4797em;"><span class="pdf24_16 pdf24_09 pdf24_51" style="word-spacing:0.0092em;">• Validade da Proposta: </span><span class="pdf24_39 pdf24_09 pdf24_21" style="word-spacing:0.0057em;">{{ $validade_proposta }} &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:25.4797em;"><span class="pdf24_16 pdf24_09 pdf24_51" style="word-spacing:0.0092em;">• Validade da Proposta: </span><span class="pdf24_39 pdf24_09 pdf24_21" style="word-spacing:0.0057em;">60 dias da data da dispensa eletrônica. &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:26.2697em;"><span class="pdf24_16 pdf24_09 pdf24_52" style="word-spacing:0.0042em;">• Local de Entrega será conforme Edital/TR. &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:27.0597em;"><span class="pdf24_16 pdf24_09 pdf24_45" style="word-spacing:0.0084em;">• Declaro estar de acordo com as condições e exigências estabelecidas no Edital/TR. &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:28.6497em;"><span class="pdf24_18 pdf24_09 pdf24_53" style="word-spacing:0.0138em;">{{ $nome_fantasia ?: $nome_empresa }} &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:29.4597em;"><span class="pdf24_18 pdf24_09 pdf24_54" style="word-spacing:0.0142em;">{{ $endereco_completo ?: 'N/A' }} &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:30.2697em;"><span class="pdf24_18 pdf24_09 pdf24_55" style="word-spacing:0.5722em;">Email: {{ $email_empresa ?: 'N/A' }} Tel.: {{ $telefone_empresa ?: 'N/A' }} &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:31.0797em;"><span class="pdf24_18 pdf24_09 pdf24_56" style="word-spacing:0.0085em;">CNPJ: {{ $cnpj_empresa ?: 'N/A' }} &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:28.6497em;"><span class="pdf24_18 pdf24_09 pdf24_53" style="word-spacing:0.0138em;">NOME FANTASIA &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:29.4597em;"><span class="pdf24_18 pdf24_09 pdf24_54" style="word-spacing:0.0142em;">ENDEREÇO COMPLETO &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:30.2697em;"><span class="pdf24_18 pdf24_09 pdf24_55" style="word-spacing:0.5722em;">Email: tel.: &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:31.0797em;"><span class="pdf24_18 pdf24_09 pdf24_56" style="word-spacing:0.0085em;">CNPJ: 00.000.000/0001-00 &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:32.6797em;"><span class="pdf24_18 pdf24_09 pdf24_57" style="word-spacing:0.0124em;">Dados Bancários: &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:33.4897em;"><span class="pdf24_18 pdf24_09 pdf24_58">Banco: {{ $banco_empresa ?: 'N/A' }} &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:34.2997em;"><span class="pdf24_18 pdf24_09 pdf24_59">Agência: {{ $agencia_empresa ?: 'N/A' }} &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:35.1097em;"><span class="pdf24_18 pdf24_09 pdf24_60">Conta: {{ $conta_empresa ?: 'N/A' }} &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:36.7097em;"><span class="pdf24_16 pdf24_09 pdf24_45" style="word-spacing:0.0094em;">Representante legal na assinatura do Contrato: </span><span class="pdf24_18 pdf24_09 pdf24_38" style="word-spacing:0.0111em;">{{ $representante_legal ?: 'N/A' }} &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:33.4897em;"><span class="pdf24_18 pdf24_09 pdf24_58">Banco: &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:34.2997em;"><span class="pdf24_18 pdf24_09 pdf24_59">Agência: &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:35.1097em;"><span class="pdf24_18 pdf24_09 pdf24_60">Conta: &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:36.7097em;"><span class="pdf24_16 pdf24_09 pdf24_45" style="word-spacing:0.0094em;">Representante legal na assinatura do Contrato: </span><span class="pdf24_18 pdf24_09 pdf24_38" style="word-spacing:0.0111em;">NOME COMPLETO &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:38.2997em;"><span class="pdf24_16 pdf24_09 pdf24_61" style="word-spacing:0.0075em;">Declaramos que estamos de acordo com os termos do Edital/TR e acatamos suas determinações, bem como, informamos que no(s) preço(s) &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:39.0897em;"><span class="pdf24_16 pdf24_09 pdf24_62" style="word-spacing:0.0074em;">proposto(s) estão incluídos todos os custos, fretes, impostos, obrigações, entre outros. &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:36.86em;top:39.8754em;"><span class="pdf24_13 pdf24_09 pdf24_63" style="word-spacing:0.0002em;">{{ $cidade_empresa ?: 'Cidade' }}, {{ $data_formatada }}. &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:36.86em;top:39.8754em;"><span class="pdf24_13 pdf24_09 pdf24_63" style="word-spacing:0.0002em;">CIDADE, 01 de Janeiro de 2026. &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:15.07em;top:42.4654em;"><span class="pdf24_64 pdf24_09 pdf24_53" style="word-spacing:-0.0024em;">ASSINATURA À MÃO COM OU SEM CARIMBO OU ASSINATURA DIGITAL &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:24.06em;top:45.0754em;"><span class="pdf24_64 pdf24_09 pdf24_65" style="word-spacing:0.0109em;">{{ $representante_legal ?: 'N/A' }} &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:24.06em;top:45.0754em;"><span class="pdf24_64 pdf24_09 pdf24_65" style="word-spacing:0.0109em;">NOME COMPLETO &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:25.84em;top:45.9454em;"><span class="pdf24_64 pdf24_09 pdf24_66">CARGO &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:23.2em;top:46.8154em;"><span class="pdf24_64 pdf24_09 pdf24_67" style="word-spacing:0em;">{{ $nome_empresa }} ({{ $cnpj_empresa ?: 'N/A' }}) &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:23.2em;top:46.8154em;"><span class="pdf24_64 pdf24_09 pdf24_67" style="word-spacing:0em;">RAZÃO SOCIAL (CNPJ) &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:33.41em;top:50.2197em;"><span class="pdf24_68 pdf24_09 pdf24_69">CUSTO &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:38.61em;top:50.2197em;"><span class="pdf24_68 pdf24_09 pdf24_34">VENDA &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:43.52em;top:50.2197em;"><span class="pdf24_68 pdf24_09 pdf24_70">LUCRO &nbsp;</span></div>
@@ -1420,9 +1390,9 @@
 				<div class="pdf24_05 pdf24_06">
 					<div class="pdf24_01 pdf24_07" style="left:21.06em;top:8.029em;"><span class="pdf24_110 pdf24_09 pdf24_10" style="word-spacing:-0.0089em;">INSIRA SUA LOGO AQUI!!!! &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:22.88em;top:9.6954em;"><span class="pdf24_111 pdf24_09 pdf24_12" style="word-spacing:-0.0156em;">PROPOSTA COMERCIAL &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:22.24em;top:10.5754em;"><span class="pdf24_112 pdf24_09 pdf24_14" style="word-spacing:-0.0006em;">Dispensa Eletrônica nº. {{ $processo->numero_modalidade ?? 'N/A' }}/{{ date('Y') }} &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:18.46em;top:12.9454em;"><span class="pdf24_112 pdf24_09 pdf24_15" style="word-spacing:-0.0005em;">{{ ($processo->orgao->uasg ?? '') . ($processo->orgao->uasg && $processo->orgao->razao_social ? ' - ' : '') . ($processo->orgao->razao_social ?? 'N/A') . ($processo->orgao->estado ? ' - ' . $processo->orgao->estado : '') }} &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:14.3197em;"><span class="pdf24_113 pdf24_09 pdf24_17" style="word-spacing:0.0048em;">A empresa </span><span class="pdf24_114 pdf24_09 pdf24_19" style="word-spacing:0.0138em;">{{ $nome_empresa }}{{ $nome_fantasia ? ' (' . $nome_fantasia . ')' : '' }} </span><span class="pdf24_113 pdf24_09 pdf24_20" style="word-spacing:0.0082em;">inscrita no CNPJ sob o n° </span><span class="pdf24_114 pdf24_09 pdf24_21">{{ $cnpj_empresa ?: 'N/A' }}</span><span class="pdf24_113 pdf24_09 pdf24_22" style="word-spacing:0.0102em;">, sediada na </span><span class="pdf24_114 pdf24_09 pdf24_23" style="word-spacing:0.0138em;">{{ $endereco_completo ?: 'N/A' }}</span><span class="pdf24_113 pdf24_09 pdf24_24" style="word-spacing:0.019em;">, abaixo &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:22.24em;top:10.5754em;"><span class="pdf24_112 pdf24_09 pdf24_14" style="word-spacing:-0.0006em;">Dispensa Eletrônica nº. 0/2025 &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:18.46em;top:12.9454em;"><span class="pdf24_112 pdf24_09 pdf24_15" style="word-spacing:-0.0005em;">UASG - NOME DO ORGÃO - UF &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:14.3197em;"><span class="pdf24_113 pdf24_09 pdf24_17" style="word-spacing:0.0048em;">A empresa </span><span class="pdf24_114 pdf24_09 pdf24_19" style="word-spacing:0.0138em;">RAZÃO SOCIAL (NOME FANTASIA) </span><span class="pdf24_113 pdf24_09 pdf24_20" style="word-spacing:0.0082em;">inscrita no CNPJ sob o n° </span><span class="pdf24_114 pdf24_09 pdf24_21">00.000.000/0001-00</span><span class="pdf24_113 pdf24_09 pdf24_22" style="word-spacing:0.0102em;">, sediada na </span><span class="pdf24_114 pdf24_09 pdf24_23" style="word-spacing:0.0138em;">ENDEREÇO COMPLETO</span><span class="pdf24_113 pdf24_09 pdf24_24" style="word-spacing:0.019em;">, abaixo &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:15.1197em;"><span class="pdf24_113 pdf24_09 pdf24_25" style="word-spacing:0.0045em;">assinada por seu representante legal, interessada na participação da presente dispensa eletrônica, propõe a esse órgão o fornecimento do objeto &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:15.9097em;"><span class="pdf24_113 pdf24_09 pdf24_17" style="word-spacing:0.0056em;">deste ato convocatório, de acordo com a presente proposta comercial, nas seguintes condições. &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:38.7198em;top:17.2531em;"><span class="pdf24_115 pdf24_09 pdf24_27">VALOR &nbsp;</span></div>
@@ -1450,25 +1420,25 @@
 					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:23.1097em;"><span class="pdf24_113 pdf24_09 pdf24_49" style="word-spacing:0.0075em;">• O preço acima inclui todos os custos de impostos, seguros, encargos sociais e demais despesas diretas e indiretas incidentes sobre o item objeto &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:23.8997em;"><span class="pdf24_113 pdf24_09 pdf24_50" style="word-spacing:0.0034em;">da presente dispensa eletrônica. &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:24.6897em;"><span class="pdf24_113 pdf24_09 pdf24_51" style="word-spacing:0.0062em;">• Prazo de entrega será conforme condições do Edital/Termo de Referência. &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:25.4797em;"><span class="pdf24_113 pdf24_09 pdf24_51" style="word-spacing:0.0092em;">• Validade da Proposta: </span><span class="pdf24_118 pdf24_09 pdf24_21" style="word-spacing:0.0057em;">{{ $validade_proposta }} &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:25.4797em;"><span class="pdf24_113 pdf24_09 pdf24_51" style="word-spacing:0.0092em;">• Validade da Proposta: </span><span class="pdf24_118 pdf24_09 pdf24_21" style="word-spacing:0.0057em;">60 dias da data da dispensa eletrônica. &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:26.2697em;"><span class="pdf24_113 pdf24_09 pdf24_52" style="word-spacing:0.0042em;">• Local de Entrega será conforme Edital/TR. &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:27.0597em;"><span class="pdf24_113 pdf24_09 pdf24_45" style="word-spacing:0.0084em;">• Declaro estar de acordo com as condições e exigências estabelecidas no Edital/TR. &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:28.6497em;"><span class="pdf24_114 pdf24_09 pdf24_53" style="word-spacing:0.0138em;">{{ $nome_fantasia ?: $nome_empresa }} &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:29.4597em;"><span class="pdf24_114 pdf24_09 pdf24_54" style="word-spacing:0.0142em;">{{ $endereco_completo ?: 'N/A' }} &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:30.2697em;"><span class="pdf24_114 pdf24_09 pdf24_55" style="word-spacing:0.5722em;">Email: {{ $email_empresa ?: 'N/A' }} Tel.: {{ $telefone_empresa ?: 'N/A' }} &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:31.0797em;"><span class="pdf24_114 pdf24_09 pdf24_56" style="word-spacing:0.0085em;">CNPJ: {{ $cnpj_empresa ?: 'N/A' }} &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:28.6497em;"><span class="pdf24_114 pdf24_09 pdf24_53" style="word-spacing:0.0138em;">NOME FANTASIA &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:29.4597em;"><span class="pdf24_114 pdf24_09 pdf24_54" style="word-spacing:0.0142em;">ENDEREÇO COMPLETO &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:30.2697em;"><span class="pdf24_114 pdf24_09 pdf24_55" style="word-spacing:0.5722em;">Email: tel.: &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:31.0797em;"><span class="pdf24_114 pdf24_09 pdf24_56" style="word-spacing:0.0085em;">CNPJ: 00.000.000/0001-00 &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:32.6797em;"><span class="pdf24_114 pdf24_09 pdf24_57" style="word-spacing:0.0124em;">Dados Bancários: &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:33.4897em;"><span class="pdf24_114 pdf24_09 pdf24_58">Banco: {{ $banco_empresa ?: 'N/A' }} &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:34.2997em;"><span class="pdf24_114 pdf24_09 pdf24_59">Agência: {{ $agencia_empresa ?: 'N/A' }} &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:35.1097em;"><span class="pdf24_114 pdf24_09 pdf24_60">Conta: {{ $conta_empresa ?: 'N/A' }} &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:36.7097em;"><span class="pdf24_113 pdf24_09 pdf24_45" style="word-spacing:0.0094em;">Representante legal na assinatura do Contrato: </span><span class="pdf24_114 pdf24_09 pdf24_38" style="word-spacing:0.0111em;">{{ $representante_legal ?: 'N/A' }} &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:33.4897em;"><span class="pdf24_114 pdf24_09 pdf24_58">Banco: &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:34.2997em;"><span class="pdf24_114 pdf24_09 pdf24_59">Agência: &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:35.1097em;"><span class="pdf24_114 pdf24_09 pdf24_60">Conta: &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:36.7097em;"><span class="pdf24_113 pdf24_09 pdf24_45" style="word-spacing:0.0094em;">Representante legal na assinatura do Contrato: </span><span class="pdf24_114 pdf24_09 pdf24_38" style="word-spacing:0.0111em;">NOME COMPLETO &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:38.2997em;"><span class="pdf24_113 pdf24_09 pdf24_61" style="word-spacing:0.0075em;">Declaramos que estamos de acordo com os termos do Edital/TR e acatamos suas determinações, bem como, informamos que no(s) preço(s) &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:39.0897em;"><span class="pdf24_113 pdf24_09 pdf24_62" style="word-spacing:0.0074em;">proposto(s) estão incluídos todos os custos, fretes, impostos, obrigações, entre outros. &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:36.86em;top:39.8754em;"><span class="pdf24_112 pdf24_09 pdf24_63" style="word-spacing:0.0002em;">{{ $cidade_empresa ?: 'Cidade' }}, {{ $data_formatada }}. &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:36.86em;top:39.8754em;"><span class="pdf24_112 pdf24_09 pdf24_63" style="word-spacing:0.0002em;">CIDADE, 01 de Janeiro de 2026. &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:15.07em;top:42.4654em;"><span class="pdf24_122 pdf24_09 pdf24_53" style="word-spacing:-0.0024em;">ASSINATURA À MÃO COM OU SEM CARIMBO OU ASSINATURA DIGITAL &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:24.06em;top:45.0754em;"><span class="pdf24_122 pdf24_09 pdf24_65" style="word-spacing:0.0109em;">{{ $representante_legal ?: 'N/A' }} &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:24.06em;top:45.0754em;"><span class="pdf24_122 pdf24_09 pdf24_65" style="word-spacing:0.0109em;">NOME COMPLETO &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:25.84em;top:45.9454em;"><span class="pdf24_122 pdf24_09 pdf24_66">CARGO &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:23.2em;top:46.8154em;"><span class="pdf24_122 pdf24_09 pdf24_67" style="word-spacing:0em;">{{ $nome_empresa }} ({{ $cnpj_empresa ?: 'N/A' }}) &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:23.2em;top:46.8154em;"><span class="pdf24_122 pdf24_09 pdf24_67" style="word-spacing:0em;">RAZÃO SOCIAL (CNPJ) &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:33.41em;top:50.2197em;"><span class="pdf24_123 pdf24_09 pdf24_69">CUSTO &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:38.61em;top:50.2197em;"><span class="pdf24_123 pdf24_09 pdf24_34">VENDA &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:43.52em;top:50.2197em;"><span class="pdf24_123 pdf24_09 pdf24_70">LUCRO &nbsp;</span></div>

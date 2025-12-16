@@ -28,23 +28,83 @@ class ExportacaoService
         // Calcular validade proporcional
         $validadeProposta = $this->calcularValidadeProposta($processo);
 
-        // Obter nome da empresa do tenant atual
+        // Obter dados completos da empresa do tenant atual
+        $tenant = null;
         $nomeEmpresa = 'Empresa não identificada';
+        $cnpjEmpresa = '';
+        $enderecoEmpresa = '';
+        $cidadeEmpresa = '';
+        $estadoEmpresa = '';
+        $emailEmpresa = '';
+        $telefoneEmpresa = '';
+        $nomeFantasia = '';
+        $bancoEmpresa = '';
+        $agenciaEmpresa = '';
+        $contaEmpresa = '';
+        $representanteLegal = '';
+        
         try {
             if (tenancy()->initialized) {
                 $tenant = tenant();
-                $nomeEmpresa = $tenant ? ($tenant->razao_social ?? 'Empresa não identificada') : 'Empresa não identificada';
+                if ($tenant) {
+                    $nomeEmpresa = $tenant->razao_social ?? 'Empresa não identificada';
+                    $cnpjEmpresa = $tenant->cnpj ?? '';
+                    $enderecoEmpresa = $tenant->endereco ?? '';
+                    $cidadeEmpresa = $tenant->cidade ?? '';
+                    $estadoEmpresa = $tenant->estado ?? '';
+                    $emailEmpresa = $tenant->email ?? '';
+                    $telefones = $tenant->telefones ?? [];
+                    $telefoneEmpresa = is_array($telefones) && !empty($telefones) ? $telefones[0] : '';
+                    $nomeFantasia = $tenant->nome_fantasia ?? $nomeEmpresa;
+                    $bancoEmpresa = $tenant->banco ?? '';
+                    $agenciaEmpresa = $tenant->agencia ?? '';
+                    $contaEmpresa = $tenant->conta ?? '';
+                    $representanteLegal = $tenant->representante_legal_nome ?? '';
+                }
             }
         } catch (\Exception $e) {
-            // Se houver erro, manter valor padrão
+            // Se houver erro, manter valores padrão
+        }
+
+        // Formatar endereço completo
+        $enderecoCompleto = trim(implode(', ', array_filter([
+            $enderecoEmpresa,
+            $cidadeEmpresa,
+            $estadoEmpresa
+        ])));
+
+        // Formatar data atual
+        $dataAtual = Carbon::now();
+        $dataFormatada = $dataAtual->format('d \d\e F \d\e Y');
+        $meses = [
+            'January' => 'Janeiro', 'February' => 'Fevereiro', 'March' => 'Março',
+            'April' => 'Abril', 'May' => 'Maio', 'June' => 'Junho',
+            'July' => 'Julho', 'August' => 'Agosto', 'September' => 'Setembro',
+            'October' => 'Outubro', 'November' => 'Novembro', 'December' => 'Dezembro'
+        ];
+        foreach ($meses as $en => $pt) {
+            $dataFormatada = str_replace($en, $pt, $dataFormatada);
         }
 
         $dados = [
             'processo' => $processo,
             'validade_proposta' => $validadeProposta,
             'data_elaboracao' => Carbon::now()->format('d/m/Y H:i'),
+            'data_formatada' => $dataFormatada,
             'itens' => $processo->itens,
             'nome_empresa' => $nomeEmpresa,
+            'nome_fantasia' => $nomeFantasia,
+            'cnpj_empresa' => $cnpjEmpresa,
+            'endereco_completo' => $enderecoCompleto,
+            'cidade_empresa' => $cidadeEmpresa,
+            'estado_empresa' => $estadoEmpresa,
+            'email_empresa' => $emailEmpresa,
+            'telefone_empresa' => $telefoneEmpresa,
+            'banco_empresa' => $bancoEmpresa,
+            'agencia_empresa' => $agenciaEmpresa,
+            'conta_empresa' => $contaEmpresa,
+            'representante_legal' => $representanteLegal,
+            'tenant' => $tenant,
         ];
 
         // Retornar HTML para conversão em PDF
