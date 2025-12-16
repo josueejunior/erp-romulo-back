@@ -72,6 +72,7 @@ class JulgamentoController extends Controller
             'itens.*.valor_negociado' => 'nullable|numeric|min:0',
             'itens.*.chance_arremate' => 'nullable|in:baixa,media,alta',
             'itens.*.chance_percentual' => 'nullable|integer|min:0|max:100',
+            'itens.*.tem_chance' => 'nullable|boolean',
             'itens.*.lembretes' => 'nullable|string',
             'itens.*.observacoes' => 'nullable|string',
         ]);
@@ -86,6 +87,7 @@ class JulgamentoController extends Controller
                     $itemData['classificacao'] ?? null,
                     $itemData['chance_arremate'] ?? null,
                     $itemData['chance_percentual'] ?? null,
+                    $itemData['tem_chance'] ?? null,
                     $itemData['valor_negociado'] ?? null,
                     $itemData['lembretes'] ?? null,
                     $itemData['observacoes'] ?? null

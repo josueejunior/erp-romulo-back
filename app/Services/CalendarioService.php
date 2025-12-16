@@ -205,26 +205,26 @@ class CalendarioService
                 'orgao',
                 'setor',
                 'itens' => function ($query) {
-                    $query->whereNotNull('lembretes')
-                        ->orWhereNotNull('classificacao');
+                    // Incluir todos os itens do processo em julgamento
+                    // Não filtrar apenas por lembretes, pois processos podem estar em julgamento sem lembretes
                 }
             ])
             ->orderBy('data_hora_sessao_publica')
             ->get();
 
         return $processos->map(function ($processo) {
-            $itensComLembrete = $processo->itens()
-                ->whereNotNull('lembretes')
-                ->get()
-                ->map(function ($item) {
-                    return [
-                        'numero_item' => $item->numero_item,
-                        'lembrete' => $item->lembretes,
-                        'classificacao' => $item->classificacao,
-                        'status_item' => $item->status_item,
-                        'chance_arremate' => $item->chance_arremate,
-                    ];
-                });
+            // Incluir todos os itens do processo, não apenas os com lembretes
+            $itensComLembrete = $processo->itens->map(function ($item) {
+                return [
+                    'numero_item' => $item->numero_item,
+                    'lembrete' => $item->lembretes,
+                    'classificacao' => $item->classificacao,
+                    'status_item' => $item->status_item,
+                    'chance_arremate' => $item->chance_arremate,
+                    'tem_chance' => $item->tem_chance ?? true,
+                    'chance_percentual' => $item->chance_percentual,
+                ];
+            });
 
             return [
                 'id' => $processo->id,

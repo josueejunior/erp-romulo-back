@@ -58,6 +58,7 @@ class DisputaService
         ?int $classificacao = null,
         ?string $chanceArremate = null,
         ?int $chancePercentual = null,
+        ?bool $temChance = null,
         ?float $valorNegociado = null,
         ?string $lembretes = null,
         ?string $observacoes = null
@@ -80,6 +81,10 @@ class DisputaService
 
         if ($chancePercentual !== null) {
             $item->chance_percentual = $chancePercentual;
+        }
+
+        if ($temChance !== null) {
+            $item->tem_chance = $temChance;
         }
 
         // Valor negociado não apaga o valor anterior, apenas adiciona
