@@ -31,6 +31,7 @@ class EmpenhoController extends Controller
             'valor' => 'required|numeric|min:0',
             'data_entrega' => 'nullable|date',
             'observacoes' => 'nullable|string',
+            'numero_cte' => 'nullable|string|max:255',
         ]);
 
         if ($validated['contrato_id']) {
@@ -89,6 +90,7 @@ class EmpenhoController extends Controller
             'concluido' => 'boolean',
             'data_entrega' => 'nullable|date',
             'observacoes' => 'nullable|string',
+            'numero_cte' => 'nullable|string|max:255',
         ]);
 
         if ($validated['contrato_id']) {

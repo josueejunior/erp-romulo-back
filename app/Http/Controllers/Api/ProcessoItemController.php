@@ -164,6 +164,131 @@ class ProcessoItemController extends Controller
 
         return response()->json(null, 204);
     }
+
+    /**
+     * Importa itens de uma planilha Excel/CSV
+     */
+    public function importar(Request $request, Processo $processo)
+    {
+        if ($processo->isEmExecucao()) {
+            return response()->json([
+                'message' => 'Não é possível importar itens para processos em execução.'
+            ], 403);
+        }
+
+        $request->validate([
+            'planilha' => 'required|file|mimes:xlsx,xls,csv|max:10240',
+        ]);
+
+        try {
+            $arquivo = $request->file('planilha');
+            $extensao = $arquivo->getClientOriginalExtension();
+            
+            // Ler arquivo Excel usando PhpSpreadsheet ou CSV
+            if (in_array($extensao, ['xlsx', 'xls'])) {
+                // Para Excel, precisaria do PhpSpreadsheet instalado
+                // Por enquanto, retornar erro informando que precisa instalar
+                return response()->json([
+                    'message' => 'Importação de Excel requer PhpSpreadsheet. Por enquanto, use CSV.'
+                ], 400);
+            } else {
+                // Processar CSV
+                $handle = fopen($arquivo->getRealPath(), 'r');
+                $cabecalhos = fgetcsv($handle, 1000, ',');
+                
+                // Normalizar cabeçalhos
+                $cabecalhos = array_map('trim', array_map('strtolower', $cabecalhos));
+                
+                // Mapear colunas
+                $mapColunas = [
+                    'numero_item' => ['numero_item', 'numero', 'item', 'nº item', 'n° item'],
+                    'quantidade' => ['quantidade', 'qtd', 'qtd.', 'qtde'],
+                    'unidade' => ['unidade', 'un', 'unid'],
+                    'especificacao_tecnica' => ['especificacao_tecnica', 'especificacao', 'descricao', 'descrição', 'especificação técnica'],
+                    'valor_estimado' => ['valor_estimado', 'valor', 'preco', 'preço', 'valor unitário'],
+                    'marca_modelo_referencia' => ['marca_modelo_referencia', 'marca', 'modelo', 'referencia', 'referência', 'marca/modelo'],
+                ];
+                
+                $indices = [];
+                foreach ($mapColunas as $campo => $variacoes) {
+                    foreach ($variacoes as $variacao) {
+                        $indice = array_search($variacao, $cabecalhos);
+                        if ($indice !== false) {
+                            $indices[$campo] = $indice;
+                            break;
+                        }
+                    }
+                }
+                
+                // Validar campos obrigatórios
+                $camposObrigatorios = ['numero_item', 'quantidade', 'unidade', 'especificacao_tecnica'];
+                $faltando = array_diff($camposObrigatorios, array_keys($indices));
+                if (!empty($faltando)) {
+                    return response()->json([
+                        'message' => 'Colunas obrigatórias não encontradas: ' . implode(', ', $faltando)
+                    ], 400);
+                }
+                
+                $itensCriados = 0;
+                $linha = 1;
+                
+                while (($dados = fgetcsv($handle, 1000, ',')) !== false) {
+                    $linha++;
+                    
+                    // Pular linhas vazias
+                    if (empty(array_filter($dados))) {
+                        continue;
+                    }
+                    
+                    try {
+                        $itemData = [
+                            'processo_id' => $processo->id,
+                            'numero_item' => (int)($dados[$indices['numero_item']] ?? 0),
+                            'quantidade' => (float)($dados[$indices['quantidade']] ?? 0),
+                            'unidade' => trim($dados[$indices['unidade']] ?? ''),
+                            'especificacao_tecnica' => trim($dados[$indices['especificacao_tecnica']] ?? ''),
+                            'valor_estimado' => isset($indices['valor_estimado']) && $dados[$indices['valor_estimado']] 
+                                ? (float)str_replace(',', '.', str_replace('.', '', $dados[$indices['valor_estimado']])) 
+                                : null,
+                            'marca_modelo_referencia' => isset($indices['marca_modelo_referencia']) 
+                                ? trim($dados[$indices['marca_modelo_referencia']] ?? '') 
+                                : null,
+                            'status_item' => 'pendente',
+                            'exige_atestado' => false,
+                        ];
+                        
+                        // Validar dados básicos
+                        if ($itemData['numero_item'] <= 0 || $itemData['quantidade'] <= 0 || empty($itemData['unidade']) || empty($itemData['especificacao_tecnica'])) {
+                            continue; // Pular linha inválida
+                        }
+                        
+                        // Calcular valor total se tiver valor unitário
+                        if ($itemData['valor_estimado']) {
+                            $itemData['valor_estimado_total'] = $itemData['valor_estimado'] * $itemData['quantidade'];
+                        }
+                        
+                        ProcessoItem::create($itemData);
+                        $itensCriados++;
+                    } catch (\Exception $e) {
+                        // Continuar processando outras linhas mesmo se uma falhar
+                        \Log::warning("Erro ao importar item linha {$linha}: " . $e->getMessage());
+                    }
+                }
+                
+                fclose($handle);
+                
+                return response()->json([
+                    'message' => "{$itensCriados} item(ns) importado(s) com sucesso.",
+                    'itens_criados' => $itensCriados,
+                ], 201);
+            }
+        } catch (\Exception $e) {
+            \Log::error('Erro ao importar planilha: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Erro ao processar planilha: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }
 
 

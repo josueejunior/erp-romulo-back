@@ -57,8 +57,10 @@ class OrcamentoItem extends Model
         }
         return null;
     }
-}
 
+    /**
+     * Calcula o custo total (produto + frete se não incluído)
+     */
     public function getCustoTotalAttribute(): float
     {
         return $this->custo_produto + ($this->frete_incluido ? 0 : $this->frete);

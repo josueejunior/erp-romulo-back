@@ -90,6 +90,7 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('processos.itens', ApiProcessoItemController::class)
             ->parameters(['itens' => 'item'])
             ->shallow();
+        Route::post('/processos/{processo}/itens/importar', [ApiProcessoItemController::class, 'importar']);
         
         // Orçamentos (por processo - múltiplos itens)
         Route::post('/processos/{processo}/orcamentos', [ApiOrcamentoController::class, 'storeByProcesso']);

@@ -30,6 +30,7 @@ class AutorizacaoFornecimentoController extends Controller
             'valor' => 'required|numeric|min:0',
             'situacao' => 'required|in:aguardando_empenho,atendendo,concluida',
             'observacoes' => 'nullable|string',
+            'numero_cte' => 'nullable|string|max:255',
         ]);
 
         if ($validated['contrato_id']) {
@@ -70,6 +71,7 @@ class AutorizacaoFornecimentoController extends Controller
             'valor' => 'required|numeric|min:0',
             'situacao' => 'required|in:aguardando_empenho,atendendo,concluida',
             'observacoes' => 'nullable|string',
+            'numero_cte' => 'nullable|string|max:255',
         ]);
 
         if ($validated['contrato_id']) {

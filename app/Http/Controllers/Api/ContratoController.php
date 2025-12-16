@@ -146,9 +146,46 @@ class ContratoController extends Controller
      */
     private function calcularMargemMedia($contratos)
     {
-        // TODO: Implementar cálculo de margem quando tiver dados de custos
-        // Por enquanto retorna 0
-        return 0;
+        if ($contratos->isEmpty()) {
+            return 0;
+        }
+
+        $margens = [];
+        
+        foreach ($contratos as $contrato) {
+            // Buscar notas fiscais de entrada (custos) e saída (receitas) vinculadas
+            $notasEntrada = \App\Models\NotaFiscal::whereHas('empenho', function($q) use ($contrato) {
+                $q->where('contrato_id', $contrato->id);
+            })->orWhereHas('contrato', function($q) use ($contrato) {
+                $q->where('id', $contrato->id);
+            })->where('tipo', 'entrada')->get();
+            
+            $notasSaida = \App\Models\NotaFiscal::whereHas('empenho', function($q) use ($contrato) {
+                $q->where('contrato_id', $contrato->id);
+            })->orWhereHas('contrato', function($q) use ($contrato) {
+                $q->where('id', $contrato->id);
+            })->where('tipo', 'saida')->get();
+
+            $custoTotal = $notasEntrada->sum('custo_total') ?? $notasEntrada->sum('custo_produto') ?? 0;
+            $receitaTotal = $notasSaida->sum('valor') ?? 0;
+
+            // Se não tiver notas fiscais, usar valor do contrato como receita
+            if ($receitaTotal == 0 && $contrato->valor_total > 0) {
+                $receitaTotal = $contrato->valor_total;
+            }
+
+            if ($receitaTotal > 0 && $custoTotal > 0) {
+                $lucro = $receitaTotal - $custoTotal;
+                $margem = ($lucro / $receitaTotal) * 100;
+                $margens[] = $margem;
+            }
+        }
+
+        if (empty($margens)) {
+            return 0;
+        }
+
+        return round(array_sum($margens) / count($margens), 2);
     }
 
     public function index(Processo $processo)
@@ -175,6 +212,7 @@ class ContratoController extends Controller
             'situacao' => 'nullable|in:vigente,encerrado,cancelado',
             'observacoes' => 'nullable|string',
             'arquivo_contrato' => 'nullable|file|mimes:pdf,doc,docx|max:10240',
+            'numero_cte' => 'nullable|string|max:255',
         ]);
 
         $validated['processo_id'] = $processo->id;
@@ -227,6 +265,7 @@ class ContratoController extends Controller
             'situacao' => 'nullable|in:vigente,encerrado,cancelado',
             'observacoes' => 'nullable|string',
             'arquivo_contrato' => 'nullable|file|mimes:pdf,doc,docx|max:10240',
+            'numero_cte' => 'nullable|string|max:255',
         ]);
 
         // Se não tiver situacao, usar status ou manter atual
