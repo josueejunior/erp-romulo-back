@@ -14,6 +14,8 @@ class DashboardController extends Controller
         $processosParticipacao = Processo::where('status', 'participacao')->count();
         $processosJulgamento = Processo::where('status', 'julgamento_habilitacao')->count();
         $processosExecucao = Processo::where('status', 'execucao')->count();
+        $processosPagamento = Processo::where('status', 'pagamento')->count();
+        $processosEncerramento = Processo::where('status', 'encerramento')->count();
 
         $proximasDisputas = Processo::whereIn('status', ['participacao', 'julgamento_habilitacao'])
             ->where('data_hora_sessao_publica', '>=', now())
@@ -52,6 +54,8 @@ class DashboardController extends Controller
                 'participacao' => $processosParticipacao,
                 'julgamento' => $processosJulgamento,
                 'execucao' => $processosExecucao,
+                'pagamento' => $processosPagamento,
+                'encerramento' => $processosEncerramento,
             ],
             'proximas_disputas' => $proximasDisputas,
             'documentos_vencendo' => $documentosVencendo,

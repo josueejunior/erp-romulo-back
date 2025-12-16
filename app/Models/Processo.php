@@ -36,6 +36,7 @@ class Processo extends Model
         'tipo_selecao_fornecedor',
         'tipo_disputa',
         'status',
+        'status_participacao',
         'observacoes',
         'data_arquivamento',
     ];

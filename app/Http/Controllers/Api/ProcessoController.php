@@ -123,6 +123,8 @@ class ProcessoController extends Controller
         $totalParticipacao = (clone $query)->where('status', 'participacao')->count();
         $totalJulgamento = (clone $query)->where('status', 'julgamento_habilitacao')->count();
         $totalExecucao = (clone $query)->where('status', 'execucao')->count();
+        $totalPagamento = (clone $query)->where('status', 'pagamento')->count();
+        $totalEncerramento = (clone $query)->where('status', 'encerramento')->count();
         
         // Processos com alerta
         $totalComAlerta = (clone $query)->where(function($q) {
@@ -170,6 +172,8 @@ class ProcessoController extends Controller
             'participacao' => $totalParticipacao,
             'julgamento' => $totalJulgamento,
             'execucao' => $totalExecucao,
+            'pagamento' => $totalPagamento,
+            'encerramento' => $totalEncerramento,
             'com_alerta' => $totalComAlerta,
             'valor_total_execucao' => round($valorTotalExecucao, 2),
             'lucro_estimado' => round($lucroEstimado, 2),

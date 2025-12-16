@@ -109,6 +109,12 @@ class ProcessoListResource extends JsonResource
             case 'vencido':
                 return 'Aguardando execução';
                 
+            case 'pagamento':
+                return 'Aguardando pagamento';
+                
+            case 'encerramento':
+                return 'Aguardando encerramento';
+                
             case 'perdido':
             case 'arquivado':
                 return 'Finalizado';
@@ -166,6 +172,39 @@ class ProcessoListResource extends JsonResource
                         'hora' => null,
                         'tipo' => 'Prazo de entrega',
                         'urgente' => $hoje->diffInDays($prazo, false) <= 7,
+                    ];
+                }
+                break;
+                
+            case 'pagamento':
+                // Próximo pagamento pendente
+                $notasFiscais = $this->notasFiscais ?? collect();
+                $proximaNotaPendente = $notasFiscais
+                    ->where('pago', false)
+                    ->whereNotNull('data_vencimento')
+                    ->sortBy('data_vencimento')
+                    ->first();
+                
+                if ($proximaNotaPendente && $proximaNotaPendente->data_vencimento) {
+                    $vencimento = Carbon::parse($proximaNotaPendente->data_vencimento);
+                    return [
+                        'data' => $vencimento->format('d/m/Y'),
+                        'hora' => null,
+                        'tipo' => 'Vencimento de pagamento',
+                        'urgente' => $hoje->diffInDays($vencimento, false) <= 7,
+                    ];
+                }
+                break;
+                
+            case 'encerramento':
+                // Data de encerramento ou arquivamento
+                if ($this->data_arquivamento) {
+                    $dataEncerramento = Carbon::parse($this->data_arquivamento);
+                    return [
+                        'data' => $dataEncerramento->format('d/m/Y'),
+                        'hora' => null,
+                        'tipo' => 'Encerramento',
+                        'urgente' => false,
                     ];
                 }
                 break;
@@ -304,7 +343,7 @@ class ProcessoListResource extends JsonResource
             return 'Perdido';
         }
         
-        if ($this->status === 'execucao' || $this->status === 'vencido') {
+        if (in_array($this->status, ['execucao', 'vencido', 'pagamento', 'encerramento'])) {
             return 'Vencido';
         }
         
@@ -326,6 +365,8 @@ class ProcessoListResource extends JsonResource
             'julgamento_habilitacao' => 'Em Julgamento',
             'execucao' => 'Em Execução',
             'vencido' => 'Vencido',
+            'pagamento' => 'Em Pagamento',
+            'encerramento' => 'Em Encerramento',
             'perdido' => 'Perdido',
             'arquivado' => 'Arquivado',
         ];

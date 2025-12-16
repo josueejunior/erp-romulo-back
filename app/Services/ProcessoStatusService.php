@@ -73,7 +73,9 @@ class ProcessoStatusService
             'julgamento_habilitacao' => ['vencido', 'perdido', 'execucao', 'arquivado'],
             'vencido' => ['execucao'],
             'perdido' => ['arquivado'],
-            'execucao' => [], // Não pode mudar de execução
+            'execucao' => ['pagamento'], // Execução pode ir para pagamento
+            'pagamento' => ['encerramento'], // Pagamento pode ir para encerramento
+            'encerramento' => ['arquivado'], // Encerramento pode ser arquivado
             'arquivado' => [], // Não pode mudar de arquivado
         ];
 
@@ -105,11 +107,29 @@ class ProcessoStatusService
                 }
                 break;
 
-            case 'arquivado':
-                if ($statusAtual !== 'perdido') {
+            case 'pagamento':
+                if ($statusAtual !== 'execucao') {
                     return [
                         'pode' => false,
-                        'motivo' => 'Apenas processos perdidos podem ser arquivados'
+                        'motivo' => 'Apenas processos em execução podem entrar em pagamento'
+                    ];
+                }
+                break;
+
+            case 'encerramento':
+                if ($statusAtual !== 'pagamento') {
+                    return [
+                        'pode' => false,
+                        'motivo' => 'Apenas processos em pagamento podem ser encerrados'
+                    ];
+                }
+                break;
+
+            case 'arquivado':
+                if (!in_array($statusAtual, ['perdido', 'encerramento'])) {
+                    return [
+                        'pode' => false,
+                        'motivo' => 'Apenas processos perdidos ou encerrados podem ser arquivados'
                     ];
                 }
                 break;
