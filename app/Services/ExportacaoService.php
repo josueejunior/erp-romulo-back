@@ -55,7 +55,8 @@ class ExportacaoService
                     $emailEmpresa = $tenant->email ?? '';
                     $telefones = $tenant->telefones ?? [];
                     $telefoneEmpresa = is_array($telefones) && !empty($telefones) ? $telefones[0] : '';
-                    $nomeFantasia = $tenant->nome_fantasia ?? $nomeEmpresa;
+                    // Nome fantasia não existe no Tenant, usar razão social
+                    $nomeFantasia = $nomeEmpresa;
                     $bancoEmpresa = $tenant->banco ?? '';
                     $agenciaEmpresa = $tenant->agencia ?? '';
                     $contaEmpresa = $tenant->conta ?? '';
@@ -149,31 +150,38 @@ class ExportacaoService
     }
 
     /**
-     * Calcula validade da proposta proporcional à data de elaboração
+     * Calcula validade da proposta
+     * Agora a validade é armazenada como string (ex: "60 dias úteis")
      */
     protected function calcularValidadeProposta(Processo $processo): string
     {
-        if (!$processo->validade_proposta_inicio || !$processo->validade_proposta_fim) {
-            return $processo->validade_proposta ?? 'Não especificada';
+        // Se já existe validade_proposta como string, retornar diretamente
+        if ($processo->validade_proposta) {
+            return $processo->validade_proposta;
         }
 
-        $inicio = Carbon::parse($processo->validade_proposta_inicio);
-        $fim = Carbon::parse($processo->validade_proposta_fim);
-        $hoje = Carbon::now();
+        // Fallback para processos antigos que ainda usam validade_proposta_inicio/fim
+        if ($processo->validade_proposta_inicio && $processo->validade_proposta_fim) {
+            $inicio = Carbon::parse($processo->validade_proposta_inicio);
+            $fim = Carbon::parse($processo->validade_proposta_fim);
+            $hoje = Carbon::now();
 
-        // Se hoje está dentro do período
-        if ($hoje->between($inicio, $fim)) {
-            $diasRestantes = $hoje->diffInDays($fim);
-            return "Válida até {$fim->format('d/m/Y')} ({$diasRestantes} dias restantes)";
+            // Se hoje está dentro do período
+            if ($hoje->between($inicio, $fim)) {
+                $diasRestantes = $hoje->diffInDays($fim);
+                return "Válida até {$fim->format('d/m/Y')} ({$diasRestantes} dias restantes)";
+            }
+
+            // Se já passou
+            if ($hoje->isAfter($fim)) {
+                return "Vencida em {$fim->format('d/m/Y')}";
+            }
+
+            // Se ainda não começou
+            return "Válida de {$inicio->format('d/m/Y')} até {$fim->format('d/m/Y')}";
         }
 
-        // Se já passou
-        if ($hoje->isAfter($fim)) {
-            return "Vencida em {$fim->format('d/m/Y')}";
-        }
-
-        // Se ainda não começou
-        return "Válida de {$inicio->format('d/m/Y')} até {$fim->format('d/m/Y')}";
+        return 'Não especificada';
     }
 }
 

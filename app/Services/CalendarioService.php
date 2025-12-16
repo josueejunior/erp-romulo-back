@@ -19,8 +19,16 @@ class CalendarioService
         $dataInicio = $dataInicio ?? Carbon::now();
         $dataFim = $dataFim ?? Carbon::now()->addDays(60);
 
+        // Buscar processos em participação (incluindo pendentes: adiado, suspenso, cancelado)
         $processos = Processo::where('status', 'participacao')
-            ->whereBetween('data_hora_sessao_publica', [$dataInicio, $dataFim])
+            ->where(function($query) use ($dataInicio, $dataFim) {
+                // Processos com data de sessão no período OU processos pendentes (sem data específica)
+                $query->whereBetween('data_hora_sessao_publica', [$dataInicio, $dataFim])
+                      ->orWhere(function($q) {
+                          // Processos pendentes (adiado, suspenso, cancelado) - mostrar sempre
+                          $q->whereIn('status_participacao', ['adiado', 'suspenso', 'cancelado']);
+                      });
+            })
             ->with([
                 'orgao',
                 'setor',
@@ -30,6 +38,7 @@ class CalendarioService
                 }
             ])
             ->orderBy('data_hora_sessao_publica')
+            ->orderBy('status_participacao')
             ->get();
 
         return $processos->map(function ($processo) {
@@ -50,7 +59,10 @@ class CalendarioService
                 'portal' => $processo->portal,
                 'precos_minimos' => $precosMinimos,
                 'total_itens' => $processo->itens->count(),
-                'dias_restantes' => Carbon::now()->diffInDays($processo->data_hora_sessao_publica, false),
+                'dias_restantes' => $processo->data_hora_sessao_publica 
+                    ? Carbon::now()->diffInDays($processo->data_hora_sessao_publica, false) 
+                    : null,
+                'status_participacao' => $processo->status_participacao ?? 'normal',
                 'avisos' => $this->gerarAvisosDisputa($processo),
             ];
         });

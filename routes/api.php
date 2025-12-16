@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\NotaFiscalController as ApiNotaFiscalController;
 use App\Http\Controllers\Api\OrgaoController as ApiOrgaoController;
 use App\Http\Controllers\Api\SetorController as ApiSetorController;
 use App\Http\Controllers\Api\FornecedorController as ApiFornecedorController;
+use App\Http\Controllers\Api\CustoIndiretoController as ApiCustoIndiretoController;
 use App\Http\Controllers\Api\DocumentoHabilitacaoController as ApiDocumentoHabilitacaoController;
 use App\Http\Controllers\Api\DashboardController as ApiDashboardController;
 use App\Http\Controllers\Api\RelatorioFinanceiroController as ApiRelatorioFinanceiroController;
@@ -126,6 +127,9 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('setors', ApiSetorController::class);
         Route::apiResource('fornecedores', ApiFornecedorController::class)
             ->parameters(['fornecedores' => 'fornecedor']);
+        Route::apiResource('custos-indiretos', ApiCustoIndiretoController::class)
+            ->parameters(['custos-indiretos' => 'custo-indireto']);
+        Route::get('/custos-indiretos-resumo', [ApiCustoIndiretoController::class, 'resumo']);
         Route::apiResource('documentos-habilitacao', ApiDocumentoHabilitacaoController::class);
         
         // Debug/Correção de roles
