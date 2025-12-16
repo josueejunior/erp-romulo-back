@@ -28,6 +28,7 @@ class Contrato extends Model
         'situacao',
         'vigente',
         'observacoes',
+        'arquivo_contrato',
     ];
 
     protected function casts(): array

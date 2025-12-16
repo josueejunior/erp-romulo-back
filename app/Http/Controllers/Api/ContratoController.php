@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Processo;
 use App\Models\Contrato;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Carbon\Carbon;
 
 class ContratoController extends Controller
@@ -166,15 +167,34 @@ class ContratoController extends Controller
 
         $validated = $request->validate([
             'numero' => 'required|string|max:255',
+            'data_assinatura' => 'nullable|date',
             'data_inicio' => 'required|date',
             'data_fim' => 'nullable|date|after:data_inicio',
             'valor_total' => 'required|numeric|min:0',
-            'situacao' => 'required|in:vigente,encerrado,cancelado',
+            'status' => 'nullable|in:ativo,encerrado,suspenso',
+            'situacao' => 'nullable|in:vigente,encerrado,cancelado',
             'observacoes' => 'nullable|string',
+            'arquivo_contrato' => 'nullable|file|mimes:pdf,doc,docx|max:10240',
         ]);
 
         $validated['processo_id'] = $processo->id;
         $validated['saldo'] = $validated['valor_total'];
+        
+        // Se não tiver situacao, usar status ou default
+        if (!isset($validated['situacao']) && isset($validated['status'])) {
+            $validated['situacao'] = $validated['status'] === 'ativo' ? 'vigente' : 
+                                    ($validated['status'] === 'encerrado' ? 'encerrado' : 'vigente');
+        } elseif (!isset($validated['situacao'])) {
+            $validated['situacao'] = 'vigente';
+        }
+
+        // Upload de arquivo
+        if ($request->hasFile('arquivo_contrato')) {
+            $arquivo = $request->file('arquivo_contrato');
+            $nomeArquivo = time() . '_' . $arquivo->getClientOriginalName();
+            $caminho = $arquivo->storeAs('contratos', $nomeArquivo, 'public');
+            $validated['arquivo_contrato'] = $caminho;
+        }
 
         $contrato = Contrato::create($validated);
 
@@ -199,12 +219,34 @@ class ContratoController extends Controller
 
         $validated = $request->validate([
             'numero' => 'required|string|max:255',
+            'data_assinatura' => 'nullable|date',
             'data_inicio' => 'required|date',
             'data_fim' => 'nullable|date|after:data_inicio',
             'valor_total' => 'required|numeric|min:0',
-            'situacao' => 'required|in:vigente,encerrado,cancelado',
+            'status' => 'nullable|in:ativo,encerrado,suspenso',
+            'situacao' => 'nullable|in:vigente,encerrado,cancelado',
             'observacoes' => 'nullable|string',
+            'arquivo_contrato' => 'nullable|file|mimes:pdf,doc,docx|max:10240',
         ]);
+
+        // Se não tiver situacao, usar status ou manter atual
+        if (!isset($validated['situacao']) && isset($validated['status'])) {
+            $validated['situacao'] = $validated['status'] === 'ativo' ? 'vigente' : 
+                                    ($validated['status'] === 'encerrado' ? 'encerrado' : 'vigente');
+        }
+
+        // Upload de arquivo
+        if ($request->hasFile('arquivo_contrato')) {
+            // Deletar arquivo antigo se existir
+            if ($contrato->arquivo_contrato && \Storage::disk('public')->exists($contrato->arquivo_contrato)) {
+                \Storage::disk('public')->delete($contrato->arquivo_contrato);
+            }
+            
+            $arquivo = $request->file('arquivo_contrato');
+            $nomeArquivo = time() . '_' . $arquivo->getClientOriginalName();
+            $caminho = $arquivo->storeAs('contratos', $nomeArquivo, 'public');
+            $validated['arquivo_contrato'] = $caminho;
+        }
 
         $valorTotalAnterior = $contrato->valor_total;
         $contrato->update($validated);
