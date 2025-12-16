@@ -248,6 +248,59 @@ class OrcamentoController extends Controller
 
         return OrcamentoResource::collection($orcamentos);
     }
+
+    /**
+     * Atualiza o fornecedor_escolhido de um orcamento_item específico
+     */
+    public function updateOrcamentoItem(Request $request, Processo $processo, Orcamento $orcamento, $orcamentoItemId)
+    {
+        if ($orcamento->processo_id !== $processo->id) {
+            return response()->json(['message' => 'Orçamento não pertence a este processo.'], 404);
+        }
+
+        if ($processo->isEmExecucao()) {
+            return response()->json([
+                'message' => 'Não é possível alterar seleção de orçamentos em processos em execução.'
+            ], 403);
+        }
+
+        $orcamentoItem = \App\Models\OrcamentoItem::where('id', $orcamentoItemId)
+            ->where('orcamento_id', $orcamento->id)
+            ->first();
+
+        if (!$orcamentoItem) {
+            return response()->json(['message' => 'Item do orçamento não encontrado.'], 404);
+        }
+
+        $validated = $request->validate([
+            'fornecedor_escolhido' => 'required|boolean',
+        ]);
+
+        // Se está marcando como escolhido, desmarcar todos os outros do mesmo item
+        if ($validated['fornecedor_escolhido']) {
+            \App\Models\OrcamentoItem::where('processo_item_id', $orcamentoItem->processo_item_id)
+                ->where('id', '!=', $orcamentoItem->id)
+                ->update(['fornecedor_escolhido' => false]);
+        }
+
+        $orcamentoItem->update(['fornecedor_escolhido' => $validated['fornecedor_escolhido']]);
+
+        // Atualizar valor mínimo no item se tiver formação de preço
+        if ($validated['fornecedor_escolhido'] && $orcamentoItem->formacaoPreco) {
+            $processoItem = $orcamentoItem->processoItem;
+            $processoItem->valor_minimo_venda = $orcamentoItem->formacaoPreco->preco_minimo;
+            $processoItem->save();
+        } elseif (!$validated['fornecedor_escolhido']) {
+            $processoItem = $orcamentoItem->processoItem;
+            $processoItem->valor_minimo_venda = null;
+            $processoItem->save();
+        }
+
+        $orcamento->refresh();
+        $orcamento->load(['fornecedor', 'transportadora', 'itens.processoItem', 'itens.formacaoPreco']);
+
+        return new OrcamentoResource($orcamento);
+    }
 }
 
 

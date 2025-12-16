@@ -11,10 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            if (!Schema::hasColumn('users', 'deleted_at')) {
-                $table->softDeletes();
-            }
+        Schema::table('processos', function (Blueprint $table) {
+            $table->date('data_recebimento_pagamento')->nullable()->after('status');
         });
     }
 
@@ -23,13 +21,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            if (Schema::hasColumn('users', 'deleted_at')) {
-                $table->dropSoftDeletes();
-            }
+        Schema::table('processos', function (Blueprint $table) {
+            $table->dropColumn('data_recebimento_pagamento');
         });
     }
 };
-
-
-

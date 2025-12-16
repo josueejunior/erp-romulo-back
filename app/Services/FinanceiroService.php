@@ -99,11 +99,13 @@ class FinanceiroService
 
     /**
      * Calcula lucro por período (incluindo custos indiretos)
+     * Considera apenas processos encerrados (com data_recebimento_pagamento)
      */
     public function calcularLucroPeriodo(Carbon $dataInicio, Carbon $dataFim): array
     {
-        // Processos vencidos/em execução no período
-        $processos = Processo::whereIn('status', ['vencido', 'execucao'])
+        // Processos encerrados (com data de recebimento do pagamento) no período
+        $processos = Processo::whereNotNull('data_recebimento_pagamento')
+            ->whereBetween('data_recebimento_pagamento', [$dataInicio, $dataFim])
             ->whereHas('itens', function ($query) {
                 $query->whereIn('status_item', ['aceito', 'aceito_habilitado']);
             })
@@ -174,6 +176,115 @@ class FinanceiroService
             'percentual_pago' => $receitaTotal > 0 
                 ? round(($valorPago / $receitaTotal) * 100, 2) 
                 : 0,
+        ];
+    }
+
+    /**
+     * Calcula gestão financeira mensal automática
+     * Considera apenas processos encerrados (com data_recebimento_pagamento)
+     * Cruza custos diretos (NFs entrada) vs vendas (NFs saída) e desconta custos indiretos
+     */
+    public function calcularGestaoFinanceiraMensal(?Carbon $mes = null): array
+    {
+        if (!$mes) {
+            $mes = Carbon::now();
+        }
+
+        $dataInicio = $mes->copy()->startOfMonth();
+        $dataFim = $mes->copy()->endOfMonth();
+
+        // Processos encerrados no mês (com data de recebimento do pagamento)
+        $processosEncerrados = Processo::whereNotNull('data_recebimento_pagamento')
+            ->whereBetween('data_recebimento_pagamento', [$dataInicio, $dataFim])
+            ->with(['itens', 'notasFiscais'])
+            ->get();
+
+        $receitaTotal = 0;
+        $custosDiretosTotal = 0;
+        $processosDetalhados = [];
+
+        foreach ($processosEncerrados as $processo) {
+            // Receita: notas fiscais de saída (vendas)
+            $receita = $processo->notasFiscais()
+                ->where('tipo', 'saida')
+                ->sum('valor') ?? 0;
+
+            // Se não tiver NF de saída, usar valores dos itens
+            if ($receita == 0) {
+                $receita = $this->calcularReceita($processo)['receita_total'];
+            }
+
+            // Custos diretos: notas fiscais de entrada (compras)
+            $custosDiretos = $processo->notasFiscais()
+                ->where('tipo', 'entrada')
+                ->sum('custo_total') ?? 0;
+
+            // Se não tiver NF de entrada, usar custo_produto
+            if ($custosDiretos == 0) {
+                $custosDiretos = $processo->notasFiscais()
+                    ->where('tipo', 'entrada')
+                    ->sum('custo_produto') ?? 0;
+            }
+
+            $lucroBruto = $receita - $custosDiretos;
+            $margem = $receita > 0 ? ($lucroBruto / $receita) * 100 : 0;
+
+            $receitaTotal += $receita;
+            $custosDiretosTotal += $custosDiretos;
+
+            $processosDetalhados[] = [
+                'id' => $processo->id,
+                'numero_modalidade' => $processo->numero_modalidade,
+                'objeto_resumido' => $processo->objeto_resumido,
+                'data_recebimento' => $processo->data_recebimento_pagamento?->format('d/m/Y'),
+                'receita' => round($receita, 2),
+                'custos_diretos' => round($custosDiretos, 2),
+                'lucro_bruto' => round($lucroBruto, 2),
+                'margem' => round($margem, 2),
+            ];
+        }
+
+        // Custos indiretos do mês
+        $custosIndiretos = $this->calcularCustosIndiretosPeriodo($dataInicio, $dataFim);
+        $custosIndiretosTotal = $custosIndiretos['total'];
+
+        // Cálculo final
+        $lucroBruto = $receitaTotal - $custosDiretosTotal;
+        $lucroLiquido = $lucroBruto - $custosIndiretosTotal;
+
+        $margemBruta = $receitaTotal > 0 
+            ? ($lucroBruto / $receitaTotal) * 100 
+            : 0;
+        
+        $margemLiquida = $receitaTotal > 0 
+            ? ($lucroLiquido / $receitaTotal) * 100 
+            : 0;
+
+        return [
+            'mes' => $mes->format('m/Y'),
+            'periodo' => [
+                'inicio' => $dataInicio->format('d/m/Y'),
+                'fim' => $dataFim->format('d/m/Y'),
+            ],
+            'resumo' => [
+                'receita_total' => round($receitaTotal, 2),
+                'custos_diretos' => round($custosDiretosTotal, 2),
+                'custos_indiretos' => round($custosIndiretosTotal, 2),
+                'lucro_bruto' => round($lucroBruto, 2),
+                'lucro_liquido' => round($lucroLiquido, 2),
+                'margem_bruta' => round($margemBruta, 2),
+                'margem_liquida' => round($margemLiquida, 2),
+            ],
+            'quantidade_processos' => $processosEncerrados->count(),
+            'processos' => $processosDetalhados,
+            'custos_indiretos_detalhados' => $custosIndiretos['custos']->map(function($custo) {
+                return [
+                    'id' => $custo->id,
+                    'descricao' => $custo->descricao,
+                    'valor' => round($custo->valor, 2),
+                    'data' => $custo->data->format('d/m/Y'),
+                ];
+            }),
         ];
     }
 }

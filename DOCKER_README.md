@@ -238,3 +238,4 @@ Após iniciar os containers, verifique:
 - O script aguarda automaticamente o PostgreSQL estar pronto antes de executar migrations
 
 
+

@@ -94,6 +94,7 @@ Route::prefix('v1')->group(function () {
         // Orçamentos (por processo - múltiplos itens)
         Route::post('/processos/{processo}/orcamentos', [ApiOrcamentoController::class, 'storeByProcesso']);
         Route::get('/processos/{processo}/orcamentos', [ApiOrcamentoController::class, 'indexByProcesso']);
+        Route::put('/processos/{processo}/orcamentos/{orcamento}/itens/{orcamentoItem}', [ApiOrcamentoController::class, 'updateOrcamentoItem']);
         
         // Orçamentos (por item - compatibilidade)
         Route::apiResource('processos.itens.orcamentos', ApiOrcamentoController::class)
@@ -142,6 +143,7 @@ Route::prefix('v1')->group(function () {
         
         // Relatórios
         Route::get('/relatorios/financeiro', [ApiRelatorioFinanceiroController::class, 'index']);
+        Route::get('/relatorios/gestao-mensal', [ApiRelatorioFinanceiroController::class, 'gestaoMensal']);
 
         // Usuários
         Route::apiResource('users', ApiUserController::class);

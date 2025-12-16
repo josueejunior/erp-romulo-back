@@ -39,6 +39,7 @@ class Processo extends Model
         'tipo_disputa',
         'status',
         'status_participacao',
+        'data_recebimento_pagamento',
         'observacoes',
         'data_arquivamento',
     ];
@@ -51,6 +52,7 @@ class Processo extends Model
             'horario_sessao_publica' => 'datetime',
             'validade_proposta_inicio' => 'date',
             'validade_proposta_fim' => 'date',
+            'data_recebimento_pagamento' => 'date',
             'data_arquivamento' => 'datetime',
         ];
     }

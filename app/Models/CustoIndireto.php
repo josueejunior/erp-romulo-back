@@ -26,3 +26,4 @@ class CustoIndireto extends Model
     }
 }
 
+

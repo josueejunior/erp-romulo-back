@@ -155,3 +155,4 @@ Após criar o `.env`, verifique:
 4. A aplicação estará em: http://localhost:8001
 
 
+

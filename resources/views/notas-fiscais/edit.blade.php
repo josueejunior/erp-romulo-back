@@ -70,6 +70,98 @@
                 </select>
             </div>
 
+            <!-- Campos de Logística (para notas de saída) -->
+            <div id="campos-logistica" class="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 border-t pt-6 mt-6" style="display: {{ old('tipo', $notaFiscal->tipo) == 'saida' ? 'grid' : 'none' }};">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                        Transportadora
+                    </label>
+                    <input type="text" name="transportadora"
+                           class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors" 
+                           value="{{ old('transportadora', $notaFiscal->transportadora) }}" placeholder="Nome da transportadora">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                        Número do CTE
+                    </label>
+                    <input type="text" name="numero_cte"
+                           class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors" 
+                           value="{{ old('numero_cte', $notaFiscal->numero_cte) }}" placeholder="Número do CTE">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                        Data de Entrega Prevista
+                    </label>
+                    <input type="date" name="data_entrega_prevista"
+                           class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors" 
+                           value="{{ old('data_entrega_prevista', $notaFiscal->data_entrega_prevista ? $notaFiscal->data_entrega_prevista->format('Y-m-d') : '') }}">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                        Data de Entrega Realizada
+                    </label>
+                    <input type="date" name="data_entrega_realizada"
+                           class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors" 
+                           value="{{ old('data_entrega_realizada', $notaFiscal->data_entrega_realizada ? $notaFiscal->data_entrega_realizada->format('Y-m-d') : '') }}">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                        Situação Logística
+                    </label>
+                    <select name="situacao_logistica"
+                            class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                        <option value="">Selecione</option>
+                        <option value="aguardando_envio" {{ old('situacao_logistica', $notaFiscal->situacao_logistica) == 'aguardando_envio' ? 'selected' : '' }}>Aguardando Envio</option>
+                        <option value="em_transito" {{ old('situacao_logistica', $notaFiscal->situacao_logistica) == 'em_transito' ? 'selected' : '' }}>Em Trânsito</option>
+                        <option value="entregue" {{ old('situacao_logistica', $notaFiscal->situacao_logistica) == 'entregue' ? 'selected' : '' }}>Entregue</option>
+                        <option value="atrasada" {{ old('situacao_logistica', $notaFiscal->situacao_logistica) == 'atrasada' ? 'selected' : '' }}>Atrasada</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Campos de Custos (para notas de entrada) -->
+            <div id="campos-custos" class="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-6 border-t pt-6 mt-6" style="display: {{ old('tipo', $notaFiscal->tipo) == 'entrada' ? 'grid' : 'none' }};">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                        Custo do Produto
+                    </label>
+                    <input type="number" name="custo_produto" step="0.01" min="0"
+                           class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors" 
+                           value="{{ old('custo_produto', $notaFiscal->custo_produto) }}" placeholder="0.00">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                        Custo do Frete
+                    </label>
+                    <input type="number" name="custo_frete" step="0.01" min="0"
+                           class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors" 
+                           value="{{ old('custo_frete', $notaFiscal->custo_frete) }}" placeholder="0.00">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                        Custo Total
+                    </label>
+                    <input type="number" name="custo_total" step="0.01" min="0"
+                           class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors" 
+                           value="{{ old('custo_total', $notaFiscal->custo_total) }}" placeholder="0.00">
+                </div>
+
+                <div class="md:col-span-3">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                        Comprovante de Pagamento
+                    </label>
+                    <input type="text" name="comprovante_pagamento"
+                           class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors" 
+                           value="{{ old('comprovante_pagamento', $notaFiscal->comprovante_pagamento) }}" placeholder="Número do comprovante">
+                </div>
+            </div>
+
             <div>
                 <label class="block text-sm font-semibold text-gray-700 mb-2">
                     Valor <span class="text-red-500">*</span>
@@ -164,4 +256,24 @@
         </div>
     </form>
 </div>
+
+<script>
+// Mostrar/ocultar campos conforme tipo de nota fiscal
+document.querySelector('select[name="tipo"]').addEventListener('change', function() {
+    const tipo = this.value;
+    const camposLogistica = document.getElementById('campos-logistica');
+    const camposCustos = document.getElementById('campos-custos');
+    
+    if (tipo === 'saida') {
+        camposLogistica.style.display = 'grid';
+        camposCustos.style.display = 'none';
+    } else if (tipo === 'entrada') {
+        camposLogistica.style.display = 'none';
+        camposCustos.style.display = 'grid';
+    } else {
+        camposLogistica.style.display = 'none';
+        camposCustos.style.display = 'none';
+    }
+});
+</script>
 @endsection

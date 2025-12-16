@@ -5,11 +5,20 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Processo;
 use App\Models\CustoIndireto;
+use App\Services\FinanceiroService;
 use Illuminate\Http\Request;
 use App\Helpers\PermissionHelper;
+use Carbon\Carbon;
 
 class RelatorioFinanceiroController extends Controller
 {
+    protected FinanceiroService $financeiroService;
+
+    public function __construct(FinanceiroService $financeiroService)
+    {
+        $this->financeiroService = $financeiroService;
+    }
+
     public function index(Request $request)
     {
         // RBAC: apenas usuários autorizados podem ver relatórios financeiros
@@ -19,6 +28,18 @@ class RelatorioFinanceiroController extends Controller
             ], 403);
         }
 
+        // Se for gestão financeira mensal (apenas processos encerrados)
+        if ($request->tipo === 'mensal' || $request->mes) {
+            $mes = $request->mes 
+                ? Carbon::createFromFormat('Y-m', $request->mes)
+                : Carbon::now();
+            
+            $resultado = $this->financeiroService->calcularGestaoFinanceiraMensal($mes);
+            
+            return response()->json($resultado);
+        }
+
+        // Relatório padrão (processos em execução)
         $query = Processo::where('status', 'execucao')
             ->with(['itens', 'contratos', 'empenhos', 'notasFiscais']);
 
@@ -105,6 +126,26 @@ class RelatorioFinanceiroController extends Controller
                 ];
             }),
         ]);
+    }
+
+    /**
+     * Endpoint específico para gestão financeira mensal
+     */
+    public function gestaoMensal(Request $request)
+    {
+        if (!PermissionHelper::canViewFinancialReports()) {
+            return response()->json([
+                'message' => 'Você não tem permissão para visualizar relatórios financeiros.',
+            ], 403);
+        }
+
+        $mes = $request->mes 
+            ? Carbon::createFromFormat('Y-m', $request->mes)
+            : Carbon::now();
+
+        $resultado = $this->financeiroService->calcularGestaoFinanceiraMensal($mes);
+
+        return response()->json($resultado);
     }
 }
 

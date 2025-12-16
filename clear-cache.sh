@@ -25,3 +25,4 @@ echo "📋 Verificando rotas de contratos:"
 php artisan route:list --path=contratos
 
 
+

@@ -262,7 +262,8 @@ class ProcessoController extends Controller
 
     public function update(Request $request, Processo $processo)
     {
-        if ($processo->isEmExecucao()) {
+        // Permitir atualização de data_recebimento_pagamento mesmo em execução
+        if ($processo->isEmExecucao() && !$request->has('data_recebimento_pagamento')) {
             return response()->json([
                 'message' => 'Processos em execução não podem ser editados.'
             ], 403);
@@ -287,6 +288,7 @@ class ProcessoController extends Controller
             'tipo_selecao_fornecedor' => 'nullable|string|in:menor_preco_item,menor_preco_lote',
             'tipo_disputa' => 'nullable|string|in:aberto,aberto_fechado',
             'status_participacao' => 'nullable|string|in:normal,adiado,suspenso,cancelado',
+            'data_recebimento_pagamento' => 'nullable|date',
             'observacoes' => 'nullable|string',
         ]);
 

@@ -17,9 +17,9 @@ class ExportacaoController extends Controller
     }
 
     /**
-     * Exporta proposta comercial
+     * Exporta proposta comercial (HTML ou PDF)
      */
-    public function propostaComercial(Processo $processo)
+    public function propostaComercial(Processo $processo, Request $request)
     {
         // Permitir exportação em qualquer status, exceto arquivado/perdido
         // Conforme especificação: pode ser gerada na fase de participação e julgamento
@@ -31,7 +31,35 @@ class ExportacaoController extends Controller
 
         $html = $this->exportacaoService->gerarPropostaComercial($processo);
 
-        // Retornar HTML (pode ser convertido para PDF no frontend ou usando dompdf)
+        // Se solicitado PDF, tentar converter (requer dompdf instalado)
+        if ($request->has('formato') && $request->formato === 'pdf') {
+            try {
+                // Tentar usar dompdf se disponível
+                if (class_exists(\Dompdf\Dompdf::class)) {
+                    $dompdf = new \Dompdf\Dompdf();
+                    $dompdf->loadHtml($html);
+                    $dompdf->setPaper('A4', 'portrait');
+                    $dompdf->render();
+                    
+                    return response($dompdf->output(), 200)
+                        ->header('Content-Type', 'application/pdf')
+                        ->header('Content-Disposition', 'inline; filename="proposta_comercial_' . $processo->id . '.pdf"');
+                } else {
+                    // Se dompdf não estiver instalado, retornar HTML com instruções
+                    return response($html)
+                        ->header('Content-Type', 'text/html; charset=utf-8')
+                        ->header('Content-Disposition', 'inline; filename="proposta_comercial_' . $processo->id . '.html"')
+                        ->header('X-PDF-Not-Available', 'true');
+                }
+            } catch (\Exception $e) {
+                // Em caso de erro, retornar HTML
+                return response($html)
+                    ->header('Content-Type', 'text/html; charset=utf-8')
+                    ->header('Content-Disposition', 'inline; filename="proposta_comercial_' . $processo->id . '.html"');
+            }
+        }
+
+        // Retornar HTML por padrão
         return response($html)
             ->header('Content-Type', 'text/html; charset=utf-8')
             ->header('Content-Disposition', 'inline; filename="proposta_comercial_' . $processo->id . '.html"');
