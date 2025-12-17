@@ -18,6 +18,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'empresa_ativa_id', // Para atualização automática quando obtém empresa do relacionamento
     ];
 
     protected $hidden = [

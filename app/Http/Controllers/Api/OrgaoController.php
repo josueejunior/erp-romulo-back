@@ -63,30 +63,28 @@ class OrgaoController extends BaseApiController
             });
         }
 
-        // Executar query e obter resultados
-        $orgaos = $query->orderBy('razao_social')->paginate(15);
+        // Executar query e obter resultados BRUTOS (sem paginação) para verificar
+        $orgaosBrutos = $query->orderBy('razao_social')->get();
         
-        // Log: Verificar o que a query retornou ANTES do filtro adicional
-        $orgaosCollection = $orgaos->getCollection();
-        \Log::info('OrgaoController::index - Resultados da Query', [
-            'total_retornado_query' => $orgaosCollection->count(),
-            'orgaos_retornados' => $orgaosCollection->map(function($orgao) {
+        \Log::info('OrgaoController::index - Resultados BRUTOS da Query', [
+            'total_bruto' => $orgaosBrutos->count(),
+            'orgaos_brutos' => $orgaosBrutos->map(function($orgao) use ($empresa) {
                 return [
                     'id' => $orgao->id,
                     'razao_social' => $orgao->razao_social,
                     'empresa_id' => $orgao->empresa_id,
+                    'empresa_id_esperado' => $empresa->id,
+                    'pertence_empresa' => $orgao->empresa_id === $empresa->id,
                 ];
             })->toArray(),
         ]);
         
-        // Verificação CRÍTICA: Filtrar novamente após paginação para garantir isolamento
-        // Isso garante que mesmo se houver algum problema na query, os dados serão filtrados
-        $orgaosFiltrados = $orgaosCollection->filter(function($orgao) use ($empresa) {
+        // Filtrar novamente ANTES da paginação para garantir isolamento
+        $orgaosFiltradosAntes = $orgaosBrutos->filter(function($orgao) use ($empresa) {
             $pertence = $orgao->empresa_id === $empresa->id && $orgao->empresa_id !== null;
             
-            // Log se encontrar órgão que não pertence
             if (!$pertence) {
-                \Log::warning('OrgaoController::index - Órgão não pertence à empresa!', [
+                \Log::warning('OrgaoController::index - Órgão removido ANTES da paginação!', [
                     'orgao_id' => $orgao->id,
                     'orgao_razao_social' => $orgao->razao_social,
                     'orgao_empresa_id' => $orgao->empresa_id,
@@ -97,14 +95,29 @@ class OrgaoController extends BaseApiController
             return $pertence;
         });
         
-        // Log dos resultados com mais detalhes
-        \Log::info('OrgaoController::index - Resultados', [
-            'total_orgaos_antes_filtro' => $orgaosCollection->count(),
-            'total_orgaos_depois_filtro' => $orgaosFiltrados->count(),
+        // Criar paginação manual com os dados filtrados
+        $page = $request->get('page', 1);
+        $perPage = 15;
+        $offset = ($page - 1) * $perPage;
+        $orgaosPaginated = $orgaosFiltradosAntes->slice($offset, $perPage)->values();
+        
+        // Criar objeto de paginação manual
+        $orgaos = new \Illuminate\Pagination\LengthAwarePaginator(
+            $orgaosPaginated,
+            $orgaosFiltradosAntes->count(),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
+        
+        // Log dos resultados finais
+        \Log::info('OrgaoController::index - Resultados Finais', [
+            'total_orgaos_bruto' => $orgaosBrutos->count(),
+            'total_orgaos_filtrado_antes_paginacao' => $orgaosFiltradosAntes->count(),
+            'total_orgaos_paginado' => $orgaosPaginated->count(),
             'empresa_id_filtro' => $empresa->id,
             'empresa_razao_social' => $empresa->razao_social,
-            'orgaos_empresa_ids' => $orgaosFiltrados->pluck('empresa_id')->unique()->toArray(),
-            'orgaos_detalhes' => $orgaosFiltrados->map(function($orgao) {
+            'orgaos_finais' => $orgaosPaginated->map(function($orgao) {
                 return [
                     'id' => $orgao->id,
                     'razao_social' => $orgao->razao_social,
@@ -113,31 +126,24 @@ class OrgaoController extends BaseApiController
             })->toArray(),
         ]);
         
-        // Verificação adicional: garantir que todos os órgãos retornados pertencem à empresa
-        $orgaosInvalidos = $orgaosFiltrados->filter(function($orgao) use ($empresa) {
-            return $orgao->empresa_id !== $empresa->id || $orgao->empresa_id === null;
+        // Verificação FINAL: Garantir que NENHUM órgão inválido seja retornado
+        $orgaosFinais = $orgaosPaginated->filter(function($orgao) use ($empresa) {
+            $pertence = $orgao->empresa_id === $empresa->id && $orgao->empresa_id !== null;
+            
+            if (!$pertence) {
+                \Log::error('OrgaoController::index - ERRO CRÍTICO: Órgão inválido na paginação!', [
+                    'orgao_id' => $orgao->id,
+                    'orgao_razao_social' => $orgao->razao_social,
+                    'orgao_empresa_id' => $orgao->empresa_id,
+                    'empresa_ativa_id' => $empresa->id,
+                ]);
+            }
+            
+            return $pertence;
         });
         
-        if ($orgaosInvalidos->count() > 0) {
-            \Log::error('OrgaoController::index - Órgãos com empresa_id incorreto encontrados APÓS FILTRO!', [
-                'empresa_id_esperado' => $empresa->id,
-                'orgaos_invalidos' => $orgaosInvalidos->map(function($orgao) {
-                    return [
-                        'id' => $orgao->id,
-                        'razao_social' => $orgao->razao_social,
-                        'empresa_id' => $orgao->empresa_id,
-                    ];
-                })->toArray(),
-            ]);
-            
-            // Remover órgãos inválidos
-            $orgaosFiltrados = $orgaosFiltrados->reject(function($orgao) use ($empresa) {
-                return $orgao->empresa_id !== $empresa->id || $orgao->empresa_id === null;
-            });
-        }
-        
-        // Atualizar collection da paginação com dados filtrados
-        $orgaos->setCollection($orgaosFiltrados);
+        // Atualizar collection da paginação com dados filtrados FINAIS
+        $orgaos->setCollection($orgaosFinais);
 
         // Criar resposta com informações de debug
         $response = OrgaoResource::collection($orgaos);
@@ -159,13 +165,23 @@ class OrgaoController extends BaseApiController
                     'total_orgaos_empresa_ativa' => $totalOrgaosEmpresa,
                     'total_orgaos_null' => $totalOrgaosNull,
                     'total_orgaos_outras_empresas' => $totalOrgaosOutrasEmpresas,
-                    'total_retornado_query' => $orgaosCollection->count(),
-                    'total_retornado_filtrado' => $orgaosFiltrados->count(),
+                    'total_retornado_query_bruto' => $orgaosBrutos->count(),
+                    'total_retornado_antes_paginacao' => $orgaosFiltradosAntes->count(),
+                    'total_retornado_final' => $orgaosFinais->count(),
                 ],
                 'query' => [
                     'sql' => $query->toSql(),
                     'bindings' => $query->getBindings(),
                 ],
+                'orgaos_retornados' => $orgaosFinais->map(function($orgao) use ($empresa) {
+                    return [
+                        'id' => $orgao->id,
+                        'razao_social' => $orgao->razao_social,
+                        'empresa_id' => $orgao->empresa_id,
+                        'empresa_id_esperado' => $empresa->id,
+                        'pertence_empresa' => $orgao->empresa_id === $empresa->id,
+                    ];
+                })->toArray(),
             ],
         ]);
 
