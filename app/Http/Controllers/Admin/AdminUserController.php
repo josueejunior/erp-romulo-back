@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Role;
 use Stancl\Tenancy\Facades\Tenancy;
 
@@ -85,13 +86,32 @@ class AdminUserController extends Controller
         tenancy()->initialize($tenant);
 
         try {
-            $validated = $request->validate([
-                'name' => 'required|string|max:255',
-                'email' => 'required|email|max:255|unique:users,email',
-                'password' => 'required|string|min:8',
-                'role' => 'required|string|in:Administrador,Operacional,Financeiro,Consulta',
-                'empresa_id' => 'required|exists:empresas,id',
-            ]);
+            // Validação: email deve ser único APENAS dentro deste tenant
+            // Cada tenant tem seu próprio banco, então emails podem repetir entre tenants
+            // Mas dentro do mesmo tenant, o email deve ser único
+            try {
+                $validated = $request->validate([
+                    'name' => 'required|string|max:255',
+                    'email' => [
+                        'required',
+                        'email',
+                        'max:255',
+                        Rule::unique('users', 'email')
+                            ->whereNull('deleted_at'), // Ignorar soft deleted
+                    ],
+                    'password' => 'required|string|min:8',
+                    'role' => 'required|string|in:Administrador,Operacional,Financeiro,Consulta',
+                    'empresa_id' => 'required|exists:empresas,id',
+                ]);
+            } catch (ValidationException $e) {
+                // Personalizar mensagem de erro para email duplicado
+                if (isset($e->errors()['email'])) {
+                    throw ValidationException::withMessages([
+                        'email' => ['Este email já está em uso nesta empresa. Cada empresa deve ter usuários únicos.'],
+                    ]);
+                }
+                throw $e;
+            }
 
             // Criar usuário
             $user = User::create([
@@ -134,19 +154,34 @@ class AdminUserController extends Controller
 
         try {
             $user = User::withTrashed()->findOrFail($userId);
-            $validated = $request->validate([
-                'name' => 'sometimes|required|string|max:255',
-                'email' => [
-                    'sometimes',
-                    'required',
-                    'email',
-                    'max:255',
-                    Rule::unique('users', 'email')->ignore($user->id),
-                ],
-                'password' => 'nullable|string|min:8',
-                'role' => 'sometimes|required|string|in:Administrador,Operacional,Financeiro,Consulta',
-                'empresa_id' => 'sometimes|required|exists:empresas,id',
-            ]);
+            
+            // Validação: email deve ser único APENAS dentro deste tenant
+            // Ignorar soft deleted e o próprio usuário sendo editado
+            try {
+                $validated = $request->validate([
+                    'name' => 'sometimes|required|string|max:255',
+                    'email' => [
+                        'sometimes',
+                        'required',
+                        'email',
+                        'max:255',
+                        Rule::unique('users', 'email')
+                            ->ignore($user->id)
+                            ->whereNull('deleted_at'), // Ignorar soft deleted
+                    ],
+                    'password' => 'nullable|string|min:8',
+                    'role' => 'sometimes|required|string|in:Administrador,Operacional,Financeiro,Consulta',
+                    'empresa_id' => 'sometimes|required|exists:empresas,id',
+                ]);
+            } catch (ValidationException $e) {
+                // Personalizar mensagem de erro para email duplicado
+                if ($e->errors()['email'] ?? null) {
+                    throw ValidationException::withMessages([
+                        'email' => ['Este email já está em uso nesta empresa. Cada empresa deve ter usuários únicos.'],
+                    ]);
+                }
+                throw $e;
+            }
 
             if (isset($validated['name'])) {
                 $user->name = $validated['name'];
