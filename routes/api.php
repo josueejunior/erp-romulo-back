@@ -28,6 +28,8 @@ use App\Http\Controllers\Api\SaldoController as ApiSaldoController;
 use App\Http\Controllers\Api\UserController as ApiUserController;
 use App\Http\Controllers\Api\PlanoController as ApiPlanoController;
 use App\Http\Controllers\Api\AssinaturaController as ApiAssinaturaController;
+use App\Http\Controllers\Admin\AdminAuthController;
+use App\Http\Controllers\Admin\AdminTenantController;
 
 /*
 |--------------------------------------------------------------------------
@@ -39,6 +41,26 @@ use App\Http\Controllers\Api\AssinaturaController as ApiAssinaturaController;
 | be assigned to the "api" middleware group. Make something great!
 |
 */
+
+// Rotas do Painel Admin Central (fora do tenant)
+Route::prefix('admin')->group(function () {
+    // Autenticação admin
+    Route::post('/login', [AdminAuthController::class, 'login']);
+    
+    // Rotas protegidas
+    Route::middleware(['auth:sanctum', \App\Http\Middleware\IsSuperAdmin::class])->group(function () {
+        Route::post('/logout', [AdminAuthController::class, 'logout']);
+        Route::get('/me', [AdminAuthController::class, 'me']);
+        
+        // Gerenciamento de empresas (tenants)
+        Route::get('/empresas', [AdminTenantController::class, 'index']);
+        Route::get('/empresas/{tenant}', [AdminTenantController::class, 'show']);
+        Route::post('/empresas', [AdminTenantController::class, 'store']);
+        Route::put('/empresas/{tenant}', [AdminTenantController::class, 'update']);
+        Route::delete('/empresas/{tenant}', [AdminTenantController::class, 'destroy']);
+        Route::post('/empresas/{tenant}/reativar', [AdminTenantController::class, 'reactivate']);
+    });
+});
 
 Route::prefix('v1')->group(function () {
     // Rotas públicas (central) - Gerenciamento de Tenants/Empresas
