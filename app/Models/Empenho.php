@@ -105,4 +105,14 @@ class Empenho extends Model
 
         $this->save();
     }
+
+    /**
+     * Atualiza saldo do empenho baseado nas notas fiscais vinculadas
+     */
+    public function atualizarSaldo(): void
+    {
+        // O saldo do empenho é calculado baseado nas notas fiscais
+        // Este método pode ser expandido conforme necessário
+        $this->atualizarSituacao();
+    }
 }

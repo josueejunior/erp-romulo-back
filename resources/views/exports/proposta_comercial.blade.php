@@ -1150,7 +1150,13 @@
 			</div>
 			<div class="pdf24_view">
 				<div class="pdf24_05 pdf24_06">
-					<div class="pdf24_01 pdf24_07" style="left:21.06em;top:8.029em;"><span class="pdf24_08 pdf24_09 pdf24_10" style="word-spacing:-0.0089em;">INSIRA SUA LOGO AQUI!!!! &nbsp;</span></div>
+					@if(isset($logo_base64) && $logo_base64)
+						<img src="{{ $logo_base64 }}" alt="Logo da Empresa" style="position:absolute;left:21.06em;top:8.029em;max-width:8em;max-height:2.5em;object-fit:contain;" />
+					@elseif(isset($logo_url) && $logo_url)
+						<img src="{{ $logo_url }}" alt="Logo da Empresa" style="position:absolute;left:21.06em;top:8.029em;max-width:8em;max-height:2.5em;object-fit:contain;" />
+					@else
+						<div class="pdf24_01 pdf24_07" style="left:21.06em;top:8.029em;"><span class="pdf24_08 pdf24_09 pdf24_10" style="word-spacing:-0.0089em;">INSIRA SUA LOGO AQUI!!!! &nbsp;</span></div>
+					@endif
 					<div class="pdf24_01 pdf24_07" style="left:22.88em;top:9.6954em;"><span class="pdf24_11 pdf24_09 pdf24_12" style="word-spacing:-0.0156em;">PROPOSTA COMERCIAL &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:22.24em;top:10.5754em;"><span class="pdf24_13 pdf24_09 pdf24_14" style="word-spacing:-0.0006em;">Dispensa Eletrônica nº. {{ $processo->numero_modalidade ?? 'N/A' }}/{{ date('Y') }} &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:18.46em;top:12.9454em;"><span class="pdf24_13 pdf24_09 pdf24_15" style="word-spacing:-0.0005em;">{{ ($processo->orgao->uasg ?? '') . ($processo->orgao->uasg && $processo->orgao->razao_social ? ' - ' : '') . ($processo->orgao->razao_social ?? 'N/A') . ($processo->orgao->estado ? ' - ' . $processo->orgao->estado : '') }} &nbsp;</span></div>
@@ -1419,7 +1425,13 @@
 			</div>
 			<div class="pdf24_view">
 				<div class="pdf24_05 pdf24_06">
-					<div class="pdf24_01 pdf24_07" style="left:21.06em;top:8.029em;"><span class="pdf24_110 pdf24_09 pdf24_10" style="word-spacing:-0.0089em;">INSIRA SUA LOGO AQUI!!!! &nbsp;</span></div>
+					@if(isset($logo_base64) && $logo_base64)
+						<img src="{{ $logo_base64 }}" alt="Logo da Empresa" style="position:absolute;left:21.06em;top:8.029em;max-width:8em;max-height:2.5em;object-fit:contain;" />
+					@elseif(isset($logo_url) && $logo_url)
+						<img src="{{ $logo_url }}" alt="Logo da Empresa" style="position:absolute;left:21.06em;top:8.029em;max-width:8em;max-height:2.5em;object-fit:contain;" />
+					@else
+						<div class="pdf24_01 pdf24_07" style="left:21.06em;top:8.029em;"><span class="pdf24_110 pdf24_09 pdf24_10" style="word-spacing:-0.0089em;">INSIRA SUA LOGO AQUI!!!! &nbsp;</span></div>
+					@endif
 					<div class="pdf24_01 pdf24_07" style="left:22.88em;top:9.6954em;"><span class="pdf24_111 pdf24_09 pdf24_12" style="word-spacing:-0.0156em;">PROPOSTA COMERCIAL &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:22.24em;top:10.5754em;"><span class="pdf24_112 pdf24_09 pdf24_14" style="word-spacing:-0.0006em;">Dispensa Eletrônica nº. {{ $processo->numero_modalidade ?? 'N/A' }}/{{ date('Y') }} &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:18.46em;top:12.9454em;"><span class="pdf24_112 pdf24_09 pdf24_15" style="word-spacing:-0.0005em;">{{ ($processo->orgao->uasg ?? '') . ($processo->orgao->uasg && $processo->orgao->razao_social ? ' - ' : '') . ($processo->orgao->razao_social ?? 'N/A') . ($processo->orgao->estado ? ' - ' . $processo->orgao->estado : '') }} &nbsp;</span></div>

@@ -7,6 +7,7 @@ use App\Http\Resources\ProcessoResource;
 use App\Models\Processo;
 use App\Models\Orgao;
 use App\Services\ProcessoStatusService;
+use App\Services\ProcessoValidationService;
 use App\Services\RedisService;
 use App\Helpers\PermissionHelper;
 use Illuminate\Http\Request;
@@ -15,10 +16,12 @@ use Illuminate\Support\Facades\DB;
 class ProcessoController extends Controller
 {
     protected ProcessoStatusService $statusService;
+    protected ProcessoValidationService $validationService;
 
-    public function __construct(ProcessoStatusService $statusService)
+    public function __construct(ProcessoStatusService $statusService, ProcessoValidationService $validationService)
     {
         $this->statusService = $statusService;
+        $this->validationService = $validationService;
     }
     public function index(Request $request)
     {
@@ -241,20 +244,24 @@ class ProcessoController extends Controller
         $validated['status'] = 'participacao';
         $validated['srp'] = $request->has('srp');
 
-        $processo = Processo::create($validated);
+        $processo = DB::transaction(function () use ($validated, $request) {
+            $processo = Processo::create($validated);
 
-        // Salvar documentos de habilitação selecionados
-        if ($request->has('documentos_habilitacao')) {
-            $documentos = $request->input('documentos_habilitacao', []);
-            foreach ($documentos as $docId => $docData) {
-                $processo->documentos()->create([
-                    'documento_habilitacao_id' => $docId,
-                    'exigido' => $docData['exigido'] ?? true,
-                    'disponivel_envio' => $docData['disponivel_envio'] ?? false,
-                    'observacoes' => $docData['observacoes'] ?? null,
-                ]);
+            // Salvar documentos de habilitação selecionados
+            if ($request->has('documentos_habilitacao')) {
+                $documentos = $request->input('documentos_habilitacao', []);
+                foreach ($documentos as $docId => $docData) {
+                    $processo->documentos()->create([
+                        'documento_habilitacao_id' => $docId,
+                        'exigido' => $docData['exigido'] ?? true,
+                        'disponivel_envio' => $docData['disponivel_envio'] ?? false,
+                        'observacoes' => $docData['observacoes'] ?? null,
+                    ]);
+                }
             }
-        }
+
+            return $processo;
+        });
 
         return new ProcessoResource($processo->load(['orgao', 'setor', 'documentos.documentoHabilitacao']));
     }
@@ -538,12 +545,22 @@ class ProcessoController extends Controller
             ], 400);
         }
 
+        // Validar pré-requisitos
+        $validacaoPreRequisitos = $this->validationService->podeAvançarFase($processo, 'julgamento_habilitacao');
+        if (!$validacaoPreRequisitos['pode']) {
+            return response()->json([
+                'message' => 'Não é possível avançar: ' . implode(' ', $validacaoPreRequisitos['erros']),
+                'avisos' => $validacaoPreRequisitos['avisos'] ?? []
+            ], 400);
+        }
+
         // Alterar para julgamento_habilitacao
         $resultado = $this->statusService->alterarStatus($processo, 'julgamento_habilitacao');
 
         return response()->json([
             'message' => 'Processo movido para fase de Julgamento e Habilitação com sucesso!',
             'processo' => new ProcessoResource($processo->fresh()->load(['orgao', 'setor', 'itens'])),
+            'avisos' => $validacaoPreRequisitos['avisos'] ?? []
         ]);
     }
 

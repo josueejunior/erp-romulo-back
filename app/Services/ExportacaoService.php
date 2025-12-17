@@ -6,6 +6,7 @@ use App\Models\Processo;
 use App\Models\ProcessoItem;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\View;
+use Illuminate\Support\Facades\Storage;
 
 class ExportacaoService
 {
@@ -67,6 +68,28 @@ class ExportacaoService
             // Se houver erro, manter valores padrão
         }
 
+        // Carregar logo da empresa se existir
+        $logoUrl = null;
+        $logoBase64 = null;
+        try {
+            if ($tenant && $tenant->logo) {
+                // Verificar se é um caminho de arquivo ou URL
+                if (Storage::disk('public')->exists($tenant->logo)) {
+                    $logoPath = Storage::disk('public')->path($tenant->logo);
+                    $logoContent = file_get_contents($logoPath);
+                    $logoBase64 = 'data:image/' . pathinfo($logoPath, PATHINFO_EXTENSION) . ';base64,' . base64_encode($logoContent);
+                } elseif (filter_var($tenant->logo, FILTER_VALIDATE_URL)) {
+                    // Se for uma URL, usar diretamente
+                    $logoUrl = $tenant->logo;
+                } elseif (str_starts_with($tenant->logo, 'data:image')) {
+                    // Se já for base64, usar diretamente
+                    $logoBase64 = $tenant->logo;
+                }
+            }
+        } catch (\Exception $e) {
+            // Se houver erro ao carregar logo, continuar sem logo
+        }
+
         // Formatar endereço completo
         $enderecoCompleto = trim(implode(', ', array_filter([
             $enderecoEmpresa,
@@ -106,6 +129,8 @@ class ExportacaoService
             'conta_empresa' => $contaEmpresa,
             'representante_legal' => $representanteLegal,
             'tenant' => $tenant,
+            'logo_url' => $logoUrl,
+            'logo_base64' => $logoBase64,
         ];
 
         // Retornar HTML para conversão em PDF

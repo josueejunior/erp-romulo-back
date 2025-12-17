@@ -52,6 +52,21 @@ class NotaFiscal extends Model
         ];
     }
 
+    /**
+     * Calcula custo_total automaticamente se não fornecido
+     */
+    protected static function booted()
+    {
+        static::saving(function ($nota) {
+            // Calcular custo_total se não fornecido ou se custo_produto/custo_frete mudaram
+            if ($nota->isDirty(['custo_produto', 'custo_frete']) || !$nota->custo_total) {
+                $produto = $nota->custo_produto ?? 0;
+                $frete = $nota->custo_frete ?? 0;
+                $nota->custo_total = round($produto + $frete, 2);
+            }
+        });
+    }
+
     public function processo(): BelongsTo
     {
         return $this->belongsTo(Processo::class);

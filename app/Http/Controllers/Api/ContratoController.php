@@ -226,15 +226,19 @@ class ContratoController extends Controller
             $validated['situacao'] = 'vigente';
         }
 
-        // Upload de arquivo
-        if ($request->hasFile('arquivo_contrato')) {
-            $arquivo = $request->file('arquivo_contrato');
-            $nomeArquivo = time() . '_' . $arquivo->getClientOriginalName();
-            $caminho = $arquivo->storeAs('contratos', $nomeArquivo, 'public');
-            $validated['arquivo_contrato'] = $caminho;
-        }
+        $contrato = \Illuminate\Support\Facades\DB::transaction(function () use ($validated, $request) {
+            // Upload de arquivo
+            if ($request->hasFile('arquivo_contrato')) {
+                $arquivo = $request->file('arquivo_contrato');
+                $nomeArquivo = time() . '_' . $arquivo->getClientOriginalName();
+                $caminho = $arquivo->storeAs('contratos', $nomeArquivo, 'public');
+                $validated['arquivo_contrato'] = $caminho;
+            }
 
-        $contrato = Contrato::create($validated);
+            $contrato = Contrato::create($validated);
+            
+            return $contrato;
+        });
 
         return response()->json($contrato, 201);
     }

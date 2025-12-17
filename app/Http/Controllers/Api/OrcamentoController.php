@@ -245,41 +245,45 @@ class OrcamentoController extends Controller
             ], 422);
         }
 
-        // Criar orçamento vinculado ao processo
-        $orcamento = Orcamento::create([
-            'processo_id' => $processo->id,
-            'fornecedor_id' => $validated['fornecedor_id'],
-            'transportadora_id' => $validated['transportadora_id'] ?? null,
-            'observacoes' => $validated['observacoes'] ?? null,
-        ]);
-
-        // Criar itens do orçamento
-        foreach ($validated['itens'] as $itemData) {
-            $orcamentoItem = OrcamentoItem::create([
-                'orcamento_id' => $orcamento->id,
-                'processo_item_id' => $itemData['processo_item_id'],
-                'custo_produto' => $itemData['custo_produto'],
-                'marca_modelo' => $itemData['marca_modelo'] ?? null,
-                'ajustes_especificacao' => $itemData['ajustes_especificacao'] ?? null,
-                'frete' => $itemData['frete'] ?? 0,
-                'frete_incluido' => $itemData['frete_incluido'] ?? false,
-                'fornecedor_escolhido' => $itemData['fornecedor_escolhido'] ?? false,
-                'observacoes' => $itemData['observacoes'] ?? null,
+        // Criar orçamento vinculado ao processo com transação
+        $orcamento = \Illuminate\Support\Facades\DB::transaction(function () use ($processo, $validated) {
+            $orcamento = Orcamento::create([
+                'processo_id' => $processo->id,
+                'fornecedor_id' => $validated['fornecedor_id'],
+                'transportadora_id' => $validated['transportadora_id'] ?? null,
+                'observacoes' => $validated['observacoes'] ?? null,
             ]);
 
-            // Se marcado como escolhido, desmarcar outros orçamentos do mesmo item
-            if ($orcamentoItem->fornecedor_escolhido) {
-                ProcessoItem::find($itemData['processo_item_id'])
-                    ->orcamentos()
-                    ->where('id', '!=', $orcamento->id)
-                    ->update(['fornecedor_escolhido' => false]);
-                
-                // Também desmarcar em orcamento_itens
-                OrcamentoItem::where('processo_item_id', $itemData['processo_item_id'])
-                    ->where('id', '!=', $orcamentoItem->id)
-                    ->update(['fornecedor_escolhido' => false]);
+            // Criar itens do orçamento
+            foreach ($validated['itens'] as $itemData) {
+                $orcamentoItem = OrcamentoItem::create([
+                    'orcamento_id' => $orcamento->id,
+                    'processo_item_id' => $itemData['processo_item_id'],
+                    'custo_produto' => $itemData['custo_produto'],
+                    'marca_modelo' => $itemData['marca_modelo'] ?? null,
+                    'ajustes_especificacao' => $itemData['ajustes_especificacao'] ?? null,
+                    'frete' => $itemData['frete'] ?? 0,
+                    'frete_incluido' => $itemData['frete_incluido'] ?? false,
+                    'fornecedor_escolhido' => $itemData['fornecedor_escolhido'] ?? false,
+                    'observacoes' => $itemData['observacoes'] ?? null,
+                ]);
+
+                // Se marcado como escolhido, desmarcar outros orçamentos do mesmo item
+                if ($orcamentoItem->fornecedor_escolhido) {
+                    ProcessoItem::find($itemData['processo_item_id'])
+                        ->orcamentos()
+                        ->where('id', '!=', $orcamento->id)
+                        ->update(['fornecedor_escolhido' => false]);
+                    
+                    // Também desmarcar em orcamento_itens
+                    OrcamentoItem::where('processo_item_id', $itemData['processo_item_id'])
+                        ->where('id', '!=', $orcamentoItem->id)
+                        ->update(['fornecedor_escolhido' => false]);
+                }
             }
-        }
+
+            return $orcamento;
+        });
 
         $orcamento->load(['fornecedor', 'transportadora', 'itens.processoItem', 'itens.formacaoPreco']);
 

@@ -129,6 +129,21 @@ class ProcessoItem extends Model
     }
 
     /**
+     * Calcula valor_estimado_total automaticamente
+     */
+    protected static function booted()
+    {
+        static::saving(function ($item) {
+            // Recalcular valor_estimado_total se quantidade ou valor_estimado mudaram
+            if ($item->isDirty(['quantidade', 'valor_estimado'])) {
+                $quantidade = $item->quantidade ?? 0;
+                $valorUnitario = $item->valor_estimado ?? 0;
+                $item->valor_estimado_total = round($quantidade * $valorUnitario, 2);
+            }
+        });
+    }
+
+    /**
      * Retorna a formação de preço ativa (mais recente)
      */
     public function getFormacaoPrecoAtivaAttribute(): ?FormacaoPreco
