@@ -163,9 +163,10 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('users', ApiUserController::class);
 
         // Assinaturas (requer autenticação e tenancy)
-        Route::get('/assinaturas', [ApiAssinaturaController::class, 'index']);
+        // IMPORTANTE: Rotas específicas ANTES de rotas com parâmetros
         Route::get('/assinaturas/atual', [ApiAssinaturaController::class, 'atual']);
         Route::get('/assinaturas/status', [ApiAssinaturaController::class, 'status']);
+        Route::get('/assinaturas', [ApiAssinaturaController::class, 'index']);
         Route::post('/assinaturas', [ApiAssinaturaController::class, 'store']);
         Route::post('/assinaturas/{assinatura}/renovar', [ApiAssinaturaController::class, 'renovar']);
         Route::post('/assinaturas/{assinatura}/cancelar', [ApiAssinaturaController::class, 'cancelar']);
