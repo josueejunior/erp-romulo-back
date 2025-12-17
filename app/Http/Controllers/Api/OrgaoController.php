@@ -42,12 +42,37 @@ class OrgaoController extends BaseApiController
 
         $orgaos = $query->orderBy('razao_social')->paginate(15);
         
-        // Log dos resultados
+        // Log dos resultados com mais detalhes
         \Log::info('OrgaoController::index - Resultados', [
             'total_orgaos' => $orgaos->total(),
             'empresa_id_filtro' => $empresa->id,
             'orgaos_empresa_ids' => $orgaos->pluck('empresa_id')->unique()->toArray(),
+            'orgaos_detalhes' => $orgaos->map(function($orgao) {
+                return [
+                    'id' => $orgao->id,
+                    'razao_social' => $orgao->razao_social,
+                    'empresa_id' => $orgao->empresa_id,
+                ];
+            })->toArray(),
         ]);
+        
+        // Verificação adicional: garantir que todos os órgãos retornados pertencem à empresa
+        $orgaosInvalidos = $orgaos->filter(function($orgao) use ($empresa) {
+            return $orgao->empresa_id !== $empresa->id || $orgao->empresa_id === null;
+        });
+        
+        if ($orgaosInvalidos->count() > 0) {
+            \Log::error('OrgaoController::index - Órgãos com empresa_id incorreto encontrados!', [
+                'empresa_id_esperado' => $empresa->id,
+                'orgaos_invalidos' => $orgaosInvalidos->map(function($orgao) {
+                    return [
+                        'id' => $orgao->id,
+                        'razao_social' => $orgao->razao_social,
+                        'empresa_id' => $orgao->empresa_id,
+                    ];
+                })->toArray(),
+            ]);
+        }
 
         return OrgaoResource::collection($orgaos);
     }
