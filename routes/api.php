@@ -26,6 +26,8 @@ use App\Http\Controllers\Api\CalendarioController as ApiCalendarioController;
 use App\Http\Controllers\Api\ExportacaoController as ApiExportacaoController;
 use App\Http\Controllers\Api\SaldoController as ApiSaldoController;
 use App\Http\Controllers\Api\UserController as ApiUserController;
+use App\Http\Controllers\Api\PlanoController as ApiPlanoController;
+use App\Http\Controllers\Api\AssinaturaController as ApiAssinaturaController;
 
 /*
 |--------------------------------------------------------------------------
@@ -155,6 +157,14 @@ Route::prefix('v1')->group(function () {
 
         // Usuários
         Route::apiResource('users', ApiUserController::class);
+
+        // Assinaturas (requer autenticação e tenancy)
+        Route::get('/assinaturas', [ApiAssinaturaController::class, 'index']);
+        Route::get('/assinaturas/atual', [ApiAssinaturaController::class, 'atual']);
+        Route::get('/assinaturas/status', [ApiAssinaturaController::class, 'status']);
+        Route::post('/assinaturas', [ApiAssinaturaController::class, 'store']);
+        Route::post('/assinaturas/{assinatura}/renovar', [ApiAssinaturaController::class, 'renovar']);
+        Route::post('/assinaturas/{assinatura}/cancelar', [ApiAssinaturaController::class, 'cancelar']);
     });
 });
 
