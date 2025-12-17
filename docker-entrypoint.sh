@@ -18,7 +18,7 @@ else
     # Verificar se predis está instalado (pode ter sido adicionado depois)
     if ! composer show predis/predis >/dev/null 2>&1; then
         echo "📦 Instalando predis/predis..."
-        composer require predis/predis --no-interaction --prefer-dist --no-dev --optimize-autoloader
+        composer require predis/predis --no-interaction --prefer-dist --optimize-autoloader
         echo "✅ predis/predis instalado!"
     fi
 fi
