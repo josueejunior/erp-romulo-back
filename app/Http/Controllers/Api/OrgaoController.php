@@ -45,17 +45,14 @@ class OrgaoController extends BaseApiController
         
         // Verificação CRÍTICA: Filtrar novamente após paginação para garantir isolamento
         // Isso garante que mesmo se houver algum problema na query, os dados serão filtrados
-        $orgaosFiltrados = $orgaos->getCollection()->filter(function($orgao) use ($empresa) {
+        $orgaosCollection = $orgaos->getCollection();
+        $orgaosFiltrados = $orgaosCollection->filter(function($orgao) use ($empresa) {
             return $orgao->empresa_id === $empresa->id && $orgao->empresa_id !== null;
         });
         
-        // Recriar paginação com dados filtrados
-        $orgaos->setCollection($orgaosFiltrados);
-        $orgaos->setTotal($orgaosFiltrados->count());
-        
         // Log dos resultados com mais detalhes
         \Log::info('OrgaoController::index - Resultados', [
-            'total_orgaos_antes_filtro' => $orgaos->total(),
+            'total_orgaos_antes_filtro' => $orgaosCollection->count(),
             'total_orgaos_depois_filtro' => $orgaosFiltrados->count(),
             'empresa_id_filtro' => $empresa->id,
             'empresa_razao_social' => $empresa->razao_social,
@@ -86,11 +83,14 @@ class OrgaoController extends BaseApiController
                 })->toArray(),
             ]);
             
-            // Remover órgãos inválidos da resposta
-            $orgaos->setCollection($orgaosFiltrados->reject(function($orgao) use ($empresa) {
+            // Remover órgãos inválidos
+            $orgaosFiltrados = $orgaosFiltrados->reject(function($orgao) use ($empresa) {
                 return $orgao->empresa_id !== $empresa->id || $orgao->empresa_id === null;
-            }));
+            });
         }
+        
+        // Atualizar collection da paginação com dados filtrados
+        $orgaos->setCollection($orgaosFiltrados);
 
         return OrgaoResource::collection($orgaos);
     }
