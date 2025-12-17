@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Carbon\Carbon;
 
@@ -15,6 +16,7 @@ class DocumentoHabilitacao extends Model
     protected $table = 'documentos_habilitacao';
 
     protected $fillable = [
+        'empresa_id',
         'tipo',
         'numero',
         'identificacao',
@@ -61,6 +63,11 @@ class DocumentoHabilitacao extends Model
         }
         $data = Carbon::parse($this->data_validade);
         return Carbon::now()->diffInDays($data, false);
+    }
+
+    public function empresa(): BelongsTo
+    {
+        return $this->belongsTo(Empresa::class);
     }
 
     public function processoDocumentos(): HasMany

@@ -4,18 +4,41 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\DocumentoHabilitacao;
+use App\Models\Empresa;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use App\Helpers\PermissionHelper;
 
 class DocumentoHabilitacaoController extends Controller
 {
+    protected function getEmpresaAtiva(): ?Empresa
+    {
+        $user = auth()->user();
+        if (!$user || !$user->empresa_ativa_id) {
+            return null;
+        }
+
+        return Empresa::find($user->empresa_ativa_id);
+    }
+
+    protected function getEmpresaAtivaOrFail(): Empresa
+    {
+        $empresa = $this->getEmpresaAtiva();
+        
+        if (!$empresa) {
+            abort(403, 'Nenhuma empresa ativa selecionada.');
+        }
+
+        return $empresa;
+    }
+
     public function index(Request $request)
     {
-        $query = DocumentoHabilitacao::query();
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        $query = DocumentoHabilitacao::where('empresa_id', $empresa->id);
 
-        // Filtrar apenas documentos não deletados (soft deletes)
-        // O campo 'ativo' não existe na migration, então usamos apenas soft deletes
+        // Filtrar apenas documentos não deletados (soft deletes são automaticamente excluídos)
 
         if ($request->search) {
             $query->where(function($q) use ($request) {
@@ -49,6 +72,8 @@ class DocumentoHabilitacaoController extends Controller
             ], 403);
         }
 
+        $empresa = $this->getEmpresaAtivaOrFail();
+
         $validated = $request->validate([
             'tipo' => 'required|string|max:255',
             'numero' => 'nullable|string|max:255',
@@ -58,6 +83,8 @@ class DocumentoHabilitacaoController extends Controller
             'arquivo' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240',
             'observacoes' => 'nullable|string',
         ]);
+
+        $validated['empresa_id'] = $empresa->id;
 
         if ($request->hasFile('arquivo')) {
             $arquivo = $request->file('arquivo');
@@ -73,6 +100,14 @@ class DocumentoHabilitacaoController extends Controller
 
     public function show(DocumentoHabilitacao $documentoHabilitacao)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($documentoHabilitacao->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Documento não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
         return response()->json($documentoHabilitacao);
     }
 
@@ -82,6 +117,14 @@ class DocumentoHabilitacaoController extends Controller
             return response()->json([
                 'message' => 'Você não tem permissão para editar documentos de habilitação.',
             ], 403);
+        }
+
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($documentoHabilitacao->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Documento não encontrado ou não pertence à empresa ativa.'
+            ], 404);
         }
 
         $validated = $request->validate([
@@ -117,6 +160,14 @@ class DocumentoHabilitacaoController extends Controller
             ], 403);
         }
 
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($documentoHabilitacao->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Documento não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+
         if ($documentoHabilitacao->processoDocumentos()->count() > 0) {
             return response()->json([
                 'message' => 'Não é possível excluir um documento que está vinculado a processos.'
@@ -127,7 +178,8 @@ class DocumentoHabilitacaoController extends Controller
             Storage::disk('public')->delete('documentos-habilitacao/' . $documentoHabilitacao->arquivo);
         }
 
-        $documentoHabilitacao->delete();
+        // Forçar exclusão permanente (não soft delete)
+        $documentoHabilitacao->forceDelete();
 
         return response()->json(null, 204);
     }
