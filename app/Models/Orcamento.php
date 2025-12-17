@@ -9,6 +9,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Orcamento extends Model
 {
+    /**
+     * Get the route key for the model.
+     */
+    public function getRouteKeyName()
+    {
+        return 'id';
+    }
+
     protected $fillable = [
         'processo_id', // Novo: para orçamentos vinculados ao processo
         'processo_item_id', // Mantido para compatibilidade (deprecated)

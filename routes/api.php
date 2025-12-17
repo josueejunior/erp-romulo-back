@@ -99,8 +99,15 @@ Route::prefix('v1')->group(function () {
         
         // Orçamentos (por item - compatibilidade)
         Route::apiResource('processos.itens.orcamentos', ApiOrcamentoController::class)
-            ->parameters(['itens' => 'item'])
+            ->parameters([
+                'itens' => 'item',
+                'orcamentos' => 'orcamento'
+            ])
             ->shallow();
+        
+        // Rota explícita para atualizar orçamento (garantir que PUT funciona)
+        Route::put('/processos/{processo}/itens/{item}/orcamentos/{orcamento}', [ApiOrcamentoController::class, 'update'])
+            ->name('processos.itens.orcamentos.update');
         
         // Formação de Preços
         Route::apiResource('processos.itens.orcamentos.formacao-preco', ApiFormacaoPrecoController::class)
