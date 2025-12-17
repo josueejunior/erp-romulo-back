@@ -5,12 +5,23 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Processo;
 use App\Models\DocumentoHabilitacao;
+use App\Services\RedisService;
 use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
     public function index()
     {
+        $tenantId = tenancy()->tenant?->id;
+        
+        // Tentar obter do cache primeiro
+        if ($tenantId && RedisService::isAvailable()) {
+            $cached = RedisService::getDashboard($tenantId);
+            if ($cached !== null) {
+                return response()->json($cached);
+            }
+        }
+
         $processosParticipacao = Processo::where('status', 'participacao')->count();
         $processosJulgamento = Processo::where('status', 'julgamento_habilitacao')->count();
         $processosExecucao = Processo::where('status', 'execucao')->count();
@@ -51,7 +62,7 @@ class DashboardController extends Controller
             ->where('data_validade', '<=', now()->addDays(7))
             ->count();
 
-        return response()->json([
+        $data = [
             'processos' => [
                 'participacao' => $processosParticipacao,
                 'julgamento_habilitacao' => $processosJulgamento,
@@ -66,7 +77,14 @@ class DashboardController extends Controller
             'documentos_vencendo' => $documentosVencendo,
             'documentos_vencidos' => $documentosVencidos,
             'documentos_urgentes' => $documentosUrgentes,
-        ]);
+        ];
+
+        // Salvar no cache Redis se disponível
+        if ($tenantId && RedisService::isAvailable()) {
+            RedisService::cacheDashboard($tenantId, $data, 300); // Cache por 5 minutos
+        }
+
+        return response()->json($data);
     }
 }
 

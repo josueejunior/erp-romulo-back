@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Processo;
 use App\Models\CustoIndireto;
 use App\Services\FinanceiroService;
+use App\Services\RedisService;
 use Illuminate\Http\Request;
 use App\Helpers\PermissionHelper;
 use Carbon\Carbon;
@@ -28,13 +29,38 @@ class RelatorioFinanceiroController extends Controller
             ], 403);
         }
 
+        $tenantId = tenancy()->tenant?->id;
+
         // Se for gestão financeira mensal (apenas processos encerrados)
         if ($request->tipo === 'mensal' || $request->mes) {
             $mes = $request->mes 
                 ? Carbon::createFromFormat('Y-m', $request->mes)
                 : Carbon::now();
             
+            // Tentar obter do cache primeiro
+            if ($tenantId && RedisService::isAvailable()) {
+                $cached = RedisService::getRelatorioFinanceiro(
+                    $tenantId, 
+                    $mes->month, 
+                    $mes->year
+                );
+                if ($cached !== null) {
+                    return response()->json($cached);
+                }
+            }
+            
             $resultado = $this->financeiroService->calcularGestaoFinanceiraMensal($mes);
+            
+            // Salvar no cache se disponível
+            if ($tenantId && RedisService::isAvailable()) {
+                RedisService::cacheRelatorioFinanceiro(
+                    $tenantId, 
+                    $mes->month, 
+                    $mes->year, 
+                    $resultado, 
+                    3600
+                ); // Cache por 1 hora
+            }
             
             return response()->json($resultado);
         }

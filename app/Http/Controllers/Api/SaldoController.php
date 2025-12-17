@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\SaldoService;
+use App\Services\RedisService;
 use App\Models\Processo;
 use Illuminate\Http\Request;
 
@@ -27,7 +28,24 @@ class SaldoController extends Controller
             ], 403);
         }
 
+        $tenantId = tenancy()->tenant?->id;
+        
+        // Tentar obter do cache primeiro
+        if ($tenantId && RedisService::isAvailable()) {
+            $cached = RedisService::getSaldo($tenantId, $processo->id);
+            if ($cached !== null) {
+                return response()->json([
+                    'data' => $cached,
+                ]);
+            }
+        }
+
         $saldo = $this->saldoService->calcularSaldoCompleto($processo);
+
+        // Salvar no cache se disponível
+        if ($tenantId && RedisService::isAvailable()) {
+            RedisService::cacheSaldo($tenantId, $processo->id, $saldo, 600); // Cache por 10 minutos
+        }
 
         return response()->json([
             'data' => $saldo,

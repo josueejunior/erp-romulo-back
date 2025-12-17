@@ -27,6 +27,15 @@ DB_PASSWORD=erp123
 # Docker específico
 RUN_SEEDS=true            # Executar seeds automaticamente
 APP_PORT=8001             # Porta no host (acessível externamente)
+
+# Redis - IMPORTANTE: usar 'redis' como host
+REDIS_CLIENT=predis
+REDIS_HOST=redis          # ← Nome do serviço no docker-compose.yml
+REDIS_PORT=6379           # ← Porta interna do container
+REDIS_PASSWORD=           # ← Senha do Redis (opcional, deixe vazio se não usar)
+REDIS_DB=0
+REDIS_CACHE_DB=1
+CACHE_STORE=redis         # ← Usar Redis como cache padrão
 ```
 
 ## 📋 Explicação das Variáveis
@@ -76,12 +85,21 @@ DB_DATABASE=erp_licitacoes
 DB_USERNAME=erp_user
 DB_PASSWORD=erp123
 
+# Redis - IMPORTANTE: usar 'redis' como host
+REDIS_CLIENT=predis
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_PASSWORD=
+REDIS_DB=0
+REDIS_CACHE_DB=1
+CACHE_STORE=redis
+
 RUN_SEEDS=true
 APP_PORT=8001
+REDIS_PORT=6379
 
 SESSION_DRIVER=file
 QUEUE_CONNECTION=sync
-CACHE_STORE=file
 
 SANCTUM_STATEFUL_DOMAINS=localhost,localhost:3000,localhost:5173,127.0.0.1,127.0.0.1:8000,127.0.0.1:8001
 ```
@@ -134,9 +152,11 @@ E remova o serviço `postgres` do `docker-compose.yml`.
 Após criar o `.env`, verifique:
 
 1. ✅ `DB_HOST=postgres` (não `localhost`)
-2. ✅ `APP_URL` corresponde à porta `APP_PORT`
-3. ✅ `RUN_SEEDS=true` se quiser dados iniciais
-4. ✅ `APP_KEY` pode estar vazio (será gerado)
+2. ✅ `REDIS_HOST=redis` (não `localhost`) - se usar Redis
+3. ✅ `APP_URL` corresponde à porta `APP_PORT`
+4. ✅ `RUN_SEEDS=true` se quiser dados iniciais
+5. ✅ `APP_KEY` pode estar vazio (será gerado)
+6. ✅ `CACHE_STORE=redis` se quiser usar Redis como cache
 
 ## 🚀 Próximos Passos
 

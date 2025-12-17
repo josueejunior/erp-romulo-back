@@ -123,18 +123,34 @@ class AuthController extends Controller
 
     public function user(Request $request)
     {
+        $user = $request->user();
+        
+        // Garantir que o tenancy está inicializado
+        if (!tenancy()->initialized) {
+            $tenantId = $request->header('X-Tenant-ID');
+            if ($tenantId) {
+                $tenant = Tenant::find($tenantId);
+                if ($tenant) {
+                    tenancy()->initialize($tenant);
+                }
+            }
+        }
+        
+        // Obter dados do tenant atual
+        $currentTenant = tenancy()->tenant;
+        
         return response()->json([
             'user' => [
-                'id' => $request->user()->id,
-                'name' => $request->user()->name,
-                'email' => $request->user()->email,
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
             ],
-            'tenant' => [
-                'id' => tenant('id'),
-                'razao_social' => tenant('razao_social'),
-                'cnpj' => tenant('cnpj'),
-                'email' => tenant('email'),
-            ],
+            'tenant' => $currentTenant ? [
+                'id' => $currentTenant->id,
+                'razao_social' => $currentTenant->razao_social,
+                'cnpj' => $currentTenant->cnpj,
+                'email' => $currentTenant->email,
+            ] : null,
         ]);
     }
 

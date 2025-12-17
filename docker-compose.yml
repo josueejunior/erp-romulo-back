@@ -21,6 +21,24 @@ services:
       timeout: 5s
       retries: 5
 
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: erp-licitacoes-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    volumes:
+      - redis_data:/data
+    networks:
+      - erp-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   # Laravel Application
   app:
     build: .
@@ -28,6 +46,8 @@ services:
     restart: unless-stopped
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     env_file:
       - .env
@@ -38,6 +58,13 @@ services:
       DB_DATABASE: ${DB_DATABASE:-erp_licitacoes}
       DB_USERNAME: ${DB_USERNAME:-erp_user}
       DB_PASSWORD: ${DB_PASSWORD:-erp123}
+      REDIS_CLIENT: predis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_DB: 0
+      REDIS_CACHE_DB: 1
+      CACHE_STORE: ${CACHE_STORE:-redis}
       RUN_SEEDS: ${RUN_SEEDS:-true}
     ports:
       - '${APP_PORT:-8001}:8000'
@@ -50,6 +77,8 @@ services:
 
 volumes:
   postgres_data:
+    driver: local
+  redis_data:
     driver: local
 
 networks:

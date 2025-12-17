@@ -40,7 +40,7 @@ APP_PORT=8001
 # Construir as imagens
 docker-compose build
 
-# Iniciar os containers (PostgreSQL + Laravel)
+# Iniciar os containers (PostgreSQL + Redis + Laravel)
 docker-compose up -d
 
 # Ver os logs
@@ -56,11 +56,12 @@ A aplicação estará disponível em: **http://localhost:8001**
 Quando você inicia os containers, o script `docker-entrypoint.sh` executa automaticamente:
 
 1. ✅ **Aguarda PostgreSQL estar pronto** - O script aguarda o banco estar disponível
-2. ✅ **Limpa cache** - Remove cache do Laravel
-3. ✅ **Gera APP_KEY** - Se não existir, gera automaticamente
-4. ✅ **Executa migrations do banco central** - Cria tabelas de tenants
-5. ✅ **Executa migrations dos tenants** - Cria tabelas dos tenants existentes
-6. ✅ **Executa seeds** - Cria dados iniciais (tenant, usuários, órgãos, etc.)
+2. ✅ **Aguarda Redis estar pronto** - O script aguarda o Redis estar disponível
+3. ✅ **Limpa cache** - Remove cache do Laravel
+4. ✅ **Gera APP_KEY** - Se não existir, gera automaticamente
+5. ✅ **Executa migrations do banco central** - Cria tabelas de tenants
+6. ✅ **Executa migrations dos tenants** - Cria tabelas dos tenants existentes
+7. ✅ **Executa seeds** - Cria dados iniciais (tenant, usuários, órgãos, etc.)
 
 ## 📊 Dados Iniciais Criados
 
@@ -120,6 +121,31 @@ docker-compose exec postgres psql -U erp_user -d erp_licitacoes
 # Database: erp_licitacoes
 ```
 
+### Acessar Redis
+```bash
+# Via container (CLI do Redis)
+docker-compose exec redis redis-cli
+
+# Com senha (se configurada)
+docker-compose exec redis redis-cli -a ${REDIS_PASSWORD}
+
+# Verificar conexão
+docker-compose exec redis redis-cli ping
+# Deve retornar: PONG
+
+# Ver estatísticas
+docker-compose exec redis redis-cli INFO stats
+```
+
+### Limpar cache do Redis
+```bash
+# Limpar todo o cache
+docker-compose exec redis redis-cli FLUSHALL
+
+# Limpar cache de um tenant específico (via Artisan)
+docker-compose exec app php artisan redis:clear --tenant=tenant-id
+```
+
 ### Parar containers
 ```bash
 docker-compose down
@@ -174,6 +200,7 @@ RUN_SEEDS=false
 ## 📁 Estrutura de Volumes
 
 - **postgres_data**: Dados persistentes do PostgreSQL
+- **redis_data**: Dados persistentes do Redis (RDB + AOF)
 - **./storage**: Arquivos de storage do Laravel
 - **./bootstrap/cache**: Cache do Laravel
 
@@ -233,9 +260,11 @@ Após iniciar os containers, verifique:
 ## 📝 Notas
 
 - O PostgreSQL usa um volume persistente, então seus dados não serão perdidos ao reiniciar
+- O Redis usa um volume persistente com AOF (Append Only File) habilitado para persistência
 - As migrations são executadas automaticamente a cada inicialização
 - Os seeds são executados apenas se `RUN_SEEDS=true` (padrão)
-- O script aguarda automaticamente o PostgreSQL estar pronto antes de executar migrations
+- O script aguarda automaticamente o PostgreSQL e Redis estarem prontos antes de executar migrations
+- O Redis está configurado para usar `predis` como cliente (não requer extensão PHP phpredis)
 
 
 

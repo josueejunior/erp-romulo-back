@@ -27,8 +27,31 @@ wait_for_postgres() {
     echo "✅ PostgreSQL está pronto!"
 }
 
+# Função para aguardar Redis estar pronto
+wait_for_redis() {
+    if [ -z "${REDIS_HOST}" ] || [ "${CACHE_STORE}" != "redis" ]; then
+        echo "⏭️  Redis não configurado ou não sendo usado, pulando verificação..."
+        return 0
+    fi
+    
+    echo "⏳ Aguardando Redis estar disponível..."
+    REDIS_HOST_CHECK="${REDIS_HOST:-redis}"
+    REDIS_PORT_CHECK="${REDIS_PORT:-6379}"
+    
+    # Tentar conectar via nc (netcat) ou timeout com bash
+    until (timeout 1 bash -c "cat < /dev/null > /dev/tcp/${REDIS_HOST_CHECK}/${REDIS_PORT_CHECK}" 2>/dev/null) || \
+          (command -v nc >/dev/null 2>&1 && nc -z "${REDIS_HOST_CHECK}" "${REDIS_PORT_CHECK}" 2>/dev/null); do
+        echo "Redis não está pronto ainda. Aguardando..."
+        sleep 2
+    done
+    echo "✅ Redis está pronto!"
+}
+
 # Aguardar PostgreSQL
 wait_for_postgres
+
+# Aguardar Redis (se configurado)
+wait_for_redis
 
 # Limpar cache
 echo "🧹 Limpando cache..."

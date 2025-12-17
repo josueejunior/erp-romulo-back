@@ -7,6 +7,7 @@ use App\Http\Resources\ProcessoResource;
 use App\Models\Processo;
 use App\Models\Orgao;
 use App\Services\ProcessoStatusService;
+use App\Services\RedisService;
 use App\Helpers\PermissionHelper;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -95,6 +96,20 @@ class ProcessoController extends Controller
         $query->orderBy($orderBy, $orderDir);
 
         $processos = $query->paginate($request->per_page ?? 15);
+
+        $tenantId = tenancy()->tenant?->id;
+        $filters = $request->only(['status', 'modalidade', 'orgao_id', 'busca', 'periodo_sessao_inicio', 'periodo_sessao_fim']);
+
+        // Cache apenas para listagens sem paginação ou com primeira página
+        if ($tenantId && RedisService::isAvailable() && ($request->per_page ?? 15) <= 20 && ($request->page ?? 1) == 1) {
+            $cached = RedisService::getProcessos($tenantId, $filters);
+            if ($cached !== null) {
+                return \App\Http\Resources\ProcessoListResource::collection($cached);
+            }
+            
+            // Salvar no cache
+            RedisService::cacheProcessos($tenantId, $filters, $processos->items(), 180);
+        }
 
         return \App\Http\Resources\ProcessoListResource::collection($processos);
     }
