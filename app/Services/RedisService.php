@@ -13,8 +13,16 @@ class RedisService
      */
     public static function cacheDashboard($tenantId, $data, $ttl = 300): void
     {
-        $key = "dashboard:{$tenantId}";
-        Cache::store('redis')->put($key, $data, $ttl);
+        if (!self::isAvailable()) {
+            return;
+        }
+        
+        try {
+            $key = "dashboard:{$tenantId}";
+            Cache::store('redis')->put($key, $data, $ttl);
+        } catch (\Exception $e) {
+            Log::warning('Erro ao cachear dashboard: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -22,8 +30,17 @@ class RedisService
      */
     public static function getDashboard($tenantId)
     {
-        $key = "dashboard:{$tenantId}";
-        return Cache::store('redis')->get($key);
+        if (!self::isAvailable()) {
+            return null;
+        }
+        
+        try {
+            $key = "dashboard:{$tenantId}";
+            return Cache::store('redis')->get($key);
+        } catch (\Exception $e) {
+            Log::warning('Erro ao obter dashboard do cache: ' . $e->getMessage());
+            return null;
+        }
     }
 
     /**
@@ -31,8 +48,16 @@ class RedisService
      */
     public static function clearDashboard($tenantId): void
     {
-        $key = "dashboard:{$tenantId}";
-        Cache::store('redis')->forget($key);
+        if (!self::isAvailable()) {
+            return;
+        }
+        
+        try {
+            $key = "dashboard:{$tenantId}";
+            Cache::store('redis')->forget($key);
+        } catch (\Exception $e) {
+            Log::warning('Erro ao limpar cache do dashboard: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -40,9 +65,17 @@ class RedisService
      */
     public static function cacheProcessos($tenantId, $filters, $data, $ttl = 180): void
     {
-        $filterHash = md5(json_encode($filters));
-        $key = "processos:{$tenantId}:{$filterHash}";
-        Cache::store('redis')->put($key, $data, $ttl);
+        if (!self::isAvailable()) {
+            return;
+        }
+        
+        try {
+            $filterHash = md5(json_encode($filters));
+            $key = "processos:{$tenantId}:{$filterHash}";
+            Cache::store('redis')->put($key, $data, $ttl);
+        } catch (\Exception $e) {
+            Log::warning('Erro ao cachear processos: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -50,9 +83,18 @@ class RedisService
      */
     public static function getProcessos($tenantId, $filters)
     {
-        $filterHash = md5(json_encode($filters));
-        $key = "processos:{$tenantId}:{$filterHash}";
-        return Cache::store('redis')->get($key);
+        if (!self::isAvailable()) {
+            return null;
+        }
+        
+        try {
+            $filterHash = md5(json_encode($filters));
+            $key = "processos:{$tenantId}:{$filterHash}";
+            return Cache::store('redis')->get($key);
+        } catch (\Exception $e) {
+            Log::warning('Erro ao obter processos do cache: ' . $e->getMessage());
+            return null;
+        }
     }
 
     /**
@@ -60,6 +102,10 @@ class RedisService
      */
     public static function clearProcessos($tenantId): void
     {
+        if (!self::isAvailable()) {
+            return;
+        }
+        
         $pattern = "processos:{$tenantId}:*";
         try {
             // Usar SCAN ao invés de KEYS para melhor performance
@@ -74,6 +120,8 @@ class RedisService
             } while ($cursor != 0);
         } catch (\Exception $e) {
             Log::warning('Erro ao limpar cache de processos: ' . $e->getMessage());
+        } catch (\Error $e) {
+            Log::warning('Erro ao limpar cache de processos (classe não encontrada): ' . $e->getMessage());
         }
     }
 
@@ -82,8 +130,16 @@ class RedisService
      */
     public static function cacheSaldo($tenantId, $processoId, $data, $ttl = 600): void
     {
-        $key = "saldo:{$tenantId}:{$processoId}";
-        Cache::store('redis')->put($key, $data, $ttl);
+        if (!self::isAvailable()) {
+            return;
+        }
+        
+        try {
+            $key = "saldo:{$tenantId}:{$processoId}";
+            Cache::store('redis')->put($key, $data, $ttl);
+        } catch (\Exception $e) {
+            Log::warning('Erro ao cachear saldo: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -91,8 +147,17 @@ class RedisService
      */
     public static function getSaldo($tenantId, $processoId)
     {
-        $key = "saldo:{$tenantId}:{$processoId}";
-        return Cache::store('redis')->get($key);
+        if (!self::isAvailable()) {
+            return null;
+        }
+        
+        try {
+            $key = "saldo:{$tenantId}:{$processoId}";
+            return Cache::store('redis')->get($key);
+        } catch (\Exception $e) {
+            Log::warning('Erro ao obter saldo do cache: ' . $e->getMessage());
+            return null;
+        }
     }
 
     /**
@@ -100,8 +165,16 @@ class RedisService
      */
     public static function clearSaldo($tenantId, $processoId): void
     {
-        $key = "saldo:{$tenantId}:{$processoId}";
-        Cache::store('redis')->forget($key);
+        if (!self::isAvailable()) {
+            return;
+        }
+        
+        try {
+            $key = "saldo:{$tenantId}:{$processoId}";
+            Cache::store('redis')->forget($key);
+        } catch (\Exception $e) {
+            Log::warning('Erro ao limpar cache de saldo: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -109,14 +182,23 @@ class RedisService
      */
     public static function rateLimit($identifier, $maxAttempts = 60, $decaySeconds = 60): bool
     {
-        $key = "rate_limit:{$identifier}";
-        $current = Redis::incr($key);
-        
-        if ($current === 1) {
-            Redis::expire($key, $decaySeconds);
+        if (!self::isAvailable()) {
+            return true; // Permitir se Redis não estiver disponível
         }
         
-        return $current <= $maxAttempts;
+        try {
+            $key = "rate_limit:{$identifier}";
+            $current = Redis::incr($key);
+            
+            if ($current === 1) {
+                Redis::expire($key, $decaySeconds);
+            }
+            
+            return $current <= $maxAttempts;
+        } catch (\Exception $e) {
+            Log::warning('Erro ao verificar rate limit: ' . $e->getMessage());
+            return true; // Permitir em caso de erro
+        }
     }
 
     /**
@@ -124,9 +206,18 @@ class RedisService
      */
     public static function getRateLimitRemaining($identifier, $maxAttempts = 60): int
     {
-        $key = "rate_limit:{$identifier}";
-        $current = (int) Redis::get($key) ?? 0;
-        return max(0, $maxAttempts - $current);
+        if (!self::isAvailable()) {
+            return $maxAttempts;
+        }
+        
+        try {
+            $key = "rate_limit:{$identifier}";
+            $current = (int) Redis::get($key) ?? 0;
+            return max(0, $maxAttempts - $current);
+        } catch (\Exception $e) {
+            Log::warning('Erro ao obter rate limit remaining: ' . $e->getMessage());
+            return $maxAttempts;
+        }
     }
 
     /**
@@ -134,9 +225,18 @@ class RedisService
      */
     public static function lock($key, $ttl = 10): bool
     {
-        $lockKey = "lock:{$key}";
-        $result = Redis::set($lockKey, 1, 'EX', $ttl, 'NX');
-        return $result === true;
+        if (!self::isAvailable()) {
+            return false;
+        }
+        
+        try {
+            $lockKey = "lock:{$key}";
+            $result = Redis::set($lockKey, 1, 'EX', $ttl, 'NX');
+            return $result === true;
+        } catch (\Exception $e) {
+            Log::warning('Erro ao criar lock: ' . $e->getMessage());
+            return false;
+        }
     }
 
     /**
@@ -144,8 +244,16 @@ class RedisService
      */
     public static function unlock($key): void
     {
-        $lockKey = "lock:{$key}";
-        Redis::del($lockKey);
+        if (!self::isAvailable()) {
+            return;
+        }
+        
+        try {
+            $lockKey = "lock:{$key}";
+            Redis::del($lockKey);
+        } catch (\Exception $e) {
+            Log::warning('Erro ao liberar lock: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -153,8 +261,16 @@ class RedisService
      */
     public static function cacheTenantSession($userId, $tenantId, $ttl = 3600): void
     {
-        $key = "user_tenant:{$userId}";
-        Cache::store('redis')->put($key, $tenantId, $ttl);
+        if (!self::isAvailable()) {
+            return;
+        }
+        
+        try {
+            $key = "user_tenant:{$userId}";
+            Cache::store('redis')->put($key, $tenantId, $ttl);
+        } catch (\Exception $e) {
+            Log::warning('Erro ao cachear sessão de tenant: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -162,8 +278,17 @@ class RedisService
      */
     public static function getTenantSession($userId)
     {
-        $key = "user_tenant:{$userId}";
-        return Cache::store('redis')->get($key);
+        if (!self::isAvailable()) {
+            return null;
+        }
+        
+        try {
+            $key = "user_tenant:{$userId}";
+            return Cache::store('redis')->get($key);
+        } catch (\Exception $e) {
+            Log::warning('Erro ao obter sessão de tenant do cache: ' . $e->getMessage());
+            return null;
+        }
     }
 
     /**
@@ -171,8 +296,16 @@ class RedisService
      */
     public static function cacheUserTenants($userId, $tenants, $ttl = 1800): void
     {
-        $key = "user_tenants:{$userId}";
-        Cache::store('redis')->put($key, $tenants, $ttl);
+        if (!self::isAvailable()) {
+            return;
+        }
+        
+        try {
+            $key = "user_tenants:{$userId}";
+            Cache::store('redis')->put($key, $tenants, $ttl);
+        } catch (\Exception $e) {
+            Log::warning('Erro ao cachear tenants do usuário: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -180,8 +313,17 @@ class RedisService
      */
     public static function getUserTenants($userId)
     {
-        $key = "user_tenants:{$userId}";
-        return Cache::store('redis')->get($key);
+        if (!self::isAvailable()) {
+            return null;
+        }
+        
+        try {
+            $key = "user_tenants:{$userId}";
+            return Cache::store('redis')->get($key);
+        } catch (\Exception $e) {
+            Log::warning('Erro ao obter tenants do usuário do cache: ' . $e->getMessage());
+            return null;
+        }
     }
 
     /**
@@ -189,8 +331,16 @@ class RedisService
      */
     public static function cacheRelatorioFinanceiro($tenantId, $mes, $ano, $data, $ttl = 3600): void
     {
-        $key = "relatorio_financeiro:{$tenantId}:{$ano}:{$mes}";
-        Cache::store('redis')->put($key, $data, $ttl);
+        if (!self::isAvailable()) {
+            return;
+        }
+        
+        try {
+            $key = "relatorio_financeiro:{$tenantId}:{$ano}:{$mes}";
+            Cache::store('redis')->put($key, $data, $ttl);
+        } catch (\Exception $e) {
+            Log::warning('Erro ao cachear relatório financeiro: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -198,8 +348,17 @@ class RedisService
      */
     public static function getRelatorioFinanceiro($tenantId, $mes, $ano)
     {
-        $key = "relatorio_financeiro:{$tenantId}:{$ano}:{$mes}";
-        return Cache::store('redis')->get($key);
+        if (!self::isAvailable()) {
+            return null;
+        }
+        
+        try {
+            $key = "relatorio_financeiro:{$tenantId}:{$ano}:{$mes}";
+            return Cache::store('redis')->get($key);
+        } catch (\Exception $e) {
+            Log::warning('Erro ao obter relatório financeiro do cache: ' . $e->getMessage());
+            return null;
+        }
     }
 
     /**
@@ -207,6 +366,10 @@ class RedisService
      */
     public static function clearRelatorioFinanceiro($tenantId): void
     {
+        if (!self::isAvailable()) {
+            return;
+        }
+        
         $pattern = "relatorio_financeiro:{$tenantId}:*";
         try {
             $cursor = 0;
@@ -220,6 +383,8 @@ class RedisService
             } while ($cursor != 0);
         } catch (\Exception $e) {
             Log::warning('Erro ao limpar cache de relatórios: ' . $e->getMessage());
+        } catch (\Error $e) {
+            Log::warning('Erro ao limpar cache de relatórios (classe não encontrada): ' . $e->getMessage());
         }
     }
 
@@ -228,8 +393,16 @@ class RedisService
      */
     public static function cacheCalendario($tenantId, $mes, $ano, $data, $ttl = 1800): void
     {
-        $key = "calendario:{$tenantId}:{$ano}:{$mes}";
-        Cache::store('redis')->put($key, $data, $ttl);
+        if (!self::isAvailable()) {
+            return;
+        }
+        
+        try {
+            $key = "calendario:{$tenantId}:{$ano}:{$mes}";
+            Cache::store('redis')->put($key, $data, $ttl);
+        } catch (\Exception $e) {
+            Log::warning('Erro ao cachear calendário: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -237,8 +410,17 @@ class RedisService
      */
     public static function getCalendario($tenantId, $mes, $ano)
     {
-        $key = "calendario:{$tenantId}:{$ano}:{$mes}";
-        return Cache::store('redis')->get($key);
+        if (!self::isAvailable()) {
+            return null;
+        }
+        
+        try {
+            $key = "calendario:{$tenantId}:{$ano}:{$mes}";
+            return Cache::store('redis')->get($key);
+        } catch (\Exception $e) {
+            Log::warning('Erro ao obter calendário do cache: ' . $e->getMessage());
+            return null;
+        }
     }
 
     /**
@@ -246,6 +428,10 @@ class RedisService
      */
     public static function clearCalendario($tenantId): void
     {
+        if (!self::isAvailable()) {
+            return;
+        }
+        
         $pattern = "calendario:{$tenantId}:*";
         try {
             $cursor = 0;
@@ -259,6 +445,8 @@ class RedisService
             } while ($cursor != 0);
         } catch (\Exception $e) {
             Log::warning('Erro ao limpar cache de calendário: ' . $e->getMessage());
+        } catch (\Error $e) {
+            Log::warning('Erro ao limpar cache de calendário (classe não encontrada): ' . $e->getMessage());
         }
     }
 
@@ -267,6 +455,10 @@ class RedisService
      */
     public static function clearAllTenantCache($tenantId): void
     {
+        if (!self::isAvailable()) {
+            return;
+        }
+        
         $patterns = [
             "dashboard:{$tenantId}",
             "processos:{$tenantId}:*",
@@ -294,6 +486,8 @@ class RedisService
                 }
             } catch (\Exception $e) {
                 Log::warning("Erro ao limpar cache pattern {$pattern}: " . $e->getMessage());
+            } catch (\Error $e) {
+                Log::warning("Erro ao limpar cache pattern {$pattern} (classe não encontrada): " . $e->getMessage());
             }
         }
     }
@@ -303,6 +497,10 @@ class RedisService
      */
     public static function getStats(): array
     {
+        if (!self::isAvailable()) {
+            return [];
+        }
+        
         try {
             $info = Redis::info();
             return [
@@ -315,6 +513,9 @@ class RedisService
         } catch (\Exception $e) {
             Log::error('Erro ao obter estatísticas do Redis: ' . $e->getMessage());
             return [];
+        } catch (\Error $e) {
+            Log::error('Erro ao obter estatísticas do Redis (classe não encontrada): ' . $e->getMessage());
+            return [];
         }
     }
 
@@ -324,10 +525,20 @@ class RedisService
     public static function isAvailable(): bool
     {
         try {
+            // Verificar se a classe Predis existe
+            if (!class_exists('Predis\Client')) {
+                return false;
+            }
+            
+            // Tentar fazer ping no Redis
             Redis::ping();
             return true;
         } catch (\Exception $e) {
             Log::warning('Redis não disponível: ' . $e->getMessage());
+            return false;
+        } catch (\Error $e) {
+            // Capturar erros de classe não encontrada
+            Log::warning('Redis não disponível (classe não encontrada): ' . $e->getMessage());
             return false;
         }
     }

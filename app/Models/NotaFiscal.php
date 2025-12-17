@@ -10,6 +10,8 @@ class NotaFiscal extends Model
 {
     use SoftDeletes;
 
+    protected $table = 'notas_fiscais';
+
     protected $fillable = [
         'processo_id',
         'empenho_id',
