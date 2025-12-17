@@ -30,6 +30,7 @@ use App\Http\Controllers\Api\PlanoController as ApiPlanoController;
 use App\Http\Controllers\Api\AssinaturaController as ApiAssinaturaController;
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Admin\AdminTenantController;
+use App\Http\Controllers\Admin\AdminUserController;
 
 /*
 |--------------------------------------------------------------------------
@@ -193,6 +194,15 @@ Route::prefix('admin')->group(function () {
         Route::put('/empresas/{tenant}', [AdminTenantController::class, 'update']);
         Route::delete('/empresas/{tenant}', [AdminTenantController::class, 'destroy']);
         Route::post('/empresas/{tenant}/reativar', [AdminTenantController::class, 'reactivate']);
+        
+        // Gerenciamento de usuários das empresas
+        Route::get('/empresas/{tenant}/usuarios', [AdminUserController::class, 'index']);
+        Route::get('/empresas/{tenant}/usuarios/{user}', [AdminUserController::class, 'show']);
+        Route::post('/empresas/{tenant}/usuarios', [AdminUserController::class, 'store']);
+        Route::put('/empresas/{tenant}/usuarios/{user}', [AdminUserController::class, 'update']);
+        Route::delete('/empresas/{tenant}/usuarios/{user}', [AdminUserController::class, 'destroy']);
+        Route::post('/empresas/{tenant}/usuarios/{user}/reativar', [AdminUserController::class, 'reactivate']);
+        Route::get('/empresas/{tenant}/empresas-disponiveis', [AdminUserController::class, 'empresas']);
     });
 });
 
