@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use App\Models\User;
 use App\Models\Tenant;
+use App\Services\RedisService;
 use Stancl\Tenancy\Facades\Tenancy;
 
 class AuthController extends Controller
@@ -25,10 +26,26 @@ class AuthController extends Controller
             tenancy()->end();
         }
 
-        // Buscar o tenant que contém o usuário com este email E senha correta
-        // Isso garante que mesmo se o email existir em múltiplos tenants,
-        // vamos encontrar o tenant correto onde a senha está correta
-        $result = $this->findTenantByUserEmailAndPassword($request->email, $request->password);
+        // Tentar obter do cache primeiro (usando hash da senha para segurança)
+        $passwordHash = hash('sha256', $request->password);
+        $cachedResult = RedisService::getLoginResult($request->email, $passwordHash);
+        
+        if ($cachedResult) {
+            \Log::info("Login encontrado no cache Redis", ['email' => $request->email]);
+            $result = $cachedResult;
+        } else {
+            // Buscar o tenant que contém o usuário com este email E senha correta
+            // Isso garante que mesmo se o email existir em múltiplos tenants,
+            // vamos encontrar o tenant correto onde a senha está correta
+            $result = $this->findTenantByUserEmailAndPassword($request->email, $request->password);
+            
+            // Cachear resultado para próximas requisições (30 minutos)
+            if ($result) {
+                RedisService::cacheLoginResult($request->email, $passwordHash, $result, 1800);
+                // Também cachear email -> tenant_id para busca rápida
+                RedisService::cacheEmailToTenant($request->email, $result['tenant']->id, 3600);
+            }
+        }
 
         if (!$result) {
             throw ValidationException::withMessages([
@@ -40,10 +57,12 @@ class AuthController extends Controller
         $user = $result['user'];
 
         // O tenant já está inicializado pelo método findTenantByUserEmailAndPassword
-        // Não precisamos inicializar novamente
+        // Mas precisamos finalizar antes de criar o token, pois o token será usado
+        // em requisições futuras que inicializarão o tenant via middleware
+        tenancy()->end();
 
-        // Criar token
-        $token = $user->createToken('auth-token')->plainTextToken;
+        // Criar token com tenant_id nas abilities para recuperação automática
+        $token = $user->createToken('auth-token', ['tenant_id' => $tenant->id])->plainTextToken;
 
         // Retornar dados do usuário e tenant
         return response()->json([
@@ -120,14 +139,16 @@ class AuthController extends Controller
     {
         $user = $request->user();
         
-        // Garantir que o tenancy está inicializado
-        if (!tenancy()->initialized) {
-            $tenantId = $request->header('X-Tenant-ID');
-            if ($tenantId) {
-                $tenant = Tenant::find($tenantId);
-                if ($tenant) {
-                    tenancy()->initialize($tenant);
-                }
+        // Tentar obter tenant_id de múltiplas fontes
+        $tenantId = $request->header('X-Tenant-ID')
+            ?? $this->getTenantIdFromToken($request)
+            ?? null;
+        
+        // Se não há tenant inicializado e temos tenant_id, inicializar
+        if (!tenancy()->initialized && $tenantId) {
+            $tenant = Tenant::find($tenantId);
+            if ($tenant) {
+                tenancy()->initialize($tenant);
             }
         }
         
@@ -148,6 +169,21 @@ class AuthController extends Controller
             ] : null,
         ]);
     }
+    
+    /**
+     * Extrair tenant_id do token Sanctum
+     */
+    private function getTenantIdFromToken(Request $request): ?string
+    {
+        $user = $request->user();
+        if ($user && method_exists($user, 'currentAccessToken') && $user->currentAccessToken()) {
+            $abilities = $user->currentAccessToken()->abilities;
+            if (isset($abilities['tenant_id'])) {
+                return $abilities['tenant_id'];
+            }
+        }
+        return null;
+    }
 
     /**
      * Busca o tenant que contém o usuário com o email E senha corretos
@@ -156,7 +192,43 @@ class AuthController extends Controller
      */
     private function findTenantByUserEmailAndPassword(string $email, string $password): ?array
     {
-        // Buscar todos os tenants
+        // Tentar obter tenant_id do cache primeiro
+        $cachedTenantId = RedisService::getTenantByEmail($email);
+        
+        if ($cachedTenantId) {
+            // Tentar validar no tenant cacheado primeiro (otimização)
+            $tenant = Tenant::find($cachedTenantId);
+            if ($tenant) {
+                try {
+                    if (tenancy()->initialized) {
+                        tenancy()->end();
+                    }
+                    
+                    tenancy()->initialize($tenant);
+                    $user = User::where('email', $email)->first();
+                    
+                    if ($user && Hash::check($password, $user->password)) {
+                        \Log::info("Usuário encontrado no tenant cacheado", [
+                            'email' => $email,
+                            'tenant_id' => $tenant->id
+                        ]);
+                        return [
+                            'tenant' => $tenant,
+                            'user' => $user,
+                        ];
+                    }
+                    
+                    tenancy()->end();
+                } catch (\Exception $e) {
+                    \Log::warning("Erro ao validar no tenant cacheado: " . $e->getMessage());
+                    if (tenancy()->initialized) {
+                        tenancy()->end();
+                    }
+                }
+            }
+        }
+        
+        // Se não encontrou no cache ou validação falhou, buscar em todos os tenants
         $tenants = Tenant::all();
 
         \Log::info("Buscando usuário com email: {$email} e validando senha em " . $tenants->count() . " tenants");
@@ -183,6 +255,10 @@ class AuthController extends Controller
                 // Se encontrou o usuário, validar a senha
                 if ($user && Hash::check($password, $user->password)) {
                     \Log::info("Usuário encontrado e senha validada no tenant {$tenant->id}");
+                    
+                    // Cachear email -> tenant_id para próximas buscas
+                    RedisService::cacheEmailToTenant($email, $tenant->id, 3600);
+                    
                     // NÃO finalizar o tenancy aqui - será usado no login
                     return [
                         'tenant' => $tenant,

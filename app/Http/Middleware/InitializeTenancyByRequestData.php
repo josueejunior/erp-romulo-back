@@ -99,6 +99,10 @@ class InitializeTenancyByRequestData extends IdentificationMiddleware
             // Verificar se há tenant_id nos abilities do token
             $abilities = $user->currentAccessToken()->abilities;
             if (isset($abilities['tenant_id'])) {
+                \Log::debug('Tenant ID encontrado no token', [
+                    'tenant_id' => $abilities['tenant_id'],
+                    'url' => $request->url()
+                ]);
                 return $abilities['tenant_id'];
             }
         }

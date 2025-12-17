@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\RedisService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
@@ -132,6 +133,10 @@ class AdminUserController extends Controller
             $user->load(['roles', 'empresas']);
             $user->roles_list = $user->getRoleNames();
 
+            // Invalidar cache de autenticação para este email
+            RedisService::invalidateEmailToTenant($validated['email']);
+            RedisService::invalidateLoginCache($validated['email']);
+
             return response()->json([
                 'message' => 'Usuário criado com sucesso!',
                 'user' => $user,
@@ -213,6 +218,21 @@ class AdminUserController extends Controller
             $user->load(['roles', 'empresas']);
             $user->roles_list = $user->getRoleNames();
 
+            // Invalidar cache de autenticação se email ou senha foram alterados
+            $oldEmail = $user->getOriginal('email');
+            if (isset($validated['email']) && $validated['email'] !== $oldEmail) {
+                RedisService::invalidateEmailToTenant($oldEmail);
+                RedisService::invalidateLoginCache($oldEmail);
+            }
+            if (isset($validated['email'])) {
+                RedisService::invalidateEmailToTenant($validated['email']);
+                RedisService::invalidateLoginCache($validated['email']);
+            }
+            if (!empty($validated['password'])) {
+                // Se senha foi alterada, invalidar cache de login
+                RedisService::invalidateLoginCache($user->email);
+            }
+
             return response()->json([
                 'message' => 'Usuário atualizado com sucesso!',
                 'user' => $user,
@@ -235,8 +255,14 @@ class AdminUserController extends Controller
 
         try {
             $user = User::findOrFail($userId);
+            $userEmail = $user->email;
+            
             // Soft delete
             $user->delete();
+
+            // Invalidar cache de autenticação
+            RedisService::invalidateEmailToTenant($userEmail);
+            RedisService::invalidateLoginCache($userEmail);
 
             return response()->json([
                 'message' => 'Usuário inativado com sucesso!',
