@@ -39,9 +39,22 @@ class AssinaturaController extends Controller
      */
     public function atual()
     {
+        \Log::info('AssinaturaController@atual chamado', [
+            'url' => request()->url(),
+            'method' => request()->method(),
+            'headers' => request()->headers->all()
+        ]);
+        
         $tenant = tenancy()->tenant;
         
+        \Log::info('Tenant status', [
+            'tenant_initialized' => tenancy()->initialized,
+            'tenant_id' => $tenant?->id,
+            'tenant_razao_social' => $tenant?->razao_social
+        ]);
+        
         if (!$tenant) {
+            \Log::warning('Tenant não encontrado em AssinaturaController@atual');
             return response()->json([
                 'message' => 'Tenant não encontrado.'
             ], 404);
