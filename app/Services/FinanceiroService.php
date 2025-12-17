@@ -136,7 +136,7 @@ class FinanceiroService
             $custosDiretosTotal += $custos['custo_total'];
         }
 
-        $custosIndiretos = $this->calcularCustosIndiretosPeriodo($dataInicio, $dataFim);
+        $custosIndiretos = $this->calcularCustosIndiretosPeriodo($dataInicio, $dataFim, $empresaId);
         $custosIndiretosTotal = $custosIndiretos['total'];
 
         $lucroBruto = $receitaTotal - $custosDiretosTotal;
