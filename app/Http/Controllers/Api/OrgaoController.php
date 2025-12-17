@@ -2,17 +2,18 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\BaseApiController;
 use App\Http\Resources\OrgaoResource;
 use App\Models\Orgao;
 use Illuminate\Http\Request;
 use App\Helpers\PermissionHelper;
 
-class OrgaoController extends Controller
+class OrgaoController extends BaseApiController
 {
     public function index(Request $request)
     {
-        $query = Orgao::with('setors');
+        $empresa = $this->getEmpresaAtivaOrFail();
+        $query = Orgao::where('empresa_id', $empresa->id)->with('setors');
 
         if ($request->search) {
             $query->where(function($q) use ($request) {
@@ -34,6 +35,8 @@ class OrgaoController extends Controller
             ], 403);
         }
 
+        $empresa = $this->getEmpresaAtivaOrFail();
+
         $validated = $request->validate([
             'uasg' => 'nullable|string|max:255',
             'razao_social' => 'required|string|max:255',
@@ -48,6 +51,7 @@ class OrgaoController extends Controller
             'observacoes' => 'nullable|string',
         ]);
 
+        $validated['empresa_id'] = $empresa->id;
         $orgao = Orgao::create($validated);
         $orgao->load('setors');
 
@@ -56,6 +60,14 @@ class OrgaoController extends Controller
 
     public function show(Orgao $orgao)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($orgao->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Órgão não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
         $orgao->load('setors');
         return new OrgaoResource($orgao);
     }
@@ -66,6 +78,14 @@ class OrgaoController extends Controller
             return response()->json([
                 'message' => 'Você não tem permissão para editar órgãos.',
             ], 403);
+        }
+
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($orgao->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Órgão não encontrado ou não pertence à empresa ativa.'
+            ], 404);
         }
 
         $validated = $request->validate([
@@ -96,13 +116,21 @@ class OrgaoController extends Controller
             ], 403);
         }
 
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($orgao->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Órgão não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+
         if ($orgao->processos()->count() > 0) {
             return response()->json([
                 'message' => 'Não é possível excluir um órgão que possui processos vinculados.'
             ], 403);
         }
 
-        $orgao->delete();
+        $orgao->forceDelete();
 
         return response()->json(null, 204);
     }

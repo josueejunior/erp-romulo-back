@@ -11,6 +11,7 @@ class Orgao extends Model
     use SoftDeletes;
 
     protected $fillable = [
+        'empresa_id',
         'uasg',
         'razao_social',
         'cnpj',
@@ -33,6 +34,11 @@ class Orgao extends Model
     public function processos(): HasMany
     {
         return $this->hasMany(Processo::class);
+    }
+
+    public function empresa(): BelongsTo
+    {
+        return $this->belongsTo(Empresa::class);
     }
 
     protected function casts(): array

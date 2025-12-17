@@ -2,19 +2,20 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\BaseApiController;
 use App\Models\CustoIndireto;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
-class CustoIndiretoController extends Controller
+class CustoIndiretoController extends BaseApiController
 {
     /**
      * Lista todos os custos indiretos
      */
     public function index(Request $request)
     {
-        $query = CustoIndireto::query();
+        $empresa = $this->getEmpresaAtivaOrFail();
+        $query = CustoIndireto::where('empresa_id', $empresa->id);
 
         // Filtro por busca (descrição ou categoria)
         if ($request->search) {
@@ -82,7 +83,10 @@ class CustoIndiretoController extends Controller
      */
     public function show($id)
     {
-        $custo = CustoIndireto::findOrFail($id);
+        $empresa = $this->getEmpresaAtivaOrFail();
+        $custo = CustoIndireto::where('id', $id)
+            ->where('empresa_id', $empresa->id)
+            ->firstOrFail();
 
         return response()->json([
             'data' => $custo
@@ -124,8 +128,11 @@ class CustoIndiretoController extends Controller
      */
     public function destroy($id)
     {
-        $custo = CustoIndireto::findOrFail($id);
-        $custo->delete();
+        $empresa = $this->getEmpresaAtivaOrFail();
+        $custo = CustoIndireto::where('id', $id)
+            ->where('empresa_id', $empresa->id)
+            ->firstOrFail();
+        $custo->forceDelete();
 
         return response()->json([
             'message' => 'Custo indireto removido com sucesso'
@@ -137,7 +144,8 @@ class CustoIndiretoController extends Controller
      */
     public function resumo(Request $request)
     {
-        $query = CustoIndireto::query();
+        $empresa = $this->getEmpresaAtivaOrFail();
+        $query = CustoIndireto::where('empresa_id', $empresa->id);
 
         // Filtro por data início
         if ($request->data_inicio) {
