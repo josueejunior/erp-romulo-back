@@ -284,12 +284,8 @@ class ProcessoController extends Controller
 
     public function update(Request $request, Processo $processo)
     {
-        // Permitir atualização de data_recebimento_pagamento mesmo em execução
-        if ($processo->isEmExecucao() && !$request->has('data_recebimento_pagamento')) {
-            return response()->json([
-                'message' => 'Processos em execução não podem ser editados.'
-            ], 403);
-        }
+        // Verificar permissão usando Policy
+        $this->authorize('update', $processo);
 
         $validated = $request->validate([
             'orgao_id' => 'required|exists:orgaos,id',
@@ -499,12 +495,8 @@ class ProcessoController extends Controller
 
     public function marcarVencido(Request $request, Processo $processo)
     {
-        // Verificar permissão
-        if (!PermissionHelper::canMarkProcessStatus()) {
-            return response()->json([
-                'message' => 'Você não tem permissão para marcar processos como vencidos.'
-            ], 403);
-        }
+        // Verificar permissão usando Policy
+        $this->authorize('markVencido', $processo);
 
         // Validar transição de status
         $validacao = $this->statusService->podeAlterarStatus($processo, 'vencido');
@@ -530,12 +522,8 @@ class ProcessoController extends Controller
 
     public function moverParaJulgamento(Request $request, Processo $processo)
     {
-        // Verificar permissão
-        if (!PermissionHelper::canMarkProcessStatus()) {
-            return response()->json([
-                'message' => 'Você não tem permissão para alterar o status do processo.'
-            ], 403);
-        }
+        // Verificar permissão usando Policy
+        $this->authorize('changeStatus', $processo);
 
         // Validar transição de status
         $validacao = $this->statusService->podeAlterarStatus($processo, 'julgamento_habilitacao');
@@ -566,12 +554,8 @@ class ProcessoController extends Controller
 
     public function marcarPerdido(Request $request, Processo $processo)
     {
-        // Verificar permissão
-        if (!PermissionHelper::canMarkProcessStatus()) {
-            return response()->json([
-                'message' => 'Você não tem permissão para marcar processos como perdidos.'
-            ], 403);
-        }
+        // Verificar permissão usando Policy
+        $this->authorize('markPerdido', $processo);
 
         // Validar transição de status
         $validacao = $this->statusService->podeAlterarStatus($processo, 'perdido');

@@ -45,11 +45,8 @@ class OrcamentoController extends Controller
             return response()->json(['message' => 'Item não pertence a este processo.'], 404);
         }
 
-        if ($processo->isEmExecucao()) {
-            return response()->json([
-                'message' => 'Não é possível adicionar orçamentos a processos em execução.'
-            ], 403);
-        }
+        // Verificar permissão usando Policy
+        $this->authorize('create', [$processo]);
 
         $validated = $request->validate([
             'fornecedor_id' => 'required|exists:fornecedores,id',
@@ -99,11 +96,8 @@ class OrcamentoController extends Controller
             return response()->json(['message' => 'Orçamento não pertence a este item/processo.'], 404);
         }
 
-        if ($processo->isEmExecucao()) {
-            return response()->json([
-                'message' => 'Não é possível editar orçamentos de processos em execução.'
-            ], 403);
-        }
+        // Verificar permissão usando Policy
+        $this->authorize('update', $orcamento);
 
         // Validação flexível: campos obrigatórios apenas se fornecidos
         $validated = $request->validate([
@@ -195,11 +189,8 @@ class OrcamentoController extends Controller
             return response()->json(['message' => 'Orçamento não pertence a este item.'], 404);
         }
 
-        if ($processo->isEmExecucao()) {
-            return response()->json([
-                'message' => 'Não é possível excluir orçamentos de processos em execução.'
-            ], 403);
-        }
+        // Verificar permissão usando Policy
+        $this->authorize('delete', $orcamento);
 
         $orcamento->delete();
 
@@ -211,11 +202,8 @@ class OrcamentoController extends Controller
      */
     public function storeByProcesso(Request $request, Processo $processo)
     {
-        if ($processo->isEmExecucao()) {
-            return response()->json([
-                'message' => 'Não é possível adicionar orçamentos a processos em execução.'
-            ], 403);
-        }
+        // Verificar permissão usando Policy
+        $this->authorize('create', [$processo]);
 
         $validated = $request->validate([
             'fornecedor_id' => 'required|exists:fornecedores,id',

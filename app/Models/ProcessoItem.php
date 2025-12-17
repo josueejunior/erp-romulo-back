@@ -203,21 +203,63 @@ class ProcessoItem extends Model
         // Valor empenhado = soma dos vínculos com empenhos
         $this->valor_empenhado = $this->vinculosEmpenho()->sum('valor_total');
 
-        // Valor faturado = soma das NF-e de saída vinculadas
-        // TODO: Implementar quando tiver relação com notas fiscais
+        // Valor faturado = soma das NF-e de saída vinculadas através dos vínculos
+        $valorFaturado = 0;
+        // Buscar notas fiscais de saída através dos vínculos (Contrato/AF/Empenho)
+        $vinculos = $this->vinculos()->with(['contrato', 'autorizacaoFornecimento', 'empenho'])->get();
+        foreach ($vinculos as $vinculo) {
+            if ($vinculo->contrato_id && $vinculo->contrato) {
+                $valorFaturado += $vinculo->contrato->notasFiscais()
+                    ->where('tipo', 'saida')
+                    ->sum('valor');
+            }
+            if ($vinculo->autorizacao_fornecimento_id && $vinculo->autorizacaoFornecimento) {
+                $valorFaturado += $vinculo->autorizacaoFornecimento->notasFiscais()
+                    ->where('tipo', 'saida')
+                    ->sum('valor');
+            }
+            if ($vinculo->empenho_id && $vinculo->empenho) {
+                $valorFaturado += $vinculo->empenho->notasFiscais()
+                    ->where('tipo', 'saida')
+                    ->sum('valor');
+            }
+        }
+        $this->valor_faturado = round($valorFaturado, 2);
 
-        // Valor pago = soma dos pagamentos confirmados
-        // TODO: Implementar quando tiver relação com pagamentos
+        // Valor pago = soma das NF-e de saída com situação "paga"
+        $valorPago = 0;
+        foreach ($vinculos as $vinculo) {
+            if ($vinculo->contrato_id && $vinculo->contrato) {
+                $valorPago += $vinculo->contrato->notasFiscais()
+                    ->where('tipo', 'saida')
+                    ->where('situacao', 'paga')
+                    ->sum('valor');
+            }
+            if ($vinculo->autorizacao_fornecimento_id && $vinculo->autorizacaoFornecimento) {
+                $valorPago += $vinculo->autorizacaoFornecimento->notasFiscais()
+                    ->where('tipo', 'saida')
+                    ->where('situacao', 'paga')
+                    ->sum('valor');
+            }
+            if ($vinculo->empenho_id && $vinculo->empenho) {
+                $valorPago += $vinculo->empenho->notasFiscais()
+                    ->where('tipo', 'saida')
+                    ->where('situacao', 'paga')
+                    ->sum('valor');
+            }
+        }
+        $this->valor_pago = round($valorPago, 2);
 
         // Saldo em aberto = valor vencido - valor pago
-        $this->saldo_aberto = $this->valor_vencido - $this->valor_pago;
+        $this->saldo_aberto = round($this->valor_vencido - $this->valor_pago, 2);
 
         // Lucro bruto = receita - custos diretos
         $custoTotal = $this->getCustoTotal();
-        $this->lucro_bruto = $this->valor_faturado - $custoTotal;
+        $this->lucro_bruto = round($this->valor_faturado - $custoTotal, 2);
 
         // Lucro líquido = lucro bruto - custos indiretos
-        // TODO: Implementar quando tiver custos indiretos alocados por item
+        // Nota: Custos indiretos são alocados por período, não por item individual
+        // Se houver necessidade de alocar custos indiretos por item, implementar aqui
         $this->lucro_liquido = $this->lucro_bruto;
 
         $this->save();

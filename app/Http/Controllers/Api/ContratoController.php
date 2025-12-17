@@ -196,11 +196,8 @@ class ContratoController extends Controller
 
     public function store(Request $request, Processo $processo)
     {
-        if (!$processo->isEmExecucao()) {
-            return response()->json([
-                'message' => 'Contratos só podem ser criados para processos em execução.'
-            ], 403);
-        }
+        // Verificar permissão usando Policy
+        $this->authorize('create', [\App\Models\Contrato::class, $processo]);
 
         $validated = $request->validate([
             'numero' => 'required|string|max:255',
@@ -259,6 +256,9 @@ class ContratoController extends Controller
             return response()->json(['message' => 'Contrato não pertence a este processo.'], 404);
         }
 
+        // Verificar permissão usando Policy
+        $this->authorize('update', $contrato);
+
         $validated = $request->validate([
             'numero' => 'required|string|max:255',
             'data_assinatura' => 'nullable|date',
@@ -306,6 +306,9 @@ class ContratoController extends Controller
         if ($contrato->processo_id !== $processo->id) {
             return response()->json(['message' => 'Contrato não pertence a este processo.'], 404);
         }
+
+        // Verificar permissão usando Policy
+        $this->authorize('delete', $contrato);
 
         if ($contrato->empenhos()->count() > 0) {
             return response()->json([
