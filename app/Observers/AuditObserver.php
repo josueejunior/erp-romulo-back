@@ -3,6 +3,7 @@
 namespace App\Observers;
 
 use App\Models\AuditLog;
+use Illuminate\Support\Str;
 
 class AuditObserver
 {
@@ -95,6 +96,6 @@ class AuditObserver
     protected function getModelName($model): string
     {
         $className = class_basename($model);
-        return str_replace('_', ' ', snake_case($className));
+        return str_replace('_', ' ', Str::snake($className));
     }
 }
