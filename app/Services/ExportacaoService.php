@@ -73,21 +73,93 @@ class ExportacaoService
         $logoBase64 = null;
         try {
             if ($tenant && $tenant->logo) {
-                // Verificar se é um caminho de arquivo ou URL
-                if (Storage::disk('public')->exists($tenant->logo)) {
-                    $logoPath = Storage::disk('public')->path($tenant->logo);
-                    $logoContent = file_get_contents($logoPath);
-                    $logoBase64 = 'data:image/' . pathinfo($logoPath, PATHINFO_EXTENSION) . ';base64,' . base64_encode($logoContent);
-                } elseif (filter_var($tenant->logo, FILTER_VALIDATE_URL)) {
-                    // Se for uma URL, usar diretamente
-                    $logoUrl = $tenant->logo;
-                } elseif (str_starts_with($tenant->logo, 'data:image')) {
-                    // Se já for base64, usar diretamente
-                    $logoBase64 = $tenant->logo;
+                $logoValue = $tenant->logo;
+                
+                // Verificar se já é base64
+                if (str_starts_with($logoValue, 'data:image')) {
+                    $logoBase64 = $logoValue;
+                }
+                // Verificar se é uma URL
+                elseif (filter_var($logoValue, FILTER_VALIDATE_URL)) {
+                    $logoUrl = $logoValue;
+                }
+                // Tentar como caminho de arquivo no storage public
+                elseif (Storage::disk('public')->exists($logoValue)) {
+                    $logoPath = Storage::disk('public')->path($logoValue);
+                    if (file_exists($logoPath) && is_readable($logoPath)) {
+                        $logoContent = file_get_contents($logoPath);
+                        $extension = strtolower(pathinfo($logoPath, PATHINFO_EXTENSION));
+                        $mimeType = 'png'; // padrão
+                        if (in_array($extension, ['jpg', 'jpeg'])) {
+                            $mimeType = 'jpeg';
+                        } elseif ($extension === 'png') {
+                            $mimeType = 'png';
+                        } elseif ($extension === 'gif') {
+                            $mimeType = 'gif';
+                        } elseif ($extension === 'webp') {
+                            $mimeType = 'webp';
+                        } elseif ($extension === 'svg') {
+                            $mimeType = 'svg+xml';
+                        }
+                        $logoBase64 = 'data:image/' . $mimeType . ';base64,' . base64_encode($logoContent);
+                    }
+                }
+                // Tentar como caminho absoluto
+                elseif (file_exists($logoValue) && is_readable($logoValue)) {
+                    $logoContent = file_get_contents($logoValue);
+                    $extension = strtolower(pathinfo($logoValue, PATHINFO_EXTENSION));
+                    $mimeType = 'png'; // padrão
+                    if (in_array($extension, ['jpg', 'jpeg'])) {
+                        $mimeType = 'jpeg';
+                    } elseif ($extension === 'png') {
+                        $mimeType = 'png';
+                    } elseif ($extension === 'gif') {
+                        $mimeType = 'gif';
+                    } elseif ($extension === 'webp') {
+                        $mimeType = 'webp';
+                    } elseif ($extension === 'svg') {
+                        $mimeType = 'svg+xml';
+                    }
+                    $logoBase64 = 'data:image/' . $mimeType . ';base64,' . base64_encode($logoContent);
+                }
+                // Tentar caminho relativo a partir do storage/public
+                else {
+                    $possiblePaths = [
+                        storage_path('app/public/' . $logoValue),
+                        storage_path('app/public/logos/' . $logoValue),
+                        public_path('storage/' . $logoValue),
+                        public_path('storage/logos/' . $logoValue),
+                    ];
+                    
+                    foreach ($possiblePaths as $possiblePath) {
+                        if (file_exists($possiblePath) && is_readable($possiblePath)) {
+                            $logoContent = file_get_contents($possiblePath);
+                            $extension = strtolower(pathinfo($possiblePath, PATHINFO_EXTENSION));
+                            $mimeType = 'png'; // padrão
+                            if (in_array($extension, ['jpg', 'jpeg'])) {
+                                $mimeType = 'jpeg';
+                            } elseif ($extension === 'png') {
+                                $mimeType = 'png';
+                            } elseif ($extension === 'gif') {
+                                $mimeType = 'gif';
+                            } elseif ($extension === 'webp') {
+                                $mimeType = 'webp';
+                            } elseif ($extension === 'svg') {
+                                $mimeType = 'svg+xml';
+                            }
+                            $logoBase64 = 'data:image/' . $mimeType . ';base64,' . base64_encode($logoContent);
+                            break;
+                        }
+                    }
                 }
             }
         } catch (\Exception $e) {
             // Se houver erro ao carregar logo, continuar sem logo
+            \Log::warning('Erro ao carregar logo do tenant', [
+                'tenant_id' => $tenant?->id,
+                'logo' => $tenant->logo ?? null,
+                'error' => $e->getMessage()
+            ]);
         }
 
         // Formatar endereço completo
@@ -110,12 +182,17 @@ class ExportacaoService
             $dataFormatada = str_replace($en, $pt, $dataFormatada);
         }
 
+        // Filtrar apenas itens que têm valor_arrematado preenchido
+        $itensComValorArrematado = $processo->itens->filter(function ($item) {
+            return !empty($item->valor_arrematado) && $item->valor_arrematado > 0;
+        })->values();
+
         $dados = [
             'processo' => $processo,
             'validade_proposta' => $validadeProposta,
             'data_elaboracao' => Carbon::now()->format('d/m/Y H:i'),
             'data_formatada' => $dataFormatada,
-            'itens' => $processo->itens,
+            'itens' => $itensComValorArrematado,
             'nome_empresa' => $nomeEmpresa,
             'nome_fantasia' => $nomeFantasia,
             'cnpj_empresa' => $cnpjEmpresa,
