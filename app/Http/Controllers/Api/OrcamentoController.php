@@ -90,8 +90,13 @@ class OrcamentoController extends Controller
 
     public function update(Request $request, Processo $processo, ProcessoItem $item, Orcamento $orcamento)
     {
-        if ($item->processo_id !== $processo->id || $orcamento->processo_item_id !== $item->id) {
-            return response()->json(['message' => 'Orçamento não pertence a este item.'], 404);
+        // Verificar se o orçamento pertence ao item e processo
+        // Pode ser vinculado ao processo OU ao item (compatibilidade)
+        $isOrcamentoDoItem = $orcamento->processo_item_id === $item->id;
+        $isOrcamentoDoProcesso = $orcamento->processo_id === $processo->id && $item->processo_id === $processo->id;
+        
+        if (!$isOrcamentoDoItem && !$isOrcamentoDoProcesso) {
+            return response()->json(['message' => 'Orçamento não pertence a este item/processo.'], 404);
         }
 
         if ($processo->isEmExecucao()) {
@@ -100,37 +105,82 @@ class OrcamentoController extends Controller
             ], 403);
         }
 
+        // Validação flexível: campos obrigatórios apenas se fornecidos
         $validated = $request->validate([
-            'fornecedor_id' => 'required|exists:fornecedores,id',
+            'fornecedor_id' => 'sometimes|required|exists:fornecedores,id',
             'transportadora_id' => 'nullable|exists:transportadoras,id',
-            'custo_produto' => 'required|numeric|min:0',
+            'custo_produto' => 'sometimes|required|numeric|min:0',
             'marca_modelo' => 'nullable|string|max:255',
             'ajustes_especificacao' => 'nullable|string',
             'frete' => 'nullable|numeric|min:0',
-            'frete_incluido' => 'boolean',
+            'frete_incluido' => 'sometimes|boolean',
+            'fornecedor_escolhido' => 'sometimes|boolean',
             'observacoes' => 'nullable|string',
         ]);
 
-        $validated['frete'] = $validated['frete'] ?? 0;
-        $validated['frete_incluido'] = $request->has('frete_incluido');
-
-        if ($request->has('fornecedor_escolhido') && $request->boolean('fornecedor_escolhido')) {
-            $item->orcamentos()->where('id', '!=', $orcamento->id)->update(['fornecedor_escolhido' => false]);
-            $validated['fornecedor_escolhido'] = true;
-        } else {
-            $validated['fornecedor_escolhido'] = false;
+        // Aplicar apenas campos fornecidos (update parcial)
+        $updateData = [];
+        
+        if ($request->has('fornecedor_id')) {
+            $updateData['fornecedor_id'] = $validated['fornecedor_id'];
+        }
+        
+        if ($request->has('transportadora_id')) {
+            $updateData['transportadora_id'] = $validated['transportadora_id'];
+        }
+        
+        if ($request->has('custo_produto')) {
+            $updateData['custo_produto'] = $validated['custo_produto'];
+        }
+        
+        if ($request->has('marca_modelo')) {
+            $updateData['marca_modelo'] = $validated['marca_modelo'];
+        }
+        
+        if ($request->has('ajustes_especificacao')) {
+            $updateData['ajustes_especificacao'] = $validated['ajustes_especificacao'];
+        }
+        
+        if ($request->has('frete')) {
+            $updateData['frete'] = $validated['frete'] ?? 0;
+        }
+        
+        if ($request->has('frete_incluido')) {
+            $updateData['frete_incluido'] = $request->boolean('frete_incluido');
+        }
+        
+        if ($request->has('observacoes')) {
+            $updateData['observacoes'] = $validated['observacoes'];
         }
 
-        $orcamento->update($validated);
+        // Gerenciar fornecedor_escolhido
+        if ($request->has('fornecedor_escolhido')) {
+            $fornecedorEscolhido = $request->boolean('fornecedor_escolhido');
+            
+            if ($fornecedorEscolhido) {
+                // Desmarcar outros orçamentos do mesmo item
+                $item->orcamentos()->where('id', '!=', $orcamento->id)->update(['fornecedor_escolhido' => false]);
+            }
+            
+            $updateData['fornecedor_escolhido'] = $fornecedorEscolhido;
+        }
+
+        // Atualizar apenas os campos fornecidos
+        if (!empty($updateData)) {
+            $orcamento->update($updateData);
+        }
+        
         $orcamento->refresh();
         $orcamento->load(['fornecedor', 'transportadora', 'formacaoPreco']);
         
         // Se o orçamento foi marcado como escolhido e tem formação de preço, atualizar valor mínimo no item
-        if ($validated['fornecedor_escolhido'] && $orcamento->formacaoPreco) {
+        if (isset($updateData['fornecedor_escolhido']) && $updateData['fornecedor_escolhido'] && $orcamento->formacaoPreco) {
             $item->valor_minimo_venda = $orcamento->formacaoPreco->preco_minimo;
-            $item->calcularValorMinimoVenda(); // Usar método do modelo se existir
+            if (method_exists($item, 'calcularValorMinimoVenda')) {
+                $item->calcularValorMinimoVenda();
+            }
             $item->save();
-        } elseif (!$validated['fornecedor_escolhido']) {
+        } elseif (isset($updateData['fornecedor_escolhido']) && !$updateData['fornecedor_escolhido']) {
             // Se foi desmarcado, limpar valor mínimo
             $item->valor_minimo_venda = null;
             $item->save();
