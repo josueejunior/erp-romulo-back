@@ -48,6 +48,10 @@ Route::prefix('v1')->group(function () {
     Route::put('/tenants/{tenant}', [TenantController::class, 'update']);
     Route::delete('/tenants/{tenant}', [TenantController::class, 'destroy']);
 
+    // Rotas públicas - Planos (podem ser visualizados sem autenticação)
+    Route::get('/planos', [ApiPlanoController::class, 'index']);
+    Route::get('/planos/{plano}', [ApiPlanoController::class, 'show']);
+
     // Rotas públicas (autenticação)
     Route::post('/auth/login', [AuthController::class, 'login']);
     Route::post('/auth/register', [AuthController::class, 'register']);
