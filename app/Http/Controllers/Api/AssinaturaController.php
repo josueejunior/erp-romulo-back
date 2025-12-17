@@ -48,10 +48,32 @@ class AssinaturaController extends Controller
         }
 
         // Buscar assinatura atual diretamente
-        $assinatura = Assinatura::where('tenant_id', $tenant->id)
-            ->where('id', $tenant->assinatura_atual_id)
-            ->with('plano')
-            ->first();
+        // Se tenant tem assinatura_atual_id, buscar por ele, senão buscar a mais recente ativa
+        $assinatura = null;
+        
+        if ($tenant->assinatura_atual_id) {
+            $assinatura = Assinatura::where('tenant_id', $tenant->id)
+                ->where('id', $tenant->assinatura_atual_id)
+                ->with('plano')
+                ->first();
+        }
+        
+        // Se não encontrou pela assinatura_atual_id, buscar a mais recente ativa
+        if (!$assinatura) {
+            $assinatura = Assinatura::where('tenant_id', $tenant->id)
+                ->where('status', 'ativa')
+                ->with('plano')
+                ->orderBy('created_at', 'desc')
+                ->first();
+        }
+        
+        // Se ainda não encontrou, buscar qualquer assinatura mais recente
+        if (!$assinatura) {
+            $assinatura = Assinatura::where('tenant_id', $tenant->id)
+                ->with('plano')
+                ->orderBy('created_at', 'desc')
+                ->first();
+        }
 
         if (!$assinatura) {
             return response()->json([
