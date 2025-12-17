@@ -13,7 +13,10 @@ class FornecedorController extends BaseApiController
     public function index(Request $request)
     {
         $empresa = $this->getEmpresaAtivaOrFail();
-        $query = Fornecedor::where('empresa_id', $empresa->id);
+        
+        // Filtrar APENAS fornecedores da empresa ativa (não incluir NULL)
+        $query = Fornecedor::where('empresa_id', $empresa->id)
+            ->whereNotNull('empresa_id');
 
         if ($request->search) {
             $query->where(function($q) use ($request) {

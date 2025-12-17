@@ -13,7 +13,11 @@ class OrgaoController extends BaseApiController
     public function index(Request $request)
     {
         $empresa = $this->getEmpresaAtivaOrFail();
-        $query = Orgao::where('empresa_id', $empresa->id)->with('setors');
+        
+        // Filtrar APENAS órgãos da empresa ativa (não incluir NULL)
+        $query = Orgao::where('empresa_id', $empresa->id)
+            ->whereNotNull('empresa_id')
+            ->with('setors');
 
         if ($request->search) {
             $query->where(function($q) use ($request) {

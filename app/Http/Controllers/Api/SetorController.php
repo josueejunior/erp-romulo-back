@@ -20,7 +20,11 @@ class SetorController extends BaseApiController
         }
         
         $empresa = $this->getEmpresaAtivaOrFail();
-        $query = Setor::where('empresa_id', $empresa->id)->with('orgao');
+        
+        // Filtrar APENAS setores da empresa ativa (não incluir NULL)
+        $query = Setor::where('empresa_id', $empresa->id)
+            ->whereNotNull('empresa_id')
+            ->with('orgao');
 
         if ($request->orgao_id) {
             // Validar que o órgão pertence à empresa
