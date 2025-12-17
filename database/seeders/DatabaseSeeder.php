@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use App\Models\User;
 use App\Models\Tenant;
+use App\Models\Empresa;
 use App\Models\Orgao;
 use App\Models\Setor;
 use Illuminate\Support\Facades\Hash;
@@ -72,6 +73,18 @@ class DatabaseSeeder extends Seeder
         // Limpar cache novamente após criar roles
         app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
+        // Criar empresa dentro do tenant
+        $empresa = Empresa::firstOrCreate(
+            ['cnpj' => '12.345.678/0001-90'],
+            [
+                'razao_social' => 'Empresa Exemplo LTDA',
+                'cnpj' => '12.345.678/0001-90',
+                'email' => 'contato@exemplo.com',
+                'status' => 'ativa',
+            ]
+        );
+        $this->command->info('Empresa criada/verificada: ' . $empresa->razao_social);
+
         // Criar múltiplos usuários para teste
         $users = [
             [
@@ -126,6 +139,18 @@ class DatabaseSeeder extends Seeder
                 } catch (\Exception $e) {
                     $this->command->error('Erro ao atualizar role do usuário ' . $userData['email'] . ': ' . $e->getMessage());
                 }
+            }
+
+            // Associar usuário à empresa (se ainda não estiver associado)
+            if (!$user->empresas->contains($empresa->id)) {
+                $user->empresas()->attach($empresa->id, ['perfil' => strtolower($userData['role'])]);
+                $this->command->info('Usuário ' . $userData['email'] . ' associado à empresa');
+            }
+
+            // Definir empresa ativa se o usuário não tiver uma
+            if (!$user->empresa_ativa_id) {
+                $user->empresa_ativa_id = $empresa->id;
+                $user->save();
             }
         }
 

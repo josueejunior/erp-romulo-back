@@ -159,8 +159,11 @@ class AuthController extends Controller
      */
     private function findTenantByUserEmail(string $email): ?Tenant
     {
-        $tenants = Tenant::where('status', 'ativa')->get();
+        // Buscar todos os tenants (não filtrar por status, pois pode não ter esse campo)
+        $tenants = Tenant::all();
         $foundTenant = null;
+
+        \Log::info("Buscando usuário com email: {$email} em " . $tenants->count() . " tenants");
 
         foreach ($tenants as $tenant) {
             try {
@@ -172,6 +175,7 @@ class AuthController extends Controller
                 // Verificar se o banco do tenant existe antes de tentar inicializar
                 try {
                     tenancy()->initialize($tenant);
+                    \Log::info("Tenant inicializado: {$tenant->id}");
                 } catch (\Exception $e) {
                     // Se não conseguir inicializar (banco não existe), pular este tenant
                     \Log::warning("Erro ao inicializar tenant {$tenant->id}: " . $e->getMessage());
@@ -181,6 +185,7 @@ class AuthController extends Controller
                 $user = User::where('email', $email)->first();
                 
                 if ($user) {
+                    \Log::info("Usuário encontrado no tenant {$tenant->id}");
                     $foundTenant = $tenant;
                     // Finalizar para reinicializar no login
                     tenancy()->end();
@@ -192,6 +197,7 @@ class AuthController extends Controller
             } catch (\Exception $e) {
                 // Se houver erro, registrar e continuar para o próximo tenant
                 \Log::warning("Erro ao buscar usuário no tenant {$tenant->id}: " . $e->getMessage());
+                \Log::warning("Stack trace: " . $e->getTraceAsString());
                 
                 // Garantir que o tenancy está finalizado
                 if (tenancy()->initialized) {
@@ -202,6 +208,10 @@ class AuthController extends Controller
                     }
                 }
             }
+        }
+
+        if (!$foundTenant) {
+            \Log::warning("Usuário com email {$email} não encontrado em nenhum tenant");
         }
 
         return $foundTenant;
