@@ -233,6 +233,14 @@ class OrcamentoController extends BaseApiController
      */
     public function storeByProcesso(Request $request, Processo $processo)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        // Verificar se o processo pertence à empresa
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
         // Verificar permissão usando Policy
         $this->authorize('create', [$processo]);
 
@@ -265,8 +273,18 @@ class OrcamentoController extends BaseApiController
         }
 
         // Criar orçamento vinculado ao processo com transação
-        $orcamento = \Illuminate\Support\Facades\DB::transaction(function () use ($processo, $validated) {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        // Verificar se o processo pertence à empresa
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
+        $orcamento = \Illuminate\Support\Facades\DB::transaction(function () use ($processo, $validated, $empresa) {
             $orcamento = Orcamento::create([
+                'empresa_id' => $empresa->id,
                 'processo_id' => $processo->id,
                 'fornecedor_id' => $validated['fornecedor_id'],
                 'transportadora_id' => $validated['transportadora_id'] ?? null,
@@ -314,6 +332,14 @@ class OrcamentoController extends BaseApiController
      */
     public function indexByProcesso(Processo $processo)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        // Verificar se o processo pertence à empresa
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
         $orcamentos = $processo->orcamentos()
             ->with(['fornecedor', 'transportadora', 'itens.processoItem', 'itens.formacaoPreco'])
             ->orderBy('created_at', 'desc')
