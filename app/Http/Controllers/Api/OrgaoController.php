@@ -14,10 +14,24 @@ class OrgaoController extends BaseApiController
     {
         $empresa = $this->getEmpresaAtivaOrFail();
         
+        // Log para debug
+        \Log::info('OrgaoController::index - Debug', [
+            'user_id' => auth()->id(),
+            'user_email' => auth()->user()?->email,
+            'empresa_ativa_id' => auth()->user()?->empresa_ativa_id,
+            'empresa_id' => $empresa->id,
+            'empresa_razao_social' => $empresa->razao_social,
+            'tenant_id' => tenancy()->tenant?->id,
+        ]);
+        
         // Filtrar APENAS órgãos da empresa ativa (não incluir NULL)
+        // Também filtrar setores por empresa_id para garantir isolamento
         $query = Orgao::where('empresa_id', $empresa->id)
             ->whereNotNull('empresa_id')
-            ->with('setors');
+            ->with(['setors' => function($query) use ($empresa) {
+                $query->where('empresa_id', $empresa->id)
+                      ->whereNotNull('empresa_id');
+            }]);
 
         if ($request->search) {
             $query->where(function($q) use ($request) {
@@ -27,6 +41,13 @@ class OrgaoController extends BaseApiController
         }
 
         $orgaos = $query->orderBy('razao_social')->paginate(15);
+        
+        // Log dos resultados
+        \Log::info('OrgaoController::index - Resultados', [
+            'total_orgaos' => $orgaos->total(),
+            'empresa_id_filtro' => $empresa->id,
+            'orgaos_empresa_ids' => $orgaos->pluck('empresa_id')->unique()->toArray(),
+        ]);
 
         return OrgaoResource::collection($orgaos);
     }
