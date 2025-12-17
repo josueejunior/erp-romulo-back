@@ -26,3 +26,4 @@ php artisan route:list --path=contratos
 
 
 
+

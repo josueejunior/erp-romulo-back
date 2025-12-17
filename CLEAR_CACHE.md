@@ -43,3 +43,4 @@ docker exec -it erp-licitacoes-app php artisan route:list --path=api/v1/contrato
 
 
 
+

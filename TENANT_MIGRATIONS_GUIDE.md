@@ -173,3 +173,4 @@ docker exec -it erp-licitacoes-app php artisan tenants:seed
 
 
 
+
