@@ -42,26 +42,6 @@ use App\Http\Controllers\Admin\AdminTenantController;
 |
 */
 
-// Rotas do Painel Admin Central (fora do tenant)
-Route::prefix('admin')->group(function () {
-    // Autenticação admin
-    Route::post('/login', [AdminAuthController::class, 'login']);
-    
-    // Rotas protegidas
-    Route::middleware(['auth:sanctum', \App\Http\Middleware\IsSuperAdmin::class])->group(function () {
-        Route::post('/logout', [AdminAuthController::class, 'logout']);
-        Route::get('/me', [AdminAuthController::class, 'me']);
-        
-        // Gerenciamento de empresas (tenants)
-        Route::get('/empresas', [AdminTenantController::class, 'index']);
-        Route::get('/empresas/{tenant}', [AdminTenantController::class, 'show']);
-        Route::post('/empresas', [AdminTenantController::class, 'store']);
-        Route::put('/empresas/{tenant}', [AdminTenantController::class, 'update']);
-        Route::delete('/empresas/{tenant}', [AdminTenantController::class, 'destroy']);
-        Route::post('/empresas/{tenant}/reativar', [AdminTenantController::class, 'reactivate']);
-    });
-});
-
 Route::prefix('v1')->group(function () {
     // Rotas públicas (central) - Gerenciamento de Tenants/Empresas
     Route::post('/tenants', [TenantController::class, 'store']);
@@ -193,6 +173,26 @@ Route::prefix('v1')->group(function () {
         Route::post('/assinaturas', [ApiAssinaturaController::class, 'store']);
         Route::post('/assinaturas/{assinatura}/renovar', [ApiAssinaturaController::class, 'renovar']);
         Route::post('/assinaturas/{assinatura}/cancelar', [ApiAssinaturaController::class, 'cancelar']);
+    });
+});
+
+// Rotas do Painel Admin Central (fora do tenant e fora do v1)
+Route::prefix('admin')->group(function () {
+    // Autenticação admin
+    Route::post('/login', [AdminAuthController::class, 'login']);
+    
+    // Rotas protegidas
+    Route::middleware(['auth:sanctum', \App\Http\Middleware\IsSuperAdmin::class])->group(function () {
+        Route::post('/logout', [AdminAuthController::class, 'logout']);
+        Route::get('/me', [AdminAuthController::class, 'me']);
+        
+        // Gerenciamento de empresas (tenants)
+        Route::get('/empresas', [AdminTenantController::class, 'index']);
+        Route::get('/empresas/{tenant}', [AdminTenantController::class, 'show']);
+        Route::post('/empresas', [AdminTenantController::class, 'store']);
+        Route::put('/empresas/{tenant}', [AdminTenantController::class, 'update']);
+        Route::delete('/empresas/{tenant}', [AdminTenantController::class, 'destroy']);
+        Route::post('/empresas/{tenant}/reativar', [AdminTenantController::class, 'reactivate']);
     });
 });
 
