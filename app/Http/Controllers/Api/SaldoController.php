@@ -22,6 +22,14 @@ class SaldoController extends Controller
      */
     public function show(Processo $processo)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
         if (!$processo->isEmExecucao()) {
             return response()->json([
                 'message' => 'Apenas processos em execução possuem saldo.'
@@ -57,6 +65,14 @@ class SaldoController extends Controller
      */
     public function saldoVencido(Processo $processo)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
         $saldo = $this->saldoService->calcularSaldoVencido($processo);
 
         return response()->json([
@@ -69,6 +85,14 @@ class SaldoController extends Controller
      */
     public function saldoVinculado(Processo $processo)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
         $saldo = $this->saldoService->calcularSaldoVinculado($processo);
 
         return response()->json([
@@ -81,6 +105,14 @@ class SaldoController extends Controller
      */
     public function saldoEmpenhado(Processo $processo)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
         $saldo = $this->saldoService->calcularSaldoEmpenhado($processo);
 
         return response()->json([

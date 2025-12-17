@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\BaseApiController;
 use App\Http\Resources\FormacaoPrecoResource;
 use App\Models\Processo;
 use App\Models\ProcessoItem;
@@ -10,12 +10,26 @@ use App\Models\Orcamento;
 use App\Models\FormacaoPreco;
 use Illuminate\Http\Request;
 
-class FormacaoPrecoController extends Controller
+class FormacaoPrecoController extends BaseApiController
 {
     public function show(Processo $processo, ProcessoItem $item, Orcamento $orcamento)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
         if ($item->processo_id !== $processo->id || $orcamento->processo_item_id !== $item->id) {
             return response()->json(['message' => 'Orçamento não pertence a este item.'], 404);
+        }
+        
+        if ($orcamento->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Orçamento não encontrado ou não pertence à empresa ativa.'
+            ], 404);
         }
 
         $formacaoPreco = $orcamento->formacaoPreco;
@@ -29,8 +43,22 @@ class FormacaoPrecoController extends Controller
 
     public function store(Request $request, Processo $processo, ProcessoItem $item, Orcamento $orcamento)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
         if ($item->processo_id !== $processo->id || $orcamento->processo_item_id !== $item->id) {
             return response()->json(['message' => 'Orçamento não pertence a este item.'], 404);
+        }
+        
+        if ($orcamento->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Orçamento não encontrado ou não pertence à empresa ativa.'
+            ], 404);
         }
 
         if ($processo->isEmExecucao()) {
@@ -78,10 +106,24 @@ class FormacaoPrecoController extends Controller
 
     public function update(Request $request, Processo $processo, ProcessoItem $item, Orcamento $orcamento, FormacaoPreco $formacaoPreco)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
         if ($item->processo_id !== $processo->id || 
             $orcamento->processo_item_id !== $item->id ||
             $formacaoPreco->orcamento_id !== $orcamento->id) {
             return response()->json(['message' => 'Formação de preço não pertence a este orçamento.'], 404);
+        }
+        
+        if ($orcamento->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Orçamento não encontrado ou não pertence à empresa ativa.'
+            ], 404);
         }
 
         if ($processo->isEmExecucao()) {

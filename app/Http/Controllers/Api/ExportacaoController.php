@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\BaseApiController;
 use App\Services\ExportacaoService;
 use App\Models\Processo;
 use Illuminate\Http\Request;
 
-class ExportacaoController extends Controller
+class ExportacaoController extends BaseApiController
 {
     protected ExportacaoService $exportacaoService;
 
@@ -21,6 +21,14 @@ class ExportacaoController extends Controller
      */
     public function propostaComercial(Processo $processo, Request $request)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
         // Permitir exportação em qualquer status, exceto arquivado/perdido
         // Conforme especificação: pode ser gerada na fase de participação e julgamento
         if (in_array($processo->status, ['arquivado', 'perdido'])) {
@@ -70,6 +78,14 @@ class ExportacaoController extends Controller
      */
     public function catalogoFichaTecnica(Processo $processo)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
         // Permitir exportação em qualquer status, exceto arquivado/perdido
         // Conforme especificação: pode ser gerada na fase de participação e julgamento
         if (in_array($processo->status, ['arquivado', 'perdido'])) {

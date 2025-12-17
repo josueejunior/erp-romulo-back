@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\BaseApiController;
 use App\Models\Processo;
 use App\Models\CustoIndireto;
 use App\Services\FinanceiroService;
@@ -11,7 +11,7 @@ use Illuminate\Http\Request;
 use App\Helpers\PermissionHelper;
 use Carbon\Carbon;
 
-class RelatorioFinanceiroController extends Controller
+class RelatorioFinanceiroController extends BaseApiController
 {
     protected FinanceiroService $financeiroService;
 
@@ -49,7 +49,8 @@ class RelatorioFinanceiroController extends Controller
                 }
             }
             
-            $resultado = $this->financeiroService->calcularGestaoFinanceiraMensal($mes);
+            $empresa = $this->getEmpresaAtivaOrFail();
+            $resultado = $this->financeiroService->calcularGestaoFinanceiraMensal($mes, $empresa->id);
             
             // Salvar no cache se disponível
             if ($tenantId && RedisService::isAvailable()) {
@@ -83,7 +84,7 @@ class RelatorioFinanceiroController extends Controller
         $totalCustosDiretos = 0;
         $totalSaldoReceber = 0;
 
-        $totalCustosIndiretos = CustoIndireto::query()
+        $totalCustosIndiretos = CustoIndireto::where('empresa_id', $empresa->id)
             ->when($request->data_inicio, function($q) use ($request) {
                 $q->where('data', '>=', $request->data_inicio);
             })
@@ -168,11 +169,13 @@ class RelatorioFinanceiroController extends Controller
             ], 403);
         }
 
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
         $mes = $request->mes 
             ? Carbon::createFromFormat('Y-m', $request->mes)
             : Carbon::now();
 
-        $resultado = $this->financeiroService->calcularGestaoFinanceiraMensal($mes);
+        $resultado = $this->financeiroService->calcularGestaoFinanceiraMensal($mes, $empresa->id);
 
         return response()->json($resultado);
     }

@@ -87,10 +87,15 @@ class FinanceiroService
     /**
      * Calcula custos indiretos em um período
      */
-    public function calcularCustosIndiretosPeriodo(Carbon $dataInicio, Carbon $dataFim): array
+    public function calcularCustosIndiretosPeriodo(Carbon $dataInicio, Carbon $dataFim, ?int $empresaId = null): array
     {
-        $custos = CustoIndireto::whereBetween('data', [$dataInicio, $dataFim])
-            ->get();
+        $query = CustoIndireto::whereBetween('data', [$dataInicio, $dataFim]);
+        
+        if ($empresaId) {
+            $query->where('empresa_id', $empresaId);
+        }
+        
+        $custos = $query->get();
 
         $total = $custos->sum('valor') ?? 0;
 
@@ -105,15 +110,20 @@ class FinanceiroService
      * Calcula lucro por período (incluindo custos indiretos)
      * Considera apenas processos encerrados (com data_recebimento_pagamento)
      */
-    public function calcularLucroPeriodo(Carbon $dataInicio, Carbon $dataFim): array
+    public function calcularLucroPeriodo(Carbon $dataInicio, Carbon $dataFim, ?int $empresaId = null): array
     {
         // Processos encerrados (com data de recebimento do pagamento) no período
-        $processos = Processo::whereNotNull('data_recebimento_pagamento')
+        $query = Processo::whereNotNull('data_recebimento_pagamento')
             ->whereBetween('data_recebimento_pagamento', [$dataInicio, $dataFim])
             ->whereHas('itens', function ($query) {
                 $query->whereIn('status_item', ['aceito', 'aceito_habilitado']);
-            })
-            ->get();
+            });
+        
+        if ($empresaId) {
+            $query->where('empresa_id', $empresaId);
+        }
+        
+        $processos = $query->get();
 
         $receitaTotal = 0;
         $custosDiretosTotal = 0;
@@ -188,7 +198,7 @@ class FinanceiroService
      * Considera apenas processos encerrados (com data_recebimento_pagamento)
      * Cruza custos diretos (NFs entrada) vs vendas (NFs saída) e desconta custos indiretos
      */
-    public function calcularGestaoFinanceiraMensal(?Carbon $mes = null): array
+    public function calcularGestaoFinanceiraMensal(?Carbon $mes = null, ?int $empresaId = null): array
     {
         if (!$mes) {
             $mes = Carbon::now();
@@ -198,10 +208,15 @@ class FinanceiroService
         $dataFim = $mes->copy()->endOfMonth();
 
         // Processos encerrados no mês (com data de recebimento do pagamento)
-        $processosEncerrados = Processo::whereNotNull('data_recebimento_pagamento')
+        $query = Processo::whereNotNull('data_recebimento_pagamento')
             ->whereBetween('data_recebimento_pagamento', [$dataInicio, $dataFim])
-            ->with(['itens', 'notasFiscais'])
-            ->get();
+            ->with(['itens', 'notasFiscais']);
+        
+        if ($empresaId) {
+            $query->where('empresa_id', $empresaId);
+        }
+        
+        $processosEncerrados = $query->get();
 
         $receitaTotal = 0;
         $custosDiretosTotal = 0;
@@ -249,7 +264,7 @@ class FinanceiroService
         }
 
         // Custos indiretos do mês
-        $custosIndiretos = $this->calcularCustosIndiretosPeriodo($dataInicio, $dataFim);
+        $custosIndiretos = $this->calcularCustosIndiretosPeriodo($dataInicio, $dataFim, $empresaId);
         $custosIndiretosTotal = $custosIndiretos['total'];
 
         // Cálculo final
