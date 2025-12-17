@@ -55,6 +55,8 @@ class CustoIndiretoController extends BaseApiController
      */
     public function store(Request $request)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
         $validator = Validator::make($request->all(), [
             'descricao' => 'required|string|max:255',
             'data' => 'required|date',
@@ -70,7 +72,9 @@ class CustoIndiretoController extends BaseApiController
             ], 422);
         }
 
-        $custo = CustoIndireto::create($request->all());
+        $data = $request->all();
+        $data['empresa_id'] = $empresa->id;
+        $custo = CustoIndireto::create($data);
 
         return response()->json([
             'message' => 'Custo indireto criado com sucesso',
@@ -98,7 +102,10 @@ class CustoIndiretoController extends BaseApiController
      */
     public function update(Request $request, $id)
     {
-        $custo = CustoIndireto::findOrFail($id);
+        $empresa = $this->getEmpresaAtivaOrFail();
+        $custo = CustoIndireto::where('id', $id)
+            ->where('empresa_id', $empresa->id)
+            ->firstOrFail();
 
         $validator = Validator::make($request->all(), [
             'descricao' => 'required|string|max:255',
