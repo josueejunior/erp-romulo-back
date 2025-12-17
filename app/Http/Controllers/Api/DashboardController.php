@@ -24,15 +24,16 @@ class DashboardController extends BaseApiController
             }
         }
 
-        $processosParticipacao = Processo::where('empresa_id', $empresa->id)->where('status', 'participacao')->count();
-        $processosJulgamento = Processo::where('empresa_id', $empresa->id)->where('status', 'julgamento_habilitacao')->count();
-        $processosExecucao = Processo::where('empresa_id', $empresa->id)->where('status', 'execucao')->count();
-        $processosPagamento = Processo::where('empresa_id', $empresa->id)->where('status', 'pagamento')->count();
-        $processosEncerramento = Processo::where('empresa_id', $empresa->id)->where('status', 'encerramento')->count();
-        $processosPerdidos = Processo::where('empresa_id', $empresa->id)->where('status', 'perdido')->count();
-        $processosArquivados = Processo::where('empresa_id', $empresa->id)->where('status', 'arquivado')->count();
+        $processosParticipacao = Processo::where('empresa_id', $empresa->id)->whereNotNull('empresa_id')->where('status', 'participacao')->count();
+        $processosJulgamento = Processo::where('empresa_id', $empresa->id)->whereNotNull('empresa_id')->where('status', 'julgamento_habilitacao')->count();
+        $processosExecucao = Processo::where('empresa_id', $empresa->id)->whereNotNull('empresa_id')->where('status', 'execucao')->count();
+        $processosPagamento = Processo::where('empresa_id', $empresa->id)->whereNotNull('empresa_id')->where('status', 'pagamento')->count();
+        $processosEncerramento = Processo::where('empresa_id', $empresa->id)->whereNotNull('empresa_id')->where('status', 'encerramento')->count();
+        $processosPerdidos = Processo::where('empresa_id', $empresa->id)->whereNotNull('empresa_id')->where('status', 'perdido')->count();
+        $processosArquivados = Processo::where('empresa_id', $empresa->id)->whereNotNull('empresa_id')->where('status', 'arquivado')->count();
 
         $proximasDisputas = Processo::where('empresa_id', $empresa->id)
+            ->whereNotNull('empresa_id')
             ->whereIn('status', ['participacao', 'julgamento_habilitacao'])
             ->where('data_hora_sessao_publica', '>=', now())
             ->orderBy('data_hora_sessao_publica', 'asc')
@@ -49,6 +50,7 @@ class DashboardController extends BaseApiController
             });
 
         $documentosVencendo = DocumentoHabilitacao::where('empresa_id', $empresa->id)
+            ->whereNotNull('empresa_id')
             ->whereNotNull('data_validade')
             ->where('data_validade', '>=', now())
             ->where('data_validade', '<=', now()->addDays(30))
@@ -56,6 +58,7 @@ class DashboardController extends BaseApiController
             ->get(['id', 'tipo', 'numero', 'data_validade']);
 
         $documentosVencidos = DocumentoHabilitacao::where('empresa_id', $empresa->id)
+            ->whereNotNull('empresa_id')
             ->whereNotNull('data_validade')
             ->where('data_validade', '<', now())
             ->orderBy('data_validade', 'desc')
@@ -63,6 +66,7 @@ class DashboardController extends BaseApiController
             ->get(['id', 'tipo', 'numero', 'data_validade']);
 
         $documentosUrgentes = DocumentoHabilitacao::where('empresa_id', $empresa->id)
+            ->whereNotNull('empresa_id')
             ->whereNotNull('data_validade')
             ->where('data_validade', '>=', now())
             ->where('data_validade', '<=', now()->addDays(7))

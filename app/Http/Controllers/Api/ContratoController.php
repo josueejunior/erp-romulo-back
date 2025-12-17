@@ -19,7 +19,10 @@ class ContratoController extends BaseApiController
     {
         $empresa = $this->getEmpresaAtivaOrFail();
         
-        $query = Contrato::where('empresa_id', $empresa->id)->with([
+        // Filtrar APENAS contratos da empresa ativa (não incluir NULL)
+        $query = Contrato::where('empresa_id', $empresa->id)
+            ->whereNotNull('empresa_id')
+            ->with([
             'processo.orgao',
             'processo.setor',
             'empenhos',

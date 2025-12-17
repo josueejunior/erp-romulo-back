@@ -108,7 +108,10 @@ class CalendarioDisputasController extends BaseApiController
     public function eventos(Request $request)
     {
         $empresa = $this->getEmpresaAtivaOrFail();
+        
+        // Filtrar APENAS processos da empresa ativa (não incluir NULL)
         $query = Processo::where('empresa_id', $empresa->id)
+            ->whereNotNull('empresa_id')
             ->whereIn('status', ['participacao', 'julgamento_habilitacao'])
             ->with(['orgao:id,uasg,razao_social', 'itens.formacoesPreco']);
 

@@ -67,7 +67,10 @@ class RelatorioFinanceiroController extends BaseApiController
         }
 
         // Relatório padrão (processos em execução)
+        $empresa = $this->getEmpresaAtivaOrFail();
         $query = Processo::where('status', 'execucao')
+            ->where('empresa_id', $empresa->id)
+            ->whereNotNull('empresa_id')
             ->with(['itens', 'contratos', 'empenhos', 'notasFiscais']);
 
         if ($request->data_inicio) {
@@ -85,6 +88,7 @@ class RelatorioFinanceiroController extends BaseApiController
         $totalSaldoReceber = 0;
 
         $totalCustosIndiretos = CustoIndireto::where('empresa_id', $empresa->id)
+            ->whereNotNull('empresa_id')
             ->when($request->data_inicio, function($q) use ($request) {
                 $q->where('data', '>=', $request->data_inicio);
             })

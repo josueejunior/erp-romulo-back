@@ -448,7 +448,10 @@ class ProcessoController extends BaseApiController
         $empresa = $this->getEmpresaAtivaOrFail();
         
         // Aplicar os mesmos filtros do index
-        $query = Processo::where('empresa_id', $empresa->id)->with([
+        // Filtrar APENAS processos da empresa ativa (não incluir NULL)
+        $query = Processo::where('empresa_id', $empresa->id)
+            ->whereNotNull('empresa_id')
+            ->with([
             'orgao',
             'setor',
             'itens',

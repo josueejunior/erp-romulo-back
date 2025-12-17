@@ -15,7 +15,9 @@ class DocumentoHabilitacaoController extends BaseApiController
     {
         $empresa = $this->getEmpresaAtivaOrFail();
         
-        $query = DocumentoHabilitacao::where('empresa_id', $empresa->id);
+        // Filtrar APENAS documentos da empresa ativa (não incluir NULL)
+        $query = DocumentoHabilitacao::where('empresa_id', $empresa->id)
+            ->whereNotNull('empresa_id');
 
         // Filtrar apenas documentos não deletados (soft deletes são automaticamente excluídos)
 
