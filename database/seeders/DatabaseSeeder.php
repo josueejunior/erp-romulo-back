@@ -13,11 +13,16 @@ use Stancl\Tenancy\Facades\Tenancy;
 use Illuminate\Support\Str;
 use Stancl\Tenancy\Jobs\CreateDatabase;
 use Stancl\Tenancy\Jobs\MigrateDatabase;
+use Database\Seeders\AdminUserSeeder;
 
 class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
+        // IMPORTANTE: AdminUserSeeder deve ser executado ANTES de qualquer tenancy
+        // pois AdminUser é uma tabela central, não do tenant
+        $this->call(AdminUserSeeder::class);
+        
         // Verificar se já existe um tenant com este CNPJ
         $tenant = Tenant::where('cnpj', '12.345.678/0001-90')->first();
 
