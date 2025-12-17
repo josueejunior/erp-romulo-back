@@ -25,27 +25,22 @@ class AuthController extends Controller
             tenancy()->end();
         }
 
-        // Buscar o tenant que contém o usuário com este email
-        $tenant = $this->findTenantByUserEmail($request->email);
+        // Buscar o tenant que contém o usuário com este email E senha correta
+        // Isso garante que mesmo se o email existir em múltiplos tenants,
+        // vamos encontrar o tenant correto onde a senha está correta
+        $result = $this->findTenantByUserEmailAndPassword($request->email, $request->password);
 
-        if (!$tenant) {
+        if (!$result) {
             throw ValidationException::withMessages([
                 'email' => ['Credenciais inválidas ou usuário não encontrado em nenhuma empresa.'],
             ]);
         }
 
-        // Inicializar o contexto do tenant
-        tenancy()->initialize($tenant);
+        $tenant = $result['tenant'];
+        $user = $result['user'];
 
-        // Tentar autenticar o usuário dentro do tenant
-        $user = User::where('email', $request->email)->first();
-
-        if (!$user || !Hash::check($request->password, $user->password)) {
-            tenancy()->end();
-            throw ValidationException::withMessages([
-                'email' => ['Credenciais inválidas.'],
-            ]);
-        }
+        // O tenant já está inicializado pelo método findTenantByUserEmailAndPassword
+        // Não precisamos inicializar novamente
 
         // Criar token
         $token = $user->createToken('auth-token')->plainTextToken;
@@ -155,15 +150,16 @@ class AuthController extends Controller
     }
 
     /**
-     * Busca o tenant que contém o usuário com o email fornecido
+     * Busca o tenant que contém o usuário com o email E senha corretos
+     * Isso garante que mesmo se o email existir em múltiplos tenants,
+     * vamos encontrar o tenant correto onde a senha está correta
      */
-    private function findTenantByUserEmail(string $email): ?Tenant
+    private function findTenantByUserEmailAndPassword(string $email, string $password): ?array
     {
-        // Buscar todos os tenants (não filtrar por status, pois pode não ter esse campo)
+        // Buscar todos os tenants
         $tenants = Tenant::all();
-        $foundTenant = null;
 
-        \Log::info("Buscando usuário com email: {$email} em " . $tenants->count() . " tenants");
+        \Log::info("Buscando usuário com email: {$email} e validando senha em " . $tenants->count() . " tenants");
 
         foreach ($tenants as $tenant) {
             try {
@@ -175,21 +171,23 @@ class AuthController extends Controller
                 // Verificar se o banco do tenant existe antes de tentar inicializar
                 try {
                     tenancy()->initialize($tenant);
-                    \Log::info("Tenant inicializado: {$tenant->id}");
                 } catch (\Exception $e) {
                     // Se não conseguir inicializar (banco não existe), pular este tenant
                     \Log::warning("Erro ao inicializar tenant {$tenant->id}: " . $e->getMessage());
                     continue;
                 }
                 
+                // Buscar usuário pelo email
                 $user = User::where('email', $email)->first();
                 
-                if ($user) {
-                    \Log::info("Usuário encontrado no tenant {$tenant->id}");
-                    $foundTenant = $tenant;
-                    // Finalizar para reinicializar no login
-                    tenancy()->end();
-                    break;
+                // Se encontrou o usuário, validar a senha
+                if ($user && Hash::check($password, $user->password)) {
+                    \Log::info("Usuário encontrado e senha validada no tenant {$tenant->id}");
+                    // NÃO finalizar o tenancy aqui - será usado no login
+                    return [
+                        'tenant' => $tenant,
+                        'user' => $user,
+                    ];
                 }
                 
                 // Finalizar após verificar este tenant
@@ -197,7 +195,6 @@ class AuthController extends Controller
             } catch (\Exception $e) {
                 // Se houver erro, registrar e continuar para o próximo tenant
                 \Log::warning("Erro ao buscar usuário no tenant {$tenant->id}: " . $e->getMessage());
-                \Log::warning("Stack trace: " . $e->getTraceAsString());
                 
                 // Garantir que o tenancy está finalizado
                 if (tenancy()->initialized) {
@@ -210,10 +207,7 @@ class AuthController extends Controller
             }
         }
 
-        if (!$foundTenant) {
-            \Log::warning("Usuário com email {$email} não encontrado em nenhum tenant");
-        }
-
-        return $foundTenant;
+        \Log::warning("Usuário com email {$email} e senha correta não encontrado em nenhum tenant");
+        return null;
     }
 }
