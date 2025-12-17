@@ -295,3 +295,4 @@ class AssinaturaController extends Controller
         ]);
     }
 }
+

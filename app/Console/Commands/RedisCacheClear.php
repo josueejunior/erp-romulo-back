@@ -93,3 +93,4 @@ class RedisCacheClear extends Command
         return 0;
     }
 }
+

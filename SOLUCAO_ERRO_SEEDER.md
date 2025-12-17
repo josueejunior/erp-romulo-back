@@ -76,3 +76,4 @@ Após executar as migrations, o seeder deve funcionar normalmente e criar:
 - ✅ Usuários
 - ✅ Órgão
 - ✅ Setor
+

@@ -183,3 +183,4 @@ Se quiser melhorar ainda mais:
 4. **Testes Automatizados** (opcional)
 
 Mas **nada disso é necessário** para o sistema funcionar perfeitamente! ✅
+

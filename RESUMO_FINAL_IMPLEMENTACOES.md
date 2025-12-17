@@ -64,3 +64,4 @@ php artisan tenants:migrate --force
 - ✅ Formação de preço na participação
 
 O sistema está 100% completo conforme o feedback da transcrição!
+

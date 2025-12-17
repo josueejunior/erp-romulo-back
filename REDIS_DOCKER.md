@@ -136,3 +136,4 @@ Após iniciar os containers, o Redis estará automaticamente:
 - ✅ Cacheando eventos do calendário
 
 Tudo funcionando automaticamente! 🚀
+

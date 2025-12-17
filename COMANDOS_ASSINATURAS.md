@@ -58,3 +58,4 @@ curl -H "Authorization: Bearer TOKEN" \
 ### Planos não aparecem
 - Executar seeder: `php artisan db:seed --class=PlanosSeeder`
 - Verificar se planos estão ativos na tabela `planos`
+

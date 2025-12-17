@@ -30,3 +30,4 @@ php artisan db:seed --class=PlanosSeeder
 - Os planos são criados no **banco central** (não tenant)
 - Podem ser visualizados sem autenticação
 - Podem ser contratados por qualquer tenant
+

@@ -237,3 +237,4 @@ Possíveis melhorias menores:
 - Garantir que atestado de capacidade técnica está visível no formulário
 
 **Sistema está pronto para uso!** 🚀
+

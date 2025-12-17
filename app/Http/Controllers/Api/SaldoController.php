@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\BaseApiController;
 use App\Services\SaldoService;
 use App\Services\RedisService;
 use App\Models\Processo;
 use Illuminate\Http\Request;
 
-class SaldoController extends Controller
+class SaldoController extends BaseApiController
 {
     protected SaldoService $saldoService;
 
@@ -120,6 +120,7 @@ class SaldoController extends Controller
         ]);
     }
 }
+
 
 
 

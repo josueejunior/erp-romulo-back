@@ -78,3 +78,4 @@ Se ainda ocorrer, execute as migrations:
 ```bash
 docker-compose exec app php artisan tenants:migrate --force
 ```
+

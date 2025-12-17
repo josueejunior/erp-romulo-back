@@ -67,3 +67,4 @@ Route::middleware(['auth:sanctum', 'tenancy', 'subscription'])->group(function (
 ⏳ **Controllers de API** - A fazer
 ⏳ **Interface frontend** - A fazer
 ⏳ **Integração pagamento** - Futuro
+

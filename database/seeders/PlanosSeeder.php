@@ -80,3 +80,4 @@ class PlanosSeeder extends Seeder
         $this->command->info('Planos criados com sucesso!');
     }
 }
+

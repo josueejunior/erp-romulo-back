@@ -80,3 +80,4 @@ Agora **TODOS** os módulos estão isolados por empresa:
 - ✅ Calendário (filtrado por processos da empresa)
 
 Cada empresa só vê e gerencia seus próprios dados!
+

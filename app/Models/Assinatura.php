@@ -110,3 +110,4 @@ class Assinatura extends Model
         $this->save();
     }
 }
+

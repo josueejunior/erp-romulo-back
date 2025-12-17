@@ -31,3 +31,4 @@ class ValidarValorTotal implements Rule
         return 'O custo total deve ser igual à soma de custo_produto + custo_frete.';
     }
 }
+

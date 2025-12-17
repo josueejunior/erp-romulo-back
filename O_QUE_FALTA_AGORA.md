@@ -154,3 +154,4 @@ Há alguns TODOs no código que podem ser implementados:
    - TODO: Implementar quando tiver custos indiretos alocados por item
 
 **Nota**: Esses TODOs são para funcionalidades futuras, não são críticos para o funcionamento atual.
+

@@ -76,3 +76,4 @@ O erro `ContainerConfig` geralmente acontece quando:
 - Há conflito de volumes ou configurações
 
 A solução mais simples é remover o container antigo e recriar.
+

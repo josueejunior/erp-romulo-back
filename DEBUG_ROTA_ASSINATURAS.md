@@ -89,3 +89,4 @@ O método `atual()` agora tem logs para debug:
 - Headers da requisição
 
 Verifique `storage/logs/laravel.log` após fazer a requisição.
+

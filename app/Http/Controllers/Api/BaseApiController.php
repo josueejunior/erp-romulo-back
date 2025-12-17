@@ -34,3 +34,4 @@ abstract class BaseApiController extends Controller
         return $empresa;
     }
 }
+

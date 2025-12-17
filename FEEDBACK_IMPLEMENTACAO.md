@@ -80,3 +80,4 @@ Os seguintes campos já estão implementados no modelo `Processo`:
 2. **Documentos**: Sistema já tem estrutura de documentos de habilitação
 3. **Valor Arrematado**: Precisa ser adicionado na disputa
 4. **Custos Indiretos**: Módulo existe, precisa verificar se está no menu
+

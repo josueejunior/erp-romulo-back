@@ -148,3 +148,4 @@ public function store(Request $request)
 - Grace period de 7 dias (configurável)
 - Limites são verificados antes de criar recursos
 - Mensagens de erro são amigáveis e informativas
+

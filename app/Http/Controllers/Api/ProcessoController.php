@@ -88,9 +88,12 @@ class ProcessoController extends BaseApiController
                 $q->where('numero_modalidade', 'like', "%{$request->search}%")
                   ->orWhere('numero_processo_administrativo', 'like', "%{$request->search}%")
                   ->orWhere('objeto_resumido', 'like', "%{$request->search}%")
-                  ->orWhereHas('orgao', function($q2) use ($request) {
-                      $q2->where('uasg', 'like', "%{$request->search}%")
-                         ->orWhere('razao_social', 'like', "%{$request->search}%");
+                  ->orWhereHas('orgao', function($q2) use ($request, $empresa) {
+                      $q2->where('empresa_id', $empresa->id)
+                         ->where(function($q3) use ($request) {
+                             $q3->where('uasg', 'like', "%{$request->search}%")
+                                ->orWhere('razao_social', 'like', "%{$request->search}%");
+                         });
                   });
             });
         }
@@ -221,9 +224,39 @@ class ProcessoController extends BaseApiController
             }
         }
 
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
         $validated = $request->validate([
-            'orgao_id' => 'required|exists:orgaos,id',
-            'setor_id' => 'nullable|exists:setors,id',
+            'orgao_id' => [
+                'required',
+                'exists:orgaos,id',
+                function ($attribute, $value, $fail) use ($empresa) {
+                    $orgao = \App\Models\Orgao::where('id', $value)
+                        ->where('empresa_id', $empresa->id)
+                        ->first();
+                    if (!$orgao) {
+                        $fail('O órgão selecionado não pertence à empresa ativa.');
+                    }
+                },
+            ],
+            'setor_id' => [
+                'nullable',
+                'exists:setors,id',
+                function ($attribute, $value, $fail) use ($empresa, $request) {
+                    if ($value) {
+                        $setor = \App\Models\Setor::where('id', $value)
+                            ->where('empresa_id', $empresa->id)
+                            ->first();
+                        if (!$setor) {
+                            $fail('O setor selecionado não pertence à empresa ativa.');
+                        }
+                        // Validar que o setor pertence ao órgão informado
+                        if ($request->orgao_id && $setor->orgao_id != $request->orgao_id) {
+                            $fail('O setor selecionado não pertence ao órgão informado.');
+                        }
+                    }
+                },
+            ],
             'modalidade' => 'required|in:dispensa,pregao',
             'numero_modalidade' => 'required|string',
             'numero_processo_administrativo' => 'nullable|string',
@@ -242,8 +275,6 @@ class ProcessoController extends BaseApiController
             'status_participacao' => 'nullable|string|in:normal,adiado,suspenso,cancelado',
             'observacoes' => 'nullable|string',
         ]);
-
-        $empresa = $this->getEmpresaAtivaOrFail();
         $validated['empresa_id'] = $empresa->id;
         $validated['status'] = 'participacao';
         $validated['srp'] = $request->has('srp');
@@ -308,8 +339,36 @@ class ProcessoController extends BaseApiController
         $this->authorize('update', $processo);
 
         $validated = $request->validate([
-            'orgao_id' => 'required|exists:orgaos,id',
-            'setor_id' => 'nullable|exists:setors,id',
+            'orgao_id' => [
+                'required',
+                'exists:orgaos,id',
+                function ($attribute, $value, $fail) use ($empresa) {
+                    $orgao = \App\Models\Orgao::where('id', $value)
+                        ->where('empresa_id', $empresa->id)
+                        ->first();
+                    if (!$orgao) {
+                        $fail('O órgão selecionado não pertence à empresa ativa.');
+                    }
+                },
+            ],
+            'setor_id' => [
+                'nullable',
+                'exists:setors,id',
+                function ($attribute, $value, $fail) use ($empresa, $request) {
+                    if ($value) {
+                        $setor = \App\Models\Setor::where('id', $value)
+                            ->where('empresa_id', $empresa->id)
+                            ->first();
+                        if (!$setor) {
+                            $fail('O setor selecionado não pertence à empresa ativa.');
+                        }
+                        // Validar que o setor pertence ao órgão informado
+                        if ($request->orgao_id && $setor->orgao_id != $request->orgao_id) {
+                            $fail('O setor selecionado não pertence ao órgão informado.');
+                        }
+                    }
+                },
+            ],
             'modalidade' => 'required|in:dispensa,pregao',
             'numero_modalidade' => 'required|string',
             'numero_processo_administrativo' => 'nullable|string',
@@ -383,8 +442,10 @@ class ProcessoController extends BaseApiController
      */
     public function exportar(Request $request)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
         // Aplicar os mesmos filtros do index
-        $query = Processo::with([
+        $query = Processo::where('empresa_id', $empresa->id)->with([
             'orgao',
             'setor',
             'itens',
@@ -402,6 +463,17 @@ class ProcessoController extends BaseApiController
 
         // Filtro de órgão
         if ($request->orgao_id) {
+            // Validar que o órgão pertence à empresa
+            $orgao = \App\Models\Orgao::where('id', $request->orgao_id)
+                ->where('empresa_id', $empresa->id)
+                ->first();
+            
+            if (!$orgao) {
+                return response()->json([
+                    'message' => 'Órgão não encontrado ou não pertence à empresa ativa.'
+                ], 404);
+            }
+            
             $query->where('orgao_id', $request->orgao_id);
         }
 
@@ -436,9 +508,12 @@ class ProcessoController extends BaseApiController
                 $q->where('numero_modalidade', 'like', "%{$request->search}%")
                   ->orWhere('numero_processo_administrativo', 'like', "%{$request->search}%")
                   ->orWhere('objeto_resumido', 'like', "%{$request->search}%")
-                  ->orWhereHas('orgao', function($q2) use ($request) {
-                      $q2->where('uasg', 'like', "%{$request->search}%")
-                         ->orWhere('razao_social', 'like', "%{$request->search}%");
+                  ->orWhereHas('orgao', function($q2) use ($request, $empresa) {
+                      $q2->where('empresa_id', $empresa->id)
+                         ->where(function($q3) use ($request) {
+                             $q3->where('uasg', 'like', "%{$request->search}%")
+                                ->orWhere('razao_social', 'like', "%{$request->search}%");
+                         });
                   });
             });
         }

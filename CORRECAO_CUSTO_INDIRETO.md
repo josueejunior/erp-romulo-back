@@ -56,3 +56,4 @@ Agora, ao criar um novo custo indireto:
 1. O `empresa_id` será automaticamente atribuído
 2. O registro aparecerá na listagem filtrada por empresa
 3. O registro só será visível para a empresa que o criou
+

@@ -62,3 +62,4 @@ class Plano extends Model
         return $this->limite_usuarios === null;
     }
 }
+

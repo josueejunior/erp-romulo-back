@@ -273,3 +273,4 @@ Route::middleware(['auth:sanctum', 'tenancy', 'rate.limit.redis:60,60'])->group(
 - [x] Criar middleware de rate limiting
 - [x] Criar comando artisan para limpeza de cache
 - [x] Documentação completa
+

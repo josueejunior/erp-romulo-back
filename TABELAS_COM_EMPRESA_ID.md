@@ -56,3 +56,4 @@ php artisan tenants:migrate --force
 ```
 
 Isso adicionará `empresa_id` em todas as tabelas listadas acima.
+

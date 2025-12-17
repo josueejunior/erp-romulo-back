@@ -155,3 +155,4 @@ O sistema agora está **mais robusto e confiável** com:
 - ✅ **Cálculos automáticos** (booted methods)
 
 **Status**: Sistema funcional → Sistema robusto e profissional ✅
+

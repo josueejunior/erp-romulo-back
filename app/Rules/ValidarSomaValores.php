@@ -43,3 +43,4 @@ class ValidarSomaValores implements Rule
         return "O {$this->campoTotal} ({$this->totalEsperado}) deve ser igual à soma dos valores (" . number_format($soma, 2, ',', '.') . ").";
     }
 }
+

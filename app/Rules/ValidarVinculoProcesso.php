@@ -50,3 +50,4 @@ class ValidarVinculoProcesso implements Rule
         return "O {$tipoLabel} selecionado não pertence a este processo.";
     }
 }
+

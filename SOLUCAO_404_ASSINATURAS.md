@@ -98,3 +98,4 @@ php artisan db:seed --class=PlanosSeeder
 ```
 
 Isso criará os 3 planos padrão no banco central.
+

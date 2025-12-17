@@ -31,3 +31,4 @@ class PlanoController extends Controller
         return response()->json($plano);
     }
 }
+

@@ -40,3 +40,4 @@ class Transportadora extends Model
         return $this->belongsTo(Fornecedor::class);
     }
 }
+

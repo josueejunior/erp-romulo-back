@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\BaseApiController;
 use App\Models\Processo;
 use App\Models\ProcessoItem;
 use App\Services\DisputaService;
@@ -10,7 +10,7 @@ use App\Services\ProcessoStatusService;
 use App\Helpers\PermissionHelper;
 use Illuminate\Http\Request;
 
-class JulgamentoController extends Controller
+class JulgamentoController extends BaseApiController
 {
     protected DisputaService $disputaService;
     protected ProcessoStatusService $statusService;

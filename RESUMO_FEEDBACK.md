@@ -58,3 +58,4 @@
 - Sistema está bem estruturado
 - Maioria das funcionalidades já existe no backend
 - Foco principal: melhorar frontend e adicionar campos faltantes
+

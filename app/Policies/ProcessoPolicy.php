@@ -92,3 +92,4 @@ class ProcessoPolicy
         return PermissionHelper::canMarkProcessStatus();
     }
 }
+

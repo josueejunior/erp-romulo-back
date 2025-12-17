@@ -89,3 +89,4 @@ class TenantMigrateRollback extends Command
         return Tenant::all();
     }
 }
+

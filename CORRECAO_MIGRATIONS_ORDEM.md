@@ -48,3 +48,4 @@ As migrations devem executar sem erros, mesmo que a ordem não seja a ideal.
 ## ⚠️ Nota
 
 A migration `2025_01_21_000001_create_audit_logs_table.php` não precisa de correção porque ela **cria** a tabela, não altera uma existente.
+

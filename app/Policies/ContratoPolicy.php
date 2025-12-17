@@ -62,3 +62,4 @@ class ContratoPolicy
         return PermissionHelper::canEditProcess();
     }
 }
+

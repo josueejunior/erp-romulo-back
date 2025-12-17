@@ -57,3 +57,4 @@ class RateLimitRedis
         return "rate_limit:{$ip}:{$method}:{$endpoint}";
     }
 }
+

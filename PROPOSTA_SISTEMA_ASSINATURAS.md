@@ -233,3 +233,4 @@ Se não: retorna erro 403
 2. **Downgrade**: O que fazer com dados que excedem o novo plano?
 3. **Backup**: Manter dados mesmo após cancelamento (soft delete)
 4. **Notificações**: Avisar antes do vencimento (7, 3, 1 dia antes)
+

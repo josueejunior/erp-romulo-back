@@ -34,15 +34,29 @@ class ContratoController extends BaseApiController
                       $p->where('numero_modalidade', 'like', "%{$request->busca}%")
                         ->orWhere('numero_processo_administrativo', 'like', "%{$request->busca}%");
                   })
-                  ->orWhereHas('processo.orgao', function($o) use ($request) {
-                      $o->where('razao_social', 'like', "%{$request->busca}%")
-                        ->orWhere('uasg', 'like', "%{$request->busca}%");
+                  ->orWhereHas('processo.orgao', function($o) use ($request, $empresa) {
+                      $o->where('empresa_id', $empresa->id)
+                        ->where(function($q) use ($request) {
+                            $q->where('razao_social', 'like', "%{$request->busca}%")
+                              ->orWhere('uasg', 'like', "%{$request->busca}%");
+                        });
                   });
             });
         }
 
         // Filtro: órgão
         if ($request->orgao_id) {
+            // Validar que o órgão pertence à empresa
+            $orgao = \App\Models\Orgao::where('id', $request->orgao_id)
+                ->where('empresa_id', $empresa->id)
+                ->first();
+            
+            if (!$orgao) {
+                return response()->json([
+                    'message' => 'Órgão não encontrado ou não pertence à empresa ativa.'
+                ], 404);
+            }
+            
             $query->whereHas('processo', function($q) use ($request) {
                 $q->where('orgao_id', $request->orgao_id);
             });

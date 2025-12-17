@@ -118,3 +118,4 @@ php artisan db:seed
 ✅ **Ao trocar empresa, apenas dados daquela empresa aparecem**
 ✅ **Todos os dados têm vínculo com empresa**
 ✅ **Sistema pronto para testes do zero**
+

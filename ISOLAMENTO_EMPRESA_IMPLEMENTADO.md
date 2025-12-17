@@ -82,3 +82,4 @@
 - **Todos os controllers principais já filtram por empresa_id**
 - **Ao criar novos registros, empresa_id é definido automaticamente**
 - **Ao trocar empresa, apenas dados da empresa ativa são exibidos**
+

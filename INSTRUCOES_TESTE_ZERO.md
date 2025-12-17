@@ -101,3 +101,4 @@ Ao trocar empresa, APENAS devem aparecer:
 - [ ] Exclusão funciona (documentos, fornecedores, etc.)
 - [ ] Dashboard mostra apenas dados da empresa ativa
 - [ ] Calendário mostra apenas processos da empresa ativa
+

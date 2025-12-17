@@ -99,3 +99,4 @@ class AuditObserver
         return str_replace('_', ' ', Str::snake($className));
     }
 }
+

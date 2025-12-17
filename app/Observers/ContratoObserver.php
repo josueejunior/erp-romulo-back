@@ -21,3 +21,4 @@ class ContratoObserver
         // Se houver processo relacionado, pode precisar atualizar algo
     }
 }
+

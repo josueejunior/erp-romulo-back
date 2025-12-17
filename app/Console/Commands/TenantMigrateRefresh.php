@@ -96,3 +96,4 @@ class TenantMigrateRefresh extends Command
         return Tenant::all();
     }
 }
+
