@@ -40,7 +40,10 @@ class DatabaseSeeder extends Seeder
                 
                 // Executar migrations
                 tenancy()->initialize($tenant);
-                \Artisan::call('tenants:migrate', ['--tenants' => $tenant->id]);
+                \Artisan::call('migrate', [
+                    '--path' => 'database/migrations/tenant',
+                    '--force' => true
+                ]);
                 tenancy()->end();
                 $this->command->info('Migrations do tenant executadas com sucesso');
             } catch (\Exception $e) {
@@ -59,6 +62,21 @@ class DatabaseSeeder extends Seeder
             $this->command->info('Tenant criado: ' . $tenant->razao_social);
         } else {
             $this->command->info('Tenant já existe: ' . $tenant->razao_social);
+            
+            // Garantir que as migrations estejam executadas mesmo se o tenant já existir
+            try {
+                tenancy()->initialize($tenant);
+                $this->command->info('Verificando migrations do tenant...');
+                \Artisan::call('migrate', [
+                    '--path' => 'database/migrations/tenant',
+                    '--force' => true
+                ]);
+                tenancy()->end();
+                $this->command->info('Migrations do tenant verificadas/executadas');
+            } catch (\Exception $e) {
+                tenancy()->end();
+                $this->command->warn('Aviso ao verificar migrations: ' . $e->getMessage());
+            }
         }
 
         // Inicializar o contexto do tenant
