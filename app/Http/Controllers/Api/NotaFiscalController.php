@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\BaseApiController;
 use App\Models\Processo;
 use App\Models\NotaFiscal;
 use App\Rules\ValidarVinculoProcesso;
@@ -11,11 +11,19 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 
-class NotaFiscalController extends Controller
+class NotaFiscalController extends BaseApiController
 {
     public function index(Processo $processo)
     {
-        $notasFiscais = $processo->notasFiscais()
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
+        $notasFiscais = $processo->notasFiscais()->where('empresa_id', $empresa->id)
             ->with(['empenho', 'contrato', 'autorizacaoFornecimento', 'fornecedor'])
             ->get();
         return response()->json($notasFiscais);
@@ -23,6 +31,14 @@ class NotaFiscalController extends Controller
 
     public function store(Request $request, Processo $processo)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
         if (!$processo->isEmExecucao()) {
             return response()->json([
                 'message' => 'Notas fiscais só podem ser criadas para processos em execução.'
@@ -96,6 +112,7 @@ class NotaFiscalController extends Controller
                 $validated['arquivo'] = $nomeArquivo;
             }
 
+            $validated['empresa_id'] = $empresa->id;
             $notaFiscal = NotaFiscal::create($validated);
             
             // Atualizar saldo do documento vinculado (será feito pelo Observer também)
@@ -117,6 +134,12 @@ class NotaFiscalController extends Controller
 
     public function show(Processo $processo, NotaFiscal $notaFiscal)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id || $notaFiscal->empresa_id !== $empresa->id) {
+            return response()->json(['message' => 'Nota fiscal não encontrada ou não pertence à empresa ativa.'], 404);
+        }
+        
         if ($notaFiscal->processo_id !== $processo->id) {
             return response()->json(['message' => 'Nota fiscal não pertence a este processo.'], 404);
         }
@@ -127,6 +150,12 @@ class NotaFiscalController extends Controller
 
     public function update(Request $request, Processo $processo, NotaFiscal $notaFiscal)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id || $notaFiscal->empresa_id !== $empresa->id) {
+            return response()->json(['message' => 'Nota fiscal não encontrada ou não pertence à empresa ativa.'], 404);
+        }
+        
         if ($notaFiscal->processo_id !== $processo->id) {
             return response()->json(['message' => 'Nota fiscal não pertence a este processo.'], 404);
         }
@@ -207,6 +236,12 @@ class NotaFiscalController extends Controller
 
     public function destroy(Processo $processo, NotaFiscal $notaFiscal)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id || $notaFiscal->empresa_id !== $empresa->id) {
+            return response()->json(['message' => 'Nota fiscal não encontrada ou não pertence à empresa ativa.'], 404);
+        }
+        
         if ($notaFiscal->processo_id !== $processo->id) {
             return response()->json(['message' => 'Nota fiscal não pertence a este processo.'], 404);
         }
@@ -215,7 +250,7 @@ class NotaFiscalController extends Controller
             Storage::disk('public')->delete('notas-fiscais/' . $notaFiscal->arquivo);
         }
 
-        $notaFiscal->delete();
+        $notaFiscal->forceDelete();
 
         return response()->json(null, 204);
     }

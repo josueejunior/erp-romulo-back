@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\BaseApiController;
 use App\Http\Resources\ProcessoResource;
 use App\Models\Processo;
 use App\Models\Orgao;
@@ -13,7 +13,7 @@ use App\Helpers\PermissionHelper;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
-class ProcessoController extends Controller
+class ProcessoController extends BaseApiController
 {
     protected ProcessoStatusService $statusService;
     protected ProcessoValidationService $validationService;
@@ -25,7 +25,9 @@ class ProcessoController extends Controller
     }
     public function index(Request $request)
     {
-        $query = Processo::with([
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        $query = Processo::where('empresa_id', $empresa->id)->with([
             'orgao',
             'setor',
             'itens.formacoesPreco',
@@ -122,7 +124,8 @@ class ProcessoController extends Controller
      */
     public function resumo(Request $request)
     {
-        $query = Processo::query();
+        $empresa = $this->getEmpresaAtivaOrFail();
+        $query = Processo::where('empresa_id', $empresa->id);
 
         // Aplicar mesmos filtros da listagem (exceto paginação)
         if ($request->modalidade) {
@@ -240,7 +243,8 @@ class ProcessoController extends Controller
             'observacoes' => 'nullable|string',
         ]);
 
-        // Com Tenancy, não precisamos mais de empresa_id - cada tenant tem seu próprio banco
+        $empresa = $this->getEmpresaAtivaOrFail();
+        $validated['empresa_id'] = $empresa->id;
         $validated['status'] = 'participacao';
         $validated['srp'] = $request->has('srp');
 
@@ -268,6 +272,14 @@ class ProcessoController extends Controller
 
     public function show(Processo $processo)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
         $processo->load([
             'orgao',
             'setor',
@@ -284,6 +296,14 @@ class ProcessoController extends Controller
 
     public function update(Request $request, Processo $processo)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
         // Verificar permissão usando Policy
         $this->authorize('update', $processo);
 
@@ -339,13 +359,21 @@ class ProcessoController extends Controller
 
     public function destroy(Processo $processo)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
         if ($processo->isEmExecucao()) {
             return response()->json([
                 'message' => 'Processos em execução não podem ser excluídos.'
             ], 403);
         }
 
-        $processo->delete();
+        $processo->forceDelete();
 
         return response()->json(null, 204);
     }

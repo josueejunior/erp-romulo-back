@@ -14,6 +14,7 @@ class AutorizacaoFornecimento extends Model
     protected $table = 'autorizacoes_fornecimento';
 
     protected $fillable = [
+        'empresa_id',
         'processo_id',
         'contrato_id',
         'numero',
@@ -45,6 +46,11 @@ class AutorizacaoFornecimento extends Model
             'valor_empenhado' => 'decimal:2',
             'vigente' => 'boolean',
         ];
+    }
+
+    public function empresa(): BelongsTo
+    {
+        return $this->belongsTo(Empresa::class);
     }
 
     public function processo(): BelongsTo

@@ -2,35 +2,14 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\BaseApiController;
 use App\Models\DocumentoHabilitacao;
-use App\Models\Empresa;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use App\Helpers\PermissionHelper;
 
-class DocumentoHabilitacaoController extends Controller
+class DocumentoHabilitacaoController extends BaseApiController
 {
-    protected function getEmpresaAtiva(): ?Empresa
-    {
-        $user = auth()->user();
-        if (!$user || !$user->empresa_ativa_id) {
-            return null;
-        }
-
-        return Empresa::find($user->empresa_ativa_id);
-    }
-
-    protected function getEmpresaAtivaOrFail(): Empresa
-    {
-        $empresa = $this->getEmpresaAtiva();
-        
-        if (!$empresa) {
-            abort(403, 'Nenhuma empresa ativa selecionada.');
-        }
-
-        return $empresa;
-    }
 
     public function index(Request $request)
     {

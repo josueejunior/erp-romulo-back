@@ -45,6 +45,20 @@ return new class extends Migration
                 $table->foreignId('empresa_id')->nullable()->after('id')->constrained('empresas')->onDelete('cascade');
             });
         }
+
+        // Adicionar empresa_id em autorizacoes_fornecimento
+        if (!Schema::hasColumn('autorizacoes_fornecimento', 'empresa_id')) {
+            Schema::table('autorizacoes_fornecimento', function (Blueprint $table) {
+                $table->foreignId('empresa_id')->nullable()->after('id')->constrained('empresas')->onDelete('cascade');
+            });
+        }
+
+        // Adicionar empresa_id em fornecedores
+        if (!Schema::hasColumn('fornecedores', 'empresa_id')) {
+            Schema::table('fornecedores', function (Blueprint $table) {
+                $table->foreignId('empresa_id')->nullable()->after('id')->constrained('empresas')->onDelete('cascade');
+            });
+        }
     }
 
     /**
@@ -52,6 +66,20 @@ return new class extends Migration
      */
     public function down(): void
     {
+        Schema::table('fornecedores', function (Blueprint $table) {
+            if (Schema::hasColumn('fornecedores', 'empresa_id')) {
+                $table->dropForeign(['empresa_id']);
+                $table->dropColumn('empresa_id');
+            }
+        });
+
+        Schema::table('autorizacoes_fornecimento', function (Blueprint $table) {
+            if (Schema::hasColumn('autorizacoes_fornecimento', 'empresa_id')) {
+                $table->dropForeign(['empresa_id']);
+                $table->dropColumn('empresa_id');
+            }
+        });
+
         Schema::table('notas_fiscais', function (Blueprint $table) {
             if (Schema::hasColumn('notas_fiscais', 'empresa_id')) {
                 $table->dropForeign(['empresa_id']);

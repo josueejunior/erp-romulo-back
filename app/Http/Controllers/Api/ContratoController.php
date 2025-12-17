@@ -2,14 +2,14 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\BaseApiController;
 use App\Models\Processo;
 use App\Models\Contrato;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Carbon\Carbon;
 
-class ContratoController extends Controller
+class ContratoController extends BaseApiController
 {
     /**
      * Lista todos os contratos (não apenas de um processo)
@@ -17,7 +17,9 @@ class ContratoController extends Controller
      */
     public function listarTodos(Request $request)
     {
-        $query = Contrato::with([
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        $query = Contrato::where('empresa_id', $empresa->id)->with([
             'processo.orgao',
             'processo.setor',
             'empenhos',
@@ -190,12 +192,28 @@ class ContratoController extends Controller
 
     public function index(Processo $processo)
     {
-        $contratos = $processo->contratos()->with(['empenhos', 'autorizacoesFornecimento'])->get();
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
+        $contratos = $processo->contratos()->where('empresa_id', $empresa->id)->with(['empenhos', 'autorizacoesFornecimento'])->get();
         return response()->json($contratos);
     }
 
     public function store(Request $request, Processo $processo)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
         // Verificar permissão usando Policy
         $this->authorize('create', [\App\Models\Contrato::class, $processo]);
 
@@ -212,6 +230,7 @@ class ContratoController extends Controller
             'numero_cte' => 'nullable|string|max:255',
         ]);
 
+        $validated['empresa_id'] = $empresa->id;
         $validated['processo_id'] = $processo->id;
         $validated['saldo'] = $validated['valor_total'];
         
@@ -242,6 +261,12 @@ class ContratoController extends Controller
 
     public function show(Processo $processo, Contrato $contrato)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id || $contrato->empresa_id !== $empresa->id) {
+            return response()->json(['message' => 'Contrato não encontrado ou não pertence à empresa ativa.'], 404);
+        }
+        
         if ($contrato->processo_id !== $processo->id) {
             return response()->json(['message' => 'Contrato não pertence a este processo.'], 404);
         }
@@ -252,6 +277,12 @@ class ContratoController extends Controller
 
     public function update(Request $request, Processo $processo, Contrato $contrato)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id || $contrato->empresa_id !== $empresa->id) {
+            return response()->json(['message' => 'Contrato não encontrado ou não pertence à empresa ativa.'], 404);
+        }
+        
         if ($contrato->processo_id !== $processo->id) {
             return response()->json(['message' => 'Contrato não pertence a este processo.'], 404);
         }
@@ -303,6 +334,12 @@ class ContratoController extends Controller
 
     public function destroy(Processo $processo, Contrato $contrato)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id || $contrato->empresa_id !== $empresa->id) {
+            return response()->json(['message' => 'Contrato não encontrado ou não pertence à empresa ativa.'], 404);
+        }
+        
         if ($contrato->processo_id !== $processo->id) {
             return response()->json(['message' => 'Contrato não pertence a este processo.'], 404);
         }
@@ -316,7 +353,7 @@ class ContratoController extends Controller
             ], 403);
         }
 
-        $contrato->delete();
+        $contrato->forceDelete();
 
         return response()->json(null, 204);
     }

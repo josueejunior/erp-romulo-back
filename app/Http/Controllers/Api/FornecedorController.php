@@ -2,17 +2,18 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\BaseApiController;
 use App\Http\Resources\FornecedorResource;
 use App\Models\Fornecedor;
 use Illuminate\Http\Request;
 use App\Helpers\PermissionHelper;
 
-class FornecedorController extends Controller
+class FornecedorController extends BaseApiController
 {
     public function index(Request $request)
     {
-        $query = Fornecedor::query();
+        $empresa = $this->getEmpresaAtivaOrFail();
+        $query = Fornecedor::where('empresa_id', $empresa->id);
 
         if ($request->search) {
             $query->where(function($q) use ($request) {
@@ -39,6 +40,8 @@ class FornecedorController extends Controller
             ], 403);
         }
 
+        $empresa = $this->getEmpresaAtivaOrFail();
+
         $validated = $request->validate([
             'razao_social' => 'required|string|max:255',
             'cnpj' => 'nullable|string|max:18',
@@ -53,6 +56,7 @@ class FornecedorController extends Controller
             'observacoes' => 'nullable|string',
         ]);
 
+        $validated['empresa_id'] = $empresa->id;
         $fornecedor = Fornecedor::create($validated);
 
         return new FornecedorResource($fornecedor);
@@ -60,6 +64,14 @@ class FornecedorController extends Controller
 
     public function show(Fornecedor $fornecedor)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($fornecedor->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Fornecedor não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
         return new FornecedorResource($fornecedor);
     }
 
@@ -69,6 +81,14 @@ class FornecedorController extends Controller
             return response()->json([
                 'message' => 'Você não tem permissão para editar fornecedores.',
             ], 403);
+        }
+
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($fornecedor->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Fornecedor não encontrado ou não pertence à empresa ativa.'
+            ], 404);
         }
 
         $validated = $request->validate([
@@ -98,13 +118,21 @@ class FornecedorController extends Controller
             ], 403);
         }
 
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($fornecedor->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Fornecedor não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+
         if ($fornecedor->orcamentos()->count() > 0) {
             return response()->json([
                 'message' => 'Não é possível excluir um fornecedor que possui orçamentos vinculados.'
             ], 403);
         }
 
-        $fornecedor->delete();
+        $fornecedor->forceDelete();
 
         return response()->json(null, 204);
     }

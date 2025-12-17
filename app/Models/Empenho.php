@@ -12,6 +12,7 @@ class Empenho extends Model
     use SoftDeletes;
 
     protected $fillable = [
+        'empresa_id',
         'processo_id',
         'contrato_id',
         'autorizacao_fornecimento_id',
@@ -37,6 +38,11 @@ class Empenho extends Model
             'valor' => 'decimal:2',
             'concluido' => 'boolean',
         ];
+    }
+
+    public function empresa(): BelongsTo
+    {
+        return $this->belongsTo(Empresa::class);
     }
 
     public function processo(): BelongsTo

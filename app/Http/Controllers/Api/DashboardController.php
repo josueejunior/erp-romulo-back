@@ -2,35 +2,38 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\BaseApiController;
 use App\Models\Processo;
 use App\Models\DocumentoHabilitacao;
 use App\Services\RedisService;
 use Illuminate\Http\Request;
 
-class DashboardController extends Controller
+class DashboardController extends BaseApiController
 {
     public function index()
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
         $tenantId = tenancy()->tenant?->id;
         
-        // Tentar obter do cache primeiro
+        // Tentar obter do cache primeiro (com empresa_id no cache key)
         if ($tenantId && RedisService::isAvailable()) {
-            $cached = RedisService::getDashboard($tenantId);
+            $cacheKey = "dashboard_{$tenantId}_{$empresa->id}";
+            $cached = RedisService::get($cacheKey);
             if ($cached !== null) {
                 return response()->json($cached);
             }
         }
 
-        $processosParticipacao = Processo::where('status', 'participacao')->count();
-        $processosJulgamento = Processo::where('status', 'julgamento_habilitacao')->count();
-        $processosExecucao = Processo::where('status', 'execucao')->count();
-        $processosPagamento = Processo::where('status', 'pagamento')->count();
-        $processosEncerramento = Processo::where('status', 'encerramento')->count();
-        $processosPerdidos = Processo::where('status', 'perdido')->count();
-        $processosArquivados = Processo::where('status', 'arquivado')->count();
+        $processosParticipacao = Processo::where('empresa_id', $empresa->id)->where('status', 'participacao')->count();
+        $processosJulgamento = Processo::where('empresa_id', $empresa->id)->where('status', 'julgamento_habilitacao')->count();
+        $processosExecucao = Processo::where('empresa_id', $empresa->id)->where('status', 'execucao')->count();
+        $processosPagamento = Processo::where('empresa_id', $empresa->id)->where('status', 'pagamento')->count();
+        $processosEncerramento = Processo::where('empresa_id', $empresa->id)->where('status', 'encerramento')->count();
+        $processosPerdidos = Processo::where('empresa_id', $empresa->id)->where('status', 'perdido')->count();
+        $processosArquivados = Processo::where('empresa_id', $empresa->id)->where('status', 'arquivado')->count();
 
-        $proximasDisputas = Processo::whereIn('status', ['participacao', 'julgamento_habilitacao'])
+        $proximasDisputas = Processo::where('empresa_id', $empresa->id)
+            ->whereIn('status', ['participacao', 'julgamento_habilitacao'])
             ->where('data_hora_sessao_publica', '>=', now())
             ->orderBy('data_hora_sessao_publica', 'asc')
             ->limit(5)
@@ -45,19 +48,22 @@ class DashboardController extends Controller
                 ];
             });
 
-        $documentosVencendo = DocumentoHabilitacao::whereNotNull('data_validade')
+        $documentosVencendo = DocumentoHabilitacao::where('empresa_id', $empresa->id)
+            ->whereNotNull('data_validade')
             ->where('data_validade', '>=', now())
             ->where('data_validade', '<=', now()->addDays(30))
             ->orderBy('data_validade', 'asc')
             ->get(['id', 'tipo', 'numero', 'data_validade']);
 
-        $documentosVencidos = DocumentoHabilitacao::whereNotNull('data_validade')
+        $documentosVencidos = DocumentoHabilitacao::where('empresa_id', $empresa->id)
+            ->whereNotNull('data_validade')
             ->where('data_validade', '<', now())
             ->orderBy('data_validade', 'desc')
             ->limit(5)
             ->get(['id', 'tipo', 'numero', 'data_validade']);
 
-        $documentosUrgentes = DocumentoHabilitacao::whereNotNull('data_validade')
+        $documentosUrgentes = DocumentoHabilitacao::where('empresa_id', $empresa->id)
+            ->whereNotNull('data_validade')
             ->where('data_validade', '>=', now())
             ->where('data_validade', '<=', now()->addDays(7))
             ->count();
@@ -79,9 +85,10 @@ class DashboardController extends Controller
             'documentos_urgentes' => $documentosUrgentes,
         ];
 
-        // Salvar no cache Redis se disponível
+        // Salvar no cache Redis se disponível (com empresa_id no cache key)
         if ($tenantId && RedisService::isAvailable()) {
-            RedisService::cacheDashboard($tenantId, $data, 300); // Cache por 5 minutos
+            $cacheKey = "dashboard_{$tenantId}_{$empresa->id}";
+            RedisService::set($cacheKey, $data, 300); // Cache por 5 minutos
         }
 
         return response()->json($data);

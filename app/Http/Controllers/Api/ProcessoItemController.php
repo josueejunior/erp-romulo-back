@@ -2,16 +2,24 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\BaseApiController;
 use App\Http\Resources\ProcessoItemResource;
 use App\Models\Processo;
 use App\Models\ProcessoItem;
 use Illuminate\Http\Request;
 
-class ProcessoItemController extends Controller
+class ProcessoItemController extends BaseApiController
 {
     public function index(Processo $processo)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
         $itens = $processo->itens()->with([
             'orcamentos.fornecedor',
             'orcamentos.transportadora',
@@ -31,6 +39,14 @@ class ProcessoItemController extends Controller
 
     public function store(Request $request, Processo $processo)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
         if ($processo->isEmExecucao()) {
             return response()->json([
                 'message' => 'Não é possível adicionar itens a processos em execução.'
@@ -70,6 +86,14 @@ class ProcessoItemController extends Controller
 
     public function show(Processo $processo, ProcessoItem $item)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
         if ($item->processo_id !== $processo->id) {
             return response()->json(['message' => 'Item não pertence a este processo.'], 404);
         }

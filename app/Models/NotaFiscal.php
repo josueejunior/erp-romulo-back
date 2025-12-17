@@ -13,6 +13,7 @@ class NotaFiscal extends Model
     protected $table = 'notas_fiscais';
 
     protected $fillable = [
+        'empresa_id',
         'processo_id',
         'empenho_id',
         'contrato_id',
@@ -65,6 +66,11 @@ class NotaFiscal extends Model
                 $nota->custo_total = round($produto + $frete, 2);
             }
         });
+    }
+
+    public function empresa(): BelongsTo
+    {
+        return $this->belongsTo(Empresa::class);
     }
 
     public function processo(): BelongsTo

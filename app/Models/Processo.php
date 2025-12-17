@@ -12,7 +12,7 @@ class Processo extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        // empresa_id removido - cada tenant tem seu próprio banco
+        'empresa_id',
         'orgao_id',
         'setor_id',
         'modalidade',
@@ -63,7 +63,10 @@ class Processo extends Model
         'validade_proposta_calculada',
     ];
 
-    // Relação empresa() removida - cada tenant tem seu próprio banco
+    public function empresa(): BelongsTo
+    {
+        return $this->belongsTo(Empresa::class);
+    }
 
     public function orgao(): BelongsTo
     {

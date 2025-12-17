@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\BaseApiController;
 use App\Services\CalendarioService;
 use App\Services\RedisService;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 
-class CalendarioController extends Controller
+class CalendarioController extends BaseApiController
 {
     protected CalendarioService $calendarioService;
 
@@ -22,6 +22,8 @@ class CalendarioController extends Controller
      */
     public function disputas(Request $request)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
         $dataInicio = $request->has('data_inicio') 
             ? Carbon::parse($request->data_inicio) 
             : Carbon::now()->startOfMonth();
@@ -34,9 +36,10 @@ class CalendarioController extends Controller
         $mes = $dataInicio->month;
         $ano = $dataInicio->year;
 
-        // Tentar obter do cache primeiro
+        // Tentar obter do cache primeiro (com empresa_id no cache key)
         if ($tenantId && RedisService::isAvailable()) {
-            $cached = RedisService::getCalendario($tenantId, $mes, $ano);
+            $cacheKey = "calendario_{$tenantId}_{$empresa->id}_{$mes}_{$ano}";
+            $cached = RedisService::get($cacheKey);
             if ($cached !== null) {
                 return response()->json([
                     'data' => $cached,
@@ -45,11 +48,12 @@ class CalendarioController extends Controller
             }
         }
 
-        $calendario = $this->calendarioService->getCalendarioDisputas($dataInicio, $dataFim);
+        $calendario = $this->calendarioService->getCalendarioDisputas($dataInicio, $dataFim, $empresa->id);
 
-        // Salvar no cache se disponível
+        // Salvar no cache se disponível (com empresa_id no cache key)
         if ($tenantId && RedisService::isAvailable()) {
-            RedisService::cacheCalendario($tenantId, $mes, $ano, $calendario, 1800); // Cache por 30 minutos
+            $cacheKey = "calendario_{$tenantId}_{$empresa->id}_{$mes}_{$ano}";
+            RedisService::set($cacheKey, $calendario->toArray(), 1800); // Cache por 30 minutos
         }
 
         return response()->json([
@@ -63,6 +67,8 @@ class CalendarioController extends Controller
      */
     public function julgamento(Request $request)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
         $dataInicio = $request->has('data_inicio') 
             ? Carbon::parse($request->data_inicio) 
             : null;
@@ -71,7 +77,7 @@ class CalendarioController extends Controller
             ? Carbon::parse($request->data_fim) 
             : null;
 
-        $calendario = $this->calendarioService->getCalendarioJulgamento($dataInicio, $dataFim);
+        $calendario = $this->calendarioService->getCalendarioJulgamento($dataInicio, $dataFim, $empresa->id);
 
         return response()->json([
             'data' => $calendario,
@@ -84,7 +90,8 @@ class CalendarioController extends Controller
      */
     public function avisosUrgentes()
     {
-        $avisos = $this->calendarioService->getAvisosUrgentes();
+        $empresa = $this->getEmpresaAtivaOrFail();
+        $avisos = $this->calendarioService->getAvisosUrgentes($empresa->id);
 
         return response()->json([
             'data' => $avisos,

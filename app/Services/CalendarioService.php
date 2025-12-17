@@ -13,14 +13,21 @@ class CalendarioService
      * Retorna processos para o calendário de disputas
      * Inclui preços mínimos calculados
      */
-    public function getCalendarioDisputas(?Carbon $dataInicio = null, ?Carbon $dataFim = null): Collection
+    public function getCalendarioDisputas(?Carbon $dataInicio = null, ?Carbon $dataFim = null, ?int $empresaId = null): Collection
     {
         // Se não especificado, buscar disputas dos próximos 60 dias
         $dataInicio = $dataInicio ?? Carbon::now();
         $dataFim = $dataFim ?? Carbon::now()->addDays(60);
 
         // Buscar processos em participação (incluindo pendentes: adiado, suspenso, cancelado)
-        $processos = Processo::where('status', 'participacao')
+        $query = Processo::where('status', 'participacao');
+        
+        // Filtrar por empresa se fornecido
+        if ($empresaId) {
+            $query->where('empresa_id', $empresaId);
+        }
+        
+        $processos = $query
             ->where(function($query) use ($dataInicio, $dataFim) {
                 // Processos com data de sessão no período OU processos pendentes (sem data específica)
                 $query->whereBetween('data_hora_sessao_publica', [$dataInicio, $dataFim])
@@ -195,12 +202,19 @@ class CalendarioService
      * Retorna processos para o calendário de julgamento
      * Inclui lembretes e classificações
      */
-    public function getCalendarioJulgamento(?Carbon $dataInicio = null, ?Carbon $dataFim = null): Collection
+    public function getCalendarioJulgamento(?Carbon $dataInicio = null, ?Carbon $dataFim = null, ?int $empresaId = null): Collection
     {
         $dataInicio = $dataInicio ?? Carbon::now();
         $dataFim = $dataFim ?? Carbon::now()->addDays(30);
 
-        $processos = Processo::where('status', 'julgamento_habilitacao')
+        $query = Processo::where('status', 'julgamento_habilitacao');
+        
+        // Filtrar por empresa se fornecido
+        if ($empresaId) {
+            $query->where('empresa_id', $empresaId);
+        }
+        
+        $processos = $query
             ->with([
                 'orgao',
                 'setor',
@@ -247,13 +261,20 @@ class CalendarioService
     /**
      * Retorna processos com avisos urgentes
      */
-    public function getAvisosUrgentes(): array
+    public function getAvisosUrgentes(?int $empresaId = null): array
     {
         $hoje = Carbon::now();
         $proximos3Dias = $hoje->copy()->addDays(3);
 
-        $processosDisputa = Processo::where('status', 'participacao')
-            ->whereBetween('data_hora_sessao_publica', [$hoje, $proximos3Dias])
+        $query = Processo::where('status', 'participacao')
+            ->whereBetween('data_hora_sessao_publica', [$hoje, $proximos3Dias]);
+        
+        // Filtrar por empresa se fornecido
+        if ($empresaId) {
+            $query->where('empresa_id', $empresaId);
+        }
+        
+        $processosDisputa = $query
             ->with(['orgao', 'setor'])
             ->get();
 

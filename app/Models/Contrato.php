@@ -12,6 +12,7 @@ class Contrato extends Model
     use SoftDeletes;
 
     protected $fillable = [
+        'empresa_id',
         'processo_id',
         'numero',
         'data_inicio',
@@ -43,6 +44,11 @@ class Contrato extends Model
             'valor_empenhado' => 'decimal:2',
             'vigente' => 'boolean',
         ];
+    }
+
+    public function empresa(): BelongsTo
+    {
+        return $this->belongsTo(Empresa::class);
     }
 
     public function processo(): BelongsTo

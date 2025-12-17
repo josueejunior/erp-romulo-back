@@ -18,6 +18,7 @@ class Orcamento extends Model
     }
 
     protected $fillable = [
+        'empresa_id',
         'processo_id', // Novo: para orçamentos vinculados ao processo
         'processo_item_id', // Mantido para compatibilidade (deprecated)
         'fornecedor_id',
@@ -39,6 +40,11 @@ class Orcamento extends Model
             'frete_incluido' => 'boolean',
             'fornecedor_escolhido' => 'boolean',
         ];
+    }
+
+    public function empresa(): BelongsTo
+    {
+        return $this->belongsTo(Empresa::class);
     }
 
     public function processo(): BelongsTo

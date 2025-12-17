@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\BaseApiController;
 use App\Http\Resources\OrcamentoResource;
 use App\Models\Processo;
 use App\Models\ProcessoItem;
@@ -10,10 +10,19 @@ use App\Models\Orcamento;
 use App\Models\OrcamentoItem;
 use Illuminate\Http\Request;
 
-class OrcamentoController extends Controller
+class OrcamentoController extends BaseApiController
 {
     public function index(Request $request, Processo $processo, ProcessoItem $item)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        // Verificar se o processo pertence à empresa
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
         // Verificar se o item pertence ao processo
         if ($item->processo_id !== $processo->id) {
             return response()->json([
@@ -41,6 +50,15 @@ class OrcamentoController extends Controller
 
     public function store(Request $request, Processo $processo, ProcessoItem $item)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        // Verificar se o processo pertence à empresa
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
         if ($item->processo_id !== $processo->id) {
             return response()->json(['message' => 'Item não pertence a este processo.'], 404);
         }
@@ -59,6 +77,7 @@ class OrcamentoController extends Controller
             'observacoes' => 'nullable|string',
         ]);
 
+        $validated['empresa_id'] = $empresa->id;
         $validated['processo_item_id'] = $item->id;
         $validated['frete'] = $validated['frete'] ?? 0;
         $validated['frete_incluido'] = $request->has('frete_incluido');
@@ -77,6 +96,12 @@ class OrcamentoController extends Controller
 
     public function show(Processo $processo, ProcessoItem $item, Orcamento $orcamento)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id || $orcamento->empresa_id !== $empresa->id) {
+            return response()->json(['message' => 'Orçamento não encontrado ou não pertence à empresa ativa.'], 404);
+        }
+        
         if ($item->processo_id !== $processo->id || $orcamento->processo_item_id !== $item->id) {
             return response()->json(['message' => 'Orçamento não pertence a este item.'], 404);
         }
@@ -87,6 +112,12 @@ class OrcamentoController extends Controller
 
     public function update(Request $request, Processo $processo, ProcessoItem $item, Orcamento $orcamento)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id || $orcamento->empresa_id !== $empresa->id) {
+            return response()->json(['message' => 'Orçamento não encontrado ou não pertence à empresa ativa.'], 404);
+        }
+        
         // Verificar se o orçamento pertence ao item e processo
         // Pode ser vinculado ao processo OU ao item (compatibilidade)
         $isOrcamentoDoItem = $orcamento->processo_item_id === $item->id;
