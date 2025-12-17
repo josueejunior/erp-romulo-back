@@ -12,9 +12,21 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('orcamentos', function (Blueprint $table) {
-            // Tornar processo_item_id nullable para permitir orçamentos vinculados diretamente ao processo
-            // (que terão múltiplos itens na tabela orcamento_itens)
+            // Remover a foreign key constraint primeiro
+            $table->dropForeign(['processo_item_id']);
+        });
+
+        Schema::table('orcamentos', function (Blueprint $table) {
+            // Alterar a coluna para nullable
             $table->foreignId('processo_item_id')->nullable()->change();
+        });
+
+        Schema::table('orcamentos', function (Blueprint $table) {
+            // Recriar a foreign key constraint
+            $table->foreign('processo_item_id')
+                ->references('id')
+                ->on('processo_itens')
+                ->onDelete('cascade');
         });
     }
 
@@ -26,8 +38,21 @@ return new class extends Migration
         // Não podemos reverter isso com segurança se houver orçamentos sem processo_item_id
         // Mas podemos tentar se necessário
         Schema::table('orcamentos', function (Blueprint $table) {
-            // Apenas se não houver registros com processo_item_id null
+            // Remover a foreign key constraint primeiro
+            $table->dropForeign(['processo_item_id']);
+        });
+
+        Schema::table('orcamentos', function (Blueprint $table) {
+            // Alterar a coluna para NOT NULL (apenas se não houver registros null)
             $table->foreignId('processo_item_id')->nullable(false)->change();
+        });
+
+        Schema::table('orcamentos', function (Blueprint $table) {
+            // Recriar a foreign key constraint
+            $table->foreign('processo_item_id')
+                ->references('id')
+                ->on('processo_itens')
+                ->onDelete('cascade');
         });
     }
 };
