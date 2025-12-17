@@ -40,14 +40,27 @@ class OrgaoController extends BaseApiController
             });
         }
 
+        // Executar query e obter resultados
         $orgaos = $query->orderBy('razao_social')->paginate(15);
+        
+        // Verificação CRÍTICA: Filtrar novamente após paginação para garantir isolamento
+        // Isso garante que mesmo se houver algum problema na query, os dados serão filtrados
+        $orgaosFiltrados = $orgaos->getCollection()->filter(function($orgao) use ($empresa) {
+            return $orgao->empresa_id === $empresa->id && $orgao->empresa_id !== null;
+        });
+        
+        // Recriar paginação com dados filtrados
+        $orgaos->setCollection($orgaosFiltrados);
+        $orgaos->setTotal($orgaosFiltrados->count());
         
         // Log dos resultados com mais detalhes
         \Log::info('OrgaoController::index - Resultados', [
-            'total_orgaos' => $orgaos->total(),
+            'total_orgaos_antes_filtro' => $orgaos->total(),
+            'total_orgaos_depois_filtro' => $orgaosFiltrados->count(),
             'empresa_id_filtro' => $empresa->id,
-            'orgaos_empresa_ids' => $orgaos->pluck('empresa_id')->unique()->toArray(),
-            'orgaos_detalhes' => $orgaos->map(function($orgao) {
+            'empresa_razao_social' => $empresa->razao_social,
+            'orgaos_empresa_ids' => $orgaosFiltrados->pluck('empresa_id')->unique()->toArray(),
+            'orgaos_detalhes' => $orgaosFiltrados->map(function($orgao) {
                 return [
                     'id' => $orgao->id,
                     'razao_social' => $orgao->razao_social,
@@ -57,12 +70,12 @@ class OrgaoController extends BaseApiController
         ]);
         
         // Verificação adicional: garantir que todos os órgãos retornados pertencem à empresa
-        $orgaosInvalidos = $orgaos->filter(function($orgao) use ($empresa) {
+        $orgaosInvalidos = $orgaosFiltrados->filter(function($orgao) use ($empresa) {
             return $orgao->empresa_id !== $empresa->id || $orgao->empresa_id === null;
         });
         
         if ($orgaosInvalidos->count() > 0) {
-            \Log::error('OrgaoController::index - Órgãos com empresa_id incorreto encontrados!', [
+            \Log::error('OrgaoController::index - Órgãos com empresa_id incorreto encontrados APÓS FILTRO!', [
                 'empresa_id_esperado' => $empresa->id,
                 'orgaos_invalidos' => $orgaosInvalidos->map(function($orgao) {
                     return [
@@ -72,6 +85,11 @@ class OrgaoController extends BaseApiController
                     ];
                 })->toArray(),
             ]);
+            
+            // Remover órgãos inválidos da resposta
+            $orgaos->setCollection($orgaosFiltrados->reject(function($orgao) use ($empresa) {
+                return $orgao->empresa_id !== $empresa->id || $orgao->empresa_id === null;
+            }));
         }
 
         return OrgaoResource::collection($orgaos);
