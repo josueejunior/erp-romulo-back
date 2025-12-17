@@ -221,6 +221,42 @@ class RedisService
     }
 
     /**
+     * Limpar rate limit de um identificador específico
+     */
+    public static function clearRateLimit($identifier): void
+    {
+        if (!self::isAvailable()) {
+            return;
+        }
+        
+        try {
+            $key = "rate_limit:{$identifier}";
+            Redis::del($key);
+        } catch (\Exception $e) {
+            Log::warning('Erro ao limpar rate limit: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Limpar todos os rate limits (usar com cuidado!)
+     */
+    public static function clearAllRateLimits(): void
+    {
+        if (!self::isAvailable()) {
+            return;
+        }
+        
+        try {
+            $keys = Redis::keys('rate_limit:*');
+            if (!empty($keys)) {
+                Redis::del($keys);
+            }
+        } catch (\Exception $e) {
+            Log::warning('Erro ao limpar todos os rate limits: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * Lock distribuído para operações críticas
      */
     public static function lock($key, $ttl = 10): bool

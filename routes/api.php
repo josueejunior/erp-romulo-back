@@ -57,7 +57,8 @@ Route::prefix('v1')->group(function () {
     Route::post('/auth/register', [AuthController::class, 'register']);
 
     // Rotas autenticadas
-    Route::middleware(['auth:sanctum', 'tenancy', 'throttle:60,1'])->group(function () {
+    // Rate limiting aumentado para 120 requisições por minuto para evitar "Too Many Attempts"
+    Route::middleware(['auth:sanctum', 'tenancy', 'throttle:120,1'])->group(function () {
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::get('/auth/user', [AuthController::class, 'user']);
         
