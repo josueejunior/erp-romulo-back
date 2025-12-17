@@ -15,7 +15,7 @@ class ContratoPolicy
      */
     public function viewAny($user): bool
     {
-        return PermissionHelper::canViewProcess();
+        return PermissionHelper::canView();
     }
 
     /**
@@ -23,7 +23,7 @@ class ContratoPolicy
      */
     public function view($user, Contrato $contrato): bool
     {
-        return PermissionHelper::canViewProcess();
+        return PermissionHelper::canView();
     }
 
     /**
@@ -31,7 +31,7 @@ class ContratoPolicy
      */
     public function create($user, $processo): bool
     {
-        if (!PermissionHelper::canManageProcess()) {
+        if (!PermissionHelper::canEditProcess()) {
             return false;
         }
 
@@ -51,7 +51,7 @@ class ContratoPolicy
      */
     public function update($user, Contrato $contrato): bool
     {
-        return PermissionHelper::canManageProcess();
+        return PermissionHelper::canEditProcess();
     }
 
     /**
@@ -59,6 +59,6 @@ class ContratoPolicy
      */
     public function delete($user, Contrato $contrato): bool
     {
-        return PermissionHelper::canManageProcess();
+        return PermissionHelper::canEditProcess();
     }
 }

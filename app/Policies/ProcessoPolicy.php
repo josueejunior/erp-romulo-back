@@ -15,7 +15,7 @@ class ProcessoPolicy
      */
     public function viewAny($user): bool
     {
-        return PermissionHelper::canViewProcess();
+        return PermissionHelper::canView();
     }
 
     /**
@@ -23,7 +23,7 @@ class ProcessoPolicy
      */
     public function view($user, Processo $processo): bool
     {
-        return PermissionHelper::canViewProcess();
+        return PermissionHelper::canView();
     }
 
     /**
@@ -31,7 +31,7 @@ class ProcessoPolicy
      */
     public function create($user): bool
     {
-        return PermissionHelper::canManageProcess();
+        return PermissionHelper::canCreateProcess();
     }
 
     /**
@@ -39,7 +39,7 @@ class ProcessoPolicy
      */
     public function update($user, Processo $processo): bool
     {
-        if (!PermissionHelper::canManageProcess()) {
+        if (!PermissionHelper::canEditProcess()) {
             return false;
         }
 
@@ -60,7 +60,7 @@ class ProcessoPolicy
      */
     public function delete($user, Processo $processo): bool
     {
-        if (!PermissionHelper::canManageProcess()) {
+        if (!PermissionHelper::canEditProcess()) {
             return false;
         }
 

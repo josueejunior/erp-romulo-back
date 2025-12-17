@@ -16,7 +16,7 @@ class OrcamentoPolicy
      */
     public function viewAny($user): bool
     {
-        return PermissionHelper::canViewProcess();
+        return PermissionHelper::canView();
     }
 
     /**
@@ -24,7 +24,7 @@ class OrcamentoPolicy
      */
     public function view($user, Orcamento $orcamento): bool
     {
-        return PermissionHelper::canViewProcess();
+        return PermissionHelper::canView();
     }
 
     /**
@@ -32,7 +32,7 @@ class OrcamentoPolicy
      */
     public function create($user, $processo): bool
     {
-        if (!PermissionHelper::canManageProcess()) {
+        if (!PermissionHelper::canCreateProcess()) {
             return false;
         }
 
@@ -50,7 +50,7 @@ class OrcamentoPolicy
      */
     public function update($user, Orcamento $orcamento): bool
     {
-        if (!PermissionHelper::canManageProcess()) {
+        if (!PermissionHelper::canEditProcess()) {
             return false;
         }
 
@@ -67,7 +67,7 @@ class OrcamentoPolicy
      */
     public function delete($user, Orcamento $orcamento): bool
     {
-        if (!PermissionHelper::canManageProcess()) {
+        if (!PermissionHelper::canEditProcess()) {
             return false;
         }
 
