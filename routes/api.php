@@ -174,8 +174,16 @@ Route::prefix('v1')->group(function () {
 });
 
 // Fallback para 404 em JSON
-Route::fallback(function () {
+Route::fallback(function (Request $request) {
+    \Log::warning('Rota não encontrada (fallback)', [
+        'url' => $request->url(),
+        'path' => $request->path(),
+        'method' => $request->method(),
+        'headers' => $request->headers->all()
+    ]);
     return response()->json([
         'message' => 'Rota não encontrada.',
+        'path' => $request->path(),
+        'method' => $request->method()
     ], 404);
 });

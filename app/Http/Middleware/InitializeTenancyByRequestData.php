@@ -53,12 +53,16 @@ class InitializeTenancyByRequestData extends IdentificationMiddleware
         $tenant = \App\Models\Tenant::find($tenantId);
 
         if (!$tenant) {
-            \Log::warning('Tenant não encontrado', [
+            \Log::warning('Tenant não encontrado no middleware', [
                 'tenant_id' => $tenantId,
-                'url' => $request->url()
+                'url' => $request->url(),
+                'path' => $request->path(),
+                'method' => $request->method(),
+                'headers' => $request->headers->all()
             ]);
             return response()->json([
-                'message' => 'Tenant não encontrado.'
+                'message' => 'Tenant não encontrado.',
+                'tenant_id_procurado' => $tenantId
             ], 404);
         }
 
