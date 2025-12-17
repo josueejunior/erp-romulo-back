@@ -75,14 +75,25 @@ class Orcamento extends Model
     public function getCustoTotalAttribute(): float
     {
         // Se tem itens vinculados, calcular soma dos custos
-        if ($this->itens()->count() > 0) {
-            return $this->itens()->sum(function($item) {
-                return $item->custo_produto + ($item->frete_incluido ? 0 : $item->frete);
+        // Verificar se a relação já está carregada
+        if ($this->relationLoaded('itens') && $this->itens->count() > 0) {
+            return $this->itens->sum(function($item) {
+                return (float)($item->custo_produto ?? 0) + ((($item->frete_incluido ?? false) ? 0 : (float)($item->frete ?? 0)));
+            });
+        }
+        
+        // Se não tem itens carregados, verificar se existe pelo menos um item
+        $count = $this->itens()->count();
+        if ($count > 0) {
+            // Carregar itens e calcular na collection
+            $itens = $this->itens()->get();
+            return $itens->sum(function($item) {
+                return (float)($item->custo_produto ?? 0) + ((($item->frete_incluido ?? false) ? 0 : (float)($item->frete ?? 0)));
             });
         }
         
         // Fallback para compatibilidade com estrutura antiga
-        return $this->custo_produto + ($this->frete_incluido ? 0 : $this->frete);
+        return (float)($this->custo_produto ?? 0) + ((($this->frete_incluido ?? false) ? 0 : (float)($this->frete ?? 0)));
     }
 
     /**
