@@ -15,6 +15,8 @@ class NotaFiscal extends Model
     protected $fillable = [
         'processo_id',
         'empenho_id',
+        'contrato_id',
+        'autorizacao_fornecimento_id',
         'tipo',
         'numero',
         'serie',
@@ -58,6 +60,16 @@ class NotaFiscal extends Model
     public function empenho(): BelongsTo
     {
         return $this->belongsTo(Empenho::class);
+    }
+
+    public function contrato(): BelongsTo
+    {
+        return $this->belongsTo(Contrato::class);
+    }
+
+    public function autorizacaoFornecimento(): BelongsTo
+    {
+        return $this->belongsTo(AutorizacaoFornecimento::class);
     }
 
     public function fornecedor(): BelongsTo

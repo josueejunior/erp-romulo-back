@@ -43,16 +43,20 @@ class FinanceiroService
 
         $receitaEstimada = $itensVencidos->sum('valor_estimado') ?? 0;
         $receitaFinal = $itensVencidos->sum('valor_final_sessao') ?? 0;
+        $receitaArrematada = $itensVencidos->sum('valor_arrematado') ?? 0;
         $receitaNegociada = $itensVencidos->sum('valor_negociado') ?? 0;
 
-        // Usar valor negociado se disponível, senão final, senão estimado
-        $receitaTotal = $receitaNegociada > 0 
-            ? $receitaNegociada 
-            : ($receitaFinal > 0 ? $receitaFinal : $receitaEstimada);
+        // Prioridade: valor arrematado > valor negociado > valor final sessão > valor estimado
+        $receitaTotal = $receitaArrematada > 0 
+            ? $receitaArrematada 
+            : ($receitaNegociada > 0 
+                ? $receitaNegociada 
+                : ($receitaFinal > 0 ? $receitaFinal : $receitaEstimada));
 
         return [
             'receita_estimada' => round($receitaEstimada, 2),
             'receita_final' => round($receitaFinal, 2),
+            'receita_arrematada' => round($receitaArrematada, 2),
             'receita_negociada' => round($receitaNegociada, 2),
             'receita_total' => round($receitaTotal, 2),
             'quantidade_itens' => $itensVencidos->count(),

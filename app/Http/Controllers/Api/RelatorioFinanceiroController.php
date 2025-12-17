@@ -98,7 +98,10 @@ class RelatorioFinanceiroController extends Controller
                 $totalSaldoReceber += $processo->contratos->sum('saldo');
             } else {
                 $receita = $processo->itens->sum(function($item) {
-                    return $item->valor_negociado ?? $item->valor_final_sessao ?? 0;
+                    return $item->valor_arrematado 
+                        ?? $item->valor_negociado 
+                        ?? $item->valor_final_sessao 
+                        ?? 0;
                 });
                 $totalSaldoReceber += $receita;
             }

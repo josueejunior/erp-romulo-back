@@ -60,6 +60,11 @@ class Contrato extends Model
         return $this->hasMany(Empenho::class);
     }
 
+    public function notasFiscais(): HasMany
+    {
+        return $this->hasMany(NotaFiscal::class);
+    }
+
     public function atualizarSaldo(): void
     {
         $totalEmpenhos = $this->empenhos()->sum('valor');

@@ -1173,8 +1173,9 @@
 							$orcamentoEscolhido = $item->orcamentos->firstWhere('fornecedor_escolhido', true);
 							$formacaoPreco = $orcamentoEscolhido?->formacaoPreco;
 							
-							// Prioridade: valor negociado > valor final sessão > preço mínimo formação > valor estimado
-							$valorUnitario = $item->valor_negociado 
+							// Prioridade: valor arrematado > valor negociado > valor final sessão > preço mínimo formação > valor estimado
+							$valorUnitario = $item->valor_arrematado 
+								?? $item->valor_negociado 
 								?? $item->valor_final_sessao 
 								?? $formacaoPreco?->preco_minimo 
 								?? $item->valor_estimado 

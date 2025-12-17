@@ -45,6 +45,7 @@ class DisputaController extends Controller
                     'unidade' => $item->unidade,
                     'valor_estimado' => $item->valor_estimado,
                     'valor_final_sessao' => $item->valor_final_sessao,
+                    'valor_arrematado' => $item->valor_arrematado,
                     'classificacao' => $item->classificacao,
                 ];
             }),
@@ -70,6 +71,7 @@ class DisputaController extends Controller
             'itens' => 'required|array',
             'itens.*.id' => 'required|exists:processo_itens,id',
             'itens.*.valor_final_sessao' => 'nullable|numeric|min:0',
+            'itens.*.valor_arrematado' => 'nullable|numeric|min:0',
             'itens.*.classificacao' => 'nullable|integer|min:1',
             'itens.*.observacoes' => 'nullable|string',
         ]);
