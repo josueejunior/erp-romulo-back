@@ -208,3 +208,5 @@ O sistema deve:
 - permitir descontos progressivos conforme execução
 - manter histórico completo e imutável
 
+
+
