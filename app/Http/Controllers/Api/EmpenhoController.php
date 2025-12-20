@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\BaseApiController;
 use App\Models\Processo;
 use App\Models\Empenho;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class EmpenhoController extends BaseApiController
 {

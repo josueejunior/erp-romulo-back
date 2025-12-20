@@ -7,6 +7,7 @@ use App\Models\Processo;
 use App\Models\Contrato;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class ContratoController extends BaseApiController

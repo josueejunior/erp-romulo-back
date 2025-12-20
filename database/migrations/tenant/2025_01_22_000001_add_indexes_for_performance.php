@@ -147,20 +147,35 @@ return new class extends Migration
 
     /**
      * Verifica se um índice já existe
+     * Compatível com PostgreSQL e MySQL
      */
     private function hasIndex(string $table, string $indexName): bool
     {
         $connection = Schema::getConnection();
-        $databaseName = $connection->getDatabaseName();
+        $driver = $connection->getDriverName();
         
-        $result = $connection->select(
-            "SELECT COUNT(*) as count 
-             FROM information_schema.statistics 
-             WHERE table_schema = ? 
-             AND table_name = ? 
-             AND index_name = ?",
-            [$databaseName, $table, $indexName]
-        );
+        if ($driver === 'pgsql') {
+            // PostgreSQL usa pg_indexes
+            $result = $connection->select(
+                "SELECT COUNT(*) as count 
+                 FROM pg_indexes 
+                 WHERE schemaname = current_schema()
+                 AND tablename = ? 
+                 AND indexname = ?",
+                [$table, $indexName]
+            );
+        } else {
+            // MySQL/MariaDB usa information_schema.statistics
+            $databaseName = $connection->getDatabaseName();
+            $result = $connection->select(
+                "SELECT COUNT(*) as count 
+                 FROM information_schema.statistics 
+                 WHERE table_schema = ? 
+                 AND table_name = ? 
+                 AND index_name = ?",
+                [$databaseName, $table, $indexName]
+            );
+        }
         
         return $result[0]->count > 0;
     }
