@@ -140,6 +140,7 @@ class ProcessoItemController extends BaseApiController
             'valor_estimado_total' => 'nullable|numeric|min:0',
             'fonte_valor' => 'nullable|in:edital,pesquisa',
             'valor_final_sessao' => 'nullable|numeric|min:0',
+            'valor_arrematado' => 'nullable|numeric|min:0',
             'data_disputa' => 'nullable|date',
             'valor_negociado' => 'nullable|numeric|min:0',
             'classificacao' => 'nullable|integer|min:1',
