@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Empresa;
+use Illuminate\Database\Eloquent\Builder;
 
 abstract class BaseApiController extends Controller
 {
@@ -70,6 +71,41 @@ abstract class BaseApiController extends Controller
         }
 
         return $empresa;
+    }
+
+    /**
+     * Aplica filtro de empresa automaticamente em queries
+     * Garante que apenas dados da empresa do usuário sejam retornados
+     */
+    protected function scopeEmpresa(Builder $query, ?int $empresaId = null): Builder
+    {
+        $empresaId = $empresaId ?? $this->getEmpresaAtivaOrFail()->id;
+        
+        // Verificar se o modelo tem empresa_id
+        if (in_array('empresa_id', $query->getModel()->getFillable())) {
+            return $query->where('empresa_id', $empresaId);
+        }
+        
+        return $query;
+    }
+
+    /**
+     * Valida se o recurso pertence à empresa do usuário
+     * Usar em show, update, destroy
+     */
+    protected function validateEmpresaResource($resource, ?int $empresaId = null): void
+    {
+        $empresaId = $empresaId ?? $this->getEmpresaAtivaOrFail()->id;
+        
+        if (isset($resource->empresa_id) && $resource->empresa_id !== $empresaId) {
+            \Log::warning('Tentativa de acesso a recurso de outra empresa', [
+                'user_id' => auth()->id(),
+                'resource_id' => $resource->id,
+                'resource_empresa_id' => $resource->empresa_id,
+                'user_empresa_id' => $empresaId,
+            ]);
+            abort(403, 'Você não tem permissão para acessar este recurso.');
+        }
     }
 }
 

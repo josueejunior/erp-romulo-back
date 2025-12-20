@@ -6,10 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\Concerns\HasEmpresaScope;
 
 class AutorizacaoFornecimento extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, HasEmpresaScope;
 
     protected $table = 'autorizacoes_fornecimento';
 

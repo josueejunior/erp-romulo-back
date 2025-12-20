@@ -106,3 +106,4 @@ $item = ProcessoItem::find($itemId);
 2. Corrigir DisputaService para validar empresa_id
 3. Revisar todas as queries em Services para garantir filtro por empresa
 4. Adicionar testes de isolamento por empresa
+

@@ -44,7 +44,7 @@ class UserController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|max:255|unique:users,email',
-            'password' => 'required|string|min:8',
+            'password' => ['required', 'string', 'min:8', new \App\Rules\StrongPassword()],
             'roles' => 'nullable|array',
             'roles.*' => 'string',
             'empresas' => 'nullable|array',
@@ -106,7 +106,7 @@ class UserController extends Controller
                 'max:255',
                 Rule::unique('users', 'email')->ignore($user->id),
             ],
-            'password' => 'nullable|string|min:8',
+            'password' => ['nullable', 'string', 'min:8', new \App\Rules\StrongPassword()],
             'roles' => 'nullable|array',
             'roles.*' => 'string',
             'empresas' => 'nullable|array',

@@ -5,10 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\Concerns\HasEmpresaScope;
 
 class CustoIndireto extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, HasEmpresaScope;
 
     protected $table = 'custo_indiretos';
 

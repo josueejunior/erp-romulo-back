@@ -145,21 +145,23 @@ class EmpenhoController extends BaseApiController
             $validated['data_entrega'] = $validated['data_entrega'] ?? now();
         }
 
-        $empenho->update($validated);
+        DB::transaction(function () use ($empenho, $validated, $contratoAnterior, $afAnterior) {
+            $empenho->update($validated);
 
-        // Atualizar saldos
-        if ($contratoAnterior) {
-            \App\Models\Contrato::find($contratoAnterior)?->atualizarSaldo();
-        }
-        if ($afAnterior) {
-            \App\Models\AutorizacaoFornecimento::find($afAnterior)?->atualizarSaldo();
-        }
-        if ($empenho->contrato_id) {
-            $empenho->contrato->atualizarSaldo();
-        }
-        if ($empenho->autorizacao_fornecimento_id) {
-            $empenho->autorizacaoFornecimento->atualizarSaldo();
-        }
+            // Atualizar saldos
+            if ($contratoAnterior) {
+                \App\Models\Contrato::find($contratoAnterior)?->atualizarSaldo();
+            }
+            if ($afAnterior) {
+                \App\Models\AutorizacaoFornecimento::find($afAnterior)?->atualizarSaldo();
+            }
+            if ($empenho->contrato_id) {
+                $empenho->contrato->atualizarSaldo();
+            }
+            if ($empenho->autorizacao_fornecimento_id) {
+                $empenho->autorizacaoFornecimento->atualizarSaldo();
+            }
+        });
 
         $empenho->load(['contrato', 'autorizacaoFornecimento']);
 
@@ -193,6 +195,8 @@ class EmpenhoController extends BaseApiController
         return response()->json(null, 204);
     }
 }
+
+
 
 
 

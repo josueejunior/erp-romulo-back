@@ -6,9 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\Concerns\HasEmpresaScope;
 
 class Orcamento extends Model
 {
+    use HasEmpresaScope;
     /**
      * Get the route key for the model.
      */

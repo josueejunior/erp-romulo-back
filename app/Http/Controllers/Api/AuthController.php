@@ -10,6 +10,8 @@ use Illuminate\Validation\ValidationException;
 use App\Models\User;
 use App\Models\Tenant;
 use App\Services\RedisService;
+use App\Rules\StrongPassword;
+use App\Helpers\LogSanitizer;
 use Stancl\Tenancy\Facades\Tenancy;
 
 class AuthController extends Controller
@@ -31,7 +33,7 @@ class AuthController extends Controller
         $cachedResult = RedisService::getLoginResult($request->email, $passwordHash);
         
         if ($cachedResult) {
-            \Log::info("Login encontrado no cache Redis", ['email' => $request->email]);
+            \Log::info("Login encontrado no cache Redis", LogSanitizer::sanitize(['email' => $request->email]));
             $result = $cachedResult;
         } else {
             // Buscar o tenant que contém o usuário com este email E senha correta
@@ -86,7 +88,7 @@ class AuthController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:8|confirmed',
+            'password' => ['required', 'string', 'min:8', 'confirmed', new StrongPassword()],
             'tenant_id' => 'required|exists:tenants,id',
         ]);
 

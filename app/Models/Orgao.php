@@ -6,10 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\Concerns\HasEmpresaScope;
 
 class Orgao extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, HasEmpresaScope;
 
     protected $fillable = [
         'empresa_id',

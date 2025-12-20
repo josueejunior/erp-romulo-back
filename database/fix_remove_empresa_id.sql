@@ -55,3 +55,4 @@ ALTER TABLE processos_new RENAME TO processos;
 PRAGMA foreign_keys=ON;
 
 
+

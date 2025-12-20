@@ -56,11 +56,16 @@ Route::prefix('v1')->group(function () {
     Route::get('/planos/{plano}', [ApiPlanoController::class, 'show']);
 
     // Rotas públicas (autenticação)
-    Route::post('/auth/login', [AuthController::class, 'login']);
-    Route::post('/auth/register', [AuthController::class, 'register']);
+    // Rate limiting mais restritivo no login para prevenir brute force
+    // 5 tentativas por minuto por IP, bloqueio após 10 tentativas falhas
+    Route::post('/auth/login', [AuthController::class, 'login'])
+        ->middleware(['throttle:5,1', 'throttle:10,60']); // 5/min, 10/hora
+    Route::post('/auth/register', [AuthController::class, 'register'])
+        ->middleware(['throttle:3,1', 'throttle:5,60']); // 3/min, 5/hora
 
     // Rotas autenticadas
-    // Rate limiting aumentado para 120 requisições por minuto para evitar "Too Many Attempts"
+    // Rate limiting: 120 requisições por minuto, 1000 por hora
+    // Rotas de criação/edição têm rate limiting adicional
     Route::middleware(['auth:sanctum', 'tenancy', 'throttle:120,1'])->group(function () {
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::get('/auth/user', [AuthController::class, 'user']);

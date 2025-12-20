@@ -340,11 +340,14 @@ class ContratoController extends BaseApiController
         }
 
         $valorTotalAnterior = $contrato->valor_total;
-        $contrato->update($validated);
+        
+        DB::transaction(function () use ($contrato, $validated, $valorTotalAnterior) {
+            $contrato->update($validated);
 
-        if ($validated['valor_total'] != $valorTotalAnterior) {
-            $contrato->atualizarSaldo();
-        }
+            if ($validated['valor_total'] != $valorTotalAnterior) {
+                $contrato->atualizarSaldo();
+            }
+        });
 
         return response()->json($contrato);
     }
@@ -375,6 +378,8 @@ class ContratoController extends BaseApiController
         return response()->json(null, 204);
     }
 }
+
+
 
 
 

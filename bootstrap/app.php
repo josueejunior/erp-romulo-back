@@ -21,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Configurar CORS para React
         $middleware->api(prepend: [
             \Illuminate\Http\Middleware\HandleCors::class,
+            \App\Http\Middleware\HandleApiErrors::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
