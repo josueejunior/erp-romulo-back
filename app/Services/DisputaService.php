@@ -21,6 +21,11 @@ class DisputaService
      */
     public function registrarResultados(Processo $processo, array $resultadosItens): Processo
     {
+        // Garantir que o processo pertence a uma empresa (isolamento)
+        if (!$processo->empresa_id) {
+            throw new \Exception('Processo não possui empresa_id definido. Não é possível registrar resultados.');
+        }
+        
         foreach ($resultadosItens as $resultado) {
             // Buscar item pelo id ou item_id (compatibilidade)
             $itemId = $resultado['id'] ?? $resultado['item_id'] ?? null;
@@ -28,9 +33,10 @@ class DisputaService
                 continue;
             }
             
-            $item = ProcessoItem::find($itemId);
+            // Buscar item através do relacionamento do processo para garantir isolamento
+            $item = $processo->itens()->where('id', $itemId)->first();
             
-            if (!$item || $item->processo_id !== $processo->id) {
+            if (!$item) {
                 continue;
             }
 

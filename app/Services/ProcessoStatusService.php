@@ -192,8 +192,10 @@ class ProcessoStatusService
     /**
      * Verifica e atualiza automaticamente os status dos processos
      * Deve ser executado periodicamente (via comando agendado)
+     * 
+     * @param int|null $empresaId Se fornecido, processa apenas processos desta empresa
      */
-    public function verificarEAtualizarStatusAutomaticos(): array
+    public function verificarEAtualizarStatusAutomaticos(?int $empresaId = null): array
     {
         $resultado = [
             'atualizados' => 0,
@@ -202,9 +204,16 @@ class ProcessoStatusService
         ];
 
         // Processos em participação que já passaram da sessão pública
-        $processosParticipacao = Processo::where('status', 'participacao')
+        // Sempre filtrar por empresa_id não nulo para garantir isolamento
+        $queryParticipacao = Processo::where('status', 'participacao')
             ->where('data_hora_sessao_publica', '<=', now())
-            ->get();
+            ->whereNotNull('empresa_id');
+        
+        if ($empresaId) {
+            $queryParticipacao->where('empresa_id', $empresaId);
+        }
+        
+        $processosParticipacao = $queryParticipacao->get();
 
         foreach ($processosParticipacao as $processo) {
             try {
@@ -218,7 +227,15 @@ class ProcessoStatusService
         }
 
         // Processos em julgamento que devem ser marcados como perdidos
-        $processosJulgamento = Processo::where('status', 'julgamento_habilitacao')->get();
+        // Sempre filtrar por empresa_id não nulo para garantir isolamento
+        $queryJulgamento = Processo::where('status', 'julgamento_habilitacao')
+            ->whereNotNull('empresa_id');
+        
+        if ($empresaId) {
+            $queryJulgamento->where('empresa_id', $empresaId);
+        }
+        
+        $processosJulgamento = $queryJulgamento->get();
 
         foreach ($processosJulgamento as $processo) {
             if ($this->deveSugerirPerdido($processo)) {
