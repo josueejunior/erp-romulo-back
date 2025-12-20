@@ -2,21 +2,37 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\BaseApiController;
 use App\Models\Processo;
 use App\Models\Empenho;
 use Illuminate\Http\Request;
 
-class EmpenhoController extends Controller
+class EmpenhoController extends BaseApiController
 {
     public function index(Processo $processo)
     {
-        $empenhos = $processo->empenhos()->with(['contrato', 'autorizacaoFornecimento'])->get();
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
+        $empenhos = $processo->empenhos()->where('empresa_id', $empresa->id)->with(['contrato', 'autorizacaoFornecimento'])->get();
         return response()->json($empenhos);
     }
 
     public function store(Request $request, Processo $processo)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
         if (!$processo->isEmExecucao()) {
             return response()->json([
                 'message' => 'Empenhos só podem ser criados para processos em execução.'
@@ -31,6 +47,7 @@ class EmpenhoController extends Controller
             'valor' => 'required|numeric|min:0',
             'data_entrega' => 'nullable|date',
             'observacoes' => 'nullable|string',
+            'numero_cte' => 'nullable|string|max:255',
         ]);
 
         if ($validated['contrato_id']) {
@@ -47,6 +64,7 @@ class EmpenhoController extends Controller
             }
         }
 
+        $validated['empresa_id'] = $empresa->id;
         $validated['processo_id'] = $processo->id;
         $validated['concluido'] = false;
 
@@ -66,6 +84,12 @@ class EmpenhoController extends Controller
 
     public function show(Processo $processo, Empenho $empenho)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id || $empenho->empresa_id !== $empresa->id) {
+            return response()->json(['message' => 'Empenho não encontrado ou não pertence à empresa ativa.'], 404);
+        }
+        
         if ($empenho->processo_id !== $processo->id) {
             return response()->json(['message' => 'Empenho não pertence a este processo.'], 404);
         }
@@ -76,6 +100,12 @@ class EmpenhoController extends Controller
 
     public function update(Request $request, Processo $processo, Empenho $empenho)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id || $empenho->empresa_id !== $empresa->id) {
+            return response()->json(['message' => 'Empenho não encontrado ou não pertence à empresa ativa.'], 404);
+        }
+        
         if ($empenho->processo_id !== $processo->id) {
             return response()->json(['message' => 'Empenho não pertence a este processo.'], 404);
         }
@@ -89,6 +119,7 @@ class EmpenhoController extends Controller
             'concluido' => 'boolean',
             'data_entrega' => 'nullable|date',
             'observacoes' => 'nullable|string',
+            'numero_cte' => 'nullable|string|max:255',
         ]);
 
         if ($validated['contrato_id']) {
@@ -137,6 +168,12 @@ class EmpenhoController extends Controller
 
     public function destroy(Processo $processo, Empenho $empenho)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id || $empenho->empresa_id !== $empresa->id) {
+            return response()->json(['message' => 'Empenho não encontrado ou não pertence à empresa ativa.'], 404);
+        }
+        
         if ($empenho->processo_id !== $processo->id) {
             return response()->json(['message' => 'Empenho não pertence a este processo.'], 404);
         }
@@ -144,7 +181,7 @@ class EmpenhoController extends Controller
         $contratoId = $empenho->contrato_id;
         $afId = $empenho->autorizacao_fornecimento_id;
 
-        $empenho->delete();
+        $empenho->forceDelete();
 
         if ($contratoId) {
             \App\Models\Contrato::find($contratoId)?->atualizarSaldo();

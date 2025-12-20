@@ -17,6 +17,11 @@ class InitializeTenancyByRequestData extends IdentificationMiddleware
     {
         // Verificar se já há tenancy inicializado
         if (tenancy()->initialized) {
+            $currentTenant = tenancy()->tenant;
+            \Log::debug('Tenancy já inicializado', [
+                'tenant_id' => $currentTenant?->id,
+                'url' => $request->url()
+            ]);
             return $next($request);
         }
 
@@ -26,21 +31,59 @@ class InitializeTenancyByRequestData extends IdentificationMiddleware
             ?? $this->getTenantIdFromToken($request)
             ?? $this->getTenantIdFromUser($request);
 
+        \Log::debug('Tentando inicializar tenancy', [
+            'tenant_id_header' => $request->header('X-Tenant-ID'),
+            'tenant_id_input' => $request->input('tenant_id'),
+            'tenant_id_final' => $tenantId,
+            'url' => $request->url()
+        ]);
+
         if (!$tenantId) {
+            \Log::warning('Tenant ID não fornecido', [
+                'url' => $request->url(),
+                'headers' => $request->headers->all()
+            ]);
             return response()->json([
                 'message' => 'Tenant ID não fornecido. Use o header X-Tenant-ID ou inclua tenant_id no request.'
             ], 400);
         }
 
+        // Buscar tenant no banco central
+        // O modelo Tenant usa a conexão padrão (central) por padrão
         $tenant = \App\Models\Tenant::find($tenantId);
 
         if (!$tenant) {
+            \Log::warning('Tenant não encontrado no middleware', [
+                'tenant_id' => $tenantId,
+                'url' => $request->url(),
+                'path' => $request->path(),
+                'method' => $request->method(),
+                'headers' => $request->headers->all()
+            ]);
             return response()->json([
-                'message' => 'Tenant não encontrado.'
+                'message' => 'Tenant não encontrado.',
+                'tenant_id_procurado' => $tenantId
             ], 404);
         }
 
-        tenancy()->initialize($tenant);
+        // Inicializar tenancy
+        try {
+            tenancy()->initialize($tenant);
+            \Log::debug('Tenancy inicializado com sucesso', [
+                'tenant_id' => $tenant->id,
+                'tenant_razao_social' => $tenant->razao_social,
+                'url' => $request->url()
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Erro ao inicializar tenancy', [
+                'tenant_id' => $tenantId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'message' => 'Erro ao inicializar tenancy: ' . $e->getMessage()
+            ], 500);
+        }
 
         return $next($request);
     }
@@ -56,6 +99,10 @@ class InitializeTenancyByRequestData extends IdentificationMiddleware
             // Verificar se há tenant_id nos abilities do token
             $abilities = $user->currentAccessToken()->abilities;
             if (isset($abilities['tenant_id'])) {
+                \Log::debug('Tenant ID encontrado no token', [
+                    'tenant_id' => $abilities['tenant_id'],
+                    'url' => $request->url()
+                ]);
                 return $abilities['tenant_id'];
             }
         }

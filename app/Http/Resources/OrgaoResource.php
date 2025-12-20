@@ -11,6 +11,7 @@ class OrgaoResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'empresa_id' => $this->empresa_id, // Adicionado para debug e validação
             'uasg' => $this->uasg,
             'razao_social' => $this->razao_social,
             'cnpj' => $this->cnpj,

@@ -73,7 +73,9 @@ class ProcessoStatusService
             'julgamento_habilitacao' => ['vencido', 'perdido', 'execucao', 'arquivado'],
             'vencido' => ['execucao'],
             'perdido' => ['arquivado'],
-            'execucao' => [], // Não pode mudar de execução
+            'execucao' => ['pagamento'], // Execução pode ir para pagamento
+            'pagamento' => ['encerramento'], // Pagamento pode ir para encerramento
+            'encerramento' => ['arquivado'], // Encerramento pode ser arquivado
             'arquivado' => [], // Não pode mudar de arquivado
         ];
 
@@ -105,11 +107,29 @@ class ProcessoStatusService
                 }
                 break;
 
-            case 'arquivado':
-                if ($statusAtual !== 'perdido') {
+            case 'pagamento':
+                if ($statusAtual !== 'execucao') {
                     return [
                         'pode' => false,
-                        'motivo' => 'Apenas processos perdidos podem ser arquivados'
+                        'motivo' => 'Apenas processos em execução podem entrar em pagamento'
+                    ];
+                }
+                break;
+
+            case 'encerramento':
+                if ($statusAtual !== 'pagamento') {
+                    return [
+                        'pode' => false,
+                        'motivo' => 'Apenas processos em pagamento podem ser encerrados'
+                    ];
+                }
+                break;
+
+            case 'arquivado':
+                if (!in_array($statusAtual, ['perdido', 'encerramento'])) {
+                    return [
+                        'pode' => false,
+                        'motivo' => 'Apenas processos perdidos ou encerrados podem ser arquivados'
                     ];
                 }
                 break;
@@ -135,6 +155,13 @@ class ProcessoStatusService
         }
 
         $processo->status = $novoStatus;
+        
+        // Se marcar como perdido, arquivar automaticamente
+        if ($novoStatus === 'perdido') {
+            $processo->status = 'arquivado';
+            $processo->data_arquivamento = now();
+        }
+        
         $processo->save();
 
         return [
@@ -160,6 +187,48 @@ class ProcessoStatusService
         }
 
         return null;
+    }
+
+    /**
+     * Verifica e atualiza automaticamente os status dos processos
+     * Deve ser executado periodicamente (via comando agendado)
+     */
+    public function verificarEAtualizarStatusAutomaticos(): array
+    {
+        $resultado = [
+            'atualizados' => 0,
+            'sugeridos' => 0,
+            'erros' => []
+        ];
+
+        // Processos em participação que já passaram da sessão pública
+        $processosParticipacao = Processo::where('status', 'participacao')
+            ->where('data_hora_sessao_publica', '<=', now())
+            ->get();
+
+        foreach ($processosParticipacao as $processo) {
+            try {
+                $result = $this->alterarStatus($processo, 'julgamento_habilitacao', true);
+                if ($result['pode']) {
+                    $resultado['atualizados']++;
+                }
+            } catch (\Exception $e) {
+                $resultado['erros'][] = "Erro ao atualizar processo {$processo->id}: " . $e->getMessage();
+            }
+        }
+
+        // Processos em julgamento que devem ser marcados como perdidos
+        $processosJulgamento = Processo::where('status', 'julgamento_habilitacao')->get();
+
+        foreach ($processosJulgamento as $processo) {
+            if ($this->deveSugerirPerdido($processo)) {
+                $resultado['sugeridos']++;
+                // Não atualiza automaticamente, apenas sugere
+                // O usuário deve confirmar a marcação como perdido
+            }
+        }
+
+        return $resultado;
     }
 }
 

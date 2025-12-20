@@ -5,12 +5,14 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Orgao extends Model
 {
     use SoftDeletes;
 
     protected $fillable = [
+        'empresa_id',
         'uasg',
         'razao_social',
         'cnpj',
@@ -20,6 +22,8 @@ class Orgao extends Model
         'cep',
         'email',
         'telefone',
+        'emails',
+        'telefones',
         'observacoes',
     ];
 
@@ -31,5 +35,18 @@ class Orgao extends Model
     public function processos(): HasMany
     {
         return $this->hasMany(Processo::class);
+    }
+
+    public function empresa(): BelongsTo
+    {
+        return $this->belongsTo(Empresa::class);
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'emails' => 'array',
+            'telefones' => 'array',
+        ];
     }
 }

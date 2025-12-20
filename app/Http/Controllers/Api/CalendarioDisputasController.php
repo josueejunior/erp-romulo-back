@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\BaseApiController;
 use App\Models\Processo;
 use App\Services\ProcessoStatusService;
 use Illuminate\Http\Request;
 
-class CalendarioDisputasController extends Controller
+class CalendarioDisputasController extends BaseApiController
 {
     protected ProcessoStatusService $statusService;
 
@@ -22,7 +22,9 @@ class CalendarioDisputasController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Processo::whereIn('status', ['participacao', 'julgamento_habilitacao'])
+        $empresa = $this->getEmpresaAtivaOrFail();
+        $query = Processo::where('empresa_id', $empresa->id)
+            ->whereIn('status', ['participacao', 'julgamento_habilitacao'])
             ->with([
                 'orgao:id,uasg,razao_social',
                 'setor:id,orgao_id,nome',
@@ -105,7 +107,12 @@ class CalendarioDisputasController extends Controller
      */
     public function eventos(Request $request)
     {
-        $query = Processo::whereIn('status', ['participacao', 'julgamento_habilitacao'])
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        // Filtrar APENAS processos da empresa ativa (não incluir NULL)
+        $query = Processo::where('empresa_id', $empresa->id)
+            ->whereNotNull('empresa_id')
+            ->whereIn('status', ['participacao', 'julgamento_habilitacao'])
             ->with(['orgao:id,uasg,razao_social', 'itens.formacoesPreco']);
 
         if ($request->data_inicio) {

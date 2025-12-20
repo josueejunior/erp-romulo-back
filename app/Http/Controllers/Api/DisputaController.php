@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\BaseApiController;
 use App\Models\Processo;
 use App\Models\ProcessoItem;
 use App\Services\DisputaService;
@@ -10,7 +10,7 @@ use App\Services\ProcessoStatusService;
 use App\Helpers\PermissionHelper;
 use Illuminate\Http\Request;
 
-class DisputaController extends Controller
+class DisputaController extends BaseApiController
 {
     protected DisputaService $disputaService;
     protected ProcessoStatusService $statusService;
@@ -22,6 +22,14 @@ class DisputaController extends Controller
     }
     public function show(Processo $processo)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
         if ($processo->isEmExecucao()) {
             return response()->json([
                 'message' => 'Não é possível visualizar disputa de processos em execução.'
@@ -45,6 +53,7 @@ class DisputaController extends Controller
                     'unidade' => $item->unidade,
                     'valor_estimado' => $item->valor_estimado,
                     'valor_final_sessao' => $item->valor_final_sessao,
+                    'valor_arrematado' => $item->valor_arrematado,
                     'classificacao' => $item->classificacao,
                 ];
             }),
@@ -53,6 +62,14 @@ class DisputaController extends Controller
 
     public function update(Request $request, Processo $processo)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
         // Verificar permissão
         if (!PermissionHelper::canEditProcess()) {
             return response()->json([
@@ -70,6 +87,7 @@ class DisputaController extends Controller
             'itens' => 'required|array',
             'itens.*.id' => 'required|exists:processo_itens,id',
             'itens.*.valor_final_sessao' => 'nullable|numeric|min:0',
+            'itens.*.valor_arrematado' => 'nullable|numeric|min:0',
             'itens.*.classificacao' => 'nullable|integer|min:1',
             'itens.*.observacoes' => 'nullable|string',
         ]);

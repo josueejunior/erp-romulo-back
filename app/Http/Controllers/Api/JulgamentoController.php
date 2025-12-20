@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\BaseApiController;
 use App\Models\Processo;
 use App\Models\ProcessoItem;
 use App\Services\DisputaService;
@@ -10,7 +10,7 @@ use App\Services\ProcessoStatusService;
 use App\Helpers\PermissionHelper;
 use Illuminate\Http\Request;
 
-class JulgamentoController extends Controller
+class JulgamentoController extends BaseApiController
 {
     protected DisputaService $disputaService;
     protected ProcessoStatusService $statusService;
@@ -22,6 +22,14 @@ class JulgamentoController extends Controller
     }
     public function show(Processo $processo)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
         if ($processo->isEmExecucao()) {
             return response()->json([
                 'message' => 'Não é possível visualizar julgamento de processos em execução.'
@@ -52,6 +60,14 @@ class JulgamentoController extends Controller
 
     public function update(Request $request, Processo $processo)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
         // Verificar permissão
         if (!PermissionHelper::canEditProcess()) {
             return response()->json([
@@ -72,6 +88,7 @@ class JulgamentoController extends Controller
             'itens.*.valor_negociado' => 'nullable|numeric|min:0',
             'itens.*.chance_arremate' => 'nullable|in:baixa,media,alta',
             'itens.*.chance_percentual' => 'nullable|integer|min:0|max:100',
+            'itens.*.tem_chance' => 'nullable|boolean',
             'itens.*.lembretes' => 'nullable|string',
             'itens.*.observacoes' => 'nullable|string',
         ]);
@@ -86,6 +103,7 @@ class JulgamentoController extends Controller
                     $itemData['classificacao'] ?? null,
                     $itemData['chance_arremate'] ?? null,
                     $itemData['chance_percentual'] ?? null,
+                    $itemData['tem_chance'] ?? null,
                     $itemData['valor_negociado'] ?? null,
                     $itemData['lembretes'] ?? null,
                     $itemData['observacoes'] ?? null

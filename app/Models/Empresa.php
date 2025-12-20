@@ -20,10 +20,15 @@ class Empresa extends Model
         'cep',
         'email',
         'telefone',
+        'emails',
+        'telefones',
         'banco_nome',
         'banco_agencia',
         'banco_conta',
         'banco_tipo',
+        'banco_codigo',
+        'banco_pix',
+        'dados_bancarios_observacoes',
         'representante_legal',
         'logo',
         'status',
@@ -33,6 +38,8 @@ class Empresa extends Model
     {
         return [
             'status' => 'string',
+            'emails' => 'array',
+            'telefones' => 'array',
         ];
     }
 

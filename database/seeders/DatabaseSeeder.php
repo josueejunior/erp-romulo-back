@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use App\Models\User;
 use App\Models\Tenant;
+use App\Models\Empresa;
 use App\Models\Orgao;
 use App\Models\Setor;
 use Illuminate\Support\Facades\Hash;
@@ -12,11 +13,16 @@ use Stancl\Tenancy\Facades\Tenancy;
 use Illuminate\Support\Str;
 use Stancl\Tenancy\Jobs\CreateDatabase;
 use Stancl\Tenancy\Jobs\MigrateDatabase;
+use Database\Seeders\AdminUserSeeder;
 
 class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
+        // IMPORTANTE: AdminUserSeeder deve ser executado ANTES de qualquer tenancy
+        // pois AdminUser é uma tabela central, não do tenant
+        $this->call(AdminUserSeeder::class);
+        
         // Verificar se já existe um tenant com este CNPJ
         $tenant = Tenant::where('cnpj', '12.345.678/0001-90')->first();
 
@@ -39,7 +45,10 @@ class DatabaseSeeder extends Seeder
                 
                 // Executar migrations
                 tenancy()->initialize($tenant);
-                \Artisan::call('tenants:migrate', ['--tenants' => $tenant->id]);
+                \Artisan::call('migrate', [
+                    '--path' => 'database/migrations/tenant',
+                    '--force' => true
+                ]);
                 tenancy()->end();
                 $this->command->info('Migrations do tenant executadas com sucesso');
             } catch (\Exception $e) {
@@ -58,6 +67,21 @@ class DatabaseSeeder extends Seeder
             $this->command->info('Tenant criado: ' . $tenant->razao_social);
         } else {
             $this->command->info('Tenant já existe: ' . $tenant->razao_social);
+            
+            // Garantir que as migrations estejam executadas mesmo se o tenant já existir
+            try {
+                tenancy()->initialize($tenant);
+                $this->command->info('Verificando migrations do tenant...');
+                \Artisan::call('migrate', [
+                    '--path' => 'database/migrations/tenant',
+                    '--force' => true
+                ]);
+                tenancy()->end();
+                $this->command->info('Migrations do tenant verificadas/executadas');
+            } catch (\Exception $e) {
+                tenancy()->end();
+                $this->command->warn('Aviso ao verificar migrations: ' . $e->getMessage());
+            }
         }
 
         // Inicializar o contexto do tenant
@@ -71,6 +95,18 @@ class DatabaseSeeder extends Seeder
         
         // Limpar cache novamente após criar roles
         app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+
+        // Criar empresa dentro do tenant
+        $empresa = Empresa::firstOrCreate(
+            ['cnpj' => '12.345.678/0001-90'],
+            [
+                'razao_social' => 'Empresa Exemplo LTDA',
+                'cnpj' => '12.345.678/0001-90',
+                'email' => 'contato@exemplo.com',
+                'status' => 'ativa',
+            ]
+        );
+        $this->command->info('Empresa criada/verificada: ' . $empresa->razao_social);
 
         // Criar múltiplos usuários para teste
         $users = [
@@ -126,6 +162,18 @@ class DatabaseSeeder extends Seeder
                 } catch (\Exception $e) {
                     $this->command->error('Erro ao atualizar role do usuário ' . $userData['email'] . ': ' . $e->getMessage());
                 }
+            }
+
+            // Associar usuário à empresa (se ainda não estiver associado)
+            if (!$user->empresas->contains($empresa->id)) {
+                $user->empresas()->attach($empresa->id, ['perfil' => strtolower($userData['role'])]);
+                $this->command->info('Usuário ' . $userData['email'] . ' associado à empresa');
+            }
+
+            // Definir empresa ativa se o usuário não tiver uma
+            if (!$user->empresa_ativa_id) {
+                $user->empresa_ativa_id = $empresa->id;
+                $user->save();
             }
         }
 

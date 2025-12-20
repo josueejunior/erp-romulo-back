@@ -1,0 +1,185 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Api\BaseApiController;
+use App\Models\CustoIndireto;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
+
+class CustoIndiretoController extends BaseApiController
+{
+    /**
+     * Lista todos os custos indiretos
+     */
+    public function index(Request $request)
+    {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        $query = CustoIndireto::where('empresa_id', $empresa->id);
+
+        // Filtro por busca (descrição ou categoria)
+        if ($request->search) {
+            $query->where(function($q) use ($request) {
+                $q->where('descricao', 'ilike', '%' . $request->search . '%')
+                  ->orWhere('categoria', 'ilike', '%' . $request->search . '%');
+            });
+        }
+
+        // Filtro por data início
+        if ($request->data_inicio) {
+            $query->where('data', '>=', $request->data_inicio);
+        }
+
+        // Filtro por data fim
+        if ($request->data_fim) {
+            $query->where('data', '<=', $request->data_fim);
+        }
+
+        // Filtro por categoria
+        if ($request->categoria) {
+            $query->where('categoria', $request->categoria);
+        }
+
+        // Ordenação
+        $query->orderBy('data', 'desc')->orderBy('created_at', 'desc');
+
+        // Paginação
+        $perPage = $request->per_page ?? 15;
+        $custos = $query->paginate($perPage);
+
+        return response()->json($custos);
+    }
+
+    /**
+     * Cria um novo custo indireto
+     */
+    public function store(Request $request)
+    {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        $validator = Validator::make($request->all(), [
+            'descricao' => 'required|string|max:255',
+            'data' => 'required|date',
+            'valor' => 'required|numeric|min:0',
+            'categoria' => 'nullable|string|max:255',
+            'observacoes' => 'nullable|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Erro de validação',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $data = $request->all();
+        $data['empresa_id'] = $empresa->id;
+        $custo = CustoIndireto::create($data);
+
+        return response()->json([
+            'message' => 'Custo indireto criado com sucesso',
+            'data' => $custo
+        ], 201);
+    }
+
+    /**
+     * Exibe um custo indireto específico
+     */
+    public function show($id)
+    {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        $custo = CustoIndireto::where('id', $id)
+            ->where('empresa_id', $empresa->id)
+            ->firstOrFail();
+
+        return response()->json([
+            'data' => $custo
+        ]);
+    }
+
+    /**
+     * Atualiza um custo indireto
+     */
+    public function update(Request $request, $id)
+    {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        $custo = CustoIndireto::where('id', $id)
+            ->where('empresa_id', $empresa->id)
+            ->firstOrFail();
+
+        $validator = Validator::make($request->all(), [
+            'descricao' => 'required|string|max:255',
+            'data' => 'required|date',
+            'valor' => 'required|numeric|min:0',
+            'categoria' => 'nullable|string|max:255',
+            'observacoes' => 'nullable|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Erro de validação',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $custo->update($request->all());
+
+        return response()->json([
+            'message' => 'Custo indireto atualizado com sucesso',
+            'data' => $custo
+        ]);
+    }
+
+    /**
+     * Remove um custo indireto
+     */
+    public function destroy($id)
+    {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        $custo = CustoIndireto::where('id', $id)
+            ->where('empresa_id', $empresa->id)
+            ->firstOrFail();
+        $custo->forceDelete();
+
+        return response()->json([
+            'message' => 'Custo indireto removido com sucesso'
+        ]);
+    }
+
+    /**
+     * Retorna resumo de custos indiretos
+     */
+    public function resumo(Request $request)
+    {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        $query = CustoIndireto::where('empresa_id', $empresa->id);
+
+        // Filtro por data início
+        if ($request->data_inicio) {
+            $query->where('data', '>=', $request->data_inicio);
+        }
+
+        // Filtro por data fim
+        if ($request->data_fim) {
+            $query->where('data', '<=', $request->data_fim);
+        }
+
+        $total = $query->sum('valor');
+        $quantidade = $query->count();
+
+        // Agrupar por categoria
+        $porCategoria = $query->selectRaw('categoria, SUM(valor) as total')
+            ->groupBy('categoria')
+            ->get();
+
+        return response()->json([
+            'total' => round($total, 2),
+            'quantidade' => $quantidade,
+            'por_categoria' => $porCategoria,
+        ]);
+    }
+}
+
+
+
+

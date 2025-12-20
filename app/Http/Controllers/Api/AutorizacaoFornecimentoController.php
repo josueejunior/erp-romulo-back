@@ -2,21 +2,37 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\BaseApiController;
 use App\Models\Processo;
 use App\Models\AutorizacaoFornecimento;
 use Illuminate\Http\Request;
 
-class AutorizacaoFornecimentoController extends Controller
+class AutorizacaoFornecimentoController extends BaseApiController
 {
     public function index(Processo $processo)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
         $afs = $processo->autorizacoesFornecimento()->with(['empenhos', 'contrato'])->get();
         return response()->json($afs);
     }
 
     public function store(Request $request, Processo $processo)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id) {
+            return response()->json([
+                'message' => 'Processo não encontrado ou não pertence à empresa ativa.'
+            ], 404);
+        }
+        
         if (!$processo->isEmExecucao()) {
             return response()->json([
                 'message' => 'Autorizações de Fornecimento só podem ser criadas para processos em execução.'
@@ -30,6 +46,7 @@ class AutorizacaoFornecimentoController extends Controller
             'valor' => 'required|numeric|min:0',
             'situacao' => 'required|in:aguardando_empenho,atendendo,concluida',
             'observacoes' => 'nullable|string',
+            'numero_cte' => 'nullable|string|max:255',
         ]);
 
         if ($validated['contrato_id']) {
@@ -39,6 +56,7 @@ class AutorizacaoFornecimentoController extends Controller
             }
         }
 
+        $validated['empresa_id'] = $empresa->id;
         $validated['processo_id'] = $processo->id;
         $validated['saldo'] = $validated['valor'];
 
@@ -49,6 +67,12 @@ class AutorizacaoFornecimentoController extends Controller
 
     public function show(Processo $processo, AutorizacaoFornecimento $autorizacaoFornecimento)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id || $autorizacaoFornecimento->empresa_id !== $empresa->id) {
+            return response()->json(['message' => 'Autorização de Fornecimento não encontrada ou não pertence à empresa ativa.'], 404);
+        }
+        
         if ($autorizacaoFornecimento->processo_id !== $processo->id) {
             return response()->json(['message' => 'AF não pertence a este processo.'], 404);
         }
@@ -59,6 +83,12 @@ class AutorizacaoFornecimentoController extends Controller
 
     public function update(Request $request, Processo $processo, AutorizacaoFornecimento $autorizacaoFornecimento)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id || $autorizacaoFornecimento->empresa_id !== $empresa->id) {
+            return response()->json(['message' => 'Autorização de Fornecimento não encontrada ou não pertence à empresa ativa.'], 404);
+        }
+        
         if ($autorizacaoFornecimento->processo_id !== $processo->id) {
             return response()->json(['message' => 'AF não pertence a este processo.'], 404);
         }
@@ -70,6 +100,7 @@ class AutorizacaoFornecimentoController extends Controller
             'valor' => 'required|numeric|min:0',
             'situacao' => 'required|in:aguardando_empenho,atendendo,concluida',
             'observacoes' => 'nullable|string',
+            'numero_cte' => 'nullable|string|max:255',
         ]);
 
         if ($validated['contrato_id']) {
@@ -91,6 +122,12 @@ class AutorizacaoFornecimentoController extends Controller
 
     public function destroy(Processo $processo, AutorizacaoFornecimento $autorizacaoFornecimento)
     {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        if ($processo->empresa_id !== $empresa->id || $autorizacaoFornecimento->empresa_id !== $empresa->id) {
+            return response()->json(['message' => 'Autorização de Fornecimento não encontrada ou não pertence à empresa ativa.'], 404);
+        }
+        
         if ($autorizacaoFornecimento->processo_id !== $processo->id) {
             return response()->json(['message' => 'AF não pertence a este processo.'], 404);
         }
@@ -101,7 +138,7 @@ class AutorizacaoFornecimentoController extends Controller
             ], 403);
         }
 
-        $autorizacaoFornecimento->delete();
+        $autorizacaoFornecimento->forceDelete();
 
         return response()->json(null, 204);
     }

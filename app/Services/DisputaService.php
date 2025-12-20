@@ -22,7 +22,13 @@ class DisputaService
     public function registrarResultados(Processo $processo, array $resultadosItens): Processo
     {
         foreach ($resultadosItens as $resultado) {
-            $item = ProcessoItem::find($resultado['item_id']);
+            // Buscar item pelo id ou item_id (compatibilidade)
+            $itemId = $resultado['id'] ?? $resultado['item_id'] ?? null;
+            if (!$itemId) {
+                continue;
+            }
+            
+            $item = ProcessoItem::find($itemId);
             
             if (!$item || $item->processo_id !== $processo->id) {
                 continue;
@@ -33,8 +39,19 @@ class DisputaService
                 $item->valor_final_sessao = $resultado['valor_final_sessao'];
             }
 
+            if (isset($resultado['valor_arrematado'])) {
+                $item->valor_arrematado = $resultado['valor_arrematado'];
+            } elseif (isset($resultado['valor_final_sessao']) && !$item->valor_arrematado) {
+                // Se não foi informado valor_arrematado mas tem valor_final_sessao, usar como fallback
+                $item->valor_arrematado = $resultado['valor_final_sessao'];
+            }
+
             if (isset($resultado['classificacao'])) {
                 $item->classificacao = $resultado['classificacao'];
+            }
+
+            if (isset($resultado['observacoes'])) {
+                $item->observacoes = $resultado['observacoes'];
             }
 
             $item->save();
@@ -58,6 +75,7 @@ class DisputaService
         ?int $classificacao = null,
         ?string $chanceArremate = null,
         ?int $chancePercentual = null,
+        ?bool $temChance = null,
         ?float $valorNegociado = null,
         ?string $lembretes = null,
         ?string $observacoes = null
@@ -80,6 +98,10 @@ class DisputaService
 
         if ($chancePercentual !== null) {
             $item->chance_percentual = $chancePercentual;
+        }
+
+        if ($temChance !== null) {
+            $item->tem_chance = $temChance;
         }
 
         // Valor negociado não apaga o valor anterior, apenas adiciona

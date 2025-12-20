@@ -16,6 +16,12 @@ class FornecedorResource extends JsonResource
             'nome_fantasia' => $this->nome_fantasia,
             'email' => $this->email,
             'telefone' => $this->telefone,
+            'endereco' => $this->endereco,
+            'cidade' => $this->cidade,
+            'estado' => $this->estado,
+            'cep' => $this->cep,
+            'contato' => $this->contato,
+            'observacoes' => $this->observacoes,
         ];
     }
 }

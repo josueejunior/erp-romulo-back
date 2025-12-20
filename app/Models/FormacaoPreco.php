@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class FormacaoPreco extends Model
 {
@@ -11,7 +12,8 @@ class FormacaoPreco extends Model
 
     protected $fillable = [
         'processo_item_id',
-        'orcamento_id',
+        'orcamento_id', // Mantido para compatibilidade
+        'orcamento_item_id', // Novo: para formações de preço vinculadas a itens de orçamento
         'custo_produto',
         'frete',
         'percentual_impostos',
@@ -45,5 +47,10 @@ class FormacaoPreco extends Model
     public function orcamento(): BelongsTo
     {
         return $this->belongsTo(Orcamento::class);
+    }
+
+    public function orcamentoItem(): BelongsTo
+    {
+        return $this->belongsTo(OrcamentoItem::class);
     }
 }

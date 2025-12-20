@@ -12,6 +12,7 @@ class Setor extends Model
     use SoftDeletes;
 
     protected $fillable = [
+        'empresa_id',
         'orgao_id',
         'nome',
         'email',
@@ -27,5 +28,10 @@ class Setor extends Model
     public function processos(): HasMany
     {
         return $this->hasMany(Processo::class);
+    }
+
+    public function empresa(): BelongsTo
+    {
+        return $this->belongsTo(Empresa::class);
     }
 }

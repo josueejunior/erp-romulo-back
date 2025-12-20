@@ -2,16 +2,75 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\BaseApiController;
 use App\Models\Processo;
 use App\Models\CustoIndireto;
+use App\Services\FinanceiroService;
+use App\Services\RedisService;
 use Illuminate\Http\Request;
+use App\Helpers\PermissionHelper;
+use Carbon\Carbon;
 
-class RelatorioFinanceiroController extends Controller
+class RelatorioFinanceiroController extends BaseApiController
 {
+    protected FinanceiroService $financeiroService;
+
+    public function __construct(FinanceiroService $financeiroService)
+    {
+        $this->financeiroService = $financeiroService;
+    }
+
     public function index(Request $request)
     {
+        // RBAC: apenas usuários autorizados podem ver relatórios financeiros
+        if (!PermissionHelper::canViewFinancialReports()) {
+            return response()->json([
+                'message' => 'Você não tem permissão para visualizar relatórios financeiros.',
+            ], 403);
+        }
+
+        $tenantId = tenancy()->tenant?->id;
+
+        // Se for gestão financeira mensal (apenas processos encerrados)
+        if ($request->tipo === 'mensal' || $request->mes) {
+            $mes = $request->mes 
+                ? Carbon::createFromFormat('Y-m', $request->mes)
+                : Carbon::now();
+            
+            // Tentar obter do cache primeiro
+            if ($tenantId && RedisService::isAvailable()) {
+                $cached = RedisService::getRelatorioFinanceiro(
+                    $tenantId, 
+                    $mes->month, 
+                    $mes->year
+                );
+                if ($cached !== null) {
+                    return response()->json($cached);
+                }
+            }
+            
+            $empresa = $this->getEmpresaAtivaOrFail();
+            $resultado = $this->financeiroService->calcularGestaoFinanceiraMensal($mes, $empresa->id);
+            
+            // Salvar no cache se disponível
+            if ($tenantId && RedisService::isAvailable()) {
+                RedisService::cacheRelatorioFinanceiro(
+                    $tenantId, 
+                    $mes->month, 
+                    $mes->year, 
+                    $resultado, 
+                    3600
+                ); // Cache por 1 hora
+            }
+            
+            return response()->json($resultado);
+        }
+
+        // Relatório padrão (processos em execução)
+        $empresa = $this->getEmpresaAtivaOrFail();
         $query = Processo::where('status', 'execucao')
+            ->where('empresa_id', $empresa->id)
+            ->whereNotNull('empresa_id')
             ->with(['itens', 'contratos', 'empenhos', 'notasFiscais']);
 
         if ($request->data_inicio) {
@@ -28,7 +87,8 @@ class RelatorioFinanceiroController extends Controller
         $totalCustosDiretos = 0;
         $totalSaldoReceber = 0;
 
-        $totalCustosIndiretos = CustoIndireto::query()
+        $totalCustosIndiretos = CustoIndireto::where('empresa_id', $empresa->id)
+            ->whereNotNull('empresa_id')
             ->when($request->data_inicio, function($q) use ($request) {
                 $q->where('data', '>=', $request->data_inicio);
             })
@@ -43,7 +103,10 @@ class RelatorioFinanceiroController extends Controller
                 $totalSaldoReceber += $processo->contratos->sum('saldo');
             } else {
                 $receita = $processo->itens->sum(function($item) {
-                    return $item->valor_negociado ?? $item->valor_final_sessao ?? 0;
+                    return $item->valor_arrematado 
+                        ?? $item->valor_negociado 
+                        ?? $item->valor_final_sessao 
+                        ?? 0;
                 });
                 $totalSaldoReceber += $receita;
             }
@@ -97,6 +160,28 @@ class RelatorioFinanceiroController extends Controller
                 ];
             }),
         ]);
+    }
+
+    /**
+     * Endpoint específico para gestão financeira mensal
+     */
+    public function gestaoMensal(Request $request)
+    {
+        if (!PermissionHelper::canViewFinancialReports()) {
+            return response()->json([
+                'message' => 'Você não tem permissão para visualizar relatórios financeiros.',
+            ], 403);
+        }
+
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        $mes = $request->mes 
+            ? Carbon::createFromFormat('Y-m', $request->mes)
+            : Carbon::now();
+
+        $resultado = $this->financeiroService->calcularGestaoFinanceiraMensal($mes, $empresa->id);
+
+        return response()->json($resultado);
     }
 }
 
