@@ -184,8 +184,9 @@ Route::prefix('v1')->group(function () {
 
 // Rotas do Painel Admin Central (fora do tenant e fora do v1)
 Route::prefix('admin')->group(function () {
-    // Autenticação admin
-    Route::post('/login', [AdminAuthController::class, 'login']);
+    // Autenticação admin - Rate limiting mais restritivo (3/min, 5/hora)
+    Route::post('/login', [AdminAuthController::class, 'login'])
+        ->middleware(['throttle:3,1', 'throttle:5,60']);
     
     // Rotas protegidas
     Route::middleware(['auth:sanctum', \App\Http\Middleware\IsSuperAdmin::class])->group(function () {

@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use App\Models\AdminUser;
+use App\Helpers\LogSanitizer;
 
 class AdminAuthController extends Controller
 {
@@ -28,10 +29,23 @@ class AdminAuthController extends Controller
         $admin = AdminUser::where('email', $request->email)->first();
 
         if (!$admin || !Hash::check($request->password, $admin->password)) {
+            // Log tentativa de login falha (sanitizado)
+            \Log::warning('Tentativa de login admin falhou', LogSanitizer::sanitize([
+                'email' => $request->email,
+                'ip' => $request->ip(),
+            ]));
+            
             throw ValidationException::withMessages([
                 'email' => ['Credenciais inválidas.'],
             ]);
         }
+
+        // Log login bem-sucedido (sanitizado)
+        \Log::info('Login admin realizado com sucesso', LogSanitizer::sanitize([
+            'admin_id' => $admin->id,
+            'admin_email' => $admin->email,
+            'ip' => $request->ip(),
+        ]));
 
         // Criar token
         $token = $admin->createToken('admin-token')->plainTextToken;
