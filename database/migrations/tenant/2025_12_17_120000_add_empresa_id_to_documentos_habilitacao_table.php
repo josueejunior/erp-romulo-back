@@ -11,9 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('documentos_habilitacao', function (Blueprint $table) {
-            $table->foreignId('empresa_id')->nullable()->after('id')->constrained('empresas')->onDelete('cascade');
-        });
+        // Verificar se a coluna já existe antes de adicionar
+        if (!Schema::hasColumn('documentos_habilitacao', 'empresa_id')) {
+            Schema::table('documentos_habilitacao', function (Blueprint $table) {
+                $table->foreignId('empresa_id')->nullable()->after('id')->constrained('empresas')->onDelete('cascade');
+            });
+        }
     }
 
     /**
@@ -21,10 +24,17 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('documentos_habilitacao', function (Blueprint $table) {
-            $table->dropForeign(['empresa_id']);
-            $table->dropColumn('empresa_id');
-        });
+        // Verificar se a coluna existe antes de remover
+        if (Schema::hasColumn('documentos_habilitacao', 'empresa_id')) {
+            Schema::table('documentos_habilitacao', function (Blueprint $table) {
+                try {
+                    $table->dropForeign(['empresa_id']);
+                } catch (\Exception $e) {
+                    // Ignorar se não houver foreign key
+                }
+                $table->dropColumn('empresa_id');
+            });
+        }
     }
 };
 
