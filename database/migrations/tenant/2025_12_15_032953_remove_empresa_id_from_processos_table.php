@@ -19,7 +19,7 @@ return new class extends Migration
             'fornecedores',
             'transportadoras',
             'documentos_habilitacao',
-            'custos_indiretos',
+            'custo_indiretos',
             'orcamentos',
             'contratos',
             'empenhos',
@@ -28,7 +28,8 @@ return new class extends Migration
         ];
         
         foreach ($tabelas as $tabela) {
-            if (!Schema::hasColumn($tabela, 'empresa_id')) {
+            // Verificar se a tabela existe antes de tentar adicionar a coluna
+            if (Schema::hasTable($tabela) && !Schema::hasColumn($tabela, 'empresa_id')) {
                 Schema::table($tabela, function (Blueprint $table) {
                     $table->foreignId('empresa_id')->nullable()->after('id')->constrained('empresas')->onDelete('restrict');
                 });
@@ -49,7 +50,7 @@ return new class extends Migration
             'fornecedores',
             'transportadoras',
             'documentos_habilitacao',
-            'custos_indiretos',
+            'custo_indiretos',
             'orcamentos',
             'contratos',
             'empenhos',
@@ -58,7 +59,8 @@ return new class extends Migration
         ];
         
         foreach ($tabelas as $tabela) {
-            if (Schema::hasColumn($tabela, 'empresa_id')) {
+            // Verificar se a tabela existe antes de tentar remover a coluna
+            if (Schema::hasTable($tabela) && Schema::hasColumn($tabela, 'empresa_id')) {
                 Schema::table($tabela, function (Blueprint $table) {
                     try {
                         $table->dropForeign(['empresa_id']);
