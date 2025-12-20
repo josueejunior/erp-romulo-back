@@ -737,6 +737,49 @@ class RedisService
     /**
      * Verificar se Redis está disponível
      */
+    /**
+     * Métodos genéricos para cache (get/set)
+     */
+    public static function get(string $key)
+    {
+        if (!self::isAvailable()) {
+            return null;
+        }
+        
+        try {
+            return Cache::store('redis')->get($key);
+        } catch (\Exception $e) {
+            Log::warning("Erro ao obter cache '{$key}': " . $e->getMessage());
+            return null;
+        }
+    }
+
+    public static function set(string $key, $value, int $ttl = 300): void
+    {
+        if (!self::isAvailable()) {
+            return;
+        }
+        
+        try {
+            Cache::store('redis')->put($key, $value, $ttl);
+        } catch (\Exception $e) {
+            Log::warning("Erro ao salvar cache '{$key}': " . $e->getMessage());
+        }
+    }
+
+    public static function forget(string $key): void
+    {
+        if (!self::isAvailable()) {
+            return;
+        }
+        
+        try {
+            Cache::store('redis')->forget($key);
+        } catch (\Exception $e) {
+            Log::warning("Erro ao remover cache '{$key}': " . $e->getMessage());
+        }
+    }
+
     public static function isAvailable(): bool
     {
         try {

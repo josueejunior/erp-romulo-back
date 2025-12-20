@@ -8,6 +8,7 @@ use App\Models\Setor;
 use App\Models\Orgao;
 use Illuminate\Http\Request;
 use App\Helpers\PermissionHelper;
+use App\Services\RedisService;
 
 class SetorController extends BaseApiController
 {
@@ -20,11 +21,29 @@ class SetorController extends BaseApiController
         }
         
         $empresa = $this->getEmpresaAtivaOrFail();
+        $tenantId = tenancy()->tenant?->id;
+        
+        // Criar chave de cache baseada nos filtros
+        $filters = [
+            'orgao_id' => $request->orgao_id,
+            'search' => $request->search,
+            'page' => $request->page ?? 1,
+        ];
+        $cacheKey = "setores:{$tenantId}:{$empresa->id}:" . md5(json_encode($filters));
+        
+        // Tentar obter do cache
+        if ($tenantId && RedisService::isAvailable()) {
+            $cached = RedisService::get($cacheKey);
+            if ($cached !== null) {
+                return response()->json($cached);
+            }
+        }
         
         // Filtrar APENAS setores da empresa ativa (não incluir NULL)
         $query = Setor::where('empresa_id', $empresa->id)
             ->whereNotNull('empresa_id')
-            ->with('orgao');
+            ->with(['orgao:id,uasg,razao_social'])
+            ->select(['id', 'empresa_id', 'orgao_id', 'nome', 'email', 'telefone', 'observacoes', 'created_at', 'updated_at']);
 
         if ($request->orgao_id) {
             // Validar que o órgão pertence à empresa
@@ -49,8 +68,14 @@ class SetorController extends BaseApiController
         }
 
         $setors = $query->orderBy('nome')->paginate(15);
+        $response = SetorResource::collection($setors);
 
-        return SetorResource::collection($setors);
+        // Salvar no cache (5 minutos)
+        if ($tenantId && RedisService::isAvailable()) {
+            RedisService::set($cacheKey, $response->response()->getData(true), 300);
+        }
+
+        return $response;
     }
 
     public function store(Request $request)
@@ -158,6 +183,25 @@ class SetorController extends BaseApiController
         $setor->update($validated);
         $setor->load('orgao');
 
+        // Limpar cache de setores
+        $tenantId = tenancy()->tenant?->id;
+        if ($tenantId && RedisService::isAvailable()) {
+            $pattern = "setores:{$tenantId}:{$empresa->id}:*";
+            try {
+                $cursor = 0;
+                do {
+                    $result = \Illuminate\Support\Facades\Redis::scan($cursor, ['match' => $pattern, 'count' => 100]);
+                    $cursor = $result[0];
+                    $keys = $result[1];
+                    if (!empty($keys)) {
+                        \Illuminate\Support\Facades\Redis::del($keys);
+                    }
+                } while ($cursor != 0);
+            } catch (\Exception $e) {
+                \Log::warning('Erro ao limpar cache de setores: ' . $e->getMessage());
+            }
+        }
+
         return new SetorResource($setor);
     }
 
@@ -185,9 +229,29 @@ class SetorController extends BaseApiController
 
         $setor->forceDelete();
 
+        // Limpar cache de setores
+        $tenantId = tenancy()->tenant?->id;
+        if ($tenantId && RedisService::isAvailable()) {
+            $pattern = "setores:{$tenantId}:{$empresa->id}:*";
+            try {
+                $cursor = 0;
+                do {
+                    $result = \Illuminate\Support\Facades\Redis::scan($cursor, ['match' => $pattern, 'count' => 100]);
+                    $cursor = $result[0];
+                    $keys = $result[1];
+                    if (!empty($keys)) {
+                        \Illuminate\Support\Facades\Redis::del($keys);
+                    }
+                } while ($cursor != 0);
+            } catch (\Exception $e) {
+                \Log::warning('Erro ao limpar cache de setores: ' . $e->getMessage());
+            }
+        }
+
         return response()->json(null, 204);
     }
 }
+
 
 
 

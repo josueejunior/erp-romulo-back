@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use App\Services\RedisService;
 
 class ContratoController extends BaseApiController
 {
@@ -19,15 +20,38 @@ class ContratoController extends BaseApiController
     public function listarTodos(Request $request)
     {
         $empresa = $this->getEmpresaAtivaOrFail();
+        $tenantId = tenancy()->tenant?->id;
+        
+        // Criar chave de cache baseada nos filtros
+        $filters = [
+            'busca' => $request->busca,
+            'orgao_id' => $request->orgao_id,
+            'srp' => $request->has('srp') ? $request->boolean('srp') : null,
+            'situacao' => $request->situacao,
+            'vigente' => $request->has('vigente') ? $request->boolean('vigente') : null,
+            'vencer_em' => $request->vencer_em,
+            'somente_alerta' => $request->boolean('somente_alerta'),
+            'page' => $request->page ?? 1,
+        ];
+        $cacheKey = "contratos:{$tenantId}:{$empresa->id}:" . md5(json_encode($filters));
+        
+        // Tentar obter do cache
+        if ($tenantId && RedisService::isAvailable()) {
+            $cached = RedisService::get($cacheKey);
+            if ($cached !== null) {
+                return response()->json($cached);
+            }
+        }
         
         // Filtrar APENAS contratos da empresa ativa (não incluir NULL)
         $query = Contrato::where('empresa_id', $empresa->id)
             ->whereNotNull('empresa_id')
             ->with([
-            'processo.orgao',
-            'processo.setor',
-            'empenhos',
-            'autorizacoesFornecimento'
+            'processo:id,numero_modalidade,numero_processo_administrativo,orgao_id,setor_id,srp',
+            'processo.orgao:id,uasg,razao_social',
+            'processo.setor:id,nome',
+            'empenhos:id,contrato_id,numero,valor',
+            'autorizacoesFornecimento:id,contrato_id,numero'
         ]);
 
         // Filtro: busca (número do contrato, processo, órgão)
@@ -125,7 +149,7 @@ class ContratoController extends BaseApiController
         $perPage = $request->per_page ?? 15;
         $contratos = $query->paginate($perPage);
 
-        return response()->json([
+        $response = [
             'data' => $contratos->items(),
             'indicadores' => $indicadores,
             'pagination' => [
@@ -133,8 +157,15 @@ class ContratoController extends BaseApiController
                 'last_page' => $contratos->lastPage(),
                 'per_page' => $contratos->perPage(),
                 'total' => $contratos->total(),
-            ]
-        ]);
+            ],
+        ];
+
+        // Salvar no cache (5 minutos)
+        if ($tenantId && RedisService::isAvailable()) {
+            RedisService::set($cacheKey, $response, 300);
+        }
+
+        return response()->json($response);
     }
 
     /**
@@ -274,6 +305,25 @@ class ContratoController extends BaseApiController
             return $contrato;
         });
 
+        // Limpar cache de contratos
+        $tenantId = tenancy()->tenant?->id;
+        if ($tenantId && RedisService::isAvailable()) {
+            $pattern = "contratos:{$tenantId}:{$empresa->id}:*";
+            try {
+                $cursor = 0;
+                do {
+                    $result = \Illuminate\Support\Facades\Redis::scan($cursor, ['match' => $pattern, 'count' => 100]);
+                    $cursor = $result[0];
+                    $keys = $result[1];
+                    if (!empty($keys)) {
+                        \Illuminate\Support\Facades\Redis::del($keys);
+                    }
+                } while ($cursor != 0);
+            } catch (\Exception $e) {
+                \Log::warning('Erro ao limpar cache de contratos: ' . $e->getMessage());
+            }
+        }
+
         return response()->json($contrato, 201);
     }
 
@@ -350,6 +400,25 @@ class ContratoController extends BaseApiController
             }
         });
 
+        // Limpar cache de contratos
+        $tenantId = tenancy()->tenant?->id;
+        if ($tenantId && RedisService::isAvailable()) {
+            $pattern = "contratos:{$tenantId}:{$empresa->id}:*";
+            try {
+                $cursor = 0;
+                do {
+                    $result = \Illuminate\Support\Facades\Redis::scan($cursor, ['match' => $pattern, 'count' => 100]);
+                    $cursor = $result[0];
+                    $keys = $result[1];
+                    if (!empty($keys)) {
+                        \Illuminate\Support\Facades\Redis::del($keys);
+                    }
+                } while ($cursor != 0);
+            } catch (\Exception $e) {
+                \Log::warning('Erro ao limpar cache de contratos: ' . $e->getMessage());
+            }
+        }
+
         return response()->json($contrato);
     }
 
@@ -375,6 +444,25 @@ class ContratoController extends BaseApiController
         }
 
         $contrato->forceDelete();
+
+        // Limpar cache de contratos
+        $tenantId = tenancy()->tenant?->id;
+        if ($tenantId && RedisService::isAvailable()) {
+            $pattern = "contratos:{$tenantId}:{$empresa->id}:*";
+            try {
+                $cursor = 0;
+                do {
+                    $result = \Illuminate\Support\Facades\Redis::scan($cursor, ['match' => $pattern, 'count' => 100]);
+                    $cursor = $result[0];
+                    $keys = $result[1];
+                    if (!empty($keys)) {
+                        \Illuminate\Support\Facades\Redis::del($keys);
+                    }
+                } while ($cursor != 0);
+            } catch (\Exception $e) {
+                \Log::warning('Erro ao limpar cache de contratos: ' . $e->getMessage());
+            }
+        }
 
         return response()->json(null, 204);
     }
