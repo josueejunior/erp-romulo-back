@@ -121,6 +121,7 @@ abstract class BaseApiController extends Controller
     /**
      * Obter ID da rota atual
      * Tenta múltiplos parâmetros comuns
+     * Garante que sempre retorna um valor primitivo (string/int), nunca um objeto
      */
     protected function getRouteId($route): ?string
     {
@@ -134,14 +135,33 @@ abstract class BaseApiController extends Controller
         
         foreach ($commonParams as $param) {
             if (isset($parameters[$param])) {
-                return $parameters[$param];
+                $value = $parameters[$param];
+                // Se for um objeto Eloquent, pegar o ID
+                if (is_object($value) && method_exists($value, 'getKey')) {
+                    return (string) $value->getKey();
+                }
+                // Se for um objeto, tentar acessar a propriedade 'id'
+                if (is_object($value) && isset($value->id)) {
+                    return (string) $value->id;
+                }
+                // Se já for um valor primitivo, retornar como string
+                return (string) $value;
             }
         }
 
-        // Se não encontrou, retornar o primeiro parâmetro numérico
+        // Se não encontrou, retornar o primeiro parâmetro numérico ou objeto com ID
         foreach ($parameters as $key => $value) {
+            // Se for um objeto Eloquent, pegar o ID
+            if (is_object($value) && method_exists($value, 'getKey')) {
+                return (string) $value->getKey();
+            }
+            // Se for um objeto, tentar acessar a propriedade 'id'
+            if (is_object($value) && isset($value->id)) {
+                return (string) $value->id;
+            }
+            // Se for numérico, retornar como string
             if (is_numeric($value)) {
-                return $value;
+                return (string) $value;
             }
         }
 

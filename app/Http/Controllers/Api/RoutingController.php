@@ -48,20 +48,46 @@ abstract class RoutingController extends BaseController
 
     /**
      * Obter ID da rota atual
+     * Garante que sempre retorna um valor primitivo (string/int), nunca um objeto
      */
     protected function getRouteId($route): ?string
     {
+        if (!$route) {
+            return null;
+        }
+        
         $parameters = $route->parameters();
+        
+        // Função auxiliar para extrair ID de um valor (pode ser objeto ou primitivo)
+        $extractId = function($value) {
+            // Se for um objeto Eloquent, pegar o ID
+            if (is_object($value) && method_exists($value, 'getKey')) {
+                return (string) $value->getKey();
+            }
+            // Se for um objeto, tentar acessar a propriedade 'id'
+            if (is_object($value) && isset($value->id)) {
+                return (string) $value->id;
+            }
+            // Se já for um valor primitivo, retornar como string
+            return is_scalar($value) ? (string) $value : null;
+        };
         
         // Tentar encontrar ID padrão (último parâmetro ou 'id')
         if (isset($parameters['id'])) {
-            return $parameters['id'];
+            $id = $extractId($parameters['id']);
+            if ($id !== null) {
+                return $id;
+            }
         }
         
         // Buscar último parâmetro
         $keys = array_keys($parameters);
         if (!empty($keys)) {
-            return $parameters[end($keys)];
+            $lastKey = end($keys);
+            $id = $extractId($parameters[$lastKey]);
+            if ($id !== null) {
+                return $id;
+            }
         }
         
         return null;
