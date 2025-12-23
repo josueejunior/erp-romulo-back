@@ -24,3 +24,4 @@ echo "  2. Atualizar namespaces"
 echo "  3. Atualizar imports"
 echo "  4. Atualizar rotas e service providers"
 
+

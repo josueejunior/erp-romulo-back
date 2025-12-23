@@ -99,3 +99,4 @@ echo "  - Fornecedor, Orgao, Documento"
 echo "  - Empenho, NotaFiscal, AutorizacaoFornecimento"
 echo "  - Custo, Auditoria, Assinatura"
 
+

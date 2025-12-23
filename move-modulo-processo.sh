@@ -58,3 +58,4 @@ echo "  3. Rotas em routes/api.php"
 echo "  4. Service Providers (AppServiceProvider)"
 echo "  5. Composer autoload (se necessário)"
 
+

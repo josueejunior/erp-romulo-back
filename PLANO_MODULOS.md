@@ -253,3 +253,4 @@ app/
 5. **Composer**: Atualizar autoload se necessário
 6. **Testes**: Garantir que todos os testes continuem funcionando
 
+

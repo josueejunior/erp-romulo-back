@@ -24,3 +24,4 @@ abstract class Migration extends BaseMigration
     }
 }
 
+

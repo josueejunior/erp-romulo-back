@@ -210,3 +210,4 @@ Para migrar código existente:
 - [ ] Remover métodos deprecados após migração completa
 - [ ] Adicionar testes unitários para `AuthIdentityService`
 
+

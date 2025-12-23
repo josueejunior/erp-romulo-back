@@ -87,3 +87,4 @@
 - O controller da API é o que está sendo usado nas rotas (`routes/api.php`)
 - Precisamos decidir se mantemos ambos ou apenas o da API
 
+

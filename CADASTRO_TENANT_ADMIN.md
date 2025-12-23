@@ -316,3 +316,4 @@ Em caso de dúvidas ou problemas:
 - Verifique se o banco de dados está acessível
 - Verifique as permissões do usuário do banco de dados
 
+

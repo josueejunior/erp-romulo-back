@@ -73,3 +73,4 @@ echo "\n✅ Concluído!\n";
 echo "Atualizadas: {$updated}\n";
 echo "Ignoradas (já atualizadas): {$skipped}\n";
 
+

@@ -181,3 +181,4 @@ php artisan migrate:refresh
 5. **Nomenclatura clara**: `create_{nome_tabela}.php`
 6. **Timestamps em português**: Use `datetimes()` se quiser `criado_em`
 
+

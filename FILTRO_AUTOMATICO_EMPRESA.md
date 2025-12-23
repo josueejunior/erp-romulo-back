@@ -177,3 +177,4 @@ public function list(array $params = []): LengthAwarePaginator
 2. Migrar outros services para estender `BaseService`
 3. Remover filtros manuais de outros services
 
+

@@ -257,3 +257,4 @@ tail -f storage/logs/laravel.log
 - Guia interno: `database/migrations/GUIA_MIGRATIONS.md`
 - Estrutura: `database/migrations/README.md`
 
+

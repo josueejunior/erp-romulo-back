@@ -149,3 +149,4 @@ php artisan db:seed --class=DashboardDemoSeeder
 - Seeders que criam dados no banco central não precisam de contexto de tenant
 - Sempre use `withTimestamps()` para modelos que usam timestamps customizados
 
+

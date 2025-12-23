@@ -123,3 +123,4 @@ echo ""
 echo "📋 Módulos DDD organizados:"
 echo "  - Auth, Assinatura"
 
+

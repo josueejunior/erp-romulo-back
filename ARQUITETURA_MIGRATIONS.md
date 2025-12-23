@@ -247,3 +247,4 @@ Para migrar migrations existentes:
 4. Usar constantes de tamanho (`Blueprint::VARCHAR_DEFAULT`)
 5. Usar `datetimes()` em vez de `timestamps()` se quiser nomes em português
 
+

@@ -304,3 +304,4 @@ Para migrar um controller existente:
 - [ ] Aplicar `RouteHelper` nas rotas
 - [ ] Adicionar testes para services
 
+

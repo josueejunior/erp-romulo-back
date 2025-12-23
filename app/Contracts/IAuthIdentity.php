@@ -54,3 +54,4 @@ interface IAuthIdentity
     public function getScope(): string;
 }
 
+

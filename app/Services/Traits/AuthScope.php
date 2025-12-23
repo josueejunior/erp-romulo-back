@@ -69,3 +69,4 @@ trait AuthScope
     }
 }
 
+

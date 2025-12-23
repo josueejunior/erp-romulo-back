@@ -51,3 +51,4 @@ echo "  Permission/ - Permissões e roles"
 echo "  System/ - Sistema (cache, jobs, tokens)"
 echo "  Assinatura/ - Planos e assinaturas"
 
+

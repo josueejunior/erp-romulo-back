@@ -188,3 +188,4 @@ class MeuController extends Controller
 3. Organizar outros módulos (Orcamento, Contrato, etc.) seguindo o mesmo padrão
 4. Remover filtros manuais de outros services
 
+
