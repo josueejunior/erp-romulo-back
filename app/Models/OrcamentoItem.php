@@ -2,11 +2,10 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
-class OrcamentoItem extends Model
+class OrcamentoItem extends BaseModel
 {
     protected $table = 'orcamento_itens';
 

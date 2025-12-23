@@ -2,20 +2,14 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use App\Models\Concerns\HasEmpresaScope;
-use App\Database\Schema\Blueprint;
+use App\Models\Traits\HasSoftDeletesWithEmpresa;
+use App\Models\Traits\BelongsToEmpresaTrait;
 
-class Empenho extends Model
+class Empenho extends BaseModel
 {
-    use SoftDeletes, HasEmpresaScope;
-
-    const CREATED_AT = Blueprint::CREATED_AT;
-    const UPDATED_AT = Blueprint::UPDATED_AT;
-    const DELETED_AT = Blueprint::DELETED_AT;
+    use HasSoftDeletesWithEmpresa, BelongsToEmpresaTrait;
 
     protected $fillable = [
         'empresa_id',
@@ -44,11 +38,6 @@ class Empenho extends Model
             'valor' => 'decimal:2',
             'concluido' => 'boolean',
         ];
-    }
-
-    public function empresa(): BelongsTo
-    {
-        return $this->belongsTo(Empresa::class);
     }
 
     public function processo(): BelongsTo

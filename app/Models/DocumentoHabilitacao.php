@@ -3,21 +3,14 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Carbon\Carbon;
-use App\Models\Concerns\HasEmpresaScope;
-use App\Database\Schema\Blueprint;
+use App\Models\Traits\HasSoftDeletesWithEmpresa;
+use App\Models\Traits\BelongsToEmpresaTrait;
 
-class DocumentoHabilitacao extends Model
+class DocumentoHabilitacao extends BaseModel
 {
-    use HasFactory, SoftDeletes, HasEmpresaScope;
-
-    const CREATED_AT = Blueprint::CREATED_AT;
-    const UPDATED_AT = Blueprint::UPDATED_AT;
-    const DELETED_AT = Blueprint::DELETED_AT;
+    use HasFactory, HasSoftDeletesWithEmpresa, BelongsToEmpresaTrait;
 
     protected $table = 'documentos_habilitacao';
 
@@ -69,11 +62,6 @@ class DocumentoHabilitacao extends Model
         }
         $data = Carbon::parse($this->data_validade);
         return Carbon::now()->diffInDays($data, false);
-    }
-
-    public function empresa(): BelongsTo
-    {
-        return $this->belongsTo(Empresa::class);
     }
 
     public function processoDocumentos(): HasMany

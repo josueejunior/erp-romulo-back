@@ -2,11 +2,11 @@
 
 namespace App\Modules\Processo\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\BaseModel;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class ProcessoItem extends Model
+class ProcessoItem extends BaseModel
 {
     protected $table = 'processo_itens';
 

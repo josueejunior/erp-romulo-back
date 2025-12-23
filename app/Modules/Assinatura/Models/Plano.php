@@ -2,16 +2,13 @@
 
 namespace App\Modules\Assinatura\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\BaseModel;
 use App\Models\Traits\HasTimestampsCustomizados;
-use App\Database\Schema\Blueprint;
 
-class Plano extends Model
+class Plano extends BaseModel
 {
     use HasTimestampsCustomizados;
-
-    const CREATED_AT = Blueprint::CREATED_AT;
-    const UPDATED_AT = Blueprint::UPDATED_AT;
+    
     public $timestamps = true;
 
     protected $fillable = [

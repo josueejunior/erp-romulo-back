@@ -2,10 +2,10 @@
 
 namespace App\Modules\Processo\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\BaseModel;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class ProcessoItemVinculo extends Model
+class ProcessoItemVinculo extends BaseModel
 {
     protected $table = 'processo_item_vinculos';
 

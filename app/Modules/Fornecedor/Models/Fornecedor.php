@@ -3,21 +3,16 @@
 namespace App\Modules\Fornecedor\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Models\Concerns\HasEmpresaScope;
 use App\Models\Traits\HasTimestampsCustomizados;
 use App\Models\Empresa;
-use App\Database\Schema\Blueprint;
 
-class Fornecedor extends Model
+class Fornecedor extends BaseModel
 {
     use HasFactory, SoftDeletes, HasEmpresaScope, HasTimestampsCustomizados;
-
-    const CREATED_AT = Blueprint::CREATED_AT;
-    const UPDATED_AT = Blueprint::UPDATED_AT;
-    const DELETED_AT = Blueprint::DELETED_AT;
+    
     public $timestamps = true;
 
     protected $table = 'fornecedores';

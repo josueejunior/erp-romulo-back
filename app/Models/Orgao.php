@@ -2,21 +2,15 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Models\Concerns\HasEmpresaScope;
+use App\Models\Traits\HasSoftDeletesWithEmpresa;
 use App\Models\Traits\HasTimestampsCustomizados;
-use App\Database\Schema\Blueprint;
+use App\Models\Traits\BelongsToEmpresaTrait;
 
-class Orgao extends Model
+class Orgao extends BaseModel
 {
-    use SoftDeletes, HasEmpresaScope, HasTimestampsCustomizados;
-
-    const CREATED_AT = Blueprint::CREATED_AT;
-    const UPDATED_AT = Blueprint::UPDATED_AT;
-    const DELETED_AT = Blueprint::DELETED_AT;
+    use HasSoftDeletesWithEmpresa, HasTimestampsCustomizados, BelongsToEmpresaTrait;
+    
     public $timestamps = true;
 
     protected $fillable = [
@@ -43,11 +37,6 @@ class Orgao extends Model
     public function processos(): HasMany
     {
         return $this->hasMany(Processo::class);
-    }
-
-    public function empresa(): BelongsTo
-    {
-        return $this->belongsTo(Empresa::class);
     }
 
     protected function casts(): array

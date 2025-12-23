@@ -2,11 +2,10 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
-class FormacaoPreco extends Model
+class FormacaoPreco extends BaseModel
 {
     protected $table = 'formacao_precos';
 

@@ -2,18 +2,15 @@
 
 namespace App\Modules\Assinatura\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\BaseModel;
 use Carbon\Carbon;
 use App\Models\Traits\HasTimestampsCustomizados;
 use App\Models\Tenant;
-use App\Database\Schema\Blueprint;
 
-class Assinatura extends Model
+class Assinatura extends BaseModel
 {
     use HasTimestampsCustomizados;
-
-    const CREATED_AT = Blueprint::CREATED_AT;
-    const UPDATED_AT = Blueprint::UPDATED_AT;
+    
     public $timestamps = true;
 
     protected $fillable = [

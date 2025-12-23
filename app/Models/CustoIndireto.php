@@ -2,19 +2,12 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Models\Concerns\HasEmpresaScope;
-use App\Database\Schema\Blueprint;
+use App\Models\Traits\HasSoftDeletesWithEmpresa;
+use App\Models\Traits\BelongsToEmpresaTrait;
 
-class CustoIndireto extends Model
+class CustoIndireto extends BaseModel
 {
-    use SoftDeletes, HasEmpresaScope;
-
-    const CREATED_AT = Blueprint::CREATED_AT;
-    const UPDATED_AT = Blueprint::UPDATED_AT;
-    const DELETED_AT = Blueprint::DELETED_AT;
+    use HasSoftDeletesWithEmpresa, BelongsToEmpresaTrait;
 
     protected $table = 'custo_indiretos';
 
@@ -33,11 +26,6 @@ class CustoIndireto extends Model
             'data' => 'date',
             'valor' => 'decimal:2',
         ];
-    }
-
-    public function empresa(): BelongsTo
-    {
-        return $this->belongsTo(Empresa::class);
     }
 }
 

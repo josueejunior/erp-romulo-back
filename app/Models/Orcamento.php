@@ -2,15 +2,15 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Models\Concerns\HasEmpresaScope;
+use App\Models\Traits\BelongsToEmpresaTrait;
 
-class Orcamento extends Model
+class Orcamento extends BaseModel
 {
-    use HasEmpresaScope;
+    use HasEmpresaScope, BelongsToEmpresaTrait;
     /**
      * Get the route key for the model.
      */
@@ -42,11 +42,6 @@ class Orcamento extends Model
             'frete_incluido' => 'boolean',
             'fornecedor_escolhido' => 'boolean',
         ];
-    }
-
-    public function empresa(): BelongsTo
-    {
-        return $this->belongsTo(Empresa::class);
     }
 
     public function processo(): BelongsTo

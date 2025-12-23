@@ -9,14 +9,11 @@ use Stancl\Tenancy\Database\Concerns\HasDomains;
 use App\Modules\Assinatura\Models\Plano;
 use App\Modules\Assinatura\Models\Assinatura;
 use App\Models\Traits\HasTimestampsCustomizados;
-use App\Database\Schema\Blueprint;
 
 class Tenant extends BaseTenant implements TenantWithDatabase
 {
     use HasDatabase, HasDomains, HasTimestampsCustomizados;
-
-    const CREATED_AT = Blueprint::CREATED_AT;
-    const UPDATED_AT = Blueprint::UPDATED_AT;
+    
     public $timestamps = true;
 
     /**
