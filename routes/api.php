@@ -178,6 +178,9 @@ Route::prefix('v1')->group(function () {
                 Route::get('/resumo', [ApiCustoIndiretoController::class, 'resumo']);
             });
         
+        // Rota de compatibilidade para /custos-indiretos-resumo
+        Route::get('/custos-indiretos-resumo', [ApiCustoIndiretoController::class, 'resumo']);
+        
         Route::module('documentos-habilitacao', ApiDocumentoHabilitacaoController::class, 'documentoHabilitacao')
             ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
         
