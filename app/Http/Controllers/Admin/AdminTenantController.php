@@ -31,10 +31,13 @@ class AdminTenantController extends Controller
      */
     public function show(Tenant $tenant)
     {
-        // Recarregar o tenant para garantir que todos os dados estão carregados
+        // Recarregar o tenant do banco para garantir que todos os dados estão atualizados
         $tenant->refresh();
         
-        // Adicionar nome do banco de dados do tenant
+        // Garantir que todos os atributos sejam carregados
+        $tenant->makeVisible($tenant->getFillable());
+        
+        // Converter para array e adicionar campos extras
         $data = $tenant->toArray();
         $data['tenancy_db_name'] = config('tenancy.database.prefix') . $tenant->id;
         

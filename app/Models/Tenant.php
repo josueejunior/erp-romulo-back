@@ -48,6 +48,39 @@ class Tenant extends BaseTenant implements TenantWithDatabase
         'limite_usuarios',
     ];
 
+    /**
+     * Colunas que devem ser visíveis na serialização JSON
+     * Garante que todos os campos customizados sejam retornados
+     */
+    protected $visible = [
+        'id',
+        'razao_social',
+        'cnpj',
+        'email',
+        'status',
+        'endereco',
+        'cidade',
+        'estado',
+        'cep',
+        'telefones',
+        'emails_adicionais',
+        'banco',
+        'agencia',
+        'conta',
+        'tipo_conta',
+        'pix',
+        'representante_legal_nome',
+        'representante_legal_cpf',
+        'representante_legal_cargo',
+        'logo',
+        'plano_atual_id',
+        'assinatura_atual_id',
+        'limite_processos',
+        'limite_usuarios',
+        'criado_em',
+        'atualizado_em',
+    ];
+
     public static function getCustomColumns(): array
     {
         return [
@@ -94,13 +127,19 @@ class Tenant extends BaseTenant implements TenantWithDatabase
     {
         $array = parent::toArray();
         
+        // Obter todos os atributos diretamente do modelo (incluindo os que podem não estar no parent::toArray())
+        $attributes = $this->getAttributes();
+        
         // Garantir que todas as colunas customizadas estejam no array
         $customColumns = self::getCustomColumns();
         foreach ($customColumns as $column) {
-            if (!isset($array[$column])) {
-                // Tentar obter o atributo diretamente
+            // Se a coluna existe nos atributos, usar o valor (mesmo que seja null)
+            if (array_key_exists($column, $attributes)) {
+                $array[$column] = $this->getAttribute($column);
+            } elseif (!isset($array[$column])) {
+                // Se não existe nos atributos nem no array, tentar obter via getAttribute
                 $value = $this->getAttribute($column);
-                if ($value !== null || array_key_exists($column, $this->getAttributes())) {
+                if ($value !== null) {
                     $array[$column] = $value;
                 }
             }
