@@ -13,8 +13,9 @@ class DocumentoHabilitacaoController extends BaseApiController
 {
     use HasDefaultActions;
 
-    public function __construct(protected DocumentoHabilitacaoService $service)
+    public function __construct(DocumentoHabilitacaoService $service)
     {
+        $this->service = $service;
     }
 
     /**

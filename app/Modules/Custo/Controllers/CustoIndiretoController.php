@@ -12,8 +12,9 @@ class CustoIndiretoController extends BaseApiController
 {
     use HasDefaultActions;
 
-    public function __construct(protected CustoIndiretoService $service)
+    public function __construct(CustoIndiretoService $service)
     {
+        $this->service = $service;
     }
 
     /**

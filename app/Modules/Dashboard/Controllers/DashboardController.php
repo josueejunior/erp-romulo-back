@@ -17,7 +17,7 @@ class DashboardController extends BaseApiController
     public function __construct(DashboardService $dashboardService)
     {
         $this->dashboardService = $dashboardService;
-        $this->service = $dashboardService; // Para HasDefaultActions
+        // Não atribuir a $this->service porque DashboardService não implementa IService
     }
 
     /**
