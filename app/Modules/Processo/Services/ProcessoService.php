@@ -100,8 +100,12 @@ class ProcessoService extends BaseService
             $builder->with($params['with']);
         }
 
-        // Ordenação
-        $builder->orderBy('created_at', 'desc');
+        // Ordenação - usar constante do modelo para timestamps customizados
+        $modelClass = static::$model;
+        $createdAtColumn = defined("$modelClass::CREATED_AT") 
+            ? $modelClass::CREATED_AT 
+            : 'criado_em';
+        $builder->orderBy($createdAtColumn, 'desc');
 
         // Paginação
         $perPage = $params['per_page'] ?? 15;
