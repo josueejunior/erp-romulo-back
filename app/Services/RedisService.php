@@ -239,20 +239,40 @@ class RedisService
 
     /**
      * Limpar todos os rate limits (usar com cuidado!)
+     * Limpa tanto os rate limits customizados quanto os do Laravel padrão
      */
     public static function clearAllRateLimits(): void
     {
         if (!self::isAvailable()) {
+            // Se Redis não estiver disponível, limpar cache do Laravel
+            \Cache::flush();
             return;
         }
         
         try {
+            // Limpar rate limits customizados
             $keys = Redis::keys('rate_limit:*');
             if (!empty($keys)) {
                 Redis::del($keys);
             }
+            
+            // Limpar rate limits do Laravel padrão (usando cache)
+            $prefix = config('cache.prefix', '');
+            $laravelKeys = Redis::keys($prefix . 'illuminate_rate_limit:*');
+            if (!empty($laravelKeys)) {
+                Redis::del($laravelKeys);
+            }
+            
+            // Também limpar via Cache facade para garantir
+            \Cache::flush();
         } catch (\Exception $e) {
             Log::warning('Erro ao limpar todos os rate limits: ' . $e->getMessage());
+            // Fallback: limpar cache geral
+            try {
+                \Cache::flush();
+            } catch (\Exception $e2) {
+                Log::warning('Erro ao limpar cache geral: ' . $e2->getMessage());
+            }
         }
     }
 

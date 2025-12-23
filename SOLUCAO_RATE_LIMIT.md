@@ -12,19 +12,30 @@ O erro `ThrottleRequestsException: Too Many Attempts` ocorre quando muitas requi
 
 ### 2. **Adicionado Métodos para Limpar Rate Limit**
 - ✅ `RedisService::clearRateLimit($identifier)` - Limpa rate limit específico
-- ✅ `RedisService::clearAllRateLimits()` - Limpa todos os rate limits
-- ✅ Comando Artisan `rate-limit:clear` para limpar via terminal
+- ✅ `RedisService::clearAllRateLimits()` - Limpa todos os rate limits (customizados e Laravel padrão)
+- ✅ Comando Artisan `rate-limit:clear` para limpar via terminal com opção `--force`
+
+### 3. **Melhorado Tratamento de Erros de Rate Limiting**
+- ✅ Tratamento específico de `ThrottleRequestsException` no `HandleApiErrors`
+- ✅ Mensagens mais amigáveis em português
+- ✅ Headers úteis incluídos na resposta (Retry-After, X-RateLimit-*)
+- ✅ Logs estruturados para monitoramento
 
 ## Soluções Imediatas
 
 ### Opção 1: Limpar Rate Limit via Comando (Recomendado)
 ```bash
-# Limpar todos os rate limits
+# Limpar todos os rate limits (com confirmação)
 php artisan rate-limit:clear
+
+# Limpar todos os rate limits (sem confirmação - útil para scripts)
+php artisan rate-limit:clear --force
 
 # Ou limpar um específico (se souber o identificador)
 php artisan rate-limit:clear "rate_limit:IP:GET:/api/v1/orgaos"
 ```
+
+**Nota:** O comando agora limpa tanto os rate limits customizados (Redis) quanto os do Laravel padrão (cache).
 
 ### Opção 2: Limpar Redis Diretamente
 ```bash

@@ -3,17 +3,27 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Traits\HasAuthContext;
 use App\Models\Empresa;
 use Illuminate\Database\Eloquent\Builder;
 
 abstract class BaseApiController extends Controller
 {
+    use HasAuthContext;
     /**
      * Obtém a empresa do usuário autenticado
      * Cada usuário tem apenas UMA empresa associada
+     * 
+     * @deprecated Use getEmpresa() do trait HasAuthContext
      */
     protected function getEmpresaAtiva(): ?Empresa
     {
+        // Usar o método do trait se disponível
+        if (method_exists($this, 'getEmpresa')) {
+            return $this->getEmpresa();
+        }
+
+        // Fallback para código legado
         $user = auth()->user();
         
         if (!$user) {

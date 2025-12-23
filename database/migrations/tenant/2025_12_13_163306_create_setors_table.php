@@ -1,11 +1,13 @@
 <?php
 
-use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
+use App\Database\Migrations\Migration;
+use App\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    public string $table = 'setors';
+
     /**
      * Run the migrations.
      */
@@ -13,13 +15,13 @@ return new class extends Migration
     {
         Schema::create('setors', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('orgao_id')->constrained('orgaos')->onDelete('cascade');
-            $table->string('nome');
-            $table->string('email')->nullable();
-            $table->string('telefone')->nullable();
-            $table->text('observacoes')->nullable();
-            $table->timestamps();
-            $table->softDeletes();
+            $table->foreignIdCustom('orgao_id', 'orgaos', false, 'cascade');
+            $table->string('nome', Blueprint::VARCHAR_DEFAULT);
+            $table->email();
+            $table->telefone();
+            $table->observacao('observacoes');
+            $table->datetimes();
+            $table->timestamp(Blueprint::DELETED_AT)->nullable();
         });
     }
 

@@ -4,13 +4,17 @@ namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Schedule;
-use App\Models\Processo;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Route;
+use App\Database\Schema\Blueprint;
+use App\Http\Routing\ModuleRegistrar;
+use App\Modules\Processo\Models\Processo;
 use App\Models\Contrato;
 use App\Models\Empenho;
 use App\Models\NotaFiscal;
 use App\Models\Orcamento;
 use App\Models\AutorizacaoFornecimento;
-use App\Observers\ProcessoObserver;
+use App\Modules\Processo\Observers\ProcessoObserver;
 use App\Observers\ContratoObserver;
 use App\Observers\EmpenhoObserver;
 use App\Observers\NotaFiscalObserver;
@@ -24,7 +28,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         // Registrar Policies
-        \Illuminate\Support\Facades\Gate::policy(\App\Models\Processo::class, \App\Policies\ProcessoPolicy::class);
+        \Illuminate\Support\Facades\Gate::policy(\App\Modules\Processo\Models\Processo::class, \App\Modules\Processo\Policies\ProcessoPolicy::class);
         \Illuminate\Support\Facades\Gate::policy(\App\Models\Contrato::class, \App\Policies\ContratoPolicy::class);
         \Illuminate\Support\Facades\Gate::policy(\App\Models\Orcamento::class, \App\Policies\OrcamentoPolicy::class);
     }
@@ -34,6 +38,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Registrar macro Route::module
+        Route::macro('module', function (string $prefix, string $controller, string $parameter): ModuleRegistrar {
+            return new ModuleRegistrar(app('router'), $prefix, $controller, $parameter);
+        });
+        
         // Registrar Observers para invalidar cache e atualizar saldos automaticamente
         Processo::observe([ProcessoObserver::class, AuditObserver::class]);
         Contrato::observe([ContratoObserver::class, AuditObserver::class]);

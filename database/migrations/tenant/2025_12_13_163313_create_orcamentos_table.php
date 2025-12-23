@@ -1,11 +1,13 @@
 <?php
 
-use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
+use App\Database\Migrations\Migration;
+use App\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    public string $table = 'orcamentos';
+
     /**
      * Run the migrations.
      */
@@ -13,17 +15,19 @@ return new class extends Migration
     {
         Schema::create('orcamentos', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('processo_item_id')->constrained('processo_itens')->onDelete('cascade');
+            $table->foreignEmpresa();
+            $table->foreignId('processo_id')->nullable()->constrained('processos')->onDelete('cascade');
+            $table->foreignId('processo_item_id')->nullable()->constrained('processo_itens')->onDelete('cascade');
             $table->foreignId('fornecedor_id')->constrained('fornecedores')->onDelete('cascade');
-            $table->foreignId('transportadora_id')->nullable()->constrained('transportadoras')->onDelete('set null');
-            $table->decimal('custo_produto', 15, 2);
-            $table->string('marca_modelo')->nullable();
-            $table->text('ajustes_especificacao')->nullable();
+            $table->foreignId('transportadora_id')->nullable()->constrained('fornecedores')->onDelete('set null'); // Transportadora é um fornecedor
+            $table->decimal('custo_produto', 15, 2)->nullable(); // Mantido para compatibilidade, mas custos estão em orcamento_itens
+            $table->string('marca_modelo', Blueprint::VARCHAR_DEFAULT)->nullable();
+            $table->observacao('ajustes_especificacao');
             $table->decimal('frete', 15, 2)->default(0);
             $table->boolean('frete_incluido')->default(false);
             $table->boolean('fornecedor_escolhido')->default(false);
-            $table->text('observacoes')->nullable();
-            $table->timestamps();
+            $table->observacao('observacoes');
+            $table->datetimes();
         });
     }
 

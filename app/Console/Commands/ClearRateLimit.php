@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use App\Services\RedisService;
+use Illuminate\Support\Facades\Cache;
 
 class ClearRateLimit extends Command
 {
@@ -12,14 +13,14 @@ class ClearRateLimit extends Command
      *
      * @var string
      */
-    protected $signature = 'rate-limit:clear {identifier? : Identificador específico do rate limit (opcional)}';
+    protected $signature = 'rate-limit:clear {identifier? : Identificador específico do rate limit (opcional)} {--force : Forçar limpeza sem confirmação}';
 
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = 'Limpa o cache de rate limiting do Redis';
+    protected $description = 'Limpa o cache de rate limiting (Redis customizado e Laravel padrão)';
 
     /**
      * Execute the console command.
@@ -29,15 +30,27 @@ class ClearRateLimit extends Command
         $identifier = $this->argument('identifier');
 
         if (!$identifier) {
-            if ($this->confirm('Deseja limpar TODOS os rate limits? Isso pode afetar outros usuários.')) {
+            $force = $this->option('force');
+            
+            if ($force || $this->confirm('Deseja limpar TODOS os rate limits? Isso pode afetar outros usuários.', true)) {
+                $this->info('Limpando todos os rate limits...');
                 RedisService::clearAllRateLimits();
-                $this->info('Todos os rate limits foram limpos com sucesso!');
+                
+                // Limpar também o cache do Laravel para garantir
+                try {
+                    Cache::flush();
+                    $this->info('Cache do Laravel também foi limpo.');
+                } catch (\Exception $e) {
+                    $this->warn('Não foi possível limpar o cache do Laravel: ' . $e->getMessage());
+                }
+                
+                $this->info('✅ Todos os rate limits foram limpos com sucesso!');
             } else {
                 $this->info('Operação cancelada.');
             }
         } else {
             RedisService::clearRateLimit($identifier);
-            $this->info("Rate limit para '{$identifier}' foi limpo com sucesso!");
+            $this->info("✅ Rate limit para '{$identifier}' foi limpo com sucesso!");
         }
 
         return 0;

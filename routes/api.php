@@ -3,28 +3,28 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\ProcessoController as ApiProcessoController;
-use App\Http\Controllers\Api\ProcessoItemController as ApiProcessoItemController;
-use App\Http\Controllers\Api\OrcamentoController as ApiOrcamentoController;
-use App\Http\Controllers\Api\FormacaoPrecoController as ApiFormacaoPrecoController;
-use App\Http\Controllers\Api\DisputaController as ApiDisputaController;
-use App\Http\Controllers\Api\JulgamentoController as ApiJulgamentoController;
-use App\Http\Controllers\Api\ContratoController as ApiContratoController;
-use App\Http\Controllers\Api\AutorizacaoFornecimentoController as ApiAutorizacaoFornecimentoController;
-use App\Http\Controllers\Api\EmpenhoController as ApiEmpenhoController;
-use App\Http\Controllers\Api\NotaFiscalController as ApiNotaFiscalController;
-use App\Http\Controllers\Api\OrgaoController as ApiOrgaoController;
-use App\Http\Controllers\Api\SetorController as ApiSetorController;
-use App\Http\Controllers\Api\FornecedorController as ApiFornecedorController;
-use App\Http\Controllers\Api\CustoIndiretoController as ApiCustoIndiretoController;
-use App\Http\Controllers\Api\DocumentoHabilitacaoController as ApiDocumentoHabilitacaoController;
-use App\Http\Controllers\Api\DashboardController as ApiDashboardController;
-use App\Http\Controllers\Api\RelatorioFinanceiroController as ApiRelatorioFinanceiroController;
+use App\Modules\Processo\Controllers\ProcessoController as ApiProcessoController;
+use App\Modules\Processo\Controllers\ProcessoItemController as ApiProcessoItemController;
+use App\Modules\Orcamento\Controllers\OrcamentoController as ApiOrcamentoController;
+use App\Modules\Orcamento\Controllers\FormacaoPrecoController as ApiFormacaoPrecoController;
+use App\Modules\Processo\Controllers\DisputaController as ApiDisputaController;
+use App\Modules\Processo\Controllers\JulgamentoController as ApiJulgamentoController;
+use App\Modules\Contrato\Controllers\ContratoController as ApiContratoController;
+use App\Modules\AutorizacaoFornecimento\Controllers\AutorizacaoFornecimentoController as ApiAutorizacaoFornecimentoController;
+use App\Modules\Empenho\Controllers\EmpenhoController as ApiEmpenhoController;
+use App\Modules\NotaFiscal\Controllers\NotaFiscalController as ApiNotaFiscalController;
+use App\Modules\Orgao\Controllers\OrgaoController as ApiOrgaoController;
+use App\Modules\Orgao\Controllers\SetorController as ApiSetorController;
+use App\Modules\Fornecedor\Controllers\FornecedorController as ApiFornecedorController;
+use App\Modules\Custo\Controllers\CustoIndiretoController as ApiCustoIndiretoController;
+use App\Modules\Documento\Controllers\DocumentoHabilitacaoController as ApiDocumentoHabilitacaoController;
+use App\Modules\Dashboard\Controllers\DashboardController as ApiDashboardController;
+use App\Modules\Relatorio\Controllers\RelatorioFinanceiroController as ApiRelatorioFinanceiroController;
 use App\Http\Controllers\Api\TenantController;
 use App\Http\Controllers\Api\CalendarioDisputasController as ApiCalendarioDisputasController;
 use App\Http\Controllers\Api\CalendarioController as ApiCalendarioController;
-use App\Http\Controllers\Api\ExportacaoController as ApiExportacaoController;
-use App\Http\Controllers\Api\SaldoController as ApiSaldoController;
+use App\Modules\Processo\Controllers\ExportacaoController as ApiExportacaoController;
+use App\Modules\Processo\Controllers\SaldoController as ApiSaldoController;
 use App\Http\Controllers\Api\UserController as ApiUserController;
 use App\Http\Controllers\Api\PlanoController as ApiPlanoController;
 use App\Http\Controllers\Api\AssinaturaController as ApiAssinaturaController;
@@ -45,15 +45,12 @@ use App\Http\Controllers\Admin\AdminUserController;
 
 Route::prefix('v1')->group(function () {
     // Rotas públicas (central) - Gerenciamento de Tenants/Empresas
-    Route::post('/tenants', [TenantController::class, 'store']);
-    Route::get('/tenants', [TenantController::class, 'index']);
-    Route::get('/tenants/{tenant}', [TenantController::class, 'show']);
-    Route::put('/tenants/{tenant}', [TenantController::class, 'update']);
-    Route::delete('/tenants/{tenant}', [TenantController::class, 'destroy']);
+    Route::module('tenants', TenantController::class, 'tenant')
+        ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
 
     // Rotas públicas - Planos (podem ser visualizados sem autenticação)
-    Route::get('/planos', [ApiPlanoController::class, 'index']);
-    Route::get('/planos/{plano}', [ApiPlanoController::class, 'show']);
+    Route::module('planos', ApiPlanoController::class, 'plano')
+        ->only(['list', 'get']);
 
     // Rotas públicas (autenticação)
     // Rate limiting mais restritivo no login para prevenir brute force
@@ -66,119 +63,146 @@ Route::prefix('v1')->group(function () {
     // Rotas autenticadas
     // Rate limiting: 120 requisições por minuto, 1000 por hora
     // Rotas de criação/edição têm rate limiting adicional
-    Route::middleware(['auth:sanctum', 'tenancy', 'throttle:120,1'])->group(function () {
+    Route::middleware(['auth:sanctum', \App\Http\Middleware\SetAuthContext::class, 'tenancy', 'throttle:120,1'])->group(function () {
+        // Autenticação
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::get('/auth/user', [AuthController::class, 'user']);
         
         // Dashboard
         Route::get('/dashboard', [ApiDashboardController::class, 'index']);
         
-        // Calendário de Disputas (legado)
-        Route::get('/calendario/disputas', [ApiCalendarioDisputasController::class, 'index']);
-        Route::get('/calendario/eventos', [ApiCalendarioDisputasController::class, 'eventos']);
-        
-        // Calendário (novo)
-        Route::get('/calendario/disputas-novo', [ApiCalendarioController::class, 'disputas']);
-        Route::get('/calendario/julgamento', [ApiCalendarioController::class, 'julgamento']);
-        Route::get('/calendario/avisos-urgentes', [ApiCalendarioController::class, 'avisosUrgentes']);
+        // Calendário
+        Route::prefix('calendario')->group(function () {
+            // Calendário de Disputas (legado)
+            Route::get('/disputas', [ApiCalendarioDisputasController::class, 'index']);
+            Route::get('/eventos', [ApiCalendarioDisputasController::class, 'eventos']);
+            
+            // Calendário (novo)
+            Route::get('/disputas-novo', [ApiCalendarioController::class, 'disputas']);
+            Route::get('/julgamento', [ApiCalendarioController::class, 'julgamento']);
+            Route::get('/avisos-urgentes', [ApiCalendarioController::class, 'avisosUrgentes']);
+        });
         
         // Processos
-        Route::get('/processos-resumo', [ApiProcessoController::class, 'resumo']);
-        Route::get('/processos/exportar', [ApiProcessoController::class, 'exportar']);
-        Route::apiResource('processos', ApiProcessoController::class);
-        Route::post('/processos/{processo}/mover-julgamento', [ApiProcessoController::class, 'moverParaJulgamento']);
-        Route::post('/processos/{processo}/marcar-vencido', [ApiProcessoController::class, 'marcarVencido']);
-        Route::post('/processos/{processo}/marcar-perdido', [ApiProcessoController::class, 'marcarPerdido']);
-        Route::get('/processos/{processo}/sugerir-status', [ApiProcessoController::class, 'sugerirStatus']);
+        Route::prefix('processos')->group(function () {
+            // Rotas customizadas (fora do Route::module)
+            Route::get('/resumo', [ApiProcessoController::class, 'resumo']);
+            Route::get('/exportar', [ApiProcessoController::class, 'exportar']);
+        });
         
-        // Exportação
-        Route::get('/processos/{processo}/exportar/proposta-comercial', [ApiExportacaoController::class, 'propostaComercial']);
-        Route::get('/processos/{processo}/exportar/catalogo-ficha-tecnica', [ApiExportacaoController::class, 'catalogoFichaTecnica']);
-        
-        // Saldo
-        Route::get('/processos/{processo}/saldo', [ApiSaldoController::class, 'show']);
-        Route::get('/processos/{processo}/saldo-vencido', [ApiSaldoController::class, 'saldoVencido']);
-        Route::get('/processos/{processo}/saldo-vinculado', [ApiSaldoController::class, 'saldoVinculado']);
-        Route::get('/processos/{processo}/saldo-empenhado', [ApiSaldoController::class, 'saldoEmpenhado']);
-        
-        // Itens do Processo
-        Route::apiResource('processos.itens', ApiProcessoItemController::class)
-            ->parameters(['itens' => 'item'])
-            ->shallow();
-        Route::post('/processos/{processo}/itens/importar', [ApiProcessoItemController::class, 'importar']);
-        
-        // Orçamentos (por processo - múltiplos itens)
-        Route::post('/processos/{processo}/orcamentos', [ApiOrcamentoController::class, 'storeByProcesso']);
-        Route::get('/processos/{processo}/orcamentos', [ApiOrcamentoController::class, 'indexByProcesso']);
-        Route::put('/processos/{processo}/orcamentos/{orcamento}/itens/{orcamentoItem}', [ApiOrcamentoController::class, 'updateOrcamentoItem']);
-        
-        // Orçamentos (por item - compatibilidade)
-        Route::apiResource('processos.itens.orcamentos', ApiOrcamentoController::class)
-            ->parameters([
-                'itens' => 'item',
-                'orcamentos' => 'orcamento'
-            ])
-            ->shallow();
-        
-        // Rota explícita para atualizar orçamento (garantir que PUT funciona)
-        Route::put('/processos/{processo}/itens/{item}/orcamentos/{orcamento}', [ApiOrcamentoController::class, 'update'])
-            ->name('processos.itens.orcamentos.update');
-        
-        // Formação de Preços
-        Route::apiResource('processos.itens.orcamentos.formacao-preco', ApiFormacaoPrecoController::class)
-            ->parameters(['itens' => 'item'])
-            ->shallow();
-        
-        // Disputa
-        Route::get('/processos/{processo}/disputa', [ApiDisputaController::class, 'show']);
-        Route::put('/processos/{processo}/disputa', [ApiDisputaController::class, 'update']);
-        
-        // Julgamento
-        Route::get('/processos/{processo}/julgamento', [ApiJulgamentoController::class, 'show']);
-        Route::put('/processos/{processo}/julgamento', [ApiJulgamentoController::class, 'update']);
+        Route::module('processos', ApiProcessoController::class, 'processo')
+            ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy'])
+            ->children(function () {
+                // Rotas customizadas de processo
+                Route::post('/mover-julgamento', [ApiProcessoController::class, 'moverParaJulgamento']);
+                Route::post('/marcar-vencido', [ApiProcessoController::class, 'marcarVencido']);
+                Route::post('/marcar-perdido', [ApiProcessoController::class, 'marcarPerdido']);
+                Route::get('/sugerir-status', [ApiProcessoController::class, 'sugerirStatus']);
+                
+                // Exportação
+                Route::get('/exportar/proposta-comercial', [ApiExportacaoController::class, 'propostaComercial']);
+                Route::get('/exportar/catalogo-ficha-tecnica', [ApiExportacaoController::class, 'catalogoFichaTecnica']);
+                
+                // Saldo
+                Route::get('/saldo', [ApiSaldoController::class, 'show']);
+                Route::get('/saldo-vencido', [ApiSaldoController::class, 'saldoVencido']);
+                Route::get('/saldo-vinculado', [ApiSaldoController::class, 'saldoVinculado']);
+                Route::get('/saldo-empenhado', [ApiSaldoController::class, 'saldoEmpenhado']);
+                
+                // Disputa
+                Route::get('/disputa', [ApiDisputaController::class, 'show']);
+                Route::put('/disputa', [ApiDisputaController::class, 'update']);
+                
+                // Julgamento
+                Route::get('/julgamento', [ApiJulgamentoController::class, 'show']);
+                Route::put('/julgamento', [ApiJulgamentoController::class, 'update']);
+                
+                // Itens do Processo
+                Route::module('itens', ApiProcessoItemController::class, 'item')
+                    ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy'])
+                    ->children(function () {
+                        // Orçamentos (por item - compatibilidade)
+                        Route::module('orcamentos', ApiOrcamentoController::class, 'orcamento')
+                            ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy'])
+                            ->children(function () {
+                                // Formação de Preços
+                                Route::module('formacao-preco', ApiFormacaoPrecoController::class, 'formacaoPreco')
+                                    ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
+                            });
+                    });
+                Route::post('/itens/importar', [ApiProcessoItemController::class, 'importar']);
+                
+                // Orçamentos (por processo - múltiplos itens)
+                Route::post('/orcamentos', [ApiOrcamentoController::class, 'storeByProcesso']);
+                Route::get('/orcamentos', [ApiOrcamentoController::class, 'indexByProcesso']);
+                Route::put('/orcamentos/{orcamento}/itens/{orcamentoItem}', [ApiOrcamentoController::class, 'updateOrcamentoItem']);
+                
+                // Contratos
+                Route::module('contratos', ApiContratoController::class, 'contrato')
+                    ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
+                
+                // Autorizações de Fornecimento
+                Route::module('autorizacoes-fornecimento', ApiAutorizacaoFornecimentoController::class, 'autorizacaoFornecimento')
+                    ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
+                
+                // Empenhos
+                Route::module('empenhos', ApiEmpenhoController::class, 'empenho')
+                    ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
+                
+                // Notas Fiscais
+                Route::module('notas-fiscais', ApiNotaFiscalController::class, 'notaFiscal')
+                    ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
+            });
         
         // Contratos
-        Route::get('/contratos', [ApiContratoController::class, 'listarTodos']); // Lista todos os contratos
-        Route::apiResource('processos.contratos', ApiContratoController::class)->shallow();
-        
-        // Autorizações de Fornecimento
-        Route::apiResource('processos.autorizacoes-fornecimento', ApiAutorizacaoFornecimentoController::class)->shallow();
-        
-        // Empenhos
-        Route::apiResource('processos.empenhos', ApiEmpenhoController::class)->shallow();
-        
-        // Notas Fiscais
-        Route::apiResource('processos.notas-fiscais', ApiNotaFiscalController::class)->shallow();
+        Route::prefix('contratos')->group(function () {
+            Route::get('/', [ApiContratoController::class, 'listarTodos']); // Lista todos os contratos
+        });
         
         // Cadastros
-        Route::apiResource('orgaos', ApiOrgaoController::class);
-        Route::apiResource('setors', ApiSetorController::class);
-        Route::apiResource('fornecedores', ApiFornecedorController::class)
-            ->parameters(['fornecedores' => 'fornecedor']);
-        Route::apiResource('custos-indiretos', ApiCustoIndiretoController::class)
-            ->parameters(['custos-indiretos' => 'custo-indireto']);
-        Route::get('/custos-indiretos-resumo', [ApiCustoIndiretoController::class, 'resumo']);
-        Route::apiResource('documentos-habilitacao', ApiDocumentoHabilitacaoController::class);
+        Route::module('orgaos', ApiOrgaoController::class, 'orgao')
+            ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
         
-        // Debug/Correção de roles
-        Route::get('/user/roles', [\App\Http\Controllers\Api\FixUserRolesController::class, 'getCurrentUserRoles']);
-        Route::post('/user/fix-role', [\App\Http\Controllers\Api\FixUserRolesController::class, 'fixCurrentUserRole']);
+        Route::module('setors', ApiSetorController::class, 'setor')
+            ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
+        
+        Route::module('fornecedores', ApiFornecedorController::class, 'fornecedor')
+            ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
+        
+        Route::module('custos-indiretos', ApiCustoIndiretoController::class, 'id')
+            ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy'])
+            ->group(function () {
+                Route::get('/resumo', [ApiCustoIndiretoController::class, 'resumo']);
+            });
+        
+        Route::module('documentos-habilitacao', ApiDocumentoHabilitacaoController::class, 'documentoHabilitacao')
+            ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
+        
+        // Usuários
+        Route::module('users', ApiUserController::class, 'user')
+            ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy'])
+            ->group(function () {
+                // Debug/Correção de roles
+                Route::get('/roles', [\App\Http\Controllers\Api\FixUserRolesController::class, 'getCurrentUserRoles']);
+                Route::post('/fix-role', [\App\Http\Controllers\Api\FixUserRolesController::class, 'fixCurrentUserRole']);
+            });
         
         // Relatórios
-        Route::get('/relatorios/financeiro', [ApiRelatorioFinanceiroController::class, 'index']);
-        Route::get('/relatorios/gestao-mensal', [ApiRelatorioFinanceiroController::class, 'gestaoMensal']);
-
-        // Usuários
-        Route::apiResource('users', ApiUserController::class);
+        Route::prefix('relatorios')->group(function () {
+            Route::get('/financeiro', [ApiRelatorioFinanceiroController::class, 'index']);
+            Route::get('/gestao-mensal', [ApiRelatorioFinanceiroController::class, 'gestaoMensal']);
+        });
 
         // Assinaturas (requer autenticação e tenancy)
-        // IMPORTANTE: Rotas específicas ANTES de rotas com parâmetros
-        Route::get('/assinaturas/atual', [ApiAssinaturaController::class, 'atual']);
-        Route::get('/assinaturas/status', [ApiAssinaturaController::class, 'status']);
-        Route::get('/assinaturas', [ApiAssinaturaController::class, 'index']);
-        Route::post('/assinaturas', [ApiAssinaturaController::class, 'store']);
-        Route::post('/assinaturas/{assinatura}/renovar', [ApiAssinaturaController::class, 'renovar']);
-        Route::post('/assinaturas/{assinatura}/cancelar', [ApiAssinaturaController::class, 'cancelar']);
+        Route::prefix('assinaturas')->group(function () {
+            // Rotas específicas ANTES de rotas com parâmetros
+            Route::get('/atual', [ApiAssinaturaController::class, 'atual']);
+            Route::get('/status', [ApiAssinaturaController::class, 'status']);
+            Route::get('/', [ApiAssinaturaController::class, 'index']);
+            Route::post('/', [ApiAssinaturaController::class, 'store']);
+            Route::post('/{assinatura}/renovar', [ApiAssinaturaController::class, 'renovar']);
+            Route::post('/{assinatura}/cancelar', [ApiAssinaturaController::class, 'cancelar']);
+        });
     });
 });
 
@@ -189,26 +213,33 @@ Route::prefix('admin')->group(function () {
         ->middleware(['throttle:3,1', 'throttle:5,60']);
     
     // Rotas protegidas
-    Route::middleware(['auth:sanctum', \App\Http\Middleware\IsSuperAdmin::class])->group(function () {
+    Route::middleware(['auth:sanctum', \App\Http\Middleware\SetAuthContext::class . ':admin', \App\Http\Middleware\IsSuperAdmin::class])->group(function () {
+        // Autenticação admin
         Route::post('/logout', [AdminAuthController::class, 'logout']);
         Route::get('/me', [AdminAuthController::class, 'me']);
         
         // Gerenciamento de empresas (tenants)
-        Route::get('/empresas', [AdminTenantController::class, 'index']);
-        Route::get('/empresas/{tenant}', [AdminTenantController::class, 'show']);
-        Route::post('/empresas', [AdminTenantController::class, 'store']);
-        Route::put('/empresas/{tenant}', [AdminTenantController::class, 'update']);
-        Route::delete('/empresas/{tenant}', [AdminTenantController::class, 'destroy']);
-        Route::post('/empresas/{tenant}/reativar', [AdminTenantController::class, 'reactivate']);
-        
-        // Gerenciamento de usuários das empresas
-        Route::get('/empresas/{tenant}/usuarios', [AdminUserController::class, 'index']);
-        Route::get('/empresas/{tenant}/usuarios/{user}', [AdminUserController::class, 'show']);
-        Route::post('/empresas/{tenant}/usuarios', [AdminUserController::class, 'store']);
-        Route::put('/empresas/{tenant}/usuarios/{user}', [AdminUserController::class, 'update']);
-        Route::delete('/empresas/{tenant}/usuarios/{user}', [AdminUserController::class, 'destroy']);
-        Route::post('/empresas/{tenant}/usuarios/{user}/reativar', [AdminUserController::class, 'reactivate']);
-        Route::get('/empresas/{tenant}/empresas-disponiveis', [AdminUserController::class, 'empresas']);
+        Route::prefix('empresas')->group(function () {
+            Route::get('/', [AdminTenantController::class, 'index']);
+            Route::get('/{tenant}', [AdminTenantController::class, 'show']);
+            Route::post('/', [AdminTenantController::class, 'store']);
+            Route::put('/{tenant}', [AdminTenantController::class, 'update']);
+            Route::delete('/{tenant}', [AdminTenantController::class, 'destroy']);
+            Route::post('/{tenant}/reativar', [AdminTenantController::class, 'reactivate']);
+            
+            // Gerenciamento de usuários das empresas
+            Route::prefix('{tenant}/usuarios')->group(function () {
+                Route::get('/', [AdminUserController::class, 'index']);
+                Route::get('/{user}', [AdminUserController::class, 'show']);
+                Route::post('/', [AdminUserController::class, 'store']);
+                Route::put('/{user}', [AdminUserController::class, 'update']);
+                Route::delete('/{user}', [AdminUserController::class, 'destroy']);
+                Route::post('/{user}/reativar', [AdminUserController::class, 'reactivate']);
+            });
+            
+            // Empresas disponíveis para usuário
+            Route::get('/{tenant}/empresas-disponiveis', [AdminUserController::class, 'empresas']);
+        });
     });
 });
 

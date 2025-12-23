@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Traits\HasDefaultActions;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -11,6 +12,23 @@ use Illuminate\Support\Facades\Hash;
 
 class UserController extends Controller
 {
+    use HasDefaultActions;
+
+    /**
+     * API: Listar usuários (Route::module)
+     */
+    public function list(Request $request)
+    {
+        return $this->index($request);
+    }
+
+    /**
+     * API: Buscar usuário (Route::module)
+     */
+    public function get(Request $request, User $user)
+    {
+        return $this->show($user);
+    }
     /**
      * Listar usuários com paginação
      */

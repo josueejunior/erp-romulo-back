@@ -15,7 +15,18 @@ class StrongPassword implements Rule
      */
     public function passes($attribute, $value)
     {
+        // Se o valor for null, permitir (Laravel já valida nullable antes)
+        if ($value === null) {
+            return true;
+        }
+
+        // Se não for string, rejeitar
         if (!is_string($value)) {
+            return false;
+        }
+
+        // Se for string vazia, rejeitar (senha não pode ser vazia se fornecida)
+        if (trim($value) === '') {
             return false;
         }
 

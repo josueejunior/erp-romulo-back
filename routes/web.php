@@ -47,10 +47,10 @@ Route::middleware(['auth', 'empresa.ativa'])->group(function () {
     
     // Itens do Processo
     Route::get('/processos/{processo}/itens/create', [ProcessoItemController::class, 'create'])->name('processo-itens.create');
-    Route::post('/processos/{processo}/itens', [ProcessoItemController::class, 'store'])->name('processo-itens.store');
+    Route::post('/processos/{processo}/itens', [ProcessoItemController::class, 'storeWeb'])->name('processo-itens.store');
     Route::get('/processos/{processo}/itens/{item}/edit', [ProcessoItemController::class, 'edit'])->name('processo-itens.edit');
-    Route::put('/processos/{processo}/itens/{item}', [ProcessoItemController::class, 'update'])->name('processo-itens.update');
-    Route::delete('/processos/{processo}/itens/{item}', [ProcessoItemController::class, 'destroy'])->name('processo-itens.destroy');
+    Route::put('/processos/{processo}/itens/{item}', [ProcessoItemController::class, 'updateWeb'])->name('processo-itens.update');
+    Route::delete('/processos/{processo}/itens/{item}', [ProcessoItemController::class, 'destroyWeb'])->name('processo-itens.destroy');
     
     // Orçamentos
     Route::get('/processos/{processo}/itens/{item}/orcamentos/create', [OrcamentoController::class, 'create'])->name('orcamentos.create');

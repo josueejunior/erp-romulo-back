@@ -8,6 +8,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Auth\AuthenticationException;
+use Illuminate\Http\Exceptions\ThrottleRequestsException;
 
 class HandleApiErrors
 {
@@ -32,6 +33,27 @@ class HandleApiErrors
             }
             
             return $response;
+        } catch (ThrottleRequestsException $e) {
+            $headers = $e->getHeaders();
+            $retryAfter = $headers['Retry-After'] ?? 60;
+            
+            \Log::warning('Rate limit excedido', [
+                'url' => $request->fullUrl(),
+                'method' => $request->method(),
+                'ip' => $request->ip(),
+                'user_id' => auth()->id(),
+                'retry_after' => $retryAfter,
+            ]);
+            
+            return response()->json([
+                'message' => 'Muitas requisições. Por favor, aguarde alguns instantes antes de tentar novamente.',
+                'retry_after' => (int) $retryAfter,
+                'retry_after_seconds' => (int) $retryAfter,
+            ], 429)->withHeaders([
+                'Retry-After' => $retryAfter,
+                'X-RateLimit-Limit' => $headers['X-RateLimit-Limit'] ?? '120',
+                'X-RateLimit-Remaining' => $headers['X-RateLimit-Remaining'] ?? '0',
+            ]);
         } catch (ValidationException $e) {
             return response()->json([
                 'message' => 'Dados inválidos',
