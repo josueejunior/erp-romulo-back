@@ -137,6 +137,18 @@ class DbTypeRule
     }
 
     /**
+     * Gerar regras para campo time (apenas hora, sem data)
+     * Aceita formatos: H:i:s ou H:i
+     * 
+     * @return array Regras de validação
+     */
+    public static function time(): array
+    {
+        // Aceitar tanto H:i:s quanto H:i
+        return ['regex:/^([0-1][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/'];
+    }
+
+    /**
      * Gerar regras para campo enum
      * 
      * @param array $values Valores permitidos
