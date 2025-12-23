@@ -247,9 +247,13 @@ class ModuleRegistrar
         }
         
         if ($method = $this->methods['store'] ?? false) {
-            $route = $this->registerRoute('post', $this->prefix . "/{" . $this->parameter . "?}", [$this->controller, $method]);
-            if ($this->name) $route->name("$this->name.store");
-            $collection->add($route);
+            $routeName = $this->name ? "{$this->name}.store" : null;
+            // Verificar se a rota já existe
+            if (!$routeName || !$this->router->getRoutes()->getByName($routeName)) {
+                $route = $this->registerRoute('post', $this->prefix . "/{" . $this->parameter . "?}", [$this->controller, $method]);
+                if ($this->name) $route->name($routeName);
+                $collection->add($route);
+            }
         }
         
         if ($method = $this->methods['update'] ?? false) {
@@ -272,16 +276,36 @@ class ModuleRegistrar
         
         // Adicionar todas as rotas ao router
         foreach ($collection->getRoutes() as $route) {
+            $routeName = $route->getName();
+            // Verificar se a rota já existe antes de adicionar
+            if ($routeName && $this->router->getRoutes()->getByName($routeName)) {
+                // Rota já existe, pular
+                continue;
+            }
             $this->router->getRoutes()->add($route);
         }
     }
 
     /**
      * Registrar automaticamente quando o objeto é destruído
+     * Mas apenas se ainda não foi registrado e não há métodos encadeados pendentes
      */
     public function __destruct()
     {
+        // Não registrar no destruct se já foi registrado ou se há métodos encadeados
+        // que indicam que o registro deve acontecer explicitamente
         if ($this->registered) return;
+        
+        // Verificar se há rotas com o mesmo nome já registradas
+        // Se sim, não registrar para evitar duplicação
+        $routes = $this->router->getRoutes();
+        $testName = $this->name ? "{$this->name}.store" : null;
+        if ($testName && $routes->getByName($testName)) {
+            // Rota já existe, marcar como registrado para evitar tentativas futuras
+            $this->registered = true;
+            return;
+        }
+        
         $this->register();
     }
 }
