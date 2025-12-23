@@ -28,6 +28,9 @@ abstract class BaseService implements IService
     /**
      * Aplicar filtro por empresa_id automaticamente no builder
      * Similar ao applyBuilderWhereCliente() do sistema de referência
+     * 
+     * NOTA: Se o modelo já tem o global scope 'empresa' (HasEmpresaScope),
+     * não aplica o filtro novamente para evitar duplicação.
      */
     protected function applyBuilderWhereEmpresa(
         Builder $builder,
@@ -38,6 +41,16 @@ abstract class BaseService implements IService
         $model = $model ?? static::$model;
         
         if (!$this->hasEmpresaUsage($model)) {
+            return $builder;
+        }
+
+        // Verificar se o modelo já tem o global scope 'empresa' (HasEmpresaScope)
+        // Se tiver, não aplicar o filtro novamente para evitar duplicação
+        // Verificar se o modelo usa o trait HasEmpresaScope
+        $modelClass = is_string($model) ? $model : get_class($model);
+        $traits = class_uses_recursive($modelClass);
+        if (in_array(\App\Models\Concerns\HasEmpresaScope::class, $traits)) {
+            // O modelo já tem HasEmpresaScope, não precisa aplicar filtro novamente
             return $builder;
         }
 
