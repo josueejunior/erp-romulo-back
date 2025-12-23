@@ -15,7 +15,12 @@ return new class extends Migration
     {
         Schema::create('assinaturas', function (Blueprint $table) {
             $table->id();
-            $table->foreignTenant();
+            // tenant_id deve ser string (UUID) para corresponder ao id da tabela tenants
+            $table->string('tenant_id', Blueprint::VARCHAR_DEFAULT);
+            $table->foreign('tenant_id')
+                ->references('id')
+                ->on('tenants')
+                ->onDelete('cascade');
             $table->foreignId('plano_id')->constrained('planos')->onDelete('restrict');
             $table->status(['ativa', 'cancelada', 'suspensa', 'expirada'], 'ativa');
             $table->date('data_inicio');
