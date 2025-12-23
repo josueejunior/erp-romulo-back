@@ -117,5 +117,35 @@ abstract class BaseApiController extends Controller
             abort(403, 'Você não tem permissão para acessar este recurso.');
         }
     }
+
+    /**
+     * Obter ID da rota atual
+     * Tenta múltiplos parâmetros comuns
+     */
+    protected function getRouteId($route): ?string
+    {
+        if (!$route) {
+            return null;
+        }
+
+        // Tentar parâmetros comuns
+        $parameters = $route->parameters();
+        $commonParams = ['id', 'fornecedor', 'orgao', 'setor', 'processo', 'contrato'];
+        
+        foreach ($commonParams as $param) {
+            if (isset($parameters[$param])) {
+                return $parameters[$param];
+            }
+        }
+
+        // Se não encontrou, retornar o primeiro parâmetro numérico
+        foreach ($parameters as $key => $value) {
+            if (is_numeric($value)) {
+                return $value;
+            }
+        }
+
+        return null;
+    }
 }
 

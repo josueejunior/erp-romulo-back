@@ -220,6 +220,11 @@ class FornecedorController extends BaseApiController
         return $this->handleList($request);
     }
 
+    public function get(Request $request)
+    {
+        return $this->handleGet($request);
+    }
+
     public function store(Request $request)
     {
         return $this->handleStore($request);
