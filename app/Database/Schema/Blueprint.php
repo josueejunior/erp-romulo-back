@@ -259,8 +259,10 @@ class Blueprint extends BaseBlueprint
     /**
      * Criar timestamps em português
      * Cria: criado_em, atualizado_em
+     * 
+     * @param int|null $precision Precisão (ignorado, mantido para compatibilidade com Laravel)
      */
-    public function datetimes(): void
+    public function datetimes($precision = null): void
     {
         $this->timestamp(self::CREATED_AT)->nullable();
         $this->timestamp(self::UPDATED_AT)->nullable();
