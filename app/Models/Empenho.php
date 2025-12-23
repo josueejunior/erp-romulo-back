@@ -13,6 +13,8 @@ class Empenho extends Model
 {
     use SoftDeletes, HasEmpresaScope;
 
+    const CREATED_AT = Blueprint::CREATED_AT;
+    const UPDATED_AT = Blueprint::UPDATED_AT;
     const DELETED_AT = Blueprint::DELETED_AT;
 
     protected $fillable = [
