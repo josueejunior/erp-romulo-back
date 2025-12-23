@@ -44,14 +44,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Mapear relacionamentos polimórficos para manter compatibilidade com dados antigos
-        // O evento 'retrieved' no PersonalAccessToken faz o mapeamento de namespaces antigos
-        // Aqui definimos os novos namespaces como padrão para novos tokens
-        Relation::morphMap([
-            'admin_user' => \App\Modules\Auth\Models\AdminUser::class,
-            'user' => \App\Modules\Auth\Models\User::class,
-        ]);
-        
         // Registrar macro Route::module
         Route::macro('module', function (string $prefix, string $controller, string $parameter): ModuleRegistrar {
             return new ModuleRegistrar(app('router'), $prefix, $controller, $parameter);
