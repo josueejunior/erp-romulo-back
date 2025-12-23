@@ -13,6 +13,11 @@ class AdminUser extends Authenticatable
 
     protected $table = 'admin_users';
 
+    // Usar timestamps customizados em português
+    const CREATED_AT = 'criado_em';
+    const UPDATED_AT = 'atualizado_em';
+    public $timestamps = true;
+
     protected $fillable = [
         'name',
         'email',
@@ -29,6 +34,8 @@ class AdminUser extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'criado_em' => 'datetime',
+            'atualizado_em' => 'datetime',
         ];
     }
 }

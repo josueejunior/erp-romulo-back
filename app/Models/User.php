@@ -8,11 +8,15 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable, HasApiTokens, HasRoles, SoftDeletes;
+    use HasFactory, Notifiable, HasApiTokens, HasRoles;
+
+    // Usar timestamps customizados em português
+    const CREATED_AT = 'criado_em';
+    const UPDATED_AT = 'atualizado_em';
+    public $timestamps = true;
 
     protected $fillable = [
         'name',
@@ -31,6 +35,8 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'criado_em' => 'datetime',
+            'atualizado_em' => 'datetime',
         ];
     }
 

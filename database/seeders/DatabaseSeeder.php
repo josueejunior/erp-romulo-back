@@ -14,9 +14,13 @@ use Illuminate\Support\Str;
 use Stancl\Tenancy\Jobs\CreateDatabase;
 use Stancl\Tenancy\Jobs\MigrateDatabase;
 use Database\Seeders\AdminUserSeeder;
+use Database\Seeders\Traits\HasUserCreation;
+use Database\Seeders\Traits\HasTenantContext;
 
 class DatabaseSeeder extends Seeder
 {
+    use HasUserCreation, HasTenantContext;
+
     public function run(): void
     {
         // IMPORTANTE: AdminUserSeeder deve ser executado ANTES de qualquer tenancy
@@ -137,44 +141,8 @@ class DatabaseSeeder extends Seeder
         ];
 
         foreach ($users as $userData) {
-            $user = User::where('email', $userData['email'])->first();
-
-            if (!$user) {
-                $user = User::create([
-                    'name' => $userData['name'],
-                    'email' => $userData['email'],
-                    'password' => Hash::make($userData['password']),
-                ]);
-
-                // Atribuir role
-                try {
-                    $user->assignRole($userData['role']);
-                    $this->command->info('Usuário criado: ' . $userData['email'] . ' (' . $userData['role'] . ')');
-                } catch (\Exception $e) {
-                    $this->command->error('Erro ao atribuir role ao usuário ' . $userData['email'] . ': ' . $e->getMessage());
-                }
-            } else {
-                // Se o usuário já existe, garantir que tenha a role correta
-                try {
-                    // Remover todas as roles e atribuir a correta
-                    $user->syncRoles([$userData['role']]);
-                    $this->command->info('Usuário já existe: ' . $userData['email'] . ' - Role atualizada para: ' . $userData['role']);
-                } catch (\Exception $e) {
-                    $this->command->error('Erro ao atualizar role do usuário ' . $userData['email'] . ': ' . $e->getMessage());
-                }
-            }
-
-            // Associar usuário à empresa (se ainda não estiver associado)
-            if (!$user->empresas->contains($empresa->id)) {
-                $user->empresas()->attach($empresa->id, ['perfil' => strtolower($userData['role'])]);
-                $this->command->info('Usuário ' . $userData['email'] . ' associado à empresa');
-            }
-
-            // Definir empresa ativa se o usuário não tiver uma
-            if (!$user->empresa_ativa_id) {
-                $user->empresa_ativa_id = $empresa->id;
-                $user->save();
-            }
+            $user = $this->createOrUpdateUser($userData, $userData['role'] ?? null);
+            $this->associateUserToEmpresa($user, $empresa, strtolower($userData['role'] ?? 'consulta'));
         }
 
         // Verificar se já existe o órgão
