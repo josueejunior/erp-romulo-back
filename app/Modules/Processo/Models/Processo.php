@@ -2,11 +2,10 @@
 
 namespace App\Modules\Processo\Models;
 
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Models\BaseModel;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use App\Models\Concerns\HasEmpresaScope;
+use App\Models\Traits\HasSoftDeletesWithEmpresa;
 use App\Models\Concerns\BelongsToEmpresa;
 use App\Models\Empresa;
 use App\Models\Orgao;
@@ -16,11 +15,10 @@ use App\Models\AutorizacaoFornecimento;
 use App\Models\Empenho;
 use App\Models\NotaFiscal;
 use App\Models\Orcamento;
-use App\Models\BaseModel;
 
 class Processo extends BaseModel
 {
-    use SoftDeletes, HasEmpresaScope, BelongsToEmpresa;
+    use HasSoftDeletesWithEmpresa, BelongsToEmpresa;
 
     protected $fillable = [
         'empresa_id',

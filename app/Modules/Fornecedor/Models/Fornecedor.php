@@ -2,16 +2,15 @@
 
 namespace App\Modules\Fornecedor\Models;
 
+use App\Models\BaseModel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Models\Concerns\HasEmpresaScope;
+use App\Models\Traits\HasSoftDeletesWithEmpresa;
 use App\Models\Traits\HasTimestampsCustomizados;
-use App\Models\Empresa;
+use App\Models\Traits\BelongsToEmpresaTrait;
 
 class Fornecedor extends BaseModel
 {
-    use HasFactory, SoftDeletes, HasEmpresaScope, HasTimestampsCustomizados;
+    use HasFactory, HasSoftDeletesWithEmpresa, HasTimestampsCustomizados, BelongsToEmpresaTrait;
     
     public $timestamps = true;
 
@@ -44,9 +43,5 @@ class Fornecedor extends BaseModel
         ]);
     }
 
-    public function empresa(): BelongsTo
-    {
-        return $this->belongsTo(Empresa::class);
-    }
 }
 
