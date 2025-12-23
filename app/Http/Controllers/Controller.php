@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Api\RoutingController;
+use App\Contracts\IService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Foundation\Validation\ValidatesRequests;
 use App\Models\Empresa;
@@ -36,7 +37,7 @@ abstract class Controller extends RoutingController
      * Obter o service
      * @throws \Exception Se service não estiver definido
      */
-    protected function getService(): object
+    protected function getService(): IService
     {
         return $this->service ?? throw new \Exception(
             "Missing service mapping at [" . static::class . "]."
