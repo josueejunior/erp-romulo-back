@@ -16,11 +16,8 @@ return new class extends Migration
         Schema::create('users', function ($table) {
             /** @var \Illuminate\Database\Schema\Blueprint $table */
             $table->id();
-            // Usar método direto do Laravel para criar foreign key
-            $table->foreignId('empresa_ativa_id')
-                ->nullable()
-                ->constrained('empresas')
-                ->onDelete('set null');
+            // Criar coluna sem foreign key primeiro (empresas ainda não existe)
+            $table->unsignedBigInteger('empresa_ativa_id')->nullable();
             $table->string('name', Blueprint::VARCHAR_DEFAULT);
             $table->email()->unique();
             $table->timestamp('email_verified_at')->nullable();
@@ -30,6 +27,17 @@ return new class extends Migration
             $table->timestamp('criado_em')->nullable();
             $table->timestamp('atualizado_em')->nullable();
         });
+        
+        // Adicionar foreign key depois que a tabela empresas for criada
+        // Isso será feito após a migration de empresas executar
+        if (Schema::hasTable('empresas')) {
+            Schema::table('users', function (Blueprint $table) {
+                $table->foreign('empresa_ativa_id')
+                    ->references('id')
+                    ->on('empresas')
+                    ->onDelete('set null');
+            });
+        }
     }
 
     /**
@@ -40,3 +48,4 @@ return new class extends Migration
         Schema::dropIfExists('users');
     }
 };
+
