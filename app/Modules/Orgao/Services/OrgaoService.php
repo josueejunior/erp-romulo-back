@@ -23,30 +23,40 @@ class OrgaoService extends BaseService
 
     public function list(array $params = []): LengthAwarePaginator
     {
-        $builder = $this->createQueryBuilder();
+        try {
+            $builder = $this->createQueryBuilder();
 
-        // Busca livre
-        if (isset($params['search']) && $params['search']) {
-            $search = $params['search'];
-            $builder->where(function($q) use ($search) {
-                $q->where('razao_social', 'like', "%{$search}%")
-                  ->orWhere('cnpj', 'like', "%{$search}%");
-            });
+            // Busca livre
+            if (isset($params['search']) && $params['search']) {
+                $search = $params['search'];
+                $builder->where(function($q) use ($search) {
+                    $q->where('razao_social', 'like', "%{$search}%")
+                      ->orWhere('cnpj', 'like', "%{$search}%");
+                });
+            }
+
+            // Carregar relacionamentos
+            if (isset($params['with']) && is_array($params['with'])) {
+                $builder->with($params['with']);
+            }
+
+            // Ordenação
+            $builder->orderBy('razao_social');
+
+            // Paginação
+            $perPage = $params['per_page'] ?? 15;
+            $page = $params['page'] ?? 1;
+
+            return $builder->paginate($perPage, ['*'], 'page', $page);
+        } catch (\Exception $e) {
+            \Log::error('Erro no OrgaoService->list()', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'params' => $params,
+                'empresa_id' => $this->getEmpresaId()
+            ]);
+            throw $e;
         }
-
-        // Carregar relacionamentos
-        if (isset($params['with']) && is_array($params['with'])) {
-            $builder->with($params['with']);
-        }
-
-        // Ordenação
-        $builder->orderBy('razao_social');
-
-        // Paginação
-        $perPage = $params['per_page'] ?? 15;
-        $page = $params['page'] ?? 1;
-
-        return $builder->paginate($perPage, ['*'], 'page', $page);
     }
 
     public function validateStoreData(array $data): \Illuminate\Contracts\Validation\Validator

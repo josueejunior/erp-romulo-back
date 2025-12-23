@@ -27,8 +27,8 @@ class OrgaoController extends RoutingController
             $params = $this->service->createListParamBag(array_merge($request->all(), $mergeParams));
             $orgaos = $this->service->list($params);
             
-            // Se for um paginator, retornar com estrutura de paginação
-            if (method_exists($orgaos, 'items')) {
+            // Verificar se é um paginator
+            if ($orgaos instanceof \Illuminate\Contracts\Pagination\LengthAwarePaginator) {
                 return response()->json([
                     'data' => OrgaoResource::collection($orgaos->items()),
                     'meta' => [
@@ -41,20 +41,47 @@ class OrgaoController extends RoutingController
             }
             
             // Se for uma coleção simples
+            if (is_iterable($orgaos)) {
+                return response()->json([
+                    'data' => OrgaoResource::collection($orgaos)
+                ]);
+            }
+            
+            // Fallback: retornar vazio
             return response()->json([
-                'data' => OrgaoResource::collection($orgaos)
+                'data' => [],
+                'meta' => [
+                    'current_page' => 1,
+                    'last_page' => 1,
+                    'per_page' => 15,
+                    'total' => 0,
+                ]
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
+            \Log::error('Erro de validação ao listar órgãos', [
+                'errors' => $e->errors()
+            ]);
             return response()->json([
                 'message' => 'Erro de validação',
                 'errors' => $e->errors()
             ], 422);
+        } catch (\Illuminate\Database\QueryException $e) {
+            \Log::error('Erro de banco de dados ao listar órgãos', [
+                'error' => $e->getMessage(),
+                'sql' => $e->getSql() ?? 'N/A',
+                'bindings' => $e->getBindings() ?? [],
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'message' => 'Erro ao consultar banco de dados. Verifique os logs para mais detalhes.'
+            ], 500);
         } catch (\Exception $e) {
             \Log::error('Erro ao listar órgãos', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
                 'file' => $e->getFile(),
-                'line' => $e->getLine()
+                'line' => $e->getLine(),
+                'class' => get_class($e)
             ]);
             return response()->json([
                 'message' => $e->getMessage() ?: 'Erro ao listar órgãos'
