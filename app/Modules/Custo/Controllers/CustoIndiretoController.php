@@ -2,13 +2,13 @@
 
 namespace App\Modules\Custo\Controllers;
 
-use App\Http\Controllers\Api\BaseApiController;
+use App\Http\Controllers\Api\RoutingController;
 use App\Http\Controllers\Traits\HasDefaultActions;
 use App\Models\CustoIndireto;
 use App\Modules\Custo\Services\CustoIndiretoService;
 use Illuminate\Http\Request;
 
-class CustoIndiretoController extends BaseApiController
+class CustoIndiretoController extends RoutingController
 {
     use HasDefaultActions;
 
@@ -150,7 +150,7 @@ class CustoIndiretoController extends BaseApiController
      */
     public function index(Request $request)
     {
-        return $this->list($request);
+        return $this->handleList($request);
     }
 
     public function store(Request $request)
@@ -167,12 +167,12 @@ class CustoIndiretoController extends BaseApiController
 
     public function update(Request $request, $id)
     {
-        return parent::update($request, $id);
+        return $this->handleUpdate($request, $id);
     }
 
     public function destroy($id)
     {
-        return parent::destroy(request(), $id);
+        return $this->handleDestroy(request(), $id);
     }
 
     /**
