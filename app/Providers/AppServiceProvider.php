@@ -19,6 +19,8 @@ use App\Observers\ContratoObserver;
 use App\Observers\EmpenhoObserver;
 use App\Observers\NotaFiscalObserver;
 use App\Observers\AuditObserver;
+use Laravel\Sanctum\Sanctum;
+use App\Models\PersonalAccessToken;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -27,6 +29,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        // Registrar modelo customizado do Sanctum para usar timestamps em português
+        Sanctum::usePersonalAccessTokenModel(PersonalAccessToken::class);
+        
         // Registrar Policies
         \Illuminate\Support\Facades\Gate::policy(\App\Modules\Processo\Models\Processo::class, \App\Modules\Processo\Policies\ProcessoPolicy::class);
         \Illuminate\Support\Facades\Gate::policy(\App\Models\Contrato::class, \App\Policies\ContratoPolicy::class);
