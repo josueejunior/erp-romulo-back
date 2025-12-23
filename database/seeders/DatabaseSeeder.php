@@ -151,6 +151,7 @@ class DatabaseSeeder extends Seeder
         if (!$orgao) {
             // Criar órgão de exemplo dentro do tenant
             $orgao = Orgao::create([
+                'empresa_id' => $empresa->id,
                 'uasg' => '123456',
                 'razao_social' => 'Órgão Público Exemplo',
                 'cnpj' => '98.765.432/0001-10',
