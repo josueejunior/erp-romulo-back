@@ -56,13 +56,14 @@ class ProcessoController extends Controller
     }
 
     /**
-     * GET /processos-resumo
+     * GET /processos/resumo
      * Retorna resumo dos processos
      */
     public function resumo(Request $request): JsonResponse
     {
         $resumo = $this->processoService->obterResumo($request->all());
 
+        // O frontend espera response.data, então retornar com wrapper 'data'
         return response()->json(['data' => $resumo]);
     }
 

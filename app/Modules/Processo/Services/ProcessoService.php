@@ -28,7 +28,15 @@ class ProcessoService extends BaseService
     public function createFindByIdParamBag(array $values): array
     {
         return [
-            'with' => $values['with'] ?? ['orgao', 'setor', 'itens', 'documentos'],
+            'with' => $values['with'] ?? [
+                'orgao', 
+                'setor', 
+                'itens', 
+                'itens.formacoesPreco', // Para calcular valores
+                'documentos',
+                'documentos.documentoHabilitacao', // Para calcular alertas de documentos vencidos
+                'empenhos', // Para calcular alertas de empenhos
+            ],
         ];
     }
 
@@ -60,7 +68,15 @@ class ProcessoService extends BaseService
             'search' => $values['search'] ?? null,
             'page' => $values['page'] ?? 1,
             'per_page' => $values['per_page'] ?? 15,
-            'with' => $values['with'] ?? ['orgao', 'setor'],
+            'with' => $values['with'] ?? [
+                'orgao', 
+                'setor',
+                'itens', // Para calcular valores
+                'itens.formacoesPreco', // Para calcular valores mínimos
+                'documentos', // Para calcular alertas
+                'documentos.documentoHabilitacao', // Para calcular alertas de documentos vencidos
+                'empenhos', // Para calcular alertas de empenhos
+            ],
         ];
     }
 
@@ -162,6 +178,17 @@ class ProcessoService extends BaseService
             $data['status'] = 'participacao';
         }
 
+        // Processar tipo_selecao_fornecedor e tipo_disputa se vierem como objetos
+        if (isset($data['tipo_selecao_fornecedor']) && is_array($data['tipo_selecao_fornecedor'])) {
+            // Se for um array/objeto, extrair o valor (assumindo que tem 'value' ou é o próprio valor)
+            $data['tipo_selecao_fornecedor'] = $data['tipo_selecao_fornecedor']['value'] ?? $data['tipo_selecao_fornecedor']['id'] ?? (is_string($data['tipo_selecao_fornecedor']) ? $data['tipo_selecao_fornecedor'] : null);
+        }
+
+        if (isset($data['tipo_disputa']) && is_array($data['tipo_disputa'])) {
+            // Se for um array/objeto, extrair o valor (assumindo que tem 'value' ou é o próprio valor)
+            $data['tipo_disputa'] = $data['tipo_disputa']['value'] ?? $data['tipo_disputa']['id'] ?? (is_string($data['tipo_disputa']) ? $data['tipo_disputa'] : null);
+        }
+
         // Chamar método do BaseService que já adiciona empresa_id automaticamente
         return parent::store($data);
     }
@@ -210,6 +237,17 @@ class ProcessoService extends BaseService
      */
     public function update(int|string $id, array $data): Model
     {
+        // Processar tipo_selecao_fornecedor e tipo_disputa se vierem como objetos
+        if (isset($data['tipo_selecao_fornecedor']) && is_array($data['tipo_selecao_fornecedor'])) {
+            // Se for um array/objeto, extrair o valor (assumindo que tem 'value' ou é o próprio valor)
+            $data['tipo_selecao_fornecedor'] = $data['tipo_selecao_fornecedor']['value'] ?? $data['tipo_selecao_fornecedor']['id'] ?? (is_string($data['tipo_selecao_fornecedor']) ? $data['tipo_selecao_fornecedor'] : null);
+        }
+
+        if (isset($data['tipo_disputa']) && is_array($data['tipo_disputa'])) {
+            // Se for um array/objeto, extrair o valor (assumindo que tem 'value' ou é o próprio valor)
+            $data['tipo_disputa'] = $data['tipo_disputa']['value'] ?? $data['tipo_disputa']['id'] ?? (is_string($data['tipo_disputa']) ? $data['tipo_disputa'] : null);
+        }
+
         // BaseService já aplica filtro e protege empresa_id
         return parent::update($id, $data);
     }
@@ -236,6 +274,7 @@ class ProcessoService extends BaseService
 
     /**
      * Obter resumo dos processos
+     * Retorna stats para o dashboard
      */
     public function obterResumo(array $filtros = []): array
     {
@@ -244,30 +283,85 @@ class ProcessoService extends BaseService
         if (!$empresaId) {
             return [
                 'total' => 0,
+                'participacao' => 0,
+                'julgamento' => 0,
+                'execucao' => 0,
+                'pagamento' => 0,
+                'encerramento' => 0,
+                'com_alerta' => 0,
+                'valor_total_execucao' => 0,
+                'lucro_estimado' => 0,
                 'por_status' => [],
                 'por_modalidade' => [],
             ];
         }
 
-        $query = Processo::where('empresa_id', $empresaId)
+        $baseQuery = Processo::where('empresa_id', $empresaId)
             ->whereNotNull('empresa_id');
 
-        // Filtros
+        // Aplicar filtros (mas não para os cálculos de stats)
+        $queryComFiltros = clone $baseQuery;
         if (isset($filtros['status'])) {
-            $query->where('status', $filtros['status']);
+            $queryComFiltros->where('status', $filtros['status']);
+        }
+        if (isset($filtros['modalidade'])) {
+            $queryComFiltros->where('modalidade', $filtros['modalidade']);
+        }
+        if (isset($filtros['orgao_id'])) {
+            $queryComFiltros->where('orgao_id', $filtros['orgao_id']);
+        }
+        if (isset($filtros['search']) && $filtros['search']) {
+            $search = $filtros['search'];
+            $queryComFiltros->where(function($q) use ($search) {
+                $q->where('numero_modalidade', 'like', "%{$search}%")
+                  ->orWhere('numero_processo_administrativo', 'like', "%{$search}%")
+                  ->orWhere('objeto_resumido', 'like', "%{$search}%");
+            });
         }
 
-        if (isset($filtros['modalidade'])) {
-            $query->where('modalidade', $filtros['modalidade']);
-        }
+        // Contar por status (usando query com filtros)
+        $participacao = (clone $queryComFiltros)->where('status', 'participacao')->count();
+        $julgamento = (clone $queryComFiltros)->where('status', 'julgamento_habilitacao')->count();
+        $execucao = (clone $queryComFiltros)->where('status', 'execucao')->count();
+        $pagamento = (clone $queryComFiltros)->where('status', 'pagamento')->count();
+        $encerramento = (clone $queryComFiltros)->where('status', 'encerramento')->count();
+
+        // Contar processos com alertas (precisa carregar processos e verificar alertas)
+        // Por enquanto, retornar 0 - pode ser implementado depois se necessário
+        $comAlerta = 0;
+
+        // Calcular valor total em execução
+        $processosExecucao = (clone $queryComFiltros)
+            ->where('status', 'execucao')
+            ->with(['itens' => function($q) {
+                $q->whereIn('status_item', ['aceito', 'aceito_habilitado']);
+            }])
+            ->get();
+        
+        $valorTotalExecucao = $processosExecucao->sum(function($processo) {
+            return $processo->itens->sum(function($item) {
+                return $item->valor_negociado ?? $item->valor_final_sessao ?? $item->valor_estimado ?? 0;
+            });
+        });
+
+        // Lucro estimado (por enquanto retornar 0 - pode ser calculado depois)
+        $lucroEstimado = 0;
 
         return [
-            'total' => $query->count(),
-            'por_status' => $query->selectRaw('status, count(*) as total')
+            'total' => $queryComFiltros->count(),
+            'participacao' => $participacao,
+            'julgamento' => $julgamento,
+            'execucao' => $execucao,
+            'pagamento' => $pagamento,
+            'encerramento' => $encerramento,
+            'com_alerta' => $comAlerta,
+            'valor_total_execucao' => round($valorTotalExecucao, 2),
+            'lucro_estimado' => round($lucroEstimado, 2),
+            'por_status' => $queryComFiltros->selectRaw('status, count(*) as total')
                 ->groupBy('status')
                 ->pluck('total', 'status')
                 ->toArray(),
-            'por_modalidade' => $query->selectRaw('modalidade, count(*) as total')
+            'por_modalidade' => $queryComFiltros->selectRaw('modalidade, count(*) as total')
                 ->groupBy('modalidade')
                 ->pluck('total', 'modalidade')
                 ->toArray(),
