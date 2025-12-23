@@ -15,6 +15,7 @@ return new class extends Migration
     {
         Schema::create('orgaos', function (Blueprint $table) {
             $table->id();
+            $table->foreignEmpresa();
             $table->string('uasg', Blueprint::VARCHAR_SMALL)->nullable();
             $table->string('razao_social', Blueprint::VARCHAR_DEFAULT);
             $table->string('cnpj', 18)->nullable();
