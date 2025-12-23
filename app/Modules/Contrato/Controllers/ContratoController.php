@@ -3,7 +3,6 @@
 namespace App\Modules\Contrato\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
-use App\Http\Controllers\Traits\HasDefaultActions;
 use App\Modules\Processo\Models\Processo;
 use App\Models\Contrato;
 use App\Modules\Contrato\Services\ContratoService;
@@ -12,14 +11,11 @@ use Illuminate\Http\Request;
 
 class ContratoController extends BaseApiController
 {
-    use HasDefaultActions;
-
     protected ContratoService $contratoService;
 
     public function __construct(ContratoService $contratoService)
     {
         $this->contratoService = $contratoService;
-        $this->service = $contratoService; // Para HasDefaultActions
     }
 
     /**
