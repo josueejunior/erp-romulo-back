@@ -7,10 +7,13 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Models\Concerns\HasEmpresaScope;
+use App\Database\Schema\Blueprint;
 
 class Contrato extends Model
 {
     use SoftDeletes, HasEmpresaScope;
+
+    const DELETED_AT = Blueprint::DELETED_AT;
 
     protected $fillable = [
         'empresa_id',

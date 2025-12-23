@@ -9,10 +9,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Carbon\Carbon;
 use App\Models\Concerns\HasEmpresaScope;
+use App\Database\Schema\Blueprint;
 
 class DocumentoHabilitacao extends Model
 {
     use HasFactory, SoftDeletes, HasEmpresaScope;
+
+    const DELETED_AT = Blueprint::DELETED_AT;
 
     protected $table = 'documentos_habilitacao';
 

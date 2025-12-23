@@ -6,10 +6,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Models\Concerns\HasEmpresaScope;
+use App\Database\Schema\Blueprint;
 
 class CustoIndireto extends Model
 {
     use SoftDeletes, HasEmpresaScope;
+
+    const DELETED_AT = Blueprint::DELETED_AT;
 
     protected $table = 'custo_indiretos';
 
