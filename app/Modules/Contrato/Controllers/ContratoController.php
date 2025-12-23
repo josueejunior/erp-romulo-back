@@ -47,31 +47,31 @@ class ContratoController extends BaseApiController
      */
     public function listarTodos(Request $request)
     {
-        $empresa = $this->getEmpresaAtivaOrFail();
-        $tenantId = tenancy()->tenant?->id;
-        
-        // Criar chave de cache baseada nos filtros
-        $filters = [
-            'busca' => $request->busca,
-            'orgao_id' => $request->orgao_id,
-            'srp' => $request->has('srp') ? $request->boolean('srp') : null,
-            'situacao' => $request->situacao,
-            'vigente' => $request->has('vigente') ? $request->boolean('vigente') : null,
-            'vencer_em' => $request->vencer_em,
-            'somente_alerta' => $request->boolean('somente_alerta'),
-            'page' => $request->page ?? 1,
-        ];
-        $cacheKey = "contratos:{$tenantId}:{$empresa->id}:" . md5(json_encode($filters));
-        
-        // Tentar obter do cache
-        if ($tenantId && RedisService::isAvailable()) {
-            $cached = RedisService::get($cacheKey);
-            if ($cached !== null) {
-                return response()->json($cached);
-            }
-        }
-        
         try {
+            $empresa = $this->getEmpresaAtivaOrFail();
+            $tenantId = tenancy()->tenant?->id;
+            
+            // Criar chave de cache baseada nos filtros
+            $filters = [
+                'busca' => $request->busca,
+                'orgao_id' => $request->orgao_id,
+                'srp' => $request->has('srp') ? $request->boolean('srp') : null,
+                'situacao' => $request->situacao,
+                'vigente' => $request->has('vigente') ? $request->boolean('vigente') : null,
+                'vencer_em' => $request->vencer_em,
+                'somente_alerta' => $request->boolean('somente_alerta'),
+                'page' => $request->page ?? 1,
+            ];
+            $cacheKey = "contratos:{$tenantId}:{$empresa->id}:" . md5(json_encode($filters));
+            
+            // Tentar obter do cache
+            if ($tenantId && RedisService::isAvailable()) {
+                $cached = RedisService::get($cacheKey);
+                if ($cached !== null) {
+                    return response()->json($cached);
+                }
+            }
+            
             $response = $this->contratoService->listarTodos(
                 $filters,
                 $empresa->id,
@@ -86,10 +86,19 @@ class ContratoController extends BaseApiController
             }
 
             return response()->json($response);
-        } catch (\Exception $e) {
+        } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
-                'message' => $e->getMessage()
-            ], 404);
+                'message' => 'Erro de validação',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            \Log::error('Erro ao listar contratos', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'message' => $e->getMessage() ?: 'Erro ao listar contratos'
+            ], 500);
         }
     }
 

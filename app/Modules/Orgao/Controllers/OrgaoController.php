@@ -41,15 +41,24 @@ class OrgaoController extends RoutingController
             }
             
             // Se for uma coleção simples
-            return response()->json(OrgaoResource::collection($orgaos));
+            return response()->json([
+                'data' => OrgaoResource::collection($orgaos)
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'message' => 'Erro de validação',
+                'errors' => $e->errors()
+            ], 422);
         } catch (\Exception $e) {
             \Log::error('Erro ao listar órgãos', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
             ]);
             return response()->json([
-                'message' => $e->getMessage()
-            ], 400);
+                'message' => $e->getMessage() ?: 'Erro ao listar órgãos'
+            ], 500);
         }
     }
 
@@ -86,7 +95,7 @@ class OrgaoController extends RoutingController
 
     public function index(Request $request)
     {
-        return $this->list($request);
+        return $this->handleList($request);
     }
 
     /**
