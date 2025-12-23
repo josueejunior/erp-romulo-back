@@ -88,6 +88,28 @@ class Tenant extends BaseTenant implements TenantWithDatabase
     }
 
     /**
+     * Sobrescrever toArray para garantir que todas as colunas customizadas sejam retornadas
+     */
+    public function toArray(): array
+    {
+        $array = parent::toArray();
+        
+        // Garantir que todas as colunas customizadas estejam no array
+        $customColumns = self::getCustomColumns();
+        foreach ($customColumns as $column) {
+            if (!isset($array[$column])) {
+                // Tentar obter o atributo diretamente
+                $value = $this->getAttribute($column);
+                if ($value !== null || array_key_exists($column, $this->getAttributes())) {
+                    $array[$column] = $value;
+                }
+            }
+        }
+        
+        return $array;
+    }
+
+    /**
      * Relacionamento com plano atual
      */
     public function planoAtual()
