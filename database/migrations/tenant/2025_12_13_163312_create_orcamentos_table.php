@@ -22,7 +22,7 @@ return new class extends Migration
             $table->foreignId('transportadora_id')->nullable()->constrained('fornecedores')->onDelete('set null'); // Transportadora é um fornecedor
             $table->decimal('custo_produto', 15, 2)->nullable(); // Mantido para compatibilidade, mas custos estão em orcamento_itens
             $table->string('marca_modelo', Blueprint::VARCHAR_DEFAULT)->nullable();
-            $table->text('ajustes_especificacao')->nullable();
+            $table->observacao('ajustes_especificacao');
             $table->decimal('frete', 15, 2)->default(0);
             $table->boolean('frete_incluido')->default(false);
             $table->boolean('fornecedor_escolhido')->default(false);
@@ -39,3 +39,4 @@ return new class extends Migration
         Schema::dropIfExists('orcamentos');
     }
 };
+
