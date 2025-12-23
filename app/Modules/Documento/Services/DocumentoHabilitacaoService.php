@@ -23,7 +23,7 @@ class DocumentoHabilitacaoService extends BaseService
         ];
     }
 
-    public function list(array $params = []): LengthAwarePaginator|\Illuminate\Support\Collection
+    public function list(array $params = []): LengthAwarePaginator
     {
         $builder = $this->createQueryBuilder();
 
@@ -43,15 +43,26 @@ class DocumentoHabilitacaoService extends BaseService
                   ->where('data_validade', '<=', now()->addDays(30));
         }
 
-        // Se não for paginação, retornar todos
-        if (isset($params['todos']) && $params['todos']) {
-            return $builder->orderBy('tipo', 'asc')->get();
-        }
-
         // Ordenação
         $builder->orderBy('data_validade', 'asc');
 
-        // Paginação
+        // Se não for paginação, retornar todos em um paginator
+        if (isset($params['todos']) && $params['todos']) {
+            $all = $builder->orderBy('tipo', 'asc')->get();
+            $perPage = $all->count() > 0 ? $all->count() : 1;
+            $page = 1;
+            
+            // Criar um LengthAwarePaginator manualmente com todos os itens
+            return new \Illuminate\Pagination\LengthAwarePaginator(
+                $all,
+                $all->count(),
+                $perPage,
+                $page,
+                ['path' => request()->url(), 'query' => request()->query()]
+            );
+        }
+
+        // Paginação normal
         $perPage = $params['per_page'] ?? 15;
         $page = $params['page'] ?? 1;
 

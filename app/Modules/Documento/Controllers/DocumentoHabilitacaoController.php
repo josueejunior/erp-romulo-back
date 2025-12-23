@@ -27,11 +27,7 @@ class DocumentoHabilitacaoController extends BaseApiController
             $params = $this->service->createListParamBag(array_merge($request->all(), $mergeParams));
             $documentos = $this->service->list($params);
             
-            // Se for collection (todos), retornar diretamente
-            if ($documentos instanceof \Illuminate\Support\Collection) {
-                return response()->json($documentos);
-            }
-            
+            // Sempre retorna LengthAwarePaginator
             return response()->json($documentos);
         } catch (\Exception $e) {
             return response()->json([
