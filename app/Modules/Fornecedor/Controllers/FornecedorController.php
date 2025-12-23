@@ -3,7 +3,6 @@
 namespace App\Modules\Fornecedor\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
-use App\Http\Controllers\Traits\HasDefaultActions;
 use App\Http\Resources\FornecedorResource;
 use App\Modules\Fornecedor\Models\Fornecedor;
 use App\Modules\Fornecedor\Services\FornecedorService;
@@ -13,10 +12,9 @@ use App\Services\RedisService;
 
 class FornecedorController extends BaseApiController
 {
-    use HasDefaultActions;
-
-    public function __construct(protected FornecedorService $service)
+    public function __construct(FornecedorService $service)
     {
+        $this->service = $service;
     }
 
     /**
@@ -182,7 +180,12 @@ class FornecedorController extends BaseApiController
      */
     public function index(Request $request)
     {
-        return $this->list($request);
+        return $this->handleList($request);
+    }
+
+    public function list(Request $request)
+    {
+        return $this->handleList($request);
     }
 
     public function store(Request $request)
@@ -199,12 +202,12 @@ class FornecedorController extends BaseApiController
 
     public function update(Request $request, Fornecedor $fornecedor)
     {
-        return parent::update($request, $fornecedor->id);
+        return $this->handleUpdate($request, $fornecedor->id);
     }
 
     public function destroy(Fornecedor $fornecedor)
     {
-        return parent::destroy(request(), $fornecedor->id);
+        return $this->handleDestroy(request(), $fornecedor->id);
     }
 
     /**

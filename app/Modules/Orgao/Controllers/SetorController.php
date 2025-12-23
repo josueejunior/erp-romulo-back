@@ -13,8 +13,6 @@ use App\Services\RedisService;
 
 class SetorController extends BaseApiController
 {
-    protected IService $service;
-
     public function __construct(SetorService $service)
     {
         $this->service = $service;
