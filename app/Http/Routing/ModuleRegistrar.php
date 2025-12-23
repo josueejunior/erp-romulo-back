@@ -85,6 +85,7 @@ class ModuleRegistrar
      */
     public function children(array|string|Closure $callback): self
     {
+        $this->ensureRegistered();
         $this->router->group(
             $this->getCompiledAttributes(['prefix' => $this->prefix . "/{" . $this->parameter . "}"]),
             $callback
@@ -97,6 +98,7 @@ class ModuleRegistrar
      */
     public function group(array|string|Closure $callback): self
     {
+        $this->ensureRegistered();
         $attributes = $this->getCompiledAttributes(['prefix' => $this->prefix ?: null]);
         unset($attributes['where'][$this->parameter]);
         $this->router->group($attributes, $callback);
@@ -211,10 +213,24 @@ class ModuleRegistrar
     }
 
     /**
+     * Garantir que as rotas estão registradas
+     */
+    protected function ensureRegistered(): void
+    {
+        if (!$this->registered) {
+            $this->register();
+        }
+    }
+
+    /**
      * Registrar todas as rotas
      */
     protected function register(): void
     {
+        if ($this->registered) {
+            return;
+        }
+        
         $this->registered = true;
         $collection = new RouteCollection();
         
