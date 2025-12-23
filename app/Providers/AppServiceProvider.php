@@ -45,10 +45,11 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         // Mapear relacionamentos polimórficos para manter compatibilidade com dados antigos
-        // Isso permite que tokens antigos com namespaces antigos continuem funcionando
-        Relation::enforceMorphMap([
-            'App\Models\AdminUser' => \App\Modules\Auth\Models\AdminUser::class,
-            'App\Models\User' => \App\Modules\Auth\Models\User::class,
+        // O evento 'retrieved' no PersonalAccessToken faz o mapeamento de namespaces antigos
+        // Aqui definimos os novos namespaces como padrão para novos tokens
+        Relation::morphMap([
+            'admin_user' => \App\Modules\Auth\Models\AdminUser::class,
+            'user' => \App\Modules\Auth\Models\User::class,
         ]);
         
         // Registrar macro Route::module
