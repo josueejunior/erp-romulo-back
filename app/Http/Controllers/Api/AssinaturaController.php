@@ -89,17 +89,20 @@ class AssinaturaController extends Controller
         }
 
         if (!$assinatura) {
+            // Retornar 200 com null ao invés de 404 para não quebrar o frontend
             return response()->json([
+                'data' => null,
                 'message' => 'Nenhuma assinatura encontrada.'
-            ], 404);
+            ], 200);
         }
         
         // Calcular dias restantes
         $diasRestantes = $assinatura->diasRestantes();
 
         return response()->json([
-            ...$assinatura->toArray(),
-            'dias_restantes' => $diasRestantes,
+            'data' => array_merge($assinatura->toArray(), [
+                'dias_restantes' => $diasRestantes,
+            ])
         ]);
     }
 
@@ -239,9 +242,18 @@ class AssinaturaController extends Controller
             ->first();
 
         if (!$assinatura) {
+            // Retornar 200 com estrutura vazia ao invés de 404
             return response()->json([
-                'message' => 'Nenhuma assinatura encontrada.'
-            ], 404);
+                'data' => [
+                    'assinatura' => null,
+                    'status' => 'sem_assinatura',
+                    'limites' => [
+                        'processos' => ['usado' => 0, 'limite' => null],
+                        'usuarios' => ['usado' => 0, 'limite' => null],
+                        'armazenamento_mb' => ['usado' => 0, 'limite' => null],
+                    ]
+                ]
+            ], 200);
         }
 
         $plano = $assinatura->plano;

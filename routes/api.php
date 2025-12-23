@@ -68,6 +68,9 @@ Route::prefix('v1')->group(function () {
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::get('/auth/user', [AuthController::class, 'user']);
         
+        // Rota de compatibilidade para /user/roles (redireciona para /users/roles)
+        Route::get('/user/roles', [\App\Http\Controllers\Api\FixUserRolesController::class, 'getCurrentUserRoles']);
+        
         // Dashboard
         Route::get('/dashboard', [ApiDashboardController::class, 'index']);
         

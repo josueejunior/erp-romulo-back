@@ -26,8 +26,27 @@ class OrgaoController extends RoutingController
         try {
             $params = $this->service->createListParamBag(array_merge($request->all(), $mergeParams));
             $orgaos = $this->service->list($params);
+            
+            // Se for um paginator, retornar com estrutura de paginação
+            if (method_exists($orgaos, 'items')) {
+                return response()->json([
+                    'data' => OrgaoResource::collection($orgaos->items()),
+                    'meta' => [
+                        'current_page' => $orgaos->currentPage(),
+                        'last_page' => $orgaos->lastPage(),
+                        'per_page' => $orgaos->perPage(),
+                        'total' => $orgaos->total(),
+                    ]
+                ]);
+            }
+            
+            // Se for uma coleção simples
             return response()->json(OrgaoResource::collection($orgaos));
         } catch (\Exception $e) {
+            \Log::error('Erro ao listar órgãos', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return response()->json([
                 'message' => $e->getMessage()
             ], 400);
