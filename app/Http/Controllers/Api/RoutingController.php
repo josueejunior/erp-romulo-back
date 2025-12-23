@@ -226,8 +226,8 @@ abstract class RoutingController extends Controller
     protected function handleServiceGet(
         IService $service,
         Request $request,
-        ?int|string $id,
-        ?int|string $parentId = null,
+        int|string|null $id,
+        int|string|null $parentId = null,
         array $mergeParams = []
     ): JsonResponse {
         if (!$id) {
@@ -258,7 +258,7 @@ abstract class RoutingController extends Controller
     protected function handleServiceList(
         IService $service,
         Request $request,
-        ?int|string $parentId = null,
+        int|string|null $parentId = null,
         array $mergeParams = []
     ): JsonResponse {
         if (!method_exists($service, 'createListParamBag') || !method_exists($service, 'list')) {
@@ -281,7 +281,7 @@ abstract class RoutingController extends Controller
     protected function handleServiceStore(
         IService $service,
         Request $request,
-        ?int|string $parentId = null,
+        int|string|null $parentId = null,
         array $mergeParams = []
     ): JsonResponse {
         if (!method_exists($service, 'validateStoreData') || !method_exists($service, 'store')) {
@@ -310,7 +310,7 @@ abstract class RoutingController extends Controller
         IService $service,
         Request $request,
         int|string $id,
-        ?int|string $parentId = null,
+        int|string|null $parentId = null,
         array $mergeParams = []
     ): JsonResponse {
         if (!method_exists($service, 'validateUpdateData') || !method_exists($service, 'update')) {
