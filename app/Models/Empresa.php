@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use App\Models\Traits\HasTimestampsCustomizados;
+use App\Modules\Processo\Models\Processo;
 
 class Empresa extends BaseModel
 {

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Models\Traits\HasSoftDeletesWithEmpresa;
 use App\Models\Traits\HasTimestampsCustomizados;
 use App\Models\Traits\BelongsToEmpresaTrait;
+use App\Modules\Processo\Models\Processo;
 
 class Orgao extends BaseModel
 {

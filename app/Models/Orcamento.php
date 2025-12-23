@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Models\Concerns\HasEmpresaScope;
 use App\Models\Traits\BelongsToEmpresaTrait;
+use App\Modules\Processo\Models\Processo;
 
 class Orcamento extends BaseModel
 {
