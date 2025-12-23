@@ -19,6 +19,35 @@ class Tenant extends BaseTenant implements TenantWithDatabase
     const UPDATED_AT = Blueprint::UPDATED_AT;
     public $timestamps = true;
 
+    /**
+     * Colunas que podem ser preenchidas em massa
+     */
+    protected $fillable = [
+        'razao_social',
+        'cnpj',
+        'email',
+        'status',
+        'endereco',
+        'cidade',
+        'estado',
+        'cep',
+        'telefones',
+        'emails_adicionais',
+        'banco',
+        'agencia',
+        'conta',
+        'tipo_conta',
+        'pix',
+        'representante_legal_nome',
+        'representante_legal_cpf',
+        'representante_legal_cargo',
+        'logo',
+        'plano_atual_id',
+        'assinatura_atual_id',
+        'limite_processos',
+        'limite_usuarios',
+    ];
+
     public static function getCustomColumns(): array
     {
         return [

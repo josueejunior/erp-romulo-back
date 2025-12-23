@@ -31,7 +31,24 @@ class AdminTenantController extends Controller
      */
     public function show(Tenant $tenant)
     {
-        return response()->json($tenant);
+        // Recarregar o tenant para garantir que todos os dados estão carregados
+        $tenant->refresh();
+        
+        // Adicionar nome do banco de dados do tenant
+        $tenant->tenancy_db_name = config('tenancy.database.prefix') . $tenant->id;
+        
+        // Garantir que todos os campos customizados sejam retornados
+        $data = $tenant->toArray();
+        
+        // Adicionar campos que podem não estar sendo retornados
+        $customColumns = Tenant::getCustomColumns();
+        foreach ($customColumns as $column) {
+            if ($column !== 'id' && !isset($data[$column])) {
+                $data[$column] = $tenant->getAttribute($column) ?? null;
+            }
+        }
+        
+        return response()->json($data);
     }
 
     /**
