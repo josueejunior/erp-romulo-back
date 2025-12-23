@@ -7,10 +7,11 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Models\Concerns\HasEmpresaScope;
+use App\Models\Traits\HasTimestampsCustomizados;
 
 class Setor extends Model
 {
-    use SoftDeletes, HasEmpresaScope;
+    use SoftDeletes, HasEmpresaScope, HasTimestampsCustomizados;
 
     protected $fillable = [
         'empresa_id',

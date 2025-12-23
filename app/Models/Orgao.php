@@ -7,10 +7,11 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Models\Concerns\HasEmpresaScope;
+use App\Models\Traits\HasTimestampsCustomizados;
 
 class Orgao extends Model
 {
-    use SoftDeletes, HasEmpresaScope;
+    use SoftDeletes, HasEmpresaScope, HasTimestampsCustomizados;
 
     protected $fillable = [
         'empresa_id',
@@ -45,9 +46,9 @@ class Orgao extends Model
 
     protected function casts(): array
     {
-        return [
+        return array_merge($this->getTimestampsCasts(), [
             'emails' => 'array',
             'telefones' => 'array',
-        ];
+        ]);
     }
 }

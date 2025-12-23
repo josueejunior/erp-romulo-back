@@ -6,10 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use App\Models\Traits\HasTimestampsCustomizados;
 
 class Empresa extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, HasTimestampsCustomizados;
 
     protected $fillable = [
         'razao_social',
@@ -36,11 +37,11 @@ class Empresa extends Model
 
     protected function casts(): array
     {
-        return [
+        return array_merge($this->getTimestampsCasts(), [
             'status' => 'string',
             'emails' => 'array',
             'telefones' => 'array',
-        ];
+        ]);
     }
 
     public function processos(): HasMany
