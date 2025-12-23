@@ -3,7 +3,7 @@
 namespace App\Modules\Orgao\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
-use App\Http\Controllers\Traits\HasDefaultActions;
+use App\Contracts\IService;
 use App\Http\Resources\SetorResource;
 use App\Models\Setor;
 use App\Modules\Orgao\Services\SetorService;
@@ -13,10 +13,11 @@ use App\Services\RedisService;
 
 class SetorController extends BaseApiController
 {
-    use HasDefaultActions;
+    protected IService $service;
 
-    public function __construct(protected SetorService $service)
+    public function __construct(SetorService $service)
     {
+        $this->service = $service;
     }
 
     /**
@@ -196,7 +197,12 @@ class SetorController extends BaseApiController
      */
     public function index(Request $request)
     {
-        return $this->list($request);
+        return $this->handleList($request);
+    }
+
+    public function list(Request $request)
+    {
+        return $this->handleList($request);
     }
 
     public function store(Request $request)
@@ -213,12 +219,12 @@ class SetorController extends BaseApiController
 
     public function update(Request $request, Setor $setor)
     {
-        return parent::update($request, $setor->id);
+        return $this->handleUpdate($request, $setor->id);
     }
 
     public function destroy(Setor $setor)
     {
-        return parent::destroy(request(), $setor->id);
+        return $this->handleDestroy(request(), $setor->id);
     }
 
     /**

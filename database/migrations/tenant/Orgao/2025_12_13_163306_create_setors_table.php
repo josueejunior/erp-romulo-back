@@ -15,6 +15,7 @@ return new class extends Migration
     {
         Schema::create('setors', function (Blueprint $table) {
             $table->id();
+            $table->foreignEmpresa();
             $table->foreignId('orgao_id')->constrained('orgaos')->onDelete('cascade');
             $table->string('nome', Blueprint::VARCHAR_DEFAULT);
             $table->email();
