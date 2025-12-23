@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Observers;
+namespace App\Modules\Processo\Observers;
 
 use App\Modules\Processo\Models\Processo;
 use App\Services\RedisService;
