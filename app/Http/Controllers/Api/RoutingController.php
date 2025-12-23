@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Contracts\IService;
-use App\Http\Controllers\Controller;
+use Illuminate\Routing\Controller as BaseController;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
@@ -13,7 +13,7 @@ use Illuminate\Validation\ValidationException;
  * Controller base que fornece handlers padrão para operações CRUD
  * Conecta métodos HTTP aos services através da interface IService
  */
-abstract class RoutingController extends Controller
+abstract class RoutingController extends BaseController
 {
 
     /**
