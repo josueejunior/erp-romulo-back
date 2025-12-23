@@ -76,7 +76,7 @@ class AssinaturaController extends Controller
             $assinatura = Assinatura::where('tenant_id', $tenant->id)
                 ->where('status', 'ativa')
                 ->with('plano')
-                ->orderBy('created_at', 'desc')
+                ->orderBy(Assinatura::CREATED_AT, 'desc')
                 ->first();
         }
         
@@ -84,7 +84,7 @@ class AssinaturaController extends Controller
         if (!$assinatura) {
             $assinatura = Assinatura::where('tenant_id', $tenant->id)
                 ->with('plano')
-                ->orderBy('created_at', 'desc')
+                ->orderBy(Assinatura::CREATED_AT, 'desc')
                 ->first();
         }
 

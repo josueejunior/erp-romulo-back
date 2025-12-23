@@ -2,7 +2,7 @@
 
 namespace App\Modules\Orgao\Controllers;
 
-use App\Http\Controllers\Api\BaseApiController;
+use App\Http\Controllers\Api\RoutingController;
 use App\Http\Controllers\Traits\HasDefaultActions;
 use App\Http\Resources\OrgaoResource;
 use App\Models\Orgao;
@@ -10,12 +10,13 @@ use App\Modules\Orgao\Services\OrgaoService;
 use Illuminate\Http\Request;
 use App\Helpers\PermissionHelper;
 
-class OrgaoController extends BaseApiController
+class OrgaoController extends RoutingController
 {
     use HasDefaultActions;
 
-    public function __construct(protected OrgaoService $service)
+    public function __construct(OrgaoService $service)
     {
+        $this->service = $service;
     }
     /**
      * Sobrescrever handleList para usar OrgaoResource

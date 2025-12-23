@@ -16,10 +16,13 @@ use App\Models\AutorizacaoFornecimento;
 use App\Models\Empenho;
 use App\Models\NotaFiscal;
 use App\Models\Orcamento;
+use App\Database\Schema\Blueprint;
 
 class Processo extends Model
 {
     use SoftDeletes, HasEmpresaScope, BelongsToEmpresa;
+
+    const DELETED_AT = Blueprint::DELETED_AT;
 
     protected $fillable = [
         'empresa_id',
