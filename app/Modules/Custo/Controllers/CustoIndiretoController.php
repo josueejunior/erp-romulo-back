@@ -27,6 +27,11 @@ class CustoIndiretoController extends BaseApiController
             $custos = $this->service->list($params);
             return response()->json($custos);
         } catch (\Exception $e) {
+            \Log::error('Erro ao listar custos indiretos', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'params' => $request->all()
+            ]);
             return response()->json([
                 'message' => $e->getMessage()
             ], 400);
@@ -180,6 +185,11 @@ class CustoIndiretoController extends BaseApiController
             $resumo = $this->service->resumo($params);
             return response()->json($resumo);
         } catch (\Exception $e) {
+            \Log::error('Erro ao obter resumo de custos indiretos', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'params' => $request->all()
+            ]);
             return response()->json([
                 'message' => $e->getMessage()
             ], 400);

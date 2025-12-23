@@ -52,7 +52,11 @@ class CustoIndiretoService extends BaseService
         }
 
         // Ordenação
-        $builder->orderBy('data', 'desc')->orderBy('created_at', 'desc');
+        $modelClass = static::$model;
+        $createdAtColumn = defined("$modelClass::CREATED_AT") 
+            ? $modelClass::CREATED_AT 
+            : 'criado_em';
+        $builder->orderBy('data', 'desc')->orderBy($createdAtColumn, 'desc');
 
         // Paginação
         $perPage = $params['per_page'] ?? 15;

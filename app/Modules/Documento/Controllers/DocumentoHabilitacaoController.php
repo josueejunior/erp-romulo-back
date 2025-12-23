@@ -30,6 +30,11 @@ class DocumentoHabilitacaoController extends BaseApiController
             // Sempre retorna LengthAwarePaginator
             return response()->json($documentos);
         } catch (\Exception $e) {
+            \Log::error('Erro ao listar documentos de habilitação', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'params' => $request->all()
+            ]);
             return response()->json([
                 'message' => $e->getMessage()
             ], 400);
