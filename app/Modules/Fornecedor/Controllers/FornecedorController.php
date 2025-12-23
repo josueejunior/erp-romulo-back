@@ -29,10 +29,22 @@ class FornecedorController extends BaseApiController
         $filters = array_merge($request->all(), $mergeParams);
         $cacheKey = "fornecedores:{$tenantId}:{$empresa->id}:" . md5(json_encode($filters));
         
+        // Debug: Log empresa e cache
+        \Log::debug('FornecedorController->handleList()', [
+            'empresa_id' => $empresa->id,
+            'tenant_id' => $tenantId,
+            'cache_key' => $cacheKey,
+            'filters' => $filters,
+        ]);
+        
         // Tentar obter do cache
         if ($tenantId && RedisService::isAvailable()) {
             $cached = RedisService::get($cacheKey);
             if ($cached !== null) {
+                \Log::debug('FornecedorController->handleList() cache hit', [
+                    'cache_key' => $cacheKey,
+                    'cached_total' => $cached['meta']['total'] ?? 0,
+                ]);
                 return response()->json($cached);
             }
         }
@@ -40,6 +52,14 @@ class FornecedorController extends BaseApiController
         try {
             $params = $this->service->createListParamBag($filters);
             $fornecedores = $this->service->list($params);
+            
+            // Debug: Log resultado antes do resource
+            \Log::debug('FornecedorController->handleList() resultado', [
+                'total' => $fornecedores->total(),
+                'count' => $fornecedores->count(),
+                'empresa_id' => $empresa->id,
+            ]);
+            
             $response = FornecedorResource::collection($fornecedores);
 
             // Salvar no cache (5 minutos)
@@ -49,6 +69,10 @@ class FornecedorController extends BaseApiController
 
             return response()->json($response);
         } catch (\Exception $e) {
+            \Log::error('FornecedorController->handleList() erro', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
             return response()->json([
                 'message' => $e->getMessage()
             ], 400);
@@ -109,6 +133,14 @@ class FornecedorController extends BaseApiController
             }
 
             $fornecedor = $this->service->store($validator->validated());
+            
+            // Debug: Log após criar
+            \Log::debug('FornecedorController->handleStore() criado', [
+                'fornecedor_id' => $fornecedor->id,
+                'fornecedor_empresa_id' => $fornecedor->empresa_id,
+                'empresa_ativa_id' => $this->getEmpresaAtivaOrFail()->id,
+            ]);
+            
             $this->clearFornecedorCache();
 
             return response()->json(['data' => new FornecedorResource($fornecedor)], 201);
@@ -218,18 +250,30 @@ class FornecedorController extends BaseApiController
         $empresa = $this->getEmpresaAtivaOrFail();
         $tenantId = tenancy()->tenant?->id;
         
+        \Log::debug('FornecedorController->clearFornecedorCache()', [
+            'empresa_id' => $empresa->id,
+            'tenant_id' => $tenantId,
+        ]);
+        
         if ($tenantId && RedisService::isAvailable()) {
             $pattern = "fornecedores:{$tenantId}:{$empresa->id}:*";
             try {
                 $cursor = 0;
+                $totalDeleted = 0;
                 do {
                     $result = \Illuminate\Support\Facades\Redis::scan($cursor, ['match' => $pattern, 'count' => 100]);
                     $cursor = $result[0];
                     $keys = $result[1];
                     if (!empty($keys)) {
-                        \Illuminate\Support\Facades\Redis::del($keys);
+                        $deleted = \Illuminate\Support\Facades\Redis::del($keys);
+                        $totalDeleted += $deleted;
                     }
                 } while ($cursor != 0);
+                
+                \Log::debug('FornecedorController->clearFornecedorCache() concluído', [
+                    'pattern' => $pattern,
+                    'total_deleted' => $totalDeleted,
+                ]);
             } catch (\Exception $e) {
                 \Log::warning('Erro ao limpar cache de fornecedores: ' . $e->getMessage());
             }

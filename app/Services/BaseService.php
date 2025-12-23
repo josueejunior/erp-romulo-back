@@ -161,8 +161,25 @@ abstract class BaseService implements IService
             }
         }
         
+        // Debug: Log antes de criar
+        \Log::debug('BaseService->store()', [
+            'model' => static::$model,
+            'empresa_id_in_data' => $data['empresa_id'] ?? null,
+            'getEmpresaId()' => $this->getEmpresaId(),
+            'data_keys' => array_keys($data),
+        ]);
+        
         $model = static::$model;
-        return $model::create($data);
+        $created = $model::create($data);
+        
+        // Debug: Log após criar
+        \Log::debug('BaseService->store() criado', [
+            'model' => static::$model,
+            'created_id' => $created->id,
+            'created_empresa_id' => $created->empresa_id ?? null,
+        ]);
+        
+        return $created;
     }
 
     /**

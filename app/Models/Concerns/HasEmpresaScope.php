@@ -35,11 +35,24 @@ trait HasEmpresaScope
 
     /**
      * Obtém empresa_id do contexto atual
-     * Tenta múltiplas fontes: usuário autenticado, request
+     * Usa IAuthIdentity para garantir consistência com BaseService
      */
     protected static function getEmpresaIdFromContext(): ?int
     {
-        // 1. Tentar obter do usuário autenticado
+        // Usar IAuthIdentity para garantir consistência com BaseService
+        try {
+            $authIdentity = app(\App\Contracts\IAuthIdentity::class);
+            if ($authIdentity) {
+                $empresaId = $authIdentity->getEmpresaId();
+                if ($empresaId) {
+                    return $empresaId;
+                }
+            }
+        } catch (\Exception $e) {
+            // Se IAuthIdentity não estiver disponível, tentar método alternativo
+        }
+
+        // Fallback: Tentar obter do usuário autenticado diretamente
         if (Auth::check()) {
             $user = Auth::user();
             
@@ -59,7 +72,7 @@ trait HasEmpresaScope
             }
         }
 
-        // 2. Tentar obter do request (header)
+        // Tentar obter do request (header)
         if (request() && request()->header('X-Empresa-ID')) {
             return (int) request()->header('X-Empresa-ID');
         }

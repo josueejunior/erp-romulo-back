@@ -24,6 +24,15 @@ class FornecedorService extends BaseService
     public function list(array $params = []): LengthAwarePaginator
     {
         $builder = $this->createQueryBuilder();
+        
+        // Debug: Log empresa_id usado no filtro
+        $empresaId = $this->getEmpresaId();
+        \Log::debug('FornecedorService->list()', [
+            'empresa_id' => $empresaId,
+            'params' => $params,
+            'sql_before' => $builder->toSql(),
+            'bindings_before' => $builder->getBindings(),
+        ]);
 
         // Busca livre
         if (isset($params['search']) && $params['search']) {
@@ -47,7 +56,18 @@ class FornecedorService extends BaseService
         $perPage = $params['per_page'] ?? 15;
         $page = $params['page'] ?? 1;
 
-        return $builder->paginate($perPage, ['*'], 'page', $page);
+        $result = $builder->paginate($perPage, ['*'], 'page', $page);
+        
+        // Debug: Log resultado
+        \Log::debug('FornecedorService->list() resultado', [
+            'total' => $result->total(),
+            'count' => $result->count(),
+            'empresa_id' => $empresaId,
+            'sql_final' => $builder->toSql(),
+            'bindings_final' => $builder->getBindings(),
+        ]);
+
+        return $result;
     }
 
     public function validateStoreData(array $data): \Illuminate\Contracts\Validation\Validator
