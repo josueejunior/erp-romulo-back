@@ -13,7 +13,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('users', function (Blueprint $table) {
+        Schema::create('users', function ($table) {
+            /** @var Blueprint $table */
             $table->id();
             $table->foreignEmpresaAtiva(); // empresa_ativa_id nullable, set null on delete
             $table->string('name', Blueprint::VARCHAR_DEFAULT);

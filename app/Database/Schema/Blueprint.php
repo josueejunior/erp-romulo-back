@@ -40,6 +40,18 @@ class Blueprint extends BaseBlueprint
     }
 
     /**
+     * Criar foreign key para empresa ativa (usuários)
+     * Cria: empresa_ativa_id -> empresas (nullable, set null on delete)
+     */
+    public function foreignEmpresaAtiva(): \Illuminate\Database\Schema\ColumnDefinition
+    {
+        return $this->foreignId('empresa_ativa_id')
+            ->nullable()
+            ->constrained('empresas')
+            ->onDelete('set null');
+    }
+
+    /**
      * Aplicar empresa_id em tabela existente (para migrations de alteração)
      * Verifica se a coluna já existe antes de adicionar
      */
