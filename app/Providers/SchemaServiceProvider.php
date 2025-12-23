@@ -18,7 +18,12 @@ class SchemaServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Configurar o resolver de Blueprint antes de qualquer uso
+        $this->app->resolving('db.schema', function ($schema) {
+            $schema->blueprintResolver(function ($table, $callback = null, $prefix = '') {
+                return new Blueprint($table, $callback, $prefix);
+            });
+        });
     }
 
     /**
@@ -30,12 +35,16 @@ class SchemaServiceProvider extends ServiceProvider
         Builder::defaultStringLength(191);
         Schema::defaultStringLength(191);
         
-        // Registrar o Blueprint customizado como resolver padrão para todas as conexões
-        $this->app->afterResolving('db', function ($db) {
-            $db->getSchemaBuilder()->blueprintResolver(function ($table, $callback = null, $prefix = '') {
-                return new Blueprint($table, $callback, $prefix);
-            });
-        });
+        // Garantir que o resolver está configurado na conexão padrão
+        try {
+            Schema::getConnection()
+                ->getSchemaBuilder()
+                ->blueprintResolver(function ($table, $callback = null, $prefix = '') {
+                    return new Blueprint($table, $callback, $prefix);
+                });
+        } catch (\Exception $e) {
+            // Se a conexão ainda não estiver disponível, será configurado quando necessário
+        }
     }
 }
 

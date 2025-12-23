@@ -14,15 +14,21 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('users', function ($table) {
-            /** @var Blueprint $table */
+            /** @var \Illuminate\Database\Schema\Blueprint $table */
             $table->id();
-            $table->foreignEmpresaAtiva(); // empresa_ativa_id nullable, set null on delete
+            // Usar método direto do Laravel para criar foreign key
+            $table->foreignId('empresa_ativa_id')
+                ->nullable()
+                ->constrained('empresas')
+                ->onDelete('set null');
             $table->string('name', Blueprint::VARCHAR_DEFAULT);
             $table->email()->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password', 255);
             $table->rememberToken();
-            $table->datetimes();
+            // Usar método direto para timestamps customizados
+            $table->timestamp('criado_em')->nullable();
+            $table->timestamp('atualizado_em')->nullable();
         });
     }
 
