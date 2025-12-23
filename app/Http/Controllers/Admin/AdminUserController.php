@@ -4,13 +4,13 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Tenant;
-use App\Models\User;
+use App\Modules\Auth\Models\User;
 use App\Services\RedisService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
-use App\Models\Role;
+use App\Modules\Permission\Models\Role;
 use Stancl\Tenancy\Facades\Tenancy;
 
 class AdminUserController extends Controller

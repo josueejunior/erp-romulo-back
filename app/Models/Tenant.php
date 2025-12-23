@@ -6,16 +6,17 @@ use Stancl\Tenancy\Database\Models\Tenant as BaseTenant;
 use Stancl\Tenancy\Contracts\TenantWithDatabase;
 use Stancl\Tenancy\Database\Concerns\HasDatabase;
 use Stancl\Tenancy\Database\Concerns\HasDomains;
-use App\Models\Plano;
-use App\Models\Assinatura;
+use App\Modules\Assinatura\Models\Plano;
+use App\Modules\Assinatura\Models\Assinatura;
+use App\Models\Traits\HasTimestampsCustomizados;
+use App\Database\Schema\Blueprint;
 
 class Tenant extends BaseTenant implements TenantWithDatabase
 {
-    use HasDatabase, HasDomains;
+    use HasDatabase, HasDomains, HasTimestampsCustomizados;
 
-    // Usar timestamps customizados em português
-    const CREATED_AT = 'criado_em';
-    const UPDATED_AT = 'atualizado_em';
+    const CREATED_AT = Blueprint::CREATED_AT;
+    const UPDATED_AT = Blueprint::UPDATED_AT;
     public $timestamps = true;
 
     public static function getCustomColumns(): array
@@ -50,13 +51,11 @@ class Tenant extends BaseTenant implements TenantWithDatabase
 
     protected function casts(): array
     {
-        return [
+        return array_merge($this->getTimestampsCasts(), [
             'telefones' => 'array',
             'emails_adicionais' => 'array',
             'data' => 'array', // Campo JSON usado pelo BaseTenant para dados customizados
-            'criado_em' => 'datetime',
-            'atualizado_em' => 'datetime',
-        ];
+        ]);
     }
 
     /**

@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Assinatura;
+use App\Modules\Assinatura\Models\Assinatura;
 use App\Models\Tenant;
-use App\Models\Plano;
+use App\Modules\Assinatura\Models\Plano;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 

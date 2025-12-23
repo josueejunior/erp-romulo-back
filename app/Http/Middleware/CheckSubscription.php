@@ -6,7 +6,7 @@ use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 use App\Models\Tenant;
-use App\Models\Assinatura;
+use App\Modules\Assinatura\Models\Assinatura;
 
 class CheckSubscription
 {

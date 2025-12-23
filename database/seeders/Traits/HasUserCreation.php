@@ -2,7 +2,7 @@
 
 namespace Database\Seeders\Traits;
 
-use App\Models\User;
+use App\Modules\Auth\Models\User;
 use Illuminate\Support\Facades\Hash;
 
 /**

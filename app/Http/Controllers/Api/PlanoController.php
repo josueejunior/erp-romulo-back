@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Traits\HasDefaultActions;
-use App\Models\Plano;
+use App\Modules\Assinatura\Models\Plano;
 use Illuminate\Http\Request;
 
 class PlanoController extends Controller

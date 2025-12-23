@@ -4,7 +4,7 @@ namespace App\Services;
 
 use App\Models\Tenant;
 use App\Models\Empresa;
-use App\Models\User;
+use App\Modules\Auth\Models\User;
 use App\Services\Traits\AuthScope;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;

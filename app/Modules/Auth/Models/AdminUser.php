@@ -1,21 +1,22 @@
 <?php
 
-namespace App\Models;
+namespace App\Modules\Auth\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use App\Models\Traits\HasTimestampsCustomizados;
+use App\Database\Schema\Blueprint;
 
 class AdminUser extends Authenticatable
 {
-    use HasFactory, Notifiable, HasApiTokens;
+    use HasFactory, Notifiable, HasApiTokens, HasTimestampsCustomizados;
 
     protected $table = 'admin_users';
 
-    // Usar timestamps customizados em português
-    const CREATED_AT = 'criado_em';
-    const UPDATED_AT = 'atualizado_em';
+    const CREATED_AT = Blueprint::CREATED_AT;
+    const UPDATED_AT = Blueprint::UPDATED_AT;
     public $timestamps = true;
 
     protected $fillable = [
@@ -31,11 +32,10 @@ class AdminUser extends Authenticatable
 
     protected function casts(): array
     {
-        return [
+        return array_merge($this->getTimestampsCasts(), [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
-            'criado_em' => 'datetime',
-            'atualizado_em' => 'datetime',
-        ];
+        ]);
     }
 }
+

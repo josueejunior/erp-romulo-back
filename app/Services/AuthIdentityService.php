@@ -5,8 +5,8 @@ namespace App\Services;
 use App\Contracts\IAuthIdentity;
 use App\Models\Tenant;
 use App\Models\Empresa;
-use App\Models\User;
-use App\Models\AdminUser;
+use App\Modules\Auth\Models\User;
+use App\Modules\Auth\Models\AdminUser;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 

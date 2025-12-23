@@ -1,11 +1,19 @@
 <?php
 
-namespace App\Models;
+namespace App\Modules\Assinatura\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Traits\HasTimestampsCustomizados;
+use App\Database\Schema\Blueprint;
 
 class Plano extends Model
 {
+    use HasTimestampsCustomizados;
+
+    const CREATED_AT = Blueprint::CREATED_AT;
+    const UPDATED_AT = Blueprint::UPDATED_AT;
+    public $timestamps = true;
+
     protected $fillable = [
         'nome',
         'descricao',
@@ -21,7 +29,7 @@ class Plano extends Model
 
     protected function casts(): array
     {
-        return [
+        return array_merge($this->getTimestampsCasts(), [
             'preco_mensal' => 'decimal:2',
             'preco_anual' => 'decimal:2',
             'limite_processos' => 'integer',
@@ -30,7 +38,7 @@ class Plano extends Model
             'recursos_disponiveis' => 'array',
             'ativo' => 'boolean',
             'ordem' => 'integer',
-        ];
+        ]);
     }
 
     public function assinaturas()

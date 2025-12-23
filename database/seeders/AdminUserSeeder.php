@@ -3,7 +3,7 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use App\Models\AdminUser;
+use App\Modules\Auth\Models\AdminUser;
 use Illuminate\Support\Facades\Hash;
 use Database\Seeders\Traits\HasTimestampsCustomizados;
 

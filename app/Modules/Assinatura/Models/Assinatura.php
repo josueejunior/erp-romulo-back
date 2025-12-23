@@ -1,12 +1,21 @@
 <?php
 
-namespace App\Models;
+namespace App\Modules\Assinatura\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Carbon\Carbon;
+use App\Models\Traits\HasTimestampsCustomizados;
+use App\Models\Tenant;
+use App\Database\Schema\Blueprint;
 
 class Assinatura extends Model
 {
+    use HasTimestampsCustomizados;
+
+    const CREATED_AT = Blueprint::CREATED_AT;
+    const UPDATED_AT = Blueprint::UPDATED_AT;
+    public $timestamps = true;
+
     protected $fillable = [
         'tenant_id',
         'plano_id',
@@ -23,13 +32,13 @@ class Assinatura extends Model
 
     protected function casts(): array
     {
-        return [
+        return array_merge($this->getTimestampsCasts(), [
             'data_inicio' => 'date',
             'data_fim' => 'date',
             'data_cancelamento' => 'date',
             'valor_pago' => 'decimal:2',
             'dias_grace_period' => 'integer',
-        ];
+        ]);
     }
 
     public function tenant()

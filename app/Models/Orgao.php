@@ -8,15 +8,15 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Models\Concerns\HasEmpresaScope;
 use App\Models\Traits\HasTimestampsCustomizados;
+use App\Database\Schema\Blueprint;
 
 class Orgao extends Model
 {
     use SoftDeletes, HasEmpresaScope, HasTimestampsCustomizados;
 
-    // Usar timestamps customizados em português
-    const CREATED_AT = 'criado_em';
-    const UPDATED_AT = 'atualizado_em';
-    const DELETED_AT = 'excluido_em';
+    const CREATED_AT = Blueprint::CREATED_AT;
+    const UPDATED_AT = Blueprint::UPDATED_AT;
+    const DELETED_AT = Blueprint::DELETED_AT;
     public $timestamps = true;
 
     protected $fillable = [

@@ -3,7 +3,7 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use App\Models\Plano;
+use App\Modules\Assinatura\Models\Plano;
 
 class PlanosSeeder extends Seeder
 {

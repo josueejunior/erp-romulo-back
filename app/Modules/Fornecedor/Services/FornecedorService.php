@@ -3,7 +3,7 @@
 namespace App\Modules\Fornecedor\Services;
 
 use App\Services\BaseService;
-use App\Models\Fornecedor;
+use App\Modules\Fornecedor\Models\Fornecedor;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Validator;
 

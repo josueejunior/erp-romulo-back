@@ -4,10 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Traits\HasDefaultActions;
-use App\Models\User;
+use App\Modules\Auth\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
-use App\Models\Role;
+use App\Modules\Permission\Models\Role;
 use Illuminate\Support\Facades\Hash;
 
 class UserController extends Controller

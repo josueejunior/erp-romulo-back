@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use App\Models\Role;
+use App\Modules\Permission\Models\Role;
 
 class FixUserRolesController extends Controller
 {

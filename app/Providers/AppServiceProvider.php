@@ -20,7 +20,7 @@ use App\Observers\EmpenhoObserver;
 use App\Observers\NotaFiscalObserver;
 use App\Observers\AuditObserver;
 use Laravel\Sanctum\Sanctum;
-use App\Models\PersonalAccessToken;
+use App\Modules\Auth\Models\PersonalAccessToken;
 
 class AppServiceProvider extends ServiceProvider
 {

@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Traits;
 
 use App\Contracts\IAuthIdentity;
-use App\Models\User;
-use App\Models\AdminUser;
+use App\Modules\Auth\Models\User;
+use App\Modules\Auth\Models\AdminUser;
 use App\Models\Tenant;
 use App\Models\Empresa;
 use Illuminate\Support\Facades\Auth;

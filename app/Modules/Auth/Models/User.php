@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Models;
+namespace App\Modules\Auth\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -9,15 +9,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
+use App\Models\Traits\HasTimestampsCustomizados;
+use App\Models\Empresa;
+use App\Database\Schema\Blueprint;
 
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable, HasApiTokens, HasRoles, SoftDeletes;
+    use HasFactory, Notifiable, HasApiTokens, HasRoles, SoftDeletes, HasTimestampsCustomizados;
 
-    // Usar timestamps customizados em português
-    const CREATED_AT = 'criado_em';
-    const UPDATED_AT = 'atualizado_em';
-    const DELETED_AT = 'excluido_em';
+    const CREATED_AT = Blueprint::CREATED_AT;
+    const UPDATED_AT = Blueprint::UPDATED_AT;
+    const DELETED_AT = Blueprint::DELETED_AT;
     public $timestamps = true;
 
     protected $fillable = [
@@ -34,13 +36,10 @@ class User extends Authenticatable
 
     protected function casts(): array
     {
-        return [
+        return array_merge($this->getTimestampsCasts(), [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
-            'criado_em' => 'datetime',
-            'atualizado_em' => 'datetime',
-            'excluido_em' => 'datetime',
-        ];
+        ]);
     }
 
     /**
@@ -53,10 +52,4 @@ class User extends Authenticatable
             ->withTimestamps();
     }
 }
-
-
-
-
-
-
 

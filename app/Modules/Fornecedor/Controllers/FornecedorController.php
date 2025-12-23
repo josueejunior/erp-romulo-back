@@ -5,7 +5,7 @@ namespace App\Modules\Fornecedor\Controllers;
 use App\Http\Controllers\Api\BaseApiController;
 use App\Http\Controllers\Traits\HasDefaultActions;
 use App\Http\Resources\FornecedorResource;
-use App\Models\Fornecedor;
+use App\Modules\Fornecedor\Models\Fornecedor;
 use App\Modules\Fornecedor\Services\FornecedorService;
 use Illuminate\Http\Request;
 use App\Helpers\PermissionHelper;
