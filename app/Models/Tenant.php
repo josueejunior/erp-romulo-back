@@ -13,6 +13,11 @@ class Tenant extends BaseTenant implements TenantWithDatabase
 {
     use HasDatabase, HasDomains;
 
+    // Usar timestamps customizados em português
+    const CREATED_AT = 'criado_em';
+    const UPDATED_AT = 'atualizado_em';
+    public $timestamps = true;
+
     public static function getCustomColumns(): array
     {
         return [
@@ -48,6 +53,9 @@ class Tenant extends BaseTenant implements TenantWithDatabase
         return [
             'telefones' => 'array',
             'emails_adicionais' => 'array',
+            'data' => 'array', // Campo JSON usado pelo BaseTenant para dados customizados
+            'criado_em' => 'datetime',
+            'atualizado_em' => 'datetime',
         ];
     }
 
