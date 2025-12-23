@@ -160,6 +160,7 @@ class DatabaseSeeder extends Seeder
 
             // Criar setor dentro do tenant
             Setor::create([
+                'empresa_id' => $empresa->id,
                 'orgao_id' => $orgao->id,
                 'nome' => 'Setor de Compras',
                 'email' => 'compras@orgao.gov.br',
