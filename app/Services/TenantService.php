@@ -240,7 +240,7 @@ class TenantService
 
         $perPage = $filters['per_page'] ?? 15;
         
-        return $query->orderBy('created_at', 'desc')->paginate($perPage);
+        return $query->orderBy('criado_em', 'desc')->paginate($perPage);
     }
 
     /**

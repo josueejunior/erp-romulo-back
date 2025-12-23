@@ -128,8 +128,12 @@ abstract class BaseService implements IService
             $builder->with($params['with']);
         }
         
-        // Ordenação padrão
-        $builder->orderBy('created_at', 'desc');
+        // Ordenação padrão (usar constante do modelo ou padrão criado_em)
+        $modelClass = static::$model;
+        $createdAtColumn = defined("$modelClass::CREATED_AT") 
+            ? $modelClass::CREATED_AT 
+            : 'criado_em';
+        $builder->orderBy($createdAtColumn, 'desc');
         
         // Paginação
         $perPage = $params['per_page'] ?? 15;
