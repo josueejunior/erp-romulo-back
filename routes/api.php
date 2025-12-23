@@ -21,8 +21,8 @@ use App\Modules\Documento\Controllers\DocumentoHabilitacaoController as ApiDocum
 use App\Modules\Dashboard\Controllers\DashboardController as ApiDashboardController;
 use App\Modules\Relatorio\Controllers\RelatorioFinanceiroController as ApiRelatorioFinanceiroController;
 use App\Http\Controllers\Api\TenantController;
-use App\Http\Controllers\Api\CalendarioDisputasController as ApiCalendarioDisputasController;
-use App\Http\Controllers\Api\CalendarioController as ApiCalendarioController;
+use App\Modules\Calendario\Controllers\CalendarioDisputasController as ApiCalendarioDisputasController;
+use App\Modules\Calendario\Controllers\CalendarioController as ApiCalendarioController;
 use App\Modules\Processo\Controllers\ExportacaoController as ApiExportacaoController;
 use App\Modules\Processo\Controllers\SaldoController as ApiSaldoController;
 use App\Http\Controllers\Api\UserController as ApiUserController;

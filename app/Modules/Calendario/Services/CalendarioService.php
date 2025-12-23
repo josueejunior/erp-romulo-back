@@ -1,9 +1,8 @@
 <?php
 
-namespace App\Services;
+namespace App\Modules\Calendario\Services;
 
-use App\Models\Processo;
-use App\Models\ProcessoItem;
+use App\Modules\Processo\Models\Processo;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 

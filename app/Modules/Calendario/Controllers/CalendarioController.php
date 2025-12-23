@@ -1,9 +1,9 @@
 <?php
 
-namespace App\Http\Controllers\Api;
+namespace App\Modules\Calendario\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
-use App\Services\CalendarioService;
+use App\Modules\Calendario\Services\CalendarioService;
 use App\Services\RedisService;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
@@ -99,8 +99,4 @@ class CalendarioController extends BaseApiController
         ]);
     }
 }
-
-
-
-
 

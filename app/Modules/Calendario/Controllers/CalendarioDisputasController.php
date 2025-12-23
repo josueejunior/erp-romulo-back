@@ -1,10 +1,10 @@
 <?php
 
-namespace App\Http\Controllers\Api;
+namespace App\Modules\Calendario\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
-use App\Models\Processo;
-use App\Services\ProcessoStatusService;
+use App\Modules\Processo\Models\Processo;
+use App\Modules\Processo\Services\ProcessoStatusService;
 use Illuminate\Http\Request;
 
 class CalendarioDisputasController extends BaseApiController
@@ -154,7 +154,4 @@ class CalendarioDisputasController extends BaseApiController
         return response()->json($eventos);
     }
 }
-
-
-
 
