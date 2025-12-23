@@ -13,6 +13,12 @@ class Orgao extends Model
 {
     use SoftDeletes, HasEmpresaScope, HasTimestampsCustomizados;
 
+    // Usar timestamps customizados em português
+    const CREATED_AT = 'criado_em';
+    const UPDATED_AT = 'atualizado_em';
+    const DELETED_AT = 'excluido_em';
+    public $timestamps = true;
+
     protected $fillable = [
         'empresa_id',
         'uasg',
