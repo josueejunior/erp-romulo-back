@@ -21,6 +21,7 @@ use App\Observers\NotaFiscalObserver;
 use App\Observers\AuditObserver;
 use Laravel\Sanctum\Sanctum;
 use App\Modules\Auth\Models\PersonalAccessToken;
+use Illuminate\Database\Eloquent\Relations\Relation;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -43,6 +44,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Mapear relacionamentos polimórficos para manter compatibilidade com dados antigos
+        // Isso permite que tokens antigos com namespaces antigos continuem funcionando
+        Relation::enforceMorphMap([
+            'App\Models\AdminUser' => \App\Modules\Auth\Models\AdminUser::class,
+            'App\Models\User' => \App\Modules\Auth\Models\User::class,
+        ]);
+        
         // Registrar macro Route::module
         Route::macro('module', function (string $prefix, string $controller, string $parameter): ModuleRegistrar {
             return new ModuleRegistrar(app('router'), $prefix, $controller, $parameter);
