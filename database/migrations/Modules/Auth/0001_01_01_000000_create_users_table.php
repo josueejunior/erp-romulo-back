@@ -15,7 +15,8 @@ return new class extends Migration
     {
         Schema::create('users', function (Blueprint $table) {
             $table->id();
-            $table->foreignEmpresaAtiva(); // empresa_ativa_id nullable, set null on delete
+            // Criar coluna sem foreign key primeiro (empresas ainda não existe)
+            $table->unsignedBigInteger('empresa_ativa_id')->nullable();
             $table->string('name', Blueprint::VARCHAR_DEFAULT);
             $table->email()->unique();
             $table->timestamp('email_verified_at')->nullable();

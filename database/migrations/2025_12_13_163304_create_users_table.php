@@ -27,17 +27,6 @@ return new class extends Migration
             $table->timestamp('criado_em')->nullable();
             $table->timestamp('atualizado_em')->nullable();
         });
-        
-        // Adicionar foreign key depois que a tabela empresas for criada
-        // Isso será feito após a migration de empresas executar
-        if (Schema::hasTable('empresas')) {
-            Schema::table('users', function (Blueprint $table) {
-                $table->foreign('empresa_ativa_id')
-                    ->references('id')
-                    ->on('empresas')
-                    ->onDelete('set null');
-            });
-        }
     }
 
     /**
