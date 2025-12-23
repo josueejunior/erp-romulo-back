@@ -30,7 +30,8 @@ class IsSuperAdmin
 
         // Verificar se é AdminUser verificando o nome da classe ou a tabela
         $userClass = get_class($user);
-        if ($userClass !== \App\Models\AdminUser::class && !($user instanceof \App\Models\AdminUser)) {
+        $adminUserClass = \App\Modules\Auth\Models\AdminUser::class;
+        if ($userClass !== $adminUserClass && !($user instanceof $adminUserClass)) {
             return response()->json([
                 'message' => 'Acesso negado. Apenas administradores podem acessar esta área.',
             ], 403);
