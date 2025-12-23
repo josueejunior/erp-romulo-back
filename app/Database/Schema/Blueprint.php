@@ -28,7 +28,7 @@ class Blueprint extends BaseBlueprint
      * Cria: empresa_id -> empresas
      * Aplica automaticamente após o campo id
      */
-    public function foreignEmpresa(bool $nullable = false): \Illuminate\Database\Schema\ColumnDefinition
+    public function foreignEmpresa(bool $nullable = false)
     {
         $column = $this->foreignId('empresa_id')->after('id');
         
@@ -72,7 +72,7 @@ class Blueprint extends BaseBlueprint
      * Criar foreign key para tenant
      * Cria: tenant_id -> tenants
      */
-    public function foreignTenant(bool $nullable = false): \Illuminate\Database\Schema\ColumnDefinition
+    public function foreignTenant(bool $nullable = false)
     {
         $column = $this->foreignId('tenant_id');
         
@@ -88,7 +88,7 @@ class Blueprint extends BaseBlueprint
      * Cria: usuario_id -> users
      * Use este método para tabelas customizadas do sistema
      */
-    public function foreignUsuario(bool $nullable = false): \Illuminate\Database\Schema\ColumnDefinition
+    public function foreignUsuario(bool $nullable = false)
     {
         $column = $this->foreignId('usuario_id');
         
@@ -104,7 +104,7 @@ class Blueprint extends BaseBlueprint
      * Cria: user_id -> users
      * Use este método para tabelas padrão do Laravel (sessions, etc)
      */
-    public function foreignUserId(bool $nullable = false): \Illuminate\Database\Schema\ColumnDefinition
+    public function foreignUserId(bool $nullable = false)
     {
         $column = $this->foreignId('user_id');
         
@@ -119,7 +119,7 @@ class Blueprint extends BaseBlueprint
      * Criar foreign key para pessoa
      * Cria: pessoa_id -> pessoas
      */
-    public function foreignPessoa(bool $nullable = false): \Illuminate\Database\Schema\ColumnDefinition
+    public function foreignPessoa(bool $nullable = false)
     {
         $column = $this->foreignId('pessoa_id');
         
@@ -142,7 +142,7 @@ class Blueprint extends BaseBlueprint
         string $table,
         bool $nullable = false,
         string $onDelete = 'restrict'
-    ): \Illuminate\Database\Schema\ColumnDefinition {
+    ) {
         $foreignColumn = $this->foreignId($column);
         
         if ($nullable) {
