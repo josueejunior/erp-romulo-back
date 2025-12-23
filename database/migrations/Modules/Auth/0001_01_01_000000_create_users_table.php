@@ -25,6 +25,7 @@ return new class extends Migration
             // Usar método direto para timestamps customizados
             $table->timestamp('criado_em')->nullable();
             $table->timestamp('atualizado_em')->nullable();
+            $table->timestamp(Blueprint::DELETED_AT)->nullable();
         });
     }
 

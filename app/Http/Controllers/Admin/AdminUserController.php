@@ -98,7 +98,7 @@ class AdminUserController extends Controller
                         'email',
                         'max:255',
                         Rule::unique('users', 'email')
-                            ->whereNull('deleted_at'), // Ignorar soft deleted
+                            ->whereNull('excluido_em'), // Ignorar soft deleted
                     ],
                     'password' => ['required', 'string', 'min:8', new \App\Rules\StrongPassword()],
                     'role' => 'required|string|in:Administrador,Operacional,Financeiro,Consulta',
