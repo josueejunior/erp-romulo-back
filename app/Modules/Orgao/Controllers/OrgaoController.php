@@ -206,8 +206,8 @@ class OrgaoController extends RoutingController
 
     public function update(Request $request, Orgao $orgao)
     {
-        // Converter para chamar o método do trait HasDefaultActions
-        return parent::update($request, $orgao->id);
+        // Chamar handleUpdate diretamente com o ID do órgão
+        return $this->handleUpdate($request, $orgao->id);
     }
 
     /**
