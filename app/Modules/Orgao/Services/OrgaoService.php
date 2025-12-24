@@ -71,7 +71,14 @@ class OrgaoService extends BaseService
             'telefones.*' => 'string|max:20',
             'emails' => 'nullable|array',
             'emails.*' => 'email|max:255',
-            'endereco' => 'nullable|string',
+            // Campos de endereço separados
+            'cep' => 'nullable|string|max:10',
+            'logradouro' => 'nullable|string|max:255',
+            'numero' => 'nullable|string|max:20',
+            'bairro' => 'nullable|string|max:255',
+            'complemento' => 'nullable|string|max:255',
+            'cidade' => 'nullable|string|max:255',
+            'estado' => 'nullable|string|max:2',
             'observacoes' => 'nullable|string',
         ]);
     }

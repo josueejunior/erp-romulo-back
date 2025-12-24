@@ -215,6 +215,10 @@ abstract class BaseService implements IService
         // Não permitir alterar empresa_id
         unset($data['empresa_id']);
 
+        // Filtrar apenas campos que estão no fillable do modelo
+        $fillable = $model->getFillable();
+        $data = array_intersect_key($data, array_flip($fillable));
+
         $model->update($data);
         $model->refresh();
 
