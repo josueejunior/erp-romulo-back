@@ -219,12 +219,31 @@ abstract class BaseService implements IService
         $fillable = $model->getFillable();
         $filteredData = [];
         
+        // Verificar quais campos são arrays no modelo (através dos casts)
+        // O Laravel armazena os casts em um método protegido, então vamos usar reflection
+        $arrayFields = [];
+        try {
+            $reflection = new \ReflectionClass($model);
+            if ($reflection->hasMethod('casts')) {
+                $castsMethod = $reflection->getMethod('casts');
+                $castsMethod->setAccessible(true);
+                $casts = $castsMethod->invoke($model);
+                $arrayFields = array_keys(array_filter($casts ?? [], fn($cast) => $cast === 'array'));
+            }
+        } catch (\Exception $e) {
+            // Se não conseguir acessar os casts, continua sem conversão
+        }
+        
         foreach ($fillable as $field) {
             if (array_key_exists($field, $data)) {
-                // Permitir arrays vazios e null para campos que podem ser arrays
-                // Se o valor for null e o campo não estiver presente, não incluir
-                // Mas se estiver presente (mesmo que null), incluir para permitir limpar o campo
-                $filteredData[$field] = $data[$field];
+                $value = $data[$field];
+                
+                // Converter null para array vazio em campos que são arrays
+                if (in_array($field, $arrayFields) && $value === null) {
+                    $value = [];
+                }
+                
+                $filteredData[$field] = $value;
             }
         }
 
