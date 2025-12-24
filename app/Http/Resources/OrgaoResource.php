@@ -11,13 +11,22 @@ class OrgaoResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'empresa_id' => $this->empresa_id, // Adicionado para debug e validação
+            'empresa_id' => $this->empresa_id,
             'uasg' => $this->uasg,
             'razao_social' => $this->razao_social,
             'cnpj' => $this->cnpj,
             'email' => $this->email,
             'telefone' => $this->telefone,
-            'endereco' => $this->endereco,
+            'telefones' => $this->telefones ?? [],
+            'emails' => $this->emails ?? [],
+            // Campos de endereço separados
+            'cep' => $this->cep,
+            'logradouro' => $this->logradouro,
+            'numero' => $this->numero,
+            'bairro' => $this->bairro,
+            'complemento' => $this->complemento,
+            'cidade' => $this->cidade,
+            'estado' => $this->estado,
             'observacoes' => $this->observacoes,
             'setors' => $this->whenLoaded('setors'),
         ];

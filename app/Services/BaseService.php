@@ -217,9 +217,27 @@ abstract class BaseService implements IService
 
         // Filtrar apenas campos que estão no fillable do modelo
         $fillable = $model->getFillable();
-        $data = array_intersect_key($data, array_flip($fillable));
+        $filteredData = [];
+        
+        foreach ($fillable as $field) {
+            if (array_key_exists($field, $data)) {
+                // Permitir arrays vazios e null para campos que podem ser arrays
+                // Se o valor for null e o campo não estiver presente, não incluir
+                // Mas se estiver presente (mesmo que null), incluir para permitir limpar o campo
+                $filteredData[$field] = $data[$field];
+            }
+        }
 
-        $model->update($data);
+        // Log para debug (remover em produção se necessário)
+        \Log::debug('BaseService->update()', [
+            'model' => static::$model,
+            'id' => $id,
+            'data_received' => $data,
+            'fillable' => $fillable,
+            'filtered_data' => $filteredData,
+        ]);
+
+        $model->update($filteredData);
         $model->refresh();
 
         return $model;
