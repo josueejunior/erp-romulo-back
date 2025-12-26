@@ -102,27 +102,47 @@ class AdminUserController extends Controller
                     ],
                     'password' => ['required', 'string', 'min:8', new \App\Rules\StrongPassword()],
                     'role' => 'required|string|in:Administrador,Operacional,Financeiro,Consulta',
+                    // Aceitar múltiplas empresas ou uma única (compatibilidade)
+                    'empresas' => 'nullable|array|min:1',
+                    'empresas.*' => 'required|integer|exists:empresas,id',
                     'empresa_id' => [
-                        'required',
+                        'nullable', // Tornado nullable para compatibilidade
                         function ($attribute, $value, $fail) {
-                            // Garantir que é um número válido
-                            if (!is_numeric($value)) {
-                                $fail('O ID da empresa deve ser um número válido.');
-                                return;
-                            }
-                            
-                            $empresaId = (int)$value;
-                            if ($empresaId <= 0) {
-                                $fail('O ID da empresa deve ser um número positivo.');
-                                return;
-                            }
-                            
-                            if (!\App\Models\Empresa::where('id', $empresaId)->exists()) {
-                                $fail('A empresa selecionada não existe.');
+                            if ($value !== null) {
+                                if (!is_numeric($value)) {
+                                    $fail('O ID da empresa deve ser um número válido.');
+                                    return;
+                                }
+                                
+                                $empresaId = (int)$value;
+                                if ($empresaId <= 0) {
+                                    $fail('O ID da empresa deve ser um número positivo.');
+                                    return;
+                                }
+                                
+                                if (!\App\Models\Empresa::where('id', $empresaId)->exists()) {
+                                    $fail('A empresa selecionada não existe.');
+                                }
                             }
                         }
                     ],
+                    'empresa_ativa_id' => 'nullable|integer|exists:empresas,id',
                 ]);
+                
+                // Validar que pelo menos uma empresa foi fornecida
+                if (empty($validated['empresas']) && empty($validated['empresa_id'])) {
+                    throw ValidationException::withMessages([
+                        'empresas' => ['Selecione pelo menos uma empresa.'],
+                    ]);
+                }
+                
+                // Validar que todas as empresas pertencem ao tenant atual
+                if (!empty($validated['empresas'])) {
+                    $this->validateEmpresasInTenant($validated['empresas'], $tenant);
+                }
+                if (!empty($validated['empresa_id'])) {
+                    $this->validateEmpresasInTenant([$validated['empresa_id']], $tenant);
+                }
             } catch (ValidationException $e) {
                 // Personalizar mensagem de erro para email duplicado
                 if (isset($e->errors()['email'])) {
@@ -133,21 +153,29 @@ class AdminUserController extends Controller
                 throw $e;
             }
 
+            // Determinar empresas a associar (priorizar array empresas[], senão usar empresa_id)
+            $empresasIds = $validated['empresas'] ?? [$validated['empresa_id']];
+            $empresaAtivaId = $validated['empresa_ativa_id'] ?? $empresasIds[0];
+
             // Criar usuário
             $user = User::create([
                 'name' => $validated['name'],
                 'email' => $validated['email'],
                 'password' => Hash::make($validated['password']),
-                'empresa_ativa_id' => $validated['empresa_id'],
+                'empresa_ativa_id' => $empresaAtivaId,
             ]);
 
             // Atribuir role
             $user->assignRole($validated['role']);
 
-            // Associar usuário à empresa
-            $user->empresas()->attach($validated['empresa_id'], [
-                'perfil' => strtolower($validated['role'])
-            ]);
+            // Associar usuário a todas as empresas
+            $syncData = [];
+            foreach ($empresasIds as $empresaId) {
+                $syncData[$empresaId] = [
+                    'perfil' => strtolower($validated['role'])
+                ];
+            }
+            $user->empresas()->sync($syncData);
 
             $user->load(['roles', 'empresas']);
             $user->roles_list = $user->getRoleNames();
@@ -195,28 +223,40 @@ class AdminUserController extends Controller
                     ],
                     'password' => ['nullable', 'string', 'min:8', new \App\Rules\StrongPassword()],
                     'role' => 'sometimes|required|string|in:Administrador,Operacional,Financeiro,Consulta',
+                    // Aceitar múltiplas empresas ou uma única (compatibilidade)
+                    'empresas' => 'sometimes|array|min:1',
+                    'empresas.*' => 'required|integer|exists:empresas,id',
                     'empresa_id' => [
                         'sometimes',
-                        'required',
                         function ($attribute, $value, $fail) {
-                            // Garantir que é um número válido
-                            if (!is_numeric($value)) {
-                                $fail('O ID da empresa deve ser um número válido.');
-                                return;
-                            }
-                            
-                            $empresaId = (int)$value;
-                            if ($empresaId <= 0) {
-                                $fail('O ID da empresa deve ser um número positivo.');
-                                return;
-                            }
-                            
-                            if (!\App\Models\Empresa::where('id', $empresaId)->exists()) {
-                                $fail('A empresa selecionada não existe.');
+                            if ($value !== null) {
+                                if (!is_numeric($value)) {
+                                    $fail('O ID da empresa deve ser um número válido.');
+                                    return;
+                                }
+                                
+                                $empresaId = (int)$value;
+                                if ($empresaId <= 0) {
+                                    $fail('O ID da empresa deve ser um número positivo.');
+                                    return;
+                                }
+                                
+                                if (!\App\Models\Empresa::where('id', $empresaId)->exists()) {
+                                    $fail('A empresa selecionada não existe.');
+                                }
                             }
                         }
                     ],
+                    'empresa_ativa_id' => 'sometimes|integer|exists:empresas,id',
                 ]);
+                
+                // Validar que todas as empresas pertencem ao tenant atual
+                if (!empty($validated['empresas'])) {
+                    $this->validateEmpresasInTenant($validated['empresas'], $tenant);
+                }
+                if (!empty($validated['empresa_id'])) {
+                    $this->validateEmpresasInTenant([$validated['empresa_id']], $tenant);
+                }
             } catch (ValidationException $e) {
                 // Personalizar mensagem de erro para email duplicado
                 if ($e->errors()['email'] ?? null) {
@@ -239,12 +279,37 @@ class AdminUserController extends Controller
                 $user->password = Hash::make($validated['password']);
             }
 
-            if (isset($validated['empresa_id'])) {
+            // Atualizar associações com empresas se fornecido
+            if (isset($validated['empresas'])) {
+                // Múltiplas empresas
+                $syncData = [];
+                foreach ($validated['empresas'] as $empresaId) {
+                    $syncData[$empresaId] = [
+                        'perfil' => strtolower($validated['role'] ?? $user->getRoleNames()->first() ?? 'consulta')
+                    ];
+                }
+                $user->empresas()->sync($syncData);
+                
+                // Atualizar empresa ativa se fornecido, senão usar a primeira
+                $empresaAtivaId = $validated['empresa_ativa_id'] ?? $validated['empresas'][0];
+                if (in_array($empresaAtivaId, $validated['empresas'])) {
+                    $user->empresa_ativa_id = $empresaAtivaId;
+                }
+            } elseif (isset($validated['empresa_id'])) {
+                // Compatibilidade: apenas uma empresa
                 $user->empresa_ativa_id = $validated['empresa_id'];
-                // Atualizar associação com empresa
                 $user->empresas()->sync([$validated['empresa_id'] => [
                     'perfil' => strtolower($validated['role'] ?? $user->getRoleNames()->first() ?? 'consulta')
                 ]]);
+            }
+            
+            // Atualizar empresa ativa separadamente se fornecido
+            if (isset($validated['empresa_ativa_id'])) {
+                // Verificar se a empresa ativa está nas empresas associadas
+                $empresasAssociadas = $user->empresas->pluck('id')->toArray();
+                if (in_array($validated['empresa_ativa_id'], $empresasAssociadas)) {
+                    $user->empresa_ativa_id = $validated['empresa_ativa_id'];
+                }
             }
 
             $user->save();
@@ -351,6 +416,33 @@ class AdminUserController extends Controller
             return response()->json($empresas);
         } finally {
             tenancy()->end();
+        }
+    }
+
+    /**
+     * Validar que todas as empresas pertencem ao tenant atual
+     */
+    private function validateEmpresasInTenant(array $empresasIds, Tenant $tenant): void
+    {
+        $jaInicializado = tenancy()->initialized;
+        
+        if (!$jaInicializado) {
+            tenancy()->initialize($tenant);
+        }
+        
+        try {
+            $empresasExistentes = \App\Models\Empresa::whereIn('id', $empresasIds)->pluck('id')->toArray();
+            $empresasInvalidas = array_diff($empresasIds, $empresasExistentes);
+            
+            if (!empty($empresasInvalidas)) {
+                throw ValidationException::withMessages([
+                    'empresas' => ['As seguintes empresas não existem neste tenant: ' . implode(', ', $empresasInvalidas)]
+                ]);
+            }
+        } finally {
+            if (!$jaInicializado) {
+                tenancy()->end();
+            }
         }
     }
 }
