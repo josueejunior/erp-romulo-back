@@ -37,17 +37,17 @@ class FornecedorController extends BaseApiController
             'filters' => $filters,
         ]);
         
-        // Tentar obter do cache
-        if ($tenantId && RedisService::isAvailable()) {
-            $cached = RedisService::get($cacheKey);
-            if ($cached !== null) {
-                \Log::debug('FornecedorController->handleList() cache hit', [
-                    'cache_key' => $cacheKey,
-                    'cached_total' => $cached['meta']['total'] ?? 0,
-                ]);
-                return response()->json($cached);
-            }
-        }
+        // Tentar obter do cache (desabilitado temporariamente para debug)
+        // if ($tenantId && RedisService::isAvailable()) {
+        //     $cached = RedisService::get($cacheKey);
+        //     if ($cached !== null) {
+        //         \Log::debug('FornecedorController->handleList() cache hit', [
+        //             'cache_key' => $cacheKey,
+        //             'cached_total' => $cached['meta']['total'] ?? 0,
+        //         ]);
+        //         return response()->json($cached);
+        //     }
+        // }
 
         try {
             $params = $this->service->createListParamBag($filters);
@@ -58,16 +58,43 @@ class FornecedorController extends BaseApiController
                 'total' => $fornecedores->total(),
                 'count' => $fornecedores->count(),
                 'empresa_id' => $empresa->id,
+                'items' => $fornecedores->items(),
             ]);
             
+            // Usar paginate() do Resource para manter a estrutura de paginação
             $response = FornecedorResource::collection($fornecedores);
-
-            // Salvar no cache (5 minutos)
-            if ($tenantId && RedisService::isAvailable()) {
-                RedisService::set($cacheKey, $response->response()->getData(true), 300);
+            
+            // Garantir que a resposta inclua a paginação
+            $responseData = $response->response()->getData(true);
+            
+            // Se não tiver estrutura de paginação, adicionar manualmente
+            if (!isset($responseData['meta'])) {
+                $responseData = [
+                    'data' => $responseData['data'] ?? $responseData,
+                    'links' => [
+                        'first' => $fornecedores->url(1),
+                        'last' => $fornecedores->url($fornecedores->lastPage()),
+                        'prev' => $fornecedores->previousPageUrl(),
+                        'next' => $fornecedores->nextPageUrl(),
+                    ],
+                    'meta' => [
+                        'current_page' => $fornecedores->currentPage(),
+                        'from' => $fornecedores->firstItem(),
+                        'last_page' => $fornecedores->lastPage(),
+                        'path' => $fornecedores->path(),
+                        'per_page' => $fornecedores->perPage(),
+                        'to' => $fornecedores->lastItem(),
+                        'total' => $fornecedores->total(),
+                    ],
+                ];
             }
 
-            return response()->json($response);
+            // Salvar no cache (5 minutos) - desabilitado temporariamente para debug
+            // if ($tenantId && RedisService::isAvailable()) {
+            //     RedisService::set($cacheKey, $responseData, 300);
+            // }
+
+            return response()->json($responseData);
         } catch (\Exception $e) {
             \Log::error('FornecedorController->handleList() erro', [
                 'error' => $e->getMessage(),

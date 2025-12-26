@@ -180,16 +180,19 @@ abstract class BaseService implements IService
             'empresa_id_in_data' => $data['empresa_id'] ?? null,
             'getEmpresaId()' => $this->getEmpresaId(),
             'data_keys' => array_keys($data),
+            'full_data' => $data,
         ]);
         
         $model = static::$model;
         $created = $model::create($data);
         
-        // Debug: Log após criar
+        // Debug: Log após criar - recarregar do banco para garantir
+        $created->refresh();
         \Log::debug('BaseService->store() criado', [
             'model' => static::$model,
             'created_id' => $created->id,
             'created_empresa_id' => $created->empresa_id ?? null,
+            'created_attributes' => $created->getAttributes(),
         ]);
         
         return $created;
