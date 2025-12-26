@@ -24,6 +24,22 @@ class Tenant extends BaseTenant implements TenantWithDatabase
     protected $keyType = 'int';
     
     /**
+     * Sobrescrever boot para garantir que não há geração automática de UUID
+     */
+    protected static function boot()
+    {
+        parent::boot();
+        
+        // Garantir que o ID não seja gerado automaticamente (deixar o banco fazer isso)
+        static::creating(function ($tenant) {
+            // Se o ID já foi definido, manter; caso contrário, deixar o banco gerar
+            if (isset($tenant->attributes['id']) && !is_numeric($tenant->attributes['id'])) {
+                unset($tenant->attributes['id']);
+            }
+        });
+    }
+    
+    /**
      * Timestamps customizados em português
      */
     const CREATED_AT = Blueprint::CREATED_AT;
