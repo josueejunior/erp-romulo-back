@@ -4,7 +4,6 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use App\Modules\Auth\Models\User;
-use App\Models\Tenant;
 use App\Models\Empresa;
 use App\Models\Orgao;
 use App\Models\Setor;
@@ -27,12 +26,12 @@ class DatabaseSeeder extends Seeder
         $this->call(AdminUserSeeder::class);
         
         // Verificar se já existe um tenant com este CNPJ
-        $tenant = Tenant::where('cnpj', '12.345.678/0001-90')->first();
+        $tenant = \App\Models\Tenant::where('cnpj', '12.345.678/0001-90')->first();
 
         if (!$tenant) {
             // Criar tenant (empresa) no banco central
             // O ID será gerado automaticamente pelo banco (auto-increment)
-            $tenant = Tenant::create([
+            $tenant = \App\Models\Tenant::create([
                 'razao_social' => 'Empresa Exemplo LTDA',
                 'cnpj' => '12.345.678/0001-90',
                 'email' => 'contato@exemplo.com',
