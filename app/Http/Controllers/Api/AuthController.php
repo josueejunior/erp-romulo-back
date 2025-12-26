@@ -157,11 +157,22 @@ class AuthController extends Controller
         // Obter dados do tenant atual
         $currentTenant = tenancy()->tenant;
         
+        // Carregar empresas do usuário
+        $user->load('empresas');
+        $empresasList = $user->empresas->map(function ($empresa) {
+            return [
+                'id' => $empresa->id,
+                'razao_social' => $empresa->razao_social,
+                'cnpj' => $empresa->cnpj,
+            ];
+        });
+
         return response()->json([
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
+                'empresas_list' => $empresasList,
             ],
             'tenant' => $currentTenant ? [
                 'id' => $currentTenant->id,

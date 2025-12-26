@@ -195,6 +195,41 @@ class UserController extends Controller
         ]);
     }
 
+    /**
+     * Trocar empresa ativa do usuário logado
+     */
+    public function switchEmpresaAtiva(Request $request)
+    {
+        $validated = $request->validate([
+            'empresa_ativa_id' => 'required|integer|exists:empresas,id',
+        ]);
+
+        $user = auth()->user();
+        
+        // Verificar se o usuário tem acesso à empresa
+        if (!$user->empresas->contains($validated['empresa_ativa_id'])) {
+            return response()->json([
+                'message' => 'Você não tem acesso a esta empresa.',
+            ], 403);
+        }
+
+        $user->empresa_ativa_id = $validated['empresa_ativa_id'];
+        $user->save();
+
+        // Buscar dados da empresa ativa
+        $empresa = \App\Models\Empresa::find($validated['empresa_ativa_id']);
+
+        return response()->json([
+            'message' => 'Empresa ativa alterada com sucesso!',
+            'user' => $this->mapUserWithRoles($user),
+            'empresa' => $empresa ? [
+                'id' => $empresa->id,
+                'razao_social' => $empresa->razao_social,
+                'cnpj' => $empresa->cnpj,
+            ] : null,
+        ]);
+    }
+
     private function mapUserWithRoles(User $user)
     {
         $user->load(['roles', 'empresas']);
