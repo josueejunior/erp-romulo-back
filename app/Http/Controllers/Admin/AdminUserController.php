@@ -102,7 +102,26 @@ class AdminUserController extends Controller
                     ],
                     'password' => ['required', 'string', 'min:8', new \App\Rules\StrongPassword()],
                     'role' => 'required|string|in:Administrador,Operacional,Financeiro,Consulta',
-                    'empresa_id' => 'required|exists:empresas,id',
+                    'empresa_id' => [
+                        'required',
+                        function ($attribute, $value, $fail) {
+                            // Garantir que é um número válido
+                            if (!is_numeric($value)) {
+                                $fail('O ID da empresa deve ser um número válido.');
+                                return;
+                            }
+                            
+                            $empresaId = (int)$value;
+                            if ($empresaId <= 0) {
+                                $fail('O ID da empresa deve ser um número positivo.');
+                                return;
+                            }
+                            
+                            if (!\App\Models\Empresa::where('id', $empresaId)->exists()) {
+                                $fail('A empresa selecionada não existe.');
+                            }
+                        }
+                    ],
                 ]);
             } catch (ValidationException $e) {
                 // Personalizar mensagem de erro para email duplicado
@@ -176,7 +195,27 @@ class AdminUserController extends Controller
                     ],
                     'password' => ['nullable', 'string', 'min:8', new \App\Rules\StrongPassword()],
                     'role' => 'sometimes|required|string|in:Administrador,Operacional,Financeiro,Consulta',
-                    'empresa_id' => 'sometimes|required|exists:empresas,id',
+                    'empresa_id' => [
+                        'sometimes',
+                        'required',
+                        function ($attribute, $value, $fail) {
+                            // Garantir que é um número válido
+                            if (!is_numeric($value)) {
+                                $fail('O ID da empresa deve ser um número válido.');
+                                return;
+                            }
+                            
+                            $empresaId = (int)$value;
+                            if ($empresaId <= 0) {
+                                $fail('O ID da empresa deve ser um número positivo.');
+                                return;
+                            }
+                            
+                            if (!\App\Models\Empresa::where('id', $empresaId)->exists()) {
+                                $fail('A empresa selecionada não existe.');
+                            }
+                        }
+                    ],
                 ]);
             } catch (ValidationException $e) {
                 // Personalizar mensagem de erro para email duplicado
