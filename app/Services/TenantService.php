@@ -18,21 +18,14 @@ class TenantService
 {
     use AuthScope;
     /**
-     * Gerar ID único para o tenant baseado na razão social
+     * Gerar ID único para o tenant (usando auto-increment)
+     * Não precisa mais gerar slug, o banco vai gerar o ID automaticamente
      */
-    public function generateUniqueTenantId(string $razaoSocial): string
+    public function generateUniqueTenantId(string $razaoSocial): ?int
     {
-        $baseId = Str::slug($razaoSocial);
-        $tenantId = $baseId;
-        $counter = 1;
-        
-        // Garantir que o ID seja único (fora da transação para evitar erros de transação abortada)
-        while (Tenant::find($tenantId)) {
-            $tenantId = $baseId . '-' . $counter;
-            $counter++;
-        }
-        
-        return $tenantId;
+        // Retornar null para usar auto-increment do banco
+        // O Laravel vai gerar o ID automaticamente
+        return null;
     }
 
     /**
@@ -150,12 +143,9 @@ class TenantService
      */
     public function createTenantWithEmpresa(array $validated, bool $requireAdmin = false): array
     {
-        // Gerar ID único antes da transação
-        $tenantId = $this->generateUniqueTenantId($validated['razao_social']);
-        
-        // Preparar dados do tenant
+        // Preparar dados do tenant (sem definir ID, deixar o banco gerar)
         $tenantData = $this->prepareTenantData($validated);
-        $tenantData['id'] = $tenantId;
+        // Não definir 'id' - deixar o banco gerar automaticamente com auto-increment
 
         DB::beginTransaction();
 

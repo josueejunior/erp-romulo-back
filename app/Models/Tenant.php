@@ -15,6 +15,12 @@ class Tenant extends BaseTenant implements TenantWithDatabase
     use HasDatabase, HasDomains, HasTimestampsCustomizados;
     
     public $timestamps = true;
+    
+    /**
+     * Usar IDs numéricos auto-incrementados ao invés de strings/slugs
+     */
+    public $incrementing = true;
+    protected $keyType = 'int';
 
     /**
      * Colunas que podem ser preenchidas em massa
