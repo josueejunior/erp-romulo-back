@@ -10,7 +10,6 @@ use App\Models\Orgao;
 use App\Models\Setor;
 use Illuminate\Support\Facades\Hash;
 use Stancl\Tenancy\Facades\Tenancy;
-use Illuminate\Support\Str;
 use Stancl\Tenancy\Jobs\CreateDatabase;
 use Stancl\Tenancy\Jobs\MigrateDatabase;
 use Database\Seeders\AdminUserSeeder;
@@ -32,9 +31,8 @@ class DatabaseSeeder extends Seeder
 
         if (!$tenant) {
             // Criar tenant (empresa) no banco central
-            // O ID do tenant será gerado automaticamente se não fornecido
+            // O ID será gerado automaticamente pelo banco (auto-increment)
             $tenant = Tenant::create([
-                'id' => Str::slug('empresa-exemplo'),
                 'razao_social' => 'Empresa Exemplo LTDA',
                 'cnpj' => '12.345.678/0001-90',
                 'email' => 'contato@exemplo.com',
