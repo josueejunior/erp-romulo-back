@@ -16,7 +16,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('tenants', function (Blueprint $table) {
-            $table->string('id', Blueprint::VARCHAR_DEFAULT)->primary();
+            $table->id(); // Usa bigInteger auto-increment
 
             // Colunas customizadas do tenant
             $table->string('razao_social', Blueprint::VARCHAR_DEFAULT);
@@ -52,7 +52,7 @@ return new class extends Migration
             // Relacionamentos
             // plano_atual_id sem foreign key (planos será criado depois)
             $table->unsignedBigInteger('plano_atual_id')->nullable();
-            $table->string('assinatura_atual_id', Blueprint::VARCHAR_DEFAULT)->nullable();
+            $table->unsignedBigInteger('assinatura_atual_id')->nullable();
             
             // Limites
             $table->integer('limite_processos')->nullable();

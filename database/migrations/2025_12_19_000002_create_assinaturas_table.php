@@ -15,8 +15,8 @@ return new class extends Migration
     {
         Schema::create('assinaturas', function (Blueprint $table) {
             $table->id();
-            // tenant_id deve ser string (UUID) para corresponder ao id da tabela tenants
-            $table->string('tenant_id', Blueprint::VARCHAR_DEFAULT);
+            // tenant_id deve ser bigInteger para corresponder ao id da tabela tenants
+            $table->unsignedBigInteger('tenant_id');
             $table->foreign('tenant_id')
                 ->references('id')
                 ->on('tenants')
