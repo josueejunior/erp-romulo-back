@@ -15,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redis;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\ValidationException;
 use DomainException;
 
@@ -257,25 +258,96 @@ class UserController extends BaseApiController
 
             // Limpar cache relacionado a fornecedores e outras entidades da empresa antiga e nova
             $tenantId = tenancy()->tenant?->id;
+            Log::info('switchEmpresaAtiva - Iniciando limpeza de cache', [
+                'user_id' => $user->id,
+                'empresa_id' => $empresaId,
+                'tenant_id' => $tenantId,
+            ]);
+            
             if ($tenantId) {
                 // Limpar cache de fornecedores para todas as empresas do usuário
                 $empresas = $this->userRepository->buscarEmpresas($user->id);
+                Log::debug('switchEmpresaAtiva - Empresas encontradas para limpar cache', [
+                    'total_empresas' => count($empresas),
+                    'empresas_ids' => array_map(fn($e) => $e->id, $empresas),
+                ]);
+                
                 foreach ($empresas as $empresa) {
-                    $pattern = "tenant_{$tenantId}:empresa_{$empresa->id}:fornecedores:*";
+                    // Obter prefixo do cache do Laravel
+                    $cachePrefix = config('cache.prefix', '');
+                    if (!empty($cachePrefix) && !str_ends_with($cachePrefix, ':')) {
+                        $cachePrefix .= ':';
+                    }
+                    
+                    // Padrão com prefixo do Laravel Cache
+                    $pattern = $cachePrefix . "tenant_{$tenantId}:empresa_{$empresa->id}:fornecedores:*";
+                    Log::debug('switchEmpresaAtiva - Limpando cache', [
+                        'pattern' => $pattern,
+                        'cache_prefix' => $cachePrefix,
+                        'empresa_id' => $empresa->id,
+                    ]);
+                    
                     try {
+                        $totalKeysDeleted = 0;
                         $cursor = 0;
                         do {
                             $result = Redis::scan($cursor, ['match' => $pattern, 'count' => 100]);
                             $cursor = $result[0];
                             $keys = $result[1];
                             if (!empty($keys)) {
-                                Redis::del($keys);
+                                $deleted = Redis::del($keys);
+                                $totalKeysDeleted += $deleted;
+                                Log::debug('switchEmpresaAtiva - Chaves deletadas', [
+                                    'pattern' => $pattern,
+                                    'keys_found' => count($keys),
+                                    'keys_deleted' => $deleted,
+                                    'total_deleted' => $totalKeysDeleted,
+                                    'sample_keys' => array_slice($keys, 0, 3), // Mostrar primeiras 3 chaves como exemplo
+                                ]);
                             }
                         } while ($cursor != 0);
+                        
+                        // Também tentar limpar usando Cache facade (mais seguro)
+                        $cacheKey = "tenant_{$tenantId}:empresa_{$empresa->id}:fornecedores:index:*";
+                        try {
+                            // Buscar todas as chaves possíveis e deletar
+                            $allKeys = [];
+                            $cursor2 = 0;
+                            do {
+                                $result2 = Redis::scan($cursor2, ['match' => $pattern, 'count' => 1000]);
+                                $cursor2 = $result2[0];
+                                $keys2 = $result2[1];
+                                if (!empty($keys2)) {
+                                    $allKeys = array_merge($allKeys, $keys2);
+                                }
+                            } while ($cursor2 != 0);
+                            
+                            // Deletar usando Cache facade (remove prefixo automaticamente)
+                            foreach ($allKeys as $key) {
+                                // Remover prefixo da chave para usar com Cache facade
+                                $keyWithoutPrefix = str_replace($cachePrefix, '', $key);
+                                Cache::store('redis')->forget($keyWithoutPrefix);
+                            }
+                        } catch (\Exception $e2) {
+                            Log::warning('Erro ao limpar cache usando Cache facade', [
+                                'error' => $e2->getMessage(),
+                            ]);
+                        }
+                        
+                        Log::info('switchEmpresaAtiva - Cache limpo com sucesso', [
+                            'empresa_id' => $empresa->id,
+                            'pattern' => $pattern,
+                            'total_keys_deleted' => $totalKeysDeleted,
+                        ]);
                     } catch (\Exception $e) {
-                        Log::warning("Erro ao limpar cache de fornecedores para empresa {$empresa->id}: " . $e->getMessage());
+                        Log::warning("Erro ao limpar cache de fornecedores para empresa {$empresa->id}", [
+                            'error' => $e->getMessage(),
+                            'trace' => $e->getTraceAsString(),
+                        ]);
                     }
                 }
+            } else {
+                Log::warning('switchEmpresaAtiva - Tenant ID não encontrado, não é possível limpar cache');
             }
 
             Log::info('Empresa ativa alterada', [
