@@ -57,7 +57,14 @@ class UserReadRepository implements UserReadRepositoryInterface
     public function listarComRelacionamentos(array $filtros = []): LengthAwarePaginator
     {
         // Carregar todos os relacionamentos necessários
-        $query = UserModel::with(['empresas', 'roles']);
+        // IMPORTANTE: Incluir usuários deletados (soft deletes) para mostrar na listagem admin
+        $query = UserModel::withTrashed()->with(['empresas', 'roles']);
+
+        \Log::info('UserReadRepository: Listando usuários', [
+            'filtros' => $filtros,
+            'tenant_id' => tenancy()->tenant?->id,
+            'tenant_db' => tenancy()->tenant?->database ?? 'central',
+        ]);
 
         if (isset($filtros['search']) && !empty($filtros['search'])) {
             $search = $filtros['search'];
@@ -68,7 +75,21 @@ class UserReadRepository implements UserReadRepositoryInterface
         }
 
         $perPage = $filtros['per_page'] ?? 15;
+        
+        // Log antes da query
+        \Log::info('UserReadRepository: Executando query', [
+            'sql' => $query->toSql(),
+            'bindings' => $query->getBindings(),
+        ]);
+        
         $paginator = $query->orderBy('name')->paginate($perPage);
+        
+        // Log após query
+        \Log::info('UserReadRepository: Query executada', [
+            'total' => $paginator->total(),
+            'count' => $paginator->count(),
+            'items_count' => $paginator->getCollection()->count(),
+        ]);
 
         // Transformar Collection para array
         // IMPORTANTE: Incluir todos os campos que o frontend espera
