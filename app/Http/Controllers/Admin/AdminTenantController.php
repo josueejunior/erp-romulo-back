@@ -85,15 +85,18 @@ class AdminTenantController extends Controller
                 return response()->json(['message' => 'Empresa não encontrada.'], 404);
             }
 
+            // Retornar como array para consistência com index
             return response()->json([
                 'data' => [
-                    'id' => $tenantDomain->id,
-                    'razao_social' => $tenantDomain->razaoSocial,
-                    'cnpj' => $tenantDomain->cnpj,
-                    'email' => $tenantDomain->email,
-                    'status' => $tenantDomain->status,
-                    'cidade' => $tenantDomain->cidade,
-                    'estado' => $tenantDomain->estado,
+                    [
+                        'id' => $tenantDomain->id,
+                        'razao_social' => $tenantDomain->razaoSocial,
+                        'cnpj' => $tenantDomain->cnpj,
+                        'email' => $tenantDomain->email,
+                        'status' => $tenantDomain->status,
+                        'cidade' => $tenantDomain->cidade,
+                        'estado' => $tenantDomain->estado,
+                    ]
                 ],
             ]);
         } catch (\Exception $e) {
