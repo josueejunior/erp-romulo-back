@@ -74,8 +74,27 @@ class FornecedorRepository implements FornecedorRepositoryInterface
     {
         $query = FornecedorModel::query();
 
-        if (isset($filtros['empresa_id'])) {
-            $query->where('empresa_id', $filtros['empresa_id']);
+        // CRÍTICO: Sempre filtrar por empresa_id
+        // Se não tiver empresa_id nos filtros, retornar vazio para segurança
+        if (!isset($filtros['empresa_id']) || empty($filtros['empresa_id'])) {
+            \Log::warning('FornecedorRepository->buscarComFiltros() chamado sem empresa_id', [
+                'filtros' => $filtros,
+            ]);
+            // Retornar paginator vazio ao invés de todos os fornecedores
+            return new \Illuminate\Pagination\LengthAwarePaginator(
+                collect([]),
+                0,
+                $filtros['per_page'] ?? 15,
+                1
+            );
+        }
+
+        // Filtrar por empresa_id (obrigatório)
+        $query->where('empresa_id', $filtros['empresa_id']);
+
+        // Filtro por transportadoras
+        if (isset($filtros['apenas_transportadoras']) && $filtros['apenas_transportadoras']) {
+            $query->where('is_transportadora', true);
         }
 
         if (isset($filtros['search']) && !empty($filtros['search'])) {
@@ -89,6 +108,12 @@ class FornecedorRepository implements FornecedorRepositoryInterface
 
         $perPage = $filtros['per_page'] ?? 15;
         $paginator = $query->orderBy('criado_em', 'desc')->paginate($perPage);
+
+        \Log::debug('FornecedorRepository->buscarComFiltros() resultado', [
+            'empresa_id' => $filtros['empresa_id'],
+            'total' => $paginator->total(),
+            'count' => $paginator->count(),
+        ]);
 
         $paginator->getCollection()->transform(function ($model) {
             return $this->toDomain($model);
