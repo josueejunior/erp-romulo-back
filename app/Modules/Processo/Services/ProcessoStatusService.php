@@ -99,10 +99,19 @@ class ProcessoStatusService
                 break;
 
             case 'execucao':
-                if ($statusAtual !== 'vencido') {
+                // Permitir marcar como vencido se estiver em julgamento_habilitacao e tiver item aceito
+                if ($statusAtual === 'julgamento_habilitacao') {
+                    // Verificar se tem pelo menos um item aceito
+                    if (!$this->temItemAceito($processo)) {
+                        return [
+                            'pode' => false,
+                            'motivo' => 'Não é possível marcar como vencido: nenhum item foi aceito'
+                        ];
+                    }
+                } elseif ($statusAtual !== 'vencido') {
                     return [
                         'pode' => false,
-                        'motivo' => 'Apenas processos vencidos podem entrar em execução'
+                        'motivo' => 'Apenas processos vencidos ou em julgamento com item aceito podem entrar em execução'
                     ];
                 }
                 break;

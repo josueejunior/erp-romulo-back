@@ -113,8 +113,23 @@ class Empenho extends BaseModel
      */
     public function atualizarSaldo(): void
     {
-        // O saldo do empenho é calculado baseado nas notas fiscais
-        // Este método pode ser expandido conforme necessário
+        // Atualizar situação baseado em prazos e notas fiscais
         $this->atualizarSituacao();
+        
+        // Se houver notas fiscais de saída pagas, considerar como atendido
+        $notasPagas = $this->notasFiscais()
+            ->where('tipo', 'saida')
+            ->where('situacao', 'paga')
+            ->sum('valor') ?? 0;
+        
+        // Se o valor pago for igual ou maior ao valor do empenho, marcar como concluído
+        if ($notasPagas >= $this->valor && !$this->concluido) {
+            $this->concluido = true;
+            $this->situacao = 'concluido';
+            if (!$this->data_entrega) {
+                $this->data_entrega = now();
+            }
+            $this->save();
+        }
     }
 }

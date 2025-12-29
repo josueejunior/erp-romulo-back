@@ -75,14 +75,18 @@ class AutorizacaoFornecimento extends BaseModel
         $this->valor_empenhado = $totalEmpenhos;
         $this->saldo = $this->valor - $totalEmpenhos;
         
-        // Atualizar situação detalhada
+        // Atualizar situação baseada em empenhos
         if ($totalEmpenhos == 0) {
+            $this->situacao = 'aguardando_empenho';
             $this->situacao_detalhada = 'aguardando_empenho';
         } elseif ($totalEmpenhos < $this->valor) {
+            $this->situacao = 'atendendo';
             $this->situacao_detalhada = 'parcialmente_atendida';
         } elseif ($this->saldo <= 0) {
+            $this->situacao = 'concluida';
             $this->situacao_detalhada = 'concluida';
         } else {
+            $this->situacao = 'atendendo';
             $this->situacao_detalhada = 'atendendo_empenho';
         }
         

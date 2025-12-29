@@ -465,9 +465,15 @@ class ProcessoService extends BaseService
             ];
         }
 
+        // Retornar formato compatível com frontend
+        $deveSugerirJulgamento = $statusService->deveSugerirJulgamento($processo);
+        $deveSugerirPerdido = $statusService->deveSugerirPerdido($processo);
+        
         return [
             'processo_id' => $processo->id,
             'status_atual' => $processo->status,
+            'deve_sugerir_julgamento' => $deveSugerirJulgamento,
+            'deve_sugerir_perdido' => $deveSugerirPerdido,
             'sugestoes' => $sugestoes
         ];
     }
