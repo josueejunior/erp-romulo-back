@@ -61,6 +61,14 @@ class CriarTenantUseCase
             logo: $dto->logo,
         );
 
+        // Verificar se já existe tenant com mesmo CNPJ antes de criar
+        if ($dto->cnpj) {
+            $tenantExistente = $this->tenantRepository->buscarPorCnpj($dto->cnpj);
+            if ($tenantExistente) {
+                throw new DomainException("Já existe uma empresa cadastrada com o CNPJ informado. ID: {$tenantExistente->id}");
+            }
+        }
+
         // Persistir tenant (infraestrutura)
         $tenant = $this->tenantRepository->criar($tenant);
 
@@ -79,7 +87,14 @@ class CriarTenantUseCase
                     'error' => $deleteException->getMessage(),
                 ]);
             }
-            throw new DomainException('Erro ao criar o banco de dados da empresa: ' . $e->getMessage());
+            
+            // Melhorar mensagem de erro
+            $errorMessage = $e->getMessage();
+            if (str_contains($errorMessage, 'already exists') || str_contains($errorMessage, 'Database') && str_contains($errorMessage, 'exists')) {
+                throw new DomainException("Erro ao criar banco de dados: O banco de dados 'tenant_{$tenant->id}' já existe. Isso pode acontecer se uma tentativa anterior de criação falhou. Por favor, delete o banco de dados manualmente ou entre em contato com o suporte técnico.");
+            }
+            
+            throw new DomainException('Erro ao criar o banco de dados da empresa: ' . $errorMessage);
         }
 
         // Inicializar contexto do tenant
