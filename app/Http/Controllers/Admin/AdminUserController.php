@@ -258,7 +258,8 @@ class AdminUserController extends Controller
                 ->orderBy('razao_social')
                 ->get();
 
-            // Garantir que seja um array (frontend espera isso para usar .filter())
+            // Garantir que seja sempre um array (mesmo que vazio)
+            // Frontend espera isso para usar .filter()
             $empresasArray = $empresas->map(function ($empresa) {
                 return [
                     'id' => (int) $empresa->id,
@@ -268,12 +269,17 @@ class AdminUserController extends Controller
                 ];
             })->values()->toArray();
 
+            // Sempre retornar array, mesmo que vazio
             return response()->json([
-                'data' => $empresasArray,
+                'data' => $empresasArray ?: [], // Garantir array vazio se não houver empresas
             ]);
         } catch (\Exception $e) {
             Log::error('Erro ao listar empresas', ['error' => $e->getMessage()]);
-            return response()->json(['message' => 'Erro ao listar empresas.'], 500);
+            // Em caso de erro, retornar array vazio para não quebrar o frontend
+            return response()->json([
+                'data' => [],
+                'message' => 'Erro ao listar empresas.',
+            ], 500);
         }
     }
 }
