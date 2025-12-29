@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Modules\Empresa\Models\Empresa;
+use App\Models\Empresa;
 use Illuminate\Http\Request;
 
 /**
