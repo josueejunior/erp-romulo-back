@@ -104,21 +104,20 @@ class AdminUserController extends Controller
                 'role.in' => 'O perfil deve ser: Administrador, Operacional, Financeiro ou Consulta.',
             ]);
 
-            // Criar DTO
-            $dto = CriarUsuarioDTO::fromRequest($request, $tenant->id);
+            // Criar TenantContext explícito (não depende de request())
+            $context = TenantContext::create($tenant->id);
+
+            // Criar DTO (sem tenantId - vem do context)
+            $dto = CriarUsuarioDTO::fromRequest($request);
 
             // Executar Use Case (toda a lógica está aqui)
-            $user = $this->criarUsuarioUseCase->executar($dto);
+            $user = $this->criarUsuarioUseCase->executar($dto, $context);
 
+            // Usar Presenter (controller não conhece estrutura do domínio)
             return response()->json([
                 'message' => 'Usuário criado com sucesso!',
                 'success' => true,
-                'data' => [
-                    'id' => $user->id,
-                    'name' => $user->nome,
-                    'email' => $user->email,
-                    'role' => $validated['role'] ?? 'Usuário',
-                ],
+                'data' => UserPresenter::fromDomain($user),
             ], 201);
         } catch (ValidationException $e) {
             return response()->json([
