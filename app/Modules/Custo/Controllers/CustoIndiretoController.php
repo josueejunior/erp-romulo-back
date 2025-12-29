@@ -16,6 +16,17 @@ class CustoIndiretoController extends Controller
     }
 
     /**
+     * Extrai o ID da rota
+     */
+    protected function getRouteId($route): ?int
+    {
+        $parameters = $route->parameters();
+        // Tentar 'id' primeiro (conforme Route::module)
+        $id = $parameters['id'] ?? null;
+        return $id ? (int) $id : null;
+    }
+
+    /**
      * Sobrescrever handleList para usar service
      */
     protected function handleList(Request $request, array $mergeParams = []): \Illuminate\Http\JsonResponse
@@ -149,6 +160,22 @@ class CustoIndiretoController extends Controller
     public function index(Request $request)
     {
         return $this->handleList($request);
+    }
+
+    /**
+     * Método list() para compatibilidade com Route::module()
+     */
+    public function list(Request $request)
+    {
+        return $this->handleList($request);
+    }
+
+    /**
+     * Método get() para compatibilidade com Route::module()
+     */
+    public function get(Request $request)
+    {
+        return $this->handleGet($request);
     }
 
     public function store(Request $request)
