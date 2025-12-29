@@ -10,6 +10,7 @@ use App\Domain\Empresa\Repositories\EmpresaRepositoryInterface;
 use App\Domain\Shared\Events\EventDispatcherInterface;
 use App\Domain\Shared\ValueObjects\Email;
 use App\Domain\Shared\ValueObjects\Senha;
+use App\Domain\Shared\ValueObjects\TenantContext;
 use App\Domain\Auth\Events\UsuarioCriado;
 use DomainException;
 
@@ -29,8 +30,9 @@ class CriarUsuarioUseCase
 
     /**
      * Executar o caso de uso
+     * Recebe TenantContext explícito (não depende de request())
      */
-    public function executar(CriarUsuarioDTO $dto): User
+    public function executar(CriarUsuarioDTO $dto, TenantContext $context): User
     {
         // Validar email usando Value Object (factory method normaliza)
         $email = Email::criar($dto->email);
@@ -52,7 +54,7 @@ class CriarUsuarioUseCase
         // Criar entidade User (regras de negócio)
         $user = new User(
             id: null, // Será gerado pelo repository
-            tenantId: $dto->tenantId,
+            tenantId: $context->tenantId,
             nome: $dto->nome,
             email: $email->value,
             senhaHash: $senha->hash,

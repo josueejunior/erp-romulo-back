@@ -7,7 +7,10 @@ use App\Application\Auth\UseCases\CriarUsuarioUseCase;
 use App\Application\Auth\UseCases\AtualizarUsuarioUseCase;
 use App\Application\Auth\DTOs\CriarUsuarioDTO;
 use App\Application\Auth\DTOs\AtualizarUsuarioDTO;
+use App\Application\Auth\Presenters\UserPresenter;
 use App\Domain\Auth\Repositories\UserRepositoryInterface;
+use App\Domain\Auth\Repositories\UserReadRepositoryInterface;
+use App\Domain\Shared\ValueObjects\TenantContext;
 use App\Models\Tenant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -25,6 +28,7 @@ class AdminUserController extends Controller
         private CriarUsuarioUseCase $criarUsuarioUseCase,
         private AtualizarUsuarioUseCase $atualizarUsuarioUseCase,
         private UserRepositoryInterface $userRepository,
+        private UserReadRepositoryInterface $userReadRepository,
     ) {}
 
     /**
@@ -112,12 +116,13 @@ class AdminUserController extends Controller
                 'email' => 'required|email|max:255',
                 'password' => ['required', 'string', 'min:8', new \App\Rules\StrongPassword()],
                 'empresa_id' => 'required|integer',
-                'role' => 'nullable|string|in:Administrador,Usuário',
+                'role' => 'nullable|string|in:Administrador,Operacional,Financeiro,Consulta',
             ], [
                 'name.required' => 'O nome é obrigatório.',
                 'email.required' => 'O e-mail é obrigatório.',
                 'password.required' => 'A senha é obrigatória.',
                 'empresa_id.required' => 'A empresa é obrigatória.',
+                'role.in' => 'O perfil deve ser: Administrador, Operacional, Financeiro ou Consulta.',
             ]);
 
             // Criar DTO
@@ -161,12 +166,21 @@ class AdminUserController extends Controller
     public function update(Request $request, Tenant $tenant, int $userId)
     {
         try {
+            // Normalizar password: string vazia vira null
+            $data = $request->all();
+            if (isset($data['password']) && trim($data['password']) === '') {
+                $data['password'] = null;
+            }
+            $request->merge($data);
+
             $validated = $request->validate([
                 'name' => 'sometimes|required|string|max:255',
                 'email' => 'sometimes|required|email|max:255',
                 'password' => ['nullable', 'string', 'min:8', new \App\Rules\StrongPassword()],
                 'empresa_id' => 'sometimes|required|integer',
-                'role' => 'nullable|string|in:Administrador,Usuário',
+                'role' => 'nullable|string|in:Administrador,Operacional,Financeiro,Consulta',
+            ], [
+                'role.in' => 'O perfil deve ser: Administrador, Operacional, Financeiro ou Consulta.',
             ]);
 
             // Criar DTO

@@ -10,7 +10,6 @@ use Illuminate\Http\Request;
 class AtualizarUsuarioDTO
 {
     public function __construct(
-        public readonly int $tenantId,
         public readonly int $userId,
         public readonly ?string $nome = null,
         public readonly ?string $email = null,
@@ -21,17 +20,25 @@ class AtualizarUsuarioDTO
 
     /**
      * Criar DTO a partir de Request
+     * TenantContext é passado separadamente
      */
-    public static function fromRequest(Request $request, int $tenantId, int $userId): self
+    public static function fromRequest(Request $request, int $userId): self
     {
+        // Normalizar role (trim e garantir que está vazio se null)
+        $role = $request->input('role');
+        $role = $role ? trim($role) : null;
+
+        // Normalizar senha: string vazia vira null
+        $senha = $request->input('password');
+        $senha = ($senha && trim($senha) !== '') ? trim($senha) : null;
+
         return new self(
-            tenantId: $tenantId,
             userId: $userId,
             nome: $request->input('name'),
             email: $request->input('email'),
-            senha: $request->input('password'),
+            senha: $senha, // Pode ser null no update
             empresaId: $request->input('empresa_id'),
-            role: $request->input('role'),
+            role: $role,
         );
     }
 }

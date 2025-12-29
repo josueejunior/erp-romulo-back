@@ -6,6 +6,9 @@ use App\Application\Auth\DTOs\AtualizarUsuarioDTO;
 use App\Domain\Auth\Entities\User;
 use App\Domain\Auth\Repositories\UserRepositoryInterface;
 use App\Domain\Empresa\Repositories\EmpresaRepositoryInterface;
+use App\Domain\Shared\ValueObjects\TenantContext;
+use App\Domain\Shared\Events\EventDispatcherInterface;
+use App\Domain\Auth\Events\SenhaAlterada;
 use Illuminate\Support\Facades\Hash;
 use DomainException;
 
@@ -18,17 +21,24 @@ class AtualizarUsuarioUseCase
     public function __construct(
         private UserRepositoryInterface $userRepository,
         private EmpresaRepositoryInterface $empresaRepository,
+        private EventDispatcherInterface $eventDispatcher,
     ) {}
 
     /**
      * Executar o caso de uso
+     * Recebe TenantContext explícito (não depende de request())
      */
-    public function executar(AtualizarUsuarioDTO $dto): User
+    public function executar(AtualizarUsuarioDTO $dto, TenantContext $context): User
     {
         // Buscar usuário existente
         $userExistente = $this->userRepository->buscarPorId($dto->userId);
         if (!$userExistente) {
             throw new DomainException('Usuário não encontrado.');
+        }
+
+        // Validar se pertence ao tenant
+        if ($userExistente->tenantId !== $context->tenantId) {
+            throw new DomainException('Usuário não pertence ao tenant atual.');
         }
 
         // Validar email se foi alterado
@@ -59,9 +69,19 @@ class AtualizarUsuarioUseCase
         // Atualizar (infraestrutura vai lidar com role se necessário)
         $userAtualizado = $this->userRepository->atualizar($userAtualizado);
 
-        // Se role foi alterada, atualizar (isso pode ser um Domain Service)
+        // Se role foi alterada, atualizar
         if ($dto->role) {
             $this->userRepository->atualizarRole($userAtualizado->id, $dto->role);
+        }
+
+        // Disparar Domain Event se senha foi alterada
+        if ($dto->senha) {
+            $this->eventDispatcher->dispatch(
+                new SenhaAlterada(
+                    userId: $userAtualizado->id,
+                    email: $userAtualizado->email,
+                )
+            );
         }
 
         return $userAtualizado;
