@@ -6,11 +6,17 @@ use App\Modules\Processo\Models\Processo;
 use App\Modules\Processo\Models\ProcessoItem;
 use App\Models\Orcamento;
 use App\Models\OrcamentoItem;
+use App\Domain\ProcessoItem\Repositories\ProcessoItemRepositoryInterface;
+use App\Domain\OrcamentoItem\Repositories\OrcamentoItemRepositoryInterface;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 
 class OrcamentoService
 {
+    public function __construct(
+        private ProcessoItemRepositoryInterface $processoItemRepository,
+        private OrcamentoItemRepositoryInterface $orcamentoItemRepository,
+    ) {}
     /**
      * Validar processo pertence à empresa
      */
@@ -219,14 +225,19 @@ class OrcamentoService
 
         $validated = $validator->validated();
 
-        // Verificar se todos os itens pertencem ao processo
-        $itensIds = collect($validated['itens'])->pluck('processo_item_id')->unique();
-        $itensDoProcesso = ProcessoItem::where('processo_id', $processo->id)
-            ->whereIn('id', $itensIds)
+        // Verificar se todos os itens pertencem ao processo via repository (DDD)
+        $itensIds = collect($validated['itens'])->pluck('processo_item_id')->unique()->toArray();
+        $itensDoProcesso = $this->processoItemRepository->buscarComFiltros([
+            'processo_id' => $processo->id,
+            'per_page' => 1000, // Buscar todos
+        ]);
+        
+        $itensEncontrados = $itensDoProcesso->getCollection()
+            ->filter(fn($item) => in_array($item->id, $itensIds))
             ->pluck('id')
             ->toArray();
-
-        if (count($itensIds) !== count($itensDoProcesso)) {
+            
+        if (count($itensIds) !== count($itensEncontrados)) {
             throw new \Exception('Um ou mais itens não pertencem a este processo.');
         }
 
@@ -254,14 +265,17 @@ class OrcamentoService
 
                 // Se marcado como escolhido, desmarcar outros
                 if ($orcamentoItem->fornecedor_escolhido) {
-                    ProcessoItem::find($itemData['processo_item_id'])
-                        ->orcamentos()
-                        ->where('id', '!=', $orcamento->id)
-                        ->update(['fornecedor_escolhido' => false]);
+                    // Buscar ProcessoItem via repository (DDD)
+                    $processoItemModel = $this->processoItemRepository->buscarModeloPorId($itemData['processo_item_id']);
+                    if ($processoItemModel) {
+                        // Desmarcar outros orçamentos do mesmo item
+                        $processoItemModel->orcamentos()
+                            ->where('id', '!=', $orcamento->id)
+                            ->update(['fornecedor_escolhido' => false]);
+                    }
                     
-                    OrcamentoItem::where('processo_item_id', $itemData['processo_item_id'])
-                        ->where('id', '!=', $orcamentoItem->id)
-                        ->update(['fornecedor_escolhido' => false]);
+                    // Desmarcar outros itens de orçamento via repository (DDD)
+                    $this->orcamentoItemRepository->desmarcarEscolhido($orcamento->id, $itemData['processo_item_id']);
                 }
             }
 
@@ -284,32 +298,54 @@ class OrcamentoService
             throw new \Exception('Não é possível alterar seleção de orçamentos em processos em execução.');
         }
 
-        $orcamentoItem = OrcamentoItem::where('id', $orcamentoItemId)
-            ->where('orcamento_id', $orcamento->id)
-            ->first();
-
-        if (!$orcamentoItem) {
+        // Buscar via repository (DDD)
+        $orcamentoItemDomain = $this->orcamentoItemRepository->buscarPorId($orcamentoItemId);
+        if (!$orcamentoItemDomain) {
             throw new \Exception('Item do orçamento não encontrado.');
         }
-
-        // Se está marcando como escolhido, desmarcar todos os outros do mesmo item
-        if ($fornecedorEscolhido) {
-            OrcamentoItem::where('processo_item_id', $orcamentoItem->processo_item_id)
-                ->where('id', '!=', $orcamentoItem->id)
-                ->update(['fornecedor_escolhido' => false]);
+        
+        // Validar que o item pertence ao orçamento
+        if ($orcamentoItemDomain->orcamentoId !== $orcamento->id) {
+            throw new \Exception('Item do orçamento não pertence a este orçamento.');
         }
 
-        $orcamentoItem->update(['fornecedor_escolhido' => $fornecedorEscolhido]);
+        // Se está marcando como escolhido, desmarcar todos os outros do mesmo item via repository (DDD)
+        if ($fornecedorEscolhido) {
+            $this->orcamentoItemRepository->desmarcarEscolhido($orcamento->id, $orcamentoItemDomain->processoItemId);
+        }
+
+        // Atualizar via repository (DDD)
+        $orcamentoItemAtualizado = new \App\Domain\OrcamentoItem\Entities\OrcamentoItem(
+            id: $orcamentoItemDomain->id,
+            orcamentoId: $orcamentoItemDomain->orcamentoId,
+            processoItemId: $orcamentoItemDomain->processoItemId,
+            custoProduto: $orcamentoItemDomain->custoProduto,
+            marcaModelo: $orcamentoItemDomain->marcaModelo,
+            ajustesEspecificacao: $orcamentoItemDomain->ajustesEspecificacao,
+            frete: $orcamentoItemDomain->frete,
+            freteIncluido: $orcamentoItemDomain->freteIncluido,
+            fornecedorEscolhido: $fornecedorEscolhido,
+            observacoes: $orcamentoItemDomain->observacoes,
+        );
+        $orcamentoItemDomain = $this->orcamentoItemRepository->atualizar($orcamentoItemAtualizado);
 
         // Atualizar valor mínimo no item se tiver formação de preço
-        if ($fornecedorEscolhido && $orcamentoItem->formacaoPreco) {
-            $processoItem = $orcamentoItem->processoItem;
-            $processoItem->valor_minimo_venda = $orcamentoItem->formacaoPreco->preco_minimo;
-            $processoItem->save();
-        } elseif (!$fornecedorEscolhido) {
-            $processoItem = $orcamentoItem->processoItem;
-            $processoItem->valor_minimo_venda = null;
-            $processoItem->save();
+        // Buscar modelo Eloquent para acessar relacionamentos
+        $orcamentoItemModel = $this->orcamentoItemRepository->buscarModeloPorId($orcamentoItemDomain->id, ['formacaoPreco', 'processoItem']);
+        if ($orcamentoItemModel) {
+            if ($fornecedorEscolhido && $orcamentoItemModel->formacaoPreco) {
+                $processoItem = $orcamentoItemModel->processoItem;
+                if ($processoItem) {
+                    $processoItem->valor_minimo_venda = $orcamentoItemModel->formacaoPreco->preco_minimo;
+                    $processoItem->save();
+                }
+            } elseif (!$fornecedorEscolhido) {
+                $processoItem = $orcamentoItemModel->processoItem;
+                if ($processoItem) {
+                    $processoItem->valor_minimo_venda = null;
+                    $processoItem->save();
+                }
+            }
         }
 
         $orcamento->refresh();

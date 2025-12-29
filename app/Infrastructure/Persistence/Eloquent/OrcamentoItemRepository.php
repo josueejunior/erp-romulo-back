@@ -6,9 +6,11 @@ use App\Domain\OrcamentoItem\Entities\OrcamentoItem;
 use App\Domain\OrcamentoItem\Repositories\OrcamentoItemRepositoryInterface;
 use App\Models\OrcamentoItem as OrcamentoItemModel;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use App\Infrastructure\Persistence\Eloquent\Traits\HasModelRetrieval;
 
 class OrcamentoItemRepository implements OrcamentoItemRepositoryInterface
 {
+    use HasModelRetrieval;
     private function toDomain(OrcamentoItemModel $model): OrcamentoItem
     {
         return new OrcamentoItem(
@@ -50,6 +52,11 @@ class OrcamentoItemRepository implements OrcamentoItemRepositoryInterface
     {
         $model = OrcamentoItemModel::find($id);
         return $model ? $this->toDomain($model) : null;
+    }
+
+    public function buscarModeloPorId(int $id, array $with = []): ?OrcamentoItemModel
+    {
+        return $this->getModel($id, $with);
     }
 
     public function buscarPorOrcamento(int $orcamentoId): array
@@ -120,6 +127,14 @@ class OrcamentoItemRepository implements OrcamentoItemRepositoryInterface
         OrcamentoItemModel::where('processo_item_id', $processoItemId)
             ->where('id', '!=', $orcamentoId)
             ->update(['fornecedor_escolhido' => false]);
+    }
+
+    /**
+     * Retorna a classe do modelo Eloquent (requerido pelo trait HasModelRetrieval)
+     */
+    protected function getModelClass(): ?string
+    {
+        return OrcamentoItemModel::class;
     }
 }
 

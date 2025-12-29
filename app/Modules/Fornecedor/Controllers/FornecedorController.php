@@ -235,7 +235,12 @@ class FornecedorController extends BaseApiController
             
             $dto = CriarFornecedorDTO::fromArray($validated);
             $fornecedorDomain = $this->criarFornecedorUseCase->executar($dto);
-            $fornecedor = Fornecedor::findOrFail($fornecedorDomain->id);
+            
+            // Buscar modelo Eloquent via repository (DDD)
+            $fornecedor = $this->fornecedorRepository->buscarModeloPorId($fornecedorDomain->id);
+            if (!$fornecedor) {
+                return response()->json(['message' => 'Fornecedor não encontrado após criação.'], 404);
+            }
             
             Log::info('FornecedorController::store() - Fornecedor criado com sucesso', [
                 'fornecedor_id' => $fornecedor->id,
@@ -291,8 +296,11 @@ class FornecedorController extends BaseApiController
             // Executar Use Case (toda a lógica está aqui)
             $fornecedorDomain = $this->atualizarFornecedorUseCase->executar($dto, $empresa->id);
             
-            // Buscar modelo Eloquent para Resource
-            $fornecedor = Fornecedor::findOrFail($fornecedorDomain->id);
+            // Buscar modelo Eloquent via repository (DDD)
+            $fornecedor = $this->fornecedorRepository->buscarModeloPorId($fornecedorDomain->id);
+            if (!$fornecedor) {
+                return response()->json(['message' => 'Fornecedor não encontrado após atualização.'], 404);
+            }
             
             $this->clearFornecedorCache();
 
@@ -350,7 +358,8 @@ class FornecedorController extends BaseApiController
             return response()->json(['message' => 'ID não fornecido'], 400);
         }
 
-        $fornecedor = Fornecedor::find($id);
+        // Buscar via repository (DDD)
+        $fornecedor = $this->fornecedorRepository->buscarModeloPorId($id);
         if (!$fornecedor) {
             return response()->json(['message' => 'Fornecedor não encontrado.'], 404);
         }
