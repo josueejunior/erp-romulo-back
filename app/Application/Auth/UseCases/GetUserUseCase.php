@@ -34,16 +34,29 @@ class GetUserUseCase
             $tenant = Tenant::find($tenantId);
         }
 
-        // Buscar empresa ativa
+        // Buscar empresa ativa e lista de empresas
         $empresaAtiva = null;
+        $empresasList = [];
         if ($tenant) {
             tenancy()->initialize($tenant);
             try {
+                // Buscar todas as empresas do usuário
+                $empresas = $this->userRepository->buscarEmpresas($user->id);
+                
+                // Transformar para formato esperado pelo frontend
+                // $empresas retorna objetos Empresa do domínio com razaoSocial (camelCase)
+                $empresasList = array_map(function($empresa) {
+                    return [
+                        'id' => $empresa->id,
+                        'razao_social' => $empresa->razaoSocial ?? '',
+                        'cnpj' => $empresa->cnpj ?? null,
+                    ];
+                }, $empresas);
+                
                 if (method_exists($user, 'empresa_ativa_id') && $user->empresa_ativa_id) {
                     $empresaAtiva = $this->userRepository->buscarEmpresaAtiva($user->id);
                 } else {
-                    // Se não tem empresa ativa, buscar primeira empresa
-                    $empresas = $this->userRepository->buscarEmpresas($user->id);
+                    // Se não tem empresa ativa, usar primeira empresa
                     $empresaAtiva = !empty($empresas) ? $empresas[0] : null;
                 }
             } finally {
@@ -59,14 +72,16 @@ class GetUserUseCase
                 'name' => method_exists($user, 'name') ? $user->name : null,
                 'email' => $user->getAuthIdentifierName() === 'email' ? $user->email : null,
                 'empresa_ativa_id' => method_exists($user, 'empresa_ativa_id') ? $user->empresa_ativa_id : null,
+                'empresas_list' => $empresasList, // Lista de empresas para o seletor
             ],
             'tenant' => $tenant ? [
                 'id' => $tenant->id,
                 'razao_social' => $tenant->razao_social,
+                'cnpj' => $tenant->cnpj ?? null,
             ] : null,
             'empresa' => $empresaAtiva ? [
                 'id' => $empresaAtiva->id,
-                'razao_social' => $empresaAtiva->razaoSocial,
+                'razao_social' => $empresaAtiva->razaoSocial ?? '',
             ] : null,
         ];
     }
