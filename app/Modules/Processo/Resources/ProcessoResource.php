@@ -19,6 +19,19 @@ class ProcessoResource extends JsonResource
         // Obter dados base do ProcessoListResource
         $listData = $listResource->toArray($request);
         
+        // Formatar data_hora_sessao_publica para o formato esperado pelo frontend (datetime-local)
+        $dataHoraFormatada = $this->data_hora_sessao_publica 
+            ? $this->data_hora_sessao_publica->format('Y-m-d\TH:i') 
+            : null;
+        
+        // Extrair horário da data_hora_sessao_publica se não tiver horario_sessao_publica separado
+        $horarioFormatado = $this->horario_sessao_publica;
+        if (!$horarioFormatado && $this->data_hora_sessao_publica) {
+            $horarioFormatado = $this->data_hora_sessao_publica->format('H:i');
+        } elseif ($horarioFormatado instanceof \DateTime || $horarioFormatado instanceof \Carbon\Carbon) {
+            $horarioFormatado = $horarioFormatado->format('H:i');
+        }
+        
         // Adicionar campos adicionais do ProcessoResource
         return array_merge($listData, [
             'orgao' => new OrgaoResource($this->whenLoaded('orgao')),
@@ -33,7 +46,9 @@ class ProcessoResource extends JsonResource
             'portal' => $this->portal,
             'numero_edital' => $this->numero_edital,
             'srp' => $this->srp,
-            'horario_sessao_publica' => $this->horario_sessao_publica,
+            // Garantir que data_hora_sessao_publica está no formato correto (sobrescreve data_sessao_publica do ProcessoListResource)
+            'data_hora_sessao_publica' => $dataHoraFormatada,
+            'horario_sessao_publica' => $horarioFormatado,
             'endereco_entrega' => $this->endereco_entrega,
             'local_entrega_detalhado' => $this->local_entrega_detalhado,
             'forma_entrega' => $this->forma_entrega,

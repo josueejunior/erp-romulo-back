@@ -90,8 +90,9 @@ class ProcessoItemService extends BaseService
 
     /**
      * Criar novo item
+     * Método específico para criar item de processo (não sobrescreve BaseService::store)
      */
-    public function store(Processo $processo, array $data): Model
+    public function storeItem(Processo $processo, array $data): Model
     {
         // Validar processo pode ser editado
         $this->validarProcessoPodeEditar($processo);

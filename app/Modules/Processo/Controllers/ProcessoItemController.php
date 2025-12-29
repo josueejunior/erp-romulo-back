@@ -86,7 +86,7 @@ class ProcessoItemController extends Controller
 
         try {
             $this->itemService->validarProcessoEmpresa($processo, $empresa->id);
-            $item = $this->itemService->store($processo, $request->all());
+            $item = $this->itemService->storeItem($processo, $request->all());
             return response()->json(['data' => $item], 201);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
@@ -215,7 +215,7 @@ class ProcessoItemController extends Controller
 
         try {
             $this->itemService->validarProcessoEmpresa($processo, $empresa->id);
-            $this->itemService->store($processo, $request->all());
+            $this->itemService->storeItem($processo, $request->all());
 
             return redirect()->route('processos.show', $processo)
                 ->with('success', 'Item adicionado com sucesso!');
