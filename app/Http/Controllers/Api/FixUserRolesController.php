@@ -27,8 +27,20 @@ class FixUserRolesController extends Controller
     public function getCurrentUserRoles(Request $request)
     {
         try {
-            // Executar Use Case
-            $data = $this->getUserRolesUseCase->executar($request->user());
+            $user = $request->user();
+            
+            // Se for AdminUser, retornar array vazio (admin não tem roles no sistema de tenants)
+            if ($user instanceof \App\Modules\Auth\Models\AdminUser) {
+                return response()->json([
+                    'data' => [
+                        'roles' => [],
+                        'primary_role' => null,
+                    ],
+                ]);
+            }
+            
+            // Executar Use Case para usuários comuns
+            $data = $this->getUserRolesUseCase->executar($user);
 
             return response()->json([
                 'data' => $data,
