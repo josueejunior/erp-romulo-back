@@ -40,18 +40,48 @@ class AdminUserController extends Controller
     public function index(Request $request, Tenant $tenant)
     {
         try {
+            \Log::info('AdminUserController::index - Iniciando', [
+                'tenant_id' => $tenant->id,
+                'tenant_razao_social' => $tenant->razao_social,
+                'request_params' => $request->all(),
+                'tenancy_initialized' => tenancy()->initialized,
+                'current_tenant_id' => tenancy()->tenant?->id,
+            ]);
+
             $filtros = [
                 'search' => $request->search,
                 'per_page' => $request->per_page ?? 15,
             ];
 
+            \Log::info('AdminUserController::index - Filtros preparados', [
+                'filtros' => $filtros,
+            ]);
+
             // Usar ReadRepository (não conhece Eloquent)
             $users = $this->userReadRepository->listarComRelacionamentos($filtros);
 
+            \Log::info('AdminUserController::index - Usuários obtidos do repository', [
+                'total' => $users->total(),
+                'count' => $users->count(),
+                'current_page' => $users->currentPage(),
+                'per_page' => $users->perPage(),
+                'items' => $users->items(),
+            ]);
+
             // Usar ResponseBuilder padronizado
-            return ApiResponse::paginated($users);
+            $response = ApiResponse::paginated($users);
+            
+            \Log::info('AdminUserController::index - Resposta preparada', [
+                'response_data' => json_decode($response->getContent(), true),
+            ]);
+
+            return $response;
         } catch (\Exception $e) {
-            Log::error('Erro ao listar usuários', ['error' => $e->getMessage()]);
+            \Log::error('Erro ao listar usuários', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'tenant_id' => $tenant->id ?? null,
+            ]);
             return response()->json(['message' => 'Erro ao listar usuários.'], 500);
         }
     }
