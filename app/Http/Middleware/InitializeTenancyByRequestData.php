@@ -123,16 +123,18 @@ class InitializeTenancyByRequestData extends IdentificationMiddleware
     }
 
     /**
-     * Tentar obter tenant_id do usuário autenticado através de sessão ou cookies
+     * Tentar obter tenant_id do usuário autenticado através de cookies
+     * Nota: APIs não têm sessão por padrão, então não tentamos acessar sessão
      */
     protected function getTenantIdFromUser(Request $request): ?string
     {
-        // Se o usuário está autenticado, buscar o tenant pela sessão
+        // Se o usuário está autenticado, buscar o tenant pelo cookie
         // Isso é um fallback caso o header não esteja presente
         if ($request->user()) {
-            // Tentar buscar o tenant_id da sessão ou cookie se disponível
-            return $request->session()->get('tenant_id') 
-                ?? $request->cookie('tenant_id');
+            // Para APIs, não usamos sessão (não está disponível)
+            // Apenas tentar cookie como fallback
+            // O tenant_id deve vir principalmente do header X-Tenant-ID ou do token
+            return $request->cookie('tenant_id');
         }
         
         return null;
