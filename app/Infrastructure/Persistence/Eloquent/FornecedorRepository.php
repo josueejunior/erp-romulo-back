@@ -75,8 +75,17 @@ class FornecedorRepository implements FornecedorRepositoryInterface
 
     public function buscarComFiltros(array $filtros = []): LengthAwarePaginator
     {
+        \Log::debug('FornecedorRepository::buscarComFiltros() - Iniciando', [
+            'filtros_recebidos' => $filtros,
+        ]);
+        
         // Aplicar filtro de empresa_id com isolamento
         $query = $this->aplicarFiltroEmpresa(FornecedorModel::class, $filtros);
+        
+        \Log::debug('FornecedorRepository::buscarComFiltros() - Query após aplicarFiltroEmpresa', [
+            'sql' => $query->toSql(),
+            'bindings' => $query->getBindings(),
+        ]);
 
         // Filtro por transportadoras
         if (isset($filtros['apenas_transportadoras']) && $filtros['apenas_transportadoras']) {
@@ -94,6 +103,12 @@ class FornecedorRepository implements FornecedorRepositoryInterface
 
         $perPage = $filtros['per_page'] ?? 15;
         $paginator = $query->orderBy('criado_em', 'desc')->paginate($perPage);
+        
+        \Log::debug('FornecedorRepository::buscarComFiltros() - Resultado da query', [
+            'total' => $paginator->total(),
+            'count' => $paginator->count(),
+            'empresa_ids_encontrados' => $paginator->getCollection()->pluck('empresa_id')->unique()->toArray(),
+        ]);
 
         // Validar que todos os registros pertencem à empresa correta
         $this->validarEmpresaIds($paginator, $filtros['empresa_id']);

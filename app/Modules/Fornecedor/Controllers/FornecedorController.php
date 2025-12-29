@@ -51,11 +51,24 @@ class FornecedorController extends BaseApiController
         $filtersHash = md5(json_encode($filters));
         $cacheKey = "tenant_{$tenantId}:empresa_{$empresa->id}:fornecedores:index:{$filtersHash}";
         
+        Log::debug('FornecedorController::index() - Verificando cache', [
+            'cache_key' => $cacheKey,
+            'empresa_id' => $empresa->id,
+        ]);
+        
         // Tentar obter do cache
         if ($tenantId && RedisService::isAvailable()) {
             $cached = RedisService::get($cacheKey);
             if ($cached !== null) {
+                Log::debug('FornecedorController::index() - Cache HIT', [
+                    'cache_key' => $cacheKey,
+                    'total_cached' => $cached['meta']['total'] ?? count($cached['data'] ?? []),
+                ]);
                 return response()->json($cached);
+            } else {
+                Log::debug('FornecedorController::index() - Cache MISS', [
+                    'cache_key' => $cacheKey,
+                ]);
             }
         }
 

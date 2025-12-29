@@ -31,14 +31,43 @@ abstract class BaseApiController extends Controller
             abort(401, 'Usuário não autenticado.');
         }
         
+        $empresaRepository = app(EmpresaRepositoryInterface::class);
+        $userRepository = app(UserRepositoryInterface::class);
+        
+        // Recarregar usuário do banco para garantir que temos empresa_ativa_id atualizado
+        // Isso é importante após trocar empresa, pois o objeto $user pode estar em cache
+        if (method_exists($user, 'refresh')) {
+            $user->refresh();
+        }
+        
         \Log::debug('BaseApiController::getEmpresaAtivaOrFail()', [
             'user_id' => $user->id,
             'user_empresa_ativa_id' => $user->empresa_ativa_id ?? null,
             'tenant_id' => tenancy()->tenant?->id,
+            'x_empresa_id_header' => request()->header('X-Empresa-ID'),
         ]);
         
-        $empresaRepository = app(EmpresaRepositoryInterface::class);
-        $userRepository = app(UserRepositoryInterface::class);
+        // Verificar se o header X-Empresa-ID foi enviado (prioridade máxima)
+        $empresaIdFromHeader = request()->header('X-Empresa-ID');
+        \Log::debug('BaseApiController::getEmpresaAtivaOrFail() - Verificando header X-Empresa-ID', [
+            'x_empresa_id_header' => $empresaIdFromHeader,
+            'all_headers' => request()->headers->all(),
+        ]);
+        
+        if ($empresaIdFromHeader) {
+            $empresaModel = $empresaRepository->buscarModeloPorId((int) $empresaIdFromHeader);
+            if ($empresaModel) {
+                \Log::debug('BaseApiController::getEmpresaAtivaOrFail() - Empresa encontrada via header X-Empresa-ID', [
+                    'empresa_id' => $empresaModel->id,
+                    'empresa_razao_social' => $empresaModel->razao_social,
+                ]);
+                return $empresaModel;
+            } else {
+                \Log::warning('BaseApiController::getEmpresaAtivaOrFail() - Empresa não encontrada via header X-Empresa-ID', [
+                    'empresa_id_header' => $empresaIdFromHeader,
+                ]);
+            }
+        }
         
         // Se o usuário tem empresa_ativa_id, buscar essa empresa via repository
         if ($user->empresa_ativa_id) {

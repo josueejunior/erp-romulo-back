@@ -254,6 +254,29 @@ class UserController extends BaseApiController
             // Atualizar empresa ativa usando o repository
             $userDomain = $this->userRepository->atualizarEmpresaAtiva($user->id, $empresaId);
 
+            // Limpar cache relacionado a fornecedores e outras entidades da empresa antiga e nova
+            $tenantId = tenancy()->tenant?->id;
+            if ($tenantId) {
+                // Limpar cache de fornecedores para todas as empresas do usuário
+                $empresas = $this->userRepository->buscarEmpresas($user->id);
+                foreach ($empresas as $empresa) {
+                    $pattern = "tenant_{$tenantId}:empresa_{$empresa->id}:fornecedores:*";
+                    try {
+                        $cursor = 0;
+                        do {
+                            $result = Redis::scan($cursor, ['match' => $pattern, 'count' => 100]);
+                            $cursor = $result[0];
+                            $keys = $result[1];
+                            if (!empty($keys)) {
+                                Redis::del($keys);
+                            }
+                        } while ($cursor != 0);
+                    } catch (\Exception $e) {
+                        Log::warning("Erro ao limpar cache de fornecedores para empresa {$empresa->id}: " . $e->getMessage());
+                    }
+                }
+            }
+
             Log::info('Empresa ativa alterada', [
                 'user_id' => $user->id,
                 'empresa_id' => $empresaId,
