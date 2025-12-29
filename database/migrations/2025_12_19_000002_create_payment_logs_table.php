@@ -20,7 +20,7 @@ return new class extends Migration
                 ->references('id')
                 ->on('tenants')
                 ->onDelete('cascade');
-            $table->foreignId('plano_id')->constrained('planos')->onDelete('restrict');
+            $table->foreignId('plano_id')->nullable()->constrained('planos')->onDelete('restrict');
             $table->decimal('valor', 10, 2);
             $table->string('periodo', 20); // 'mensal' ou 'anual'
             $table->string('status', 50); // 'pending', 'approved', 'rejected', 'failed'
@@ -37,6 +37,7 @@ return new class extends Migration
             $table->index('external_id');
             $table->index('idempotency_key');
             $table->index('status');
+            $table->index('plano_id');
         });
     }
 

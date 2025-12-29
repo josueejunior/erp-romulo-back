@@ -46,9 +46,18 @@ class AdminTenantController extends Controller
 
             $tenants = $this->tenantRepository->buscarComFiltros($filters);
 
+            // Buscar modelos Eloquent para eager loading de relacionamentos
+            $tenantIds = $tenants->pluck('id')->toArray();
+            $tenantModels = Tenant::with(['planoAtual', 'assinaturaAtual'])
+                ->whereIn('id', $tenantIds)
+                ->get()
+                ->keyBy('id');
+
             // Converter entidades do domínio para array e usar ResponseBuilder padronizado
-            return ApiResponse::paginated($tenants, function ($tenant) {
-                return [
+            return ApiResponse::paginated($tenants, function ($tenant) use ($tenantModels) {
+                $tenantModel = $tenantModels->get($tenant->id);
+                
+                $data = [
                     'id' => $tenant->id,
                     'razao_social' => $tenant->razaoSocial,
                     'cnpj' => $tenant->cnpj,
@@ -57,6 +66,34 @@ class AdminTenantController extends Controller
                     'cidade' => $tenant->cidade,
                     'estado' => $tenant->estado,
                 ];
+
+                // Adicionar informações de plano e assinatura se disponíveis
+                if ($tenantModel) {
+                    if ($tenantModel->planoAtual) {
+                        $data['plano_atual'] = [
+                            'id' => $tenantModel->planoAtual->id,
+                            'nome' => $tenantModel->planoAtual->nome,
+                            'preco_mensal' => $tenantModel->planoAtual->preco_mensal,
+                            'preco_anual' => $tenantModel->planoAtual->preco_anual,
+                        ];
+                        $data['plano_atual_id'] = $tenantModel->plano_atual_id;
+                    }
+                    
+                    if ($tenantModel->assinaturaAtual) {
+                        $data['assinatura_atual'] = [
+                            'id' => $tenantModel->assinaturaAtual->id,
+                            'status' => $tenantModel->assinaturaAtual->status,
+                            'valor_pago' => $tenantModel->assinaturaAtual->valor_pago,
+                            'data_inicio' => $tenantModel->assinaturaAtual->data_inicio,
+                            'data_fim' => $tenantModel->assinaturaAtual->data_fim,
+                            'metodo_pagamento' => $tenantModel->assinaturaAtual->metodo_pagamento,
+                            'transacao_id' => $tenantModel->assinaturaAtual->transacao_id,
+                        ];
+                        $data['assinatura_atual_id'] = $tenantModel->assinatura_atual_id;
+                    }
+                }
+
+                return $data;
             });
         } catch (\Exception $e) {
             Log::error('Erro ao listar empresas', ['error' => $e->getMessage()]);
