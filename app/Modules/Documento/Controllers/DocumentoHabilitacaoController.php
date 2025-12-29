@@ -40,6 +40,17 @@ class DocumentoHabilitacaoController extends BaseApiController
     }
 
     /**
+     * Extrai o ID da rota
+     */
+    protected function getRouteId($route): ?int
+    {
+        $parameters = $route->parameters();
+        // Tentar 'documentoHabilitacao' primeiro, depois 'id'
+        $id = $parameters['documentoHabilitacao'] ?? $parameters['id'] ?? null;
+        return $id ? (int) $id : null;
+    }
+
+    /**
      * Sobrescrever handleGet para usar service
      */
     protected function handleGet(Request $request, array $mergeParams = []): \Illuminate\Http\JsonResponse
@@ -168,16 +179,61 @@ class DocumentoHabilitacaoController extends BaseApiController
     }
 
     /**
-     * Métodos de compatibilidade
+     * GET /documentos-habilitacao - Listar documentos
+     * Método chamado pelo Route::module()
+     */
+    public function list(Request $request): \Illuminate\Http\JsonResponse
+    {
+        return $this->handleList($request);
+    }
+
+    /**
+     * GET /documentos-habilitacao/{id} - Buscar documento por ID
+     * Método chamado pelo Route::module()
+     */
+    public function get(Request $request, int|string $id = null): \Illuminate\Http\JsonResponse
+    {
+        // Se o ID foi passado como parâmetro, definir na rota
+        if ($id !== null) {
+            $route = $request->route();
+            $route->setParameter('documentoHabilitacao', $id);
+        }
+        return $this->handleGet($request);
+    }
+
+    /**
+     * POST /documentos-habilitacao - Criar documento
+     * Método chamado pelo Route::module()
+     */
+    public function store(Request $request): \Illuminate\Http\JsonResponse
+    {
+        return $this->handleStore($request);
+    }
+
+    /**
+     * PUT /documentos-habilitacao/{id} - Atualizar documento
+     * Método chamado pelo Route::module()
+     */
+    public function update(Request $request, int|string $id): \Illuminate\Http\JsonResponse
+    {
+        return $this->handleUpdate($request, $id);
+    }
+
+    /**
+     * DELETE /documentos-habilitacao/{id} - Excluir documento
+     * Método chamado pelo Route::module()
+     */
+    public function destroy(Request $request, int|string $id): \Illuminate\Http\JsonResponse
+    {
+        return $this->handleDestroy($request, $id);
+    }
+
+    /**
+     * Métodos de compatibilidade (mantidos para compatibilidade com rotas antigas)
      */
     public function index(Request $request)
     {
         return $this->list($request);
-    }
-
-    public function store(Request $request)
-    {
-        return $this->handleStore($request);
     }
 
     public function show(DocumentoHabilitacao $documentoHabilitacao)
@@ -185,16 +241,6 @@ class DocumentoHabilitacaoController extends BaseApiController
         $request = request();
         $request->route()->setParameter('documentoHabilitacao', $documentoHabilitacao->id);
         return $this->handleGet($request);
-    }
-
-    public function update(Request $request, DocumentoHabilitacao $documentoHabilitacao)
-    {
-        return parent::update($request, $documentoHabilitacao->id);
-    }
-
-    public function destroy(DocumentoHabilitacao $documentoHabilitacao)
-    {
-        return parent::destroy(request(), $documentoHabilitacao->id);
     }
 }
 
