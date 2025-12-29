@@ -56,7 +56,8 @@ class UserReadRepository implements UserReadRepositoryInterface
 
     public function listarComRelacionamentos(array $filtros = []): LengthAwarePaginator
     {
-        $query = UserModel::with(['empresas']);
+        // Carregar todos os relacionamentos necessários
+        $query = UserModel::with(['empresas', 'roles']);
 
         if (isset($filtros['search']) && !empty($filtros['search'])) {
             $search = $filtros['search'];
@@ -70,12 +71,26 @@ class UserReadRepository implements UserReadRepositoryInterface
         $paginator = $query->orderBy('name')->paginate($perPage);
 
         // Transformar Collection para array
+        // IMPORTANTE: Incluir todos os campos que o frontend espera
         $items = $paginator->getCollection()->map(function ($user) {
+            // Carregar relacionamentos se não estiverem carregados
+            if (!$user->relationLoaded('roles')) {
+                $user->load('roles');
+            }
+            if (!$user->relationLoaded('empresas')) {
+                $user->load('empresas');
+            }
+            
             return [
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
                 'empresa_ativa_id' => $user->empresa_ativa_id,
+                'roles' => $user->roles->pluck('name')->toArray(),
+                'roles_list' => $user->roles->pluck('name')->toArray(), // Frontend espera isso
+                'empresas' => $user->empresas->map(fn($e) => ['id' => $e->id, 'razao_social' => $e->razao_social])->toArray(),
+                'empresas_list' => $user->empresas->map(fn($e) => ['id' => $e->id, 'razao_social' => $e->razao_social])->toArray(), // Frontend espera isso
+                'deleted_at' => $user->deleted_at?->toISOString() ?? null,
             ];
         })->values()->toArray();
 

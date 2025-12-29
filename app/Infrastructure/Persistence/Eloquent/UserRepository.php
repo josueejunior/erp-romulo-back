@@ -160,8 +160,32 @@ class UserRepository implements UserRepositoryInterface
      */
     public function sincronizarEmpresas(int $userId, array $empresasIds): void
     {
+        \Log::info('UserRepository: Sincronizando empresas', [
+            'user_id' => $userId,
+            'empresas_ids' => $empresasIds,
+            'empresas_count' => count($empresasIds),
+        ]);
+        
         $model = UserModel::findOrFail($userId);
+        
+        // Verificar empresas atuais antes da sincronização
+        $empresasAntigas = $model->empresas->pluck('id')->toArray();
+        \Log::info('UserRepository: Empresas antes da sincronização', [
+            'user_id' => $userId,
+            'empresas_antigas' => $empresasAntigas,
+        ]);
+        
+        // Sincronizar (mesmo com 1 empresa, deve funcionar)
         $model->empresas()->sync($empresasIds);
+        
+        // Verificar empresas após sincronização
+        $model->refresh();
+        $empresasNovas = $model->empresas->pluck('id')->toArray();
+        \Log::info('UserRepository: Empresas após sincronização', [
+            'user_id' => $userId,
+            'empresas_novas' => $empresasNovas,
+            'sincronizacao_ok' => $empresasNovas === $empresasIds,
+        ]);
     }
 }
 

@@ -74,16 +74,85 @@ class AtualizarUsuarioUseCase
             $this->userRepository->atualizarRole($userAtualizado->id, $dto->role);
         }
 
-        // Se empresas foram fornecidas, sincronizar
-        if ($dto->empresas !== null && !empty($dto->empresas)) {
-            // Validar que todas as empresas existem no tenant
-            foreach ($dto->empresas as $empresaId) {
-                $empresa = $this->empresaRepository->buscarPorId($empresaId);
-                if (!$empresa) {
-                    throw new DomainException("Empresa ID {$empresaId} não encontrada neste tenant.");
+        // Se empresas foram fornecidas (mesmo que array vazio), sincronizar
+        // null = não altera, [] = remove todas, [1,2] = sincroniza com essas
+        if ($dto->empresas !== null) {
+            \Log::info('AtualizarUsuarioUseCase: Sincronizando empresas', [
+                'user_id' => $userAtualizado->id,
+                'empresas' => $dto->empresas,
+                'empresas_count' => count($dto->empresas),
+                'empresa_ativa_id' => $dto->empresaId,
+            ]);
+            
+            // Validar que todas as empresas existem no tenant (se houver empresas)
+            if (!empty($dto->empresas)) {
+                foreach ($dto->empresas as $empresaId) {
+                    $empresa = $this->empresaRepository->buscarPorId($empresaId);
+                    if (!$empresa) {
+                        throw new DomainException("Empresa ID {$empresaId} não encontrada neste tenant.");
+                    }
+                }
+                
+                // Garantir que empresa_ativa_id está nas empresas selecionadas
+                $empresaAtivaFinal = $dto->empresaId;
+                if ($empresaAtivaFinal && !in_array($empresaAtivaFinal, $dto->empresas)) {
+                    // Se empresa_ativa_id não está nas empresas, usar a primeira
+                    $empresaAtivaFinal = $dto->empresas[0];
+                    \Log::info('AtualizarUsuarioUseCase: Empresa ativa ajustada', [
+                        'empresa_ativa_original' => $dto->empresaId,
+                        'empresa_ativa_final' => $empresaAtivaFinal,
+                    ]);
+                } elseif (!$empresaAtivaFinal && !empty($dto->empresas)) {
+                    // Se não foi fornecida, usar a primeira empresa
+                    $empresaAtivaFinal = $dto->empresas[0];
+                    \Log::info('AtualizarUsuarioUseCase: Empresa ativa definida como primeira', [
+                        'empresa_ativa_final' => $empresaAtivaFinal,
+                    ]);
+                }
+                
+                // Sincronizar empresas (IMPORTANTE: mesmo com 1 empresa, deve funcionar)
+                $this->userRepository->sincronizarEmpresas($userAtualizado->id, $dto->empresas);
+                \Log::info('AtualizarUsuarioUseCase: Empresas sincronizadas', [
+                    'user_id' => $userAtualizado->id,
+                    'empresas_sincronizadas' => $dto->empresas,
+                ]);
+                
+                // Atualizar empresa_ativa_id se necessário
+                if ($empresaAtivaFinal && $empresaAtivaFinal !== $userAtualizado->empresaAtivaId) {
+                    $userAtualizado = new User(
+                        id: $userAtualizado->id,
+                        tenantId: $userAtualizado->tenantId,
+                        nome: $userAtualizado->nome,
+                        email: $userAtualizado->email,
+                        senhaHash: $userAtualizado->senhaHash,
+                        empresaAtivaId: $empresaAtivaFinal,
+                    );
+                    $userAtualizado = $this->userRepository->atualizar($userAtualizado);
+                    \Log::info('AtualizarUsuarioUseCase: Empresa ativa atualizada', [
+                        'user_id' => $userAtualizado->id,
+                        'empresa_ativa_id' => $empresaAtivaFinal,
+                    ]);
+                }
+            } else {
+                // Array vazio: remover todas as empresas
+                \Log::warning('AtualizarUsuarioUseCase: Removendo todas as empresas do usuário', [
+                    'user_id' => $userAtualizado->id,
+                ]);
+                $this->userRepository->sincronizarEmpresas($userAtualizado->id, []);
+                
+                // Remover empresa_ativa_id
+                if ($userAtualizado->empresaAtivaId !== null) {
+                    $userAtualizado = new User(
+                        id: $userAtualizado->id,
+                        tenantId: $userAtualizado->tenantId,
+                        nome: $userAtualizado->nome,
+                        email: $userAtualizado->email,
+                        senhaHash: $userAtualizado->senhaHash,
+                        empresaAtivaId: null,
+                    );
+                    $userAtualizado = $this->userRepository->atualizar($userAtualizado);
                 }
             }
-            $this->userRepository->sincronizarEmpresas($userAtualizado->id, $dto->empresas);
         }
 
         // Disparar Domain Event se senha foi alterada

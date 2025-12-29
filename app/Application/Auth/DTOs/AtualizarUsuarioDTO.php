@@ -34,13 +34,23 @@ class AtualizarUsuarioDTO
         $senha = ($senha && trim($senha) !== '') ? trim($senha) : null;
 
         // Normalizar empresas: garantir que seja array de inteiros
+        // IMPORTANTE: Se empresas for enviado (mesmo vazio), deve sincronizar
+        // Se não for enviado (null), não altera as empresas existentes
         $empresas = $request->input('empresas');
-        if ($empresas && !is_array($empresas)) {
-            $empresas = [$empresas];
-        }
-        if ($empresas) {
+        $empresasEnviadas = $request->has('empresas'); // Verifica se a chave existe
+        
+        if ($empresasEnviadas) {
+            // Se foi enviado, normalizar (mesmo que seja array vazio)
+            if (!is_array($empresas)) {
+                $empresas = $empresas ? [$empresas] : [];
+            }
+            // Filtrar e validar IDs
             $empresas = array_filter(array_map('intval', $empresas), fn($id) => $id > 0);
-            $empresas = !empty($empresas) ? array_values($empresas) : null;
+            $empresas = array_values($empresas); // Reindexar array
+            // Se ficou vazio após filtrar, manter como array vazio (será sincronizado)
+        } else {
+            // Se não foi enviado, manter null (não altera empresas)
+            $empresas = null;
         }
 
         // empresa_id pode vir separado ou como empresa_ativa_id
