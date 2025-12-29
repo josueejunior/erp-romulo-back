@@ -48,17 +48,27 @@ class UserReadRepository implements UserReadRepositoryInterface
         $perPage = $filtros['per_page'] ?? 15;
         $paginator = $query->orderBy('name')->paginate($perPage);
 
-        // Transformar para array
-        $paginator->getCollection()->transform(function ($user) {
+        // Transformar Collection para array
+        $items = $paginator->getCollection()->map(function ($user) {
             return [
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
                 'empresa_ativa_id' => $user->empresa_ativa_id,
             ];
-        });
+        })->values()->toArray();
 
-        return $paginator;
+        // Criar novo paginator com array (não Collection)
+        return new \Illuminate\Pagination\LengthAwarePaginator(
+            $items,
+            $paginator->total(),
+            $paginator->perPage(),
+            $paginator->currentPage(),
+            [
+                'path' => $paginator->path(),
+                'pageName' => $paginator->getPageName(),
+            ]
+        );
     }
 }
 

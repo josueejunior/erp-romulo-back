@@ -47,14 +47,15 @@ class AdminUserController extends Controller
             // Usar ReadRepository (não conhece Eloquent)
             $users = $this->userReadRepository->listarComRelacionamentos($filtros);
 
+            // items() já retorna array (garantido pelo ReadRepository)
             return response()->json([
                 'data' => $users->items(),
-                'pagination' => [
-                    'current_page' => $users->currentPage(),
-                    'per_page' => $users->perPage(),
-                    'total' => $users->total(),
-                    'last_page' => $users->lastPage(),
-                ],
+                'current_page' => $users->currentPage(),
+                'per_page' => $users->perPage(),
+                'total' => $users->total(),
+                'last_page' => $users->lastPage(),
+                'from' => $users->firstItem(),
+                'to' => $users->lastItem(),
             ]);
         } catch (\Exception $e) {
             Log::error('Erro ao listar usuários', ['error' => $e->getMessage()]);
