@@ -162,9 +162,10 @@ class ProcessoController extends Controller
     }
 
     /**
-     * Sobrescrever index para usar ProcessoListResource
+     * GET /processos - Listar processos
+     * Método chamado pelo Route::module()
      */
-    public function index(Request $request): JsonResponse
+    public function list(Request $request): JsonResponse
     {
         try {
             $params = $this->processoService->createListParamBag($request->all());
@@ -193,9 +194,18 @@ class ProcessoController extends Controller
     }
 
     /**
-     * Sobrescrever show para usar ProcessoResource
+     * Alias para list() - mantém compatibilidade
      */
-    public function show(Request $request, int|string $id): JsonResponse
+    public function index(Request $request): JsonResponse
+    {
+        return $this->list($request);
+    }
+
+    /**
+     * GET /processos/{id} - Buscar processo por ID
+     * Método chamado pelo Route::module()
+     */
+    public function get(Request $request, int|string $id): JsonResponse
     {
         $params = $this->processoService->createFindByIdParamBag($request->all());
         $processo = $this->processoService->findById($id, $params);
@@ -207,5 +217,113 @@ class ProcessoController extends Controller
         return response()->json([
             'data' => new ProcessoResource($processo)
         ]);
+    }
+
+    /**
+     * Alias para get() - mantém compatibilidade
+     */
+    public function show(Request $request, int|string $id): JsonResponse
+    {
+        return $this->get($request, $id);
+    }
+
+    /**
+     * POST /processos - Criar novo processo
+     * Método chamado pelo Route::module()
+     */
+    public function store(Request $request): JsonResponse
+    {
+        try {
+            $validator = $this->processoService->validateStoreData($request->all());
+            
+            if ($validator->fails()) {
+                return response()->json([
+                    'message' => 'Dados inválidos',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $processo = $this->processoService->store($request->all());
+
+            return response()->json([
+                'message' => 'Processo criado com sucesso',
+                'data' => new ProcessoResource($processo->load(['orgao', 'setor']))
+            ], 201);
+        } catch (\Exception $e) {
+            \Log::error('Erro ao criar processo', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            
+            return response()->json([
+                'message' => 'Erro ao criar processo: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * PUT /processos/{id} - Atualizar processo
+     * Método chamado pelo Route::module()
+     */
+    public function update(Request $request, int|string $id): JsonResponse
+    {
+        try {
+            $validator = $this->processoService->validateUpdateData($request->all(), $id);
+            
+            if ($validator->fails()) {
+                return response()->json([
+                    'message' => 'Dados inválidos',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $processo = $this->processoService->update($id, $request->all());
+
+            return response()->json([
+                'message' => 'Processo atualizado com sucesso',
+                'data' => new ProcessoResource($processo->load(['orgao', 'setor']))
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Erro ao atualizar processo', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'id' => $id,
+            ]);
+            
+            return response()->json([
+                'message' => 'Erro ao atualizar processo: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * DELETE /processos/{id} - Excluir processo
+     * Método chamado pelo Route::module()
+     */
+    public function destroy(Request $request, int|string $id): JsonResponse
+    {
+        try {
+            $deleted = $this->processoService->deleteById($id);
+            
+            if (!$deleted) {
+                return response()->json([
+                    'message' => 'Processo não encontrado'
+                ], 404);
+            }
+
+            return response()->json([
+                'message' => 'Processo excluído com sucesso'
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Erro ao excluir processo', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'id' => $id,
+            ]);
+            
+            return response()->json([
+                'message' => 'Erro ao excluir processo: ' . $e->getMessage()
+            ], 500);
+        }
     }
 }
