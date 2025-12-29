@@ -131,8 +131,9 @@ class ProcessoItemService extends BaseService
 
     /**
      * Atualizar item
+     * Método específico para atualizar item de processo (não sobrescreve BaseService::update)
      */
-    public function update(Processo $processo, ProcessoItem $item, array $data): Model
+    public function updateItem(Processo $processo, ProcessoItem $item, array $data): Model
     {
         // Validar processo pode ser editado
         $this->validarProcessoPodeEditar($processo);

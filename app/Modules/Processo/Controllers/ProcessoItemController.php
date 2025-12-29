@@ -124,7 +124,7 @@ class ProcessoItemController extends Controller
         try {
             $this->itemService->validarProcessoEmpresa($processo, $empresa->id);
             $this->itemService->validarItemEmpresa($item, $empresa->id);
-            $item = $this->itemService->update($processo, $item, $request->all());
+            $item = $this->itemService->updateItem($processo, $item, $request->all());
             return response()->json(['data' => $item]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
@@ -256,7 +256,7 @@ class ProcessoItemController extends Controller
         try {
             $this->itemService->validarProcessoEmpresa($processo, $empresa->id);
             $this->itemService->validarItemEmpresa($item, $empresa->id);
-            $this->itemService->update($processo, $item, $request->all());
+            $this->itemService->updateItem($processo, $item, $request->all());
 
             return redirect()->route('processos.show', $processo)
                 ->with('success', 'Item atualizado com sucesso!');
