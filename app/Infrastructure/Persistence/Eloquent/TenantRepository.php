@@ -99,14 +99,14 @@ class TenantRepository implements TenantRepositoryInterface
         if (isset($filtros['search']) && !empty($filtros['search'])) {
             $search = $filtros['search'];
             $query->where(function($q) use ($search) {
-                $q->where('razao_social', 'ilike', "%{$search}%")
-                  ->orWhere('cnpj', 'ilike', "%{$search}%")
-                  ->orWhere('email', 'ilike', "%{$search}%");
+                $q->where('razao_social', 'like', "%{$search}%")
+                  ->orWhere('cnpj', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%");
             });
         }
 
         $perPage = $filtros['per_page'] ?? 15;
-        $paginator = $query->orderBy('criado_em', 'desc')->paginate($perPage);
+        $paginator = $query->orderBy(\App\Database\Schema\Blueprint::CREATED_AT, 'desc')->paginate($perPage);
 
         // Converter cada item para entidade do domínio
         $paginator->getCollection()->transform(function ($model) {
