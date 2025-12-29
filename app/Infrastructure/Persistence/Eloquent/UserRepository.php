@@ -4,6 +4,7 @@ namespace App\Infrastructure\Persistence\Eloquent;
 
 use App\Domain\Auth\Entities\User;
 use App\Domain\Auth\Repositories\UserRepositoryInterface;
+use App\Domain\Empresa\Repositories\EmpresaRepositoryInterface;
 use App\Modules\Auth\Models\User as UserModel;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -186,6 +187,46 @@ class UserRepository implements UserRepositoryInterface
             'empresas_novas' => $empresasNovas,
             'sincronizacao_ok' => $empresasNovas === $empresasIds,
         ]);
+    }
+
+    public function buscarEmpresaAtiva(int $userId): ?\App\Domain\Empresa\Entities\Empresa
+    {
+        $model = UserModel::findOrFail($userId);
+        
+        if (!$model->empresa_ativa_id) {
+            return null;
+        }
+
+        $empresaRepository = app(EmpresaRepositoryInterface::class);
+        return $empresaRepository->buscarPorId($model->empresa_ativa_id);
+    }
+
+    public function buscarEmpresas(int $userId): array
+    {
+        $model = UserModel::findOrFail($userId);
+        $empresas = $model->empresas;
+        
+        $empresaRepository = app(EmpresaRepositoryInterface::class);
+        $result = [];
+        
+        foreach ($empresas as $empresaModel) {
+            $empresa = $empresaRepository->buscarPorId($empresaModel->id);
+            if ($empresa) {
+                $result[] = $empresa;
+            }
+        }
+        
+        return $result;
+    }
+
+    public function atualizarEmpresaAtiva(int $userId, int $empresaId): User
+    {
+        $model = UserModel::findOrFail($userId);
+        $model->empresa_ativa_id = $empresaId;
+        $model->save();
+        
+        $tenantId = tenancy()->tenant?->id ?? 0;
+        return $this->toDomain($model->fresh(), $tenantId);
     }
 }
 

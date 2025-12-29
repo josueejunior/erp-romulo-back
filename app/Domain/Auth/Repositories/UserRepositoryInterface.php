@@ -71,5 +71,20 @@ interface UserRepositoryInterface
      * Sincronizar empresas do usuário
      */
     public function sincronizarEmpresas(int $userId, array $empresasIds): void;
+
+    /**
+     * Buscar empresa ativa do usuário
+     */
+    public function buscarEmpresaAtiva(int $userId): ?\App\Domain\Empresa\Entities\Empresa;
+
+    /**
+     * Buscar todas as empresas do usuário
+     */
+    public function buscarEmpresas(int $userId): array;
+
+    /**
+     * Atualizar empresa ativa do usuário
+     */
+    public function atualizarEmpresaAtiva(int $userId, int $empresaId): User;
 }
 
