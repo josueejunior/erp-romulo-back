@@ -20,16 +20,37 @@ class UserReadRepository implements UserReadRepositoryInterface
             return null;
         }
 
+        // Garantir que empresas seja sempre um array
+        $empresas = $user->empresas->map(fn($e) => [
+            'id' => $e->id,
+            'razao_social' => $e->razao_social,
+        ])->toArray();
+
+        // Garantir que roles seja sempre um array
+        $roles = $user->roles->pluck('name')->toArray();
+
+        // Buscar empresa ativa se existir
+        $empresaAtiva = null;
+        if ($user->empresa_ativa_id) {
+            $empresaAtivaModel = $user->empresas->firstWhere('id', $user->empresa_ativa_id);
+            if ($empresaAtivaModel) {
+                $empresaAtiva = [
+                    'id' => $empresaAtivaModel->id,
+                    'razao_social' => $empresaAtivaModel->razao_social,
+                ];
+            }
+        }
+
         return [
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
             'empresa_ativa_id' => $user->empresa_ativa_id,
-            'roles' => $user->roles->pluck('name')->toArray(),
-            'empresas' => $user->empresas->map(fn($e) => [
-                'id' => $e->id,
-                'razao_social' => $e->razao_social,
-            ])->toArray(),
+            'empresa_ativa' => $empresaAtiva,
+            'roles' => $roles,
+            'roles_list' => $roles, // Frontend espera isso também
+            'empresas' => $empresas, // Garantir que seja array
+            'empresas_list' => $empresas, // Frontend espera isso também
         ];
     }
 

@@ -77,7 +77,16 @@ class AdminUserController extends Controller
                 return response()->json(['message' => 'Usuário não encontrado.'], 404);
             }
 
-            return response()->json(['data' => $userData]);
+            // Garantir que empresas e roles sejam sempre arrays (frontend espera isso)
+            // Isso é crítico para evitar erros de .filter() no frontend
+            $userData['empresas'] = is_array($userData['empresas'] ?? null) ? $userData['empresas'] : [];
+            $userData['roles'] = is_array($userData['roles'] ?? null) ? $userData['roles'] : [];
+            $userData['roles_list'] = is_array($userData['roles_list'] ?? null) ? $userData['roles_list'] : $userData['roles'];
+            $userData['empresas_list'] = is_array($userData['empresas_list'] ?? null) ? $userData['empresas_list'] : $userData['empresas'];
+
+            // Frontend espera o objeto diretamente em response.data (sem wrapper 'data')
+            // Axios já desempacota response.data, então retornamos o objeto diretamente
+            return response()->json($userData);
         } catch (\Exception $e) {
             Log::error('Erro ao buscar usuário', ['error' => $e->getMessage()]);
             return response()->json(['message' => 'Erro ao buscar usuário.'], 500);
