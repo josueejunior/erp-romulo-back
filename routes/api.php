@@ -28,6 +28,8 @@ use App\Modules\Processo\Controllers\SaldoController as ApiSaldoController;
 use App\Http\Controllers\Api\UserController as ApiUserController;
 use App\Http\Controllers\Api\PlanoController as ApiPlanoController;
 use App\Http\Controllers\Api\AssinaturaController as ApiAssinaturaController;
+use App\Modules\Payment\Controllers\PaymentController as ApiPaymentController;
+use App\Modules\Payment\Controllers\WebhookController as ApiWebhookController;
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Admin\AdminTenantController;
 use App\Http\Controllers\Admin\AdminUserController;
@@ -222,6 +224,16 @@ Route::prefix('v1')->group(function () {
             Route::post('/{assinatura}/renovar', [ApiAssinaturaController::class, 'renovar']);
             Route::post('/{assinatura}/cancelar', [ApiAssinaturaController::class, 'cancelar']);
         });
+
+        // Pagamentos (requer autenticação e tenancy)
+        Route::prefix('payments')->group(function () {
+            Route::post('/processar-assinatura', [ApiPaymentController::class, 'processarAssinatura']);
+        });
+    });
+
+    // Webhooks (públicos, sem autenticação)
+    Route::prefix('webhooks')->group(function () {
+        Route::post('/mercadopago', [ApiWebhookController::class, 'mercadopago']);
     });
 });
 

@@ -157,6 +157,12 @@ class AppServiceProvider extends ServiceProvider
             \App\Domain\Auth\Repositories\UserReadRepositoryInterface::class,
             \App\Infrastructure\Persistence\Eloquent\UserReadRepository::class
         );
+
+        // Payment Gateway
+        $this->app->bind(
+            \App\Domain\Payment\Repositories\PaymentProviderInterface::class,
+            \App\Infrastructure\Payment\MercadoPagoGateway::class
+        );
     }
 
     /**
