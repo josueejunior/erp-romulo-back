@@ -7,7 +7,10 @@ use App\Http\Controllers\Traits\HasDefaultActions;
 use App\Modules\Processo\Models\Processo;
 use App\Models\Empenho;
 use App\Modules\Empenho\Services\EmpenhoService;
+use App\Application\Empenho\UseCases\CriarEmpenhoUseCase;
+use App\Application\Empenho\DTOs\CriarEmpenhoDTO;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class EmpenhoController extends BaseApiController
 {
@@ -15,8 +18,10 @@ class EmpenhoController extends BaseApiController
 
     protected EmpenhoService $empenhoService;
 
-    public function __construct(EmpenhoService $empenhoService)
-    {
+    public function __construct(
+        EmpenhoService $empenhoService,
+        private CriarEmpenhoUseCase $criarEmpenhoUseCase,
+    ) {
         $this->empenhoService = $empenhoService;
         $this->service = $empenhoService; // Para HasDefaultActions
     }
@@ -73,9 +78,21 @@ class EmpenhoController extends BaseApiController
         $empresa = $this->getEmpresaAtivaOrFail();
         
         try {
-            $empenho = $this->empenhoService->store($processo, $request->all(), $empresa->id);
+            // Preparar dados para DTO
+            $data = $request->all();
+            $data['processo_id'] = $processo->id;
+            $data['empresa_id'] = $empresa->id;
+            
+            // Usar Use Case DDD
+            $dto = CriarEmpenhoDTO::fromArray($data);
+            $empenhoDomain = $this->criarEmpenhoUseCase->executar($dto);
+            
+            // Buscar modelo Eloquent para resposta
+            $empenho = Empenho::findOrFail($empenhoDomain->id);
+            $empenho->load(['processo', 'contrato', 'autorizacaoFornecimento']);
+            
             return response()->json($empenho, 201);
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             return response()->json([
                 'message' => 'Dados inválidos',
                 'errors' => $e->errors()

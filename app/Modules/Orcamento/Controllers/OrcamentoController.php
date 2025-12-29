@@ -9,7 +9,10 @@ use App\Modules\Processo\Models\Processo;
 use App\Modules\Processo\Models\ProcessoItem;
 use App\Models\Orcamento;
 use App\Modules\Orcamento\Services\OrcamentoService;
+use App\Application\Orcamento\UseCases\CriarOrcamentoUseCase;
+use App\Application\Orcamento\DTOs\CriarOrcamentoDTO;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class OrcamentoController extends BaseApiController
 {
@@ -17,8 +20,10 @@ class OrcamentoController extends BaseApiController
 
     protected OrcamentoService $orcamentoService;
 
-    public function __construct(OrcamentoService $orcamentoService)
-    {
+    public function __construct(
+        OrcamentoService $orcamentoService,
+        private CriarOrcamentoUseCase $criarOrcamentoUseCase,
+    ) {
         $this->orcamentoService = $orcamentoService;
         $this->service = $orcamentoService; // Para HasDefaultActions
     }
@@ -87,9 +92,22 @@ class OrcamentoController extends BaseApiController
         $this->authorize('create', [$processo]);
 
         try {
-            $orcamento = $this->orcamentoService->store($processo, $item, $request->all(), $empresa->id);
+            // Preparar dados para DTO
+            $data = $request->all();
+            $data['processo_id'] = $processo->id;
+            $data['processo_item_id'] = $item->id;
+            $data['empresa_id'] = $empresa->id;
+            
+            // Usar Use Case DDD
+            $dto = CriarOrcamentoDTO::fromArray($data);
+            $orcamentoDomain = $this->criarOrcamentoUseCase->executar($dto);
+            
+            // Buscar modelo Eloquent para Resource
+            $orcamento = Orcamento::findOrFail($orcamentoDomain->id);
+            $orcamento->load(['fornecedor', 'transportadora', 'itens.processoItem', 'itens.formacaoPreco']);
+            
             return new OrcamentoResource($orcamento);
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             return response()->json([
                 'message' => 'Dados inválidos',
                 'errors' => $e->errors()

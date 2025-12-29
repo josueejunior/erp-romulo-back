@@ -5,135 +5,113 @@ namespace App\Modules\Fornecedor\Controllers;
 use App\Http\Controllers\Api\BaseApiController;
 use App\Http\Resources\FornecedorResource;
 use App\Modules\Fornecedor\Models\Fornecedor;
-use App\Modules\Fornecedor\Services\FornecedorService;
+use App\Application\Fornecedor\UseCases\CriarFornecedorUseCase;
+use App\Application\Fornecedor\DTOs\CriarFornecedorDTO;
+use App\Domain\Fornecedor\Repositories\FornecedorRepositoryInterface;
+use App\Domain\Fornecedor\Entities\Fornecedor as FornecedorDomain;
 use Illuminate\Http\Request;
 use App\Helpers\PermissionHelper;
 use App\Services\RedisService;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Log;
 
 class FornecedorController extends BaseApiController
 {
-    public function __construct(FornecedorService $service)
-    {
-        $this->service = $service;
-    }
+    public function __construct(
+        private CriarFornecedorUseCase $criarFornecedorUseCase,
+        private FornecedorRepositoryInterface $fornecedorRepository,
+    ) {}
 
     /**
-     * Sobrescrever handleList para usar FornecedorResource e cache
+     * Listar fornecedores usando Repository DDD
      */
-    protected function handleList(Request $request, array $mergeParams = []): \Illuminate\Http\JsonResponse
+    public function index(Request $request): \Illuminate\Http\JsonResponse
     {
         $empresa = $this->getEmpresaAtivaOrFail();
         $tenantId = tenancy()->tenant?->id;
         
-        // Criar chave de cache baseada nos filtros
-        $filters = array_merge($request->all(), $mergeParams);
+        $filters = $request->all();
+        $filters['empresa_id'] = $empresa->id;
         $cacheKey = "fornecedores:{$tenantId}:{$empresa->id}:" . md5(json_encode($filters));
         
-        // Debug: Log empresa e cache
-        \Log::debug('FornecedorController->handleList()', [
-            'empresa_id' => $empresa->id,
-            'tenant_id' => $tenantId,
-            'cache_key' => $cacheKey,
-            'filters' => $filters,
-        ]);
-        
-        // Tentar obter do cache (desabilitado temporariamente para debug)
-        // if ($tenantId && RedisService::isAvailable()) {
-        //     $cached = RedisService::get($cacheKey);
-        //     if ($cached !== null) {
-        //         \Log::debug('FornecedorController->handleList() cache hit', [
-        //             'cache_key' => $cacheKey,
-        //             'cached_total' => $cached['meta']['total'] ?? 0,
-        //         ]);
-        //         return response()->json($cached);
-        //     }
-        // }
+        // Tentar obter do cache
+        if ($tenantId && RedisService::isAvailable()) {
+            $cached = RedisService::get($cacheKey);
+            if ($cached !== null) {
+                return response()->json($cached);
+            }
+        }
 
         try {
-            $params = $this->service->createListParamBag($filters);
-            $fornecedores = $this->service->list($params);
+            // Usar Repository DDD
+            $fornecedoresDomain = $this->fornecedorRepository->buscarComFiltros($filters);
             
-            // Debug: Log resultado antes do resource
-            \Log::debug('FornecedorController->handleList() resultado', [
-                'total' => $fornecedores->total(),
-                'count' => $fornecedores->count(),
-                'empresa_id' => $empresa->id,
-                'items' => $fornecedores->items(),
-            ]);
+            // Converter entidades de domínio para modelos Eloquent para Resource
+            $fornecedores = $fornecedoresDomain->getCollection()->map(function ($fornecedorDomain) {
+                return Fornecedor::findOrFail($fornecedorDomain->id);
+            });
             
-            // Usar paginate() do Resource para manter a estrutura de paginação
-            $response = FornecedorResource::collection($fornecedores);
+            // Criar paginator manual para manter estrutura
+            $paginator = new \Illuminate\Pagination\LengthAwarePaginator(
+                $fornecedores,
+                $fornecedoresDomain->total(),
+                $fornecedoresDomain->perPage(),
+                $fornecedoresDomain->currentPage(),
+                ['path' => $request->url(), 'query' => $request->query()]
+            );
             
-            // Garantir que a resposta inclua a paginação
+            $response = FornecedorResource::collection($paginator);
             $responseData = $response->response()->getData(true);
             
-            // Se não tiver estrutura de paginação, adicionar manualmente
-            if (!isset($responseData['meta'])) {
-                $responseData = [
-                    'data' => $responseData['data'] ?? $responseData,
-                    'links' => [
-                        'first' => $fornecedores->url(1),
-                        'last' => $fornecedores->url($fornecedores->lastPage()),
-                        'prev' => $fornecedores->previousPageUrl(),
-                        'next' => $fornecedores->nextPageUrl(),
-                    ],
-                    'meta' => [
-                        'current_page' => $fornecedores->currentPage(),
-                        'from' => $fornecedores->firstItem(),
-                        'last_page' => $fornecedores->lastPage(),
-                        'path' => $fornecedores->path(),
-                        'per_page' => $fornecedores->perPage(),
-                        'to' => $fornecedores->lastItem(),
-                        'total' => $fornecedores->total(),
-                    ],
-                ];
-            }
+            // Adicionar paginação
+            $responseData = [
+                'data' => $responseData['data'] ?? $responseData,
+                'links' => [
+                    'first' => $paginator->url(1),
+                    'last' => $paginator->url($paginator->lastPage()),
+                    'prev' => $paginator->previousPageUrl(),
+                    'next' => $paginator->nextPageUrl(),
+                ],
+                'meta' => [
+                    'current_page' => $paginator->currentPage(),
+                    'from' => $paginator->firstItem(),
+                    'last_page' => $paginator->lastPage(),
+                    'path' => $paginator->path(),
+                    'per_page' => $paginator->perPage(),
+                    'to' => $paginator->lastItem(),
+                    'total' => $paginator->total(),
+                ],
+            ];
 
-            // Salvar no cache (5 minutos) - desabilitado temporariamente para debug
-            // if ($tenantId && RedisService::isAvailable()) {
-            //     RedisService::set($cacheKey, $responseData, 300);
-            // }
+            // Salvar no cache (5 minutos)
+            if ($tenantId && RedisService::isAvailable()) {
+                RedisService::set($cacheKey, $responseData, 300);
+            }
 
             return response()->json($responseData);
         } catch (\Exception $e) {
-            \Log::error('FornecedorController->handleList() erro', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 400);
+            Log::error('Erro ao listar fornecedores', ['error' => $e->getMessage()]);
+            return response()->json(['message' => $e->getMessage()], 400);
         }
     }
 
     /**
-     * Sobrescrever handleGet para usar FornecedorResource
+     * Buscar fornecedor por ID usando Repository DDD
      */
-    protected function handleGet(Request $request, array $mergeParams = []): \Illuminate\Http\JsonResponse
+    public function show(Fornecedor $fornecedor): \Illuminate\Http\JsonResponse
     {
-        $route = $request->route();
-        $id = $this->getRouteId($route);
-        
-        if (!$id) {
-            return response()->json(['message' => 'ID não fornecido'], 400);
-        }
-
         try {
-            $params = array_merge($request->all(), $mergeParams);
-            $paramBag = $this->service->createFindByIdParamBag($params);
-            $fornecedor = $this->service->findById($id, $paramBag);
+            $empresa = $this->getEmpresaAtivaOrFail();
             
-            if (!$fornecedor) {
-                return response()->json([
-                    'message' => 'Fornecedor não encontrado ou não pertence à empresa ativa.'
-                ], 404);
+            $fornecedorDomain = $this->fornecedorRepository->buscarPorId($fornecedor->id);
+            
+            if (!$fornecedorDomain || $fornecedorDomain->empresaId !== $empresa->id) {
+                return response()->json(['message' => 'Fornecedor não encontrado.'], 404);
             }
             
             return response()->json(['data' => new FornecedorResource($fornecedor)]);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 400);
+            return response()->json(['message' => $e->getMessage()], 400);
         }
     }
 
@@ -150,6 +128,14 @@ class FornecedorController extends BaseApiController
 
         try {
             $data = array_merge($request->all(), $mergeParams);
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Garantir que empresa_id está definido
+            if (!isset($data['empresa_id'])) {
+                $data['empresa_id'] = $empresa->id;
+            }
+            
+            // Validar dados
             $validator = $this->service->validateStoreData($data);
             
             if ($validator->fails()) {
@@ -159,18 +145,28 @@ class FornecedorController extends BaseApiController
                 ], 422);
             }
 
-            $fornecedor = $this->service->store($validator->validated());
+            // Usar Use Case DDD
+            $dto = CriarFornecedorDTO::fromArray($validator->validated());
+            $fornecedorDomain = $this->criarFornecedorUseCase->executar($dto);
+            
+            // Buscar modelo Eloquent para Resource
+            $fornecedor = Fornecedor::findOrFail($fornecedorDomain->id);
             
             // Debug: Log após criar
             \Log::debug('FornecedorController->handleStore() criado', [
                 'fornecedor_id' => $fornecedor->id,
                 'fornecedor_empresa_id' => $fornecedor->empresa_id,
-                'empresa_ativa_id' => $this->getEmpresaAtivaOrFail()->id,
+                'empresa_ativa_id' => $empresa->id,
             ]);
             
             $this->clearFornecedorCache();
 
             return response()->json(['data' => new FornecedorResource($fornecedor)], 201);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'message' => 'Erro de validação',
+                'errors' => $e->errors()
+            ], 422);
         } catch (\Exception $e) {
             return response()->json([
                 'message' => $e->getMessage()
@@ -179,7 +175,7 @@ class FornecedorController extends BaseApiController
     }
 
     /**
-     * Sobrescrever handleUpdate para validação de permissão e usar FornecedorResource
+     * Sobrescrever handleUpdate para usar Repository DDD
      */
     protected function handleUpdate(Request $request, int|string $id, array $mergeParams = []): \Illuminate\Http\JsonResponse
     {
@@ -190,7 +186,10 @@ class FornecedorController extends BaseApiController
         }
 
         try {
+            $empresa = $this->getEmpresaAtivaOrFail();
             $data = array_merge($request->all(), $mergeParams);
+            
+            // Validar dados usando service (mantém validações existentes)
             $validator = $this->service->validateUpdateData($data, $id);
             
             if ($validator->fails()) {
@@ -200,7 +199,45 @@ class FornecedorController extends BaseApiController
                 ], 422);
             }
 
-            $fornecedor = $this->service->update($id, $validator->validated());
+            // Buscar fornecedor existente via Repository DDD
+            $fornecedorDomain = $this->fornecedorRepository->buscarPorId((int) $id);
+            
+            if (!$fornecedorDomain || $fornecedorDomain->empresaId !== $empresa->id) {
+                return response()->json([
+                    'message' => 'Fornecedor não encontrado ou não pertence à empresa ativa.'
+                ], 404);
+            }
+
+            // Criar nova instância com dados atualizados
+            $validated = $validator->validated();
+            $fornecedorAtualizado = new \App\Domain\Fornecedor\Entities\Fornecedor(
+                id: $fornecedorDomain->id,
+                empresaId: $fornecedorDomain->empresaId,
+                razaoSocial: $validated['razao_social'] ?? $fornecedorDomain->razaoSocial,
+                cnpj: $validated['cnpj'] ?? $fornecedorDomain->cnpj,
+                nomeFantasia: $validated['nome_fantasia'] ?? $fornecedorDomain->nomeFantasia,
+                cep: $validated['cep'] ?? $fornecedorDomain->cep,
+                logradouro: $validated['logradouro'] ?? $fornecedorDomain->logradouro,
+                numero: $validated['numero'] ?? $fornecedorDomain->numero,
+                bairro: $validated['bairro'] ?? $fornecedorDomain->bairro,
+                complemento: $validated['complemento'] ?? $fornecedorDomain->complemento,
+                cidade: $validated['cidade'] ?? $fornecedorDomain->cidade,
+                estado: $validated['estado'] ?? $fornecedorDomain->estado,
+                email: $validated['email'] ?? $fornecedorDomain->email,
+                telefone: $validated['telefone'] ?? $fornecedorDomain->telefone,
+                emails: $validated['emails'] ?? $fornecedorDomain->emails,
+                telefones: $validated['telefones'] ?? $fornecedorDomain->telefones,
+                contato: $validated['contato'] ?? $fornecedorDomain->contato,
+                observacoes: $validated['observacoes'] ?? $fornecedorDomain->observacoes,
+                isTransportadora: $validated['is_transportadora'] ?? $fornecedorDomain->isTransportadora,
+            );
+
+            // Atualizar via Repository DDD
+            $fornecedorDomainAtualizado = $this->fornecedorRepository->atualizar($fornecedorAtualizado);
+            
+            // Buscar modelo Eloquent para Resource
+            $fornecedor = Fornecedor::findOrFail($fornecedorDomainAtualizado->id);
+            
             $this->clearFornecedorCache();
 
             return response()->json(['data' => new FornecedorResource($fornecedor)]);
@@ -212,7 +249,7 @@ class FornecedorController extends BaseApiController
     }
 
     /**
-     * Sobrescrever handleDestroy para validação de permissão
+     * Sobrescrever handleDestroy para usar Repository DDD
      */
     protected function handleDestroy(Request $request, int|string $id, array $mergeParams = []): \Illuminate\Http\JsonResponse
     {
@@ -223,7 +260,19 @@ class FornecedorController extends BaseApiController
         }
 
         try {
-            $this->service->deleteById($id);
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Verificar se fornecedor existe e pertence à empresa
+            $fornecedorDomain = $this->fornecedorRepository->buscarPorId((int) $id);
+            
+            if (!$fornecedorDomain || $fornecedorDomain->empresaId !== $empresa->id) {
+                return response()->json([
+                    'message' => 'Fornecedor não encontrado ou não pertence à empresa ativa.'
+                ], 404);
+            }
+
+            // Deletar via Repository DDD
+            $this->fornecedorRepository->deletar((int) $id);
             $this->clearFornecedorCache();
 
             return response()->json(null, 204);

@@ -6,15 +6,20 @@ use App\Http\Controllers\Api\BaseApiController;
 use App\Modules\Processo\Models\Processo;
 use App\Models\Contrato;
 use App\Modules\Contrato\Services\ContratoService;
+use App\Application\Contrato\UseCases\CriarContratoUseCase;
+use App\Application\Contrato\DTOs\CriarContratoDTO;
 use App\Services\RedisService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class ContratoController extends BaseApiController
 {
     protected ContratoService $contratoService;
 
-    public function __construct(ContratoService $contratoService)
-    {
+    public function __construct(
+        ContratoService $contratoService,
+        private CriarContratoUseCase $criarContratoUseCase,
+    ) {
         $this->contratoService = $contratoService;
     }
 
@@ -134,9 +139,21 @@ class ContratoController extends BaseApiController
         $this->authorize('create', [\App\Models\Contrato::class, $processo]);
 
         try {
-            $contrato = $this->contratoService->store($processo, $request->all(), $request, $empresa->id);
+            // Preparar dados para DTO
+            $data = $request->all();
+            $data['processo_id'] = $processo->id;
+            $data['empresa_id'] = $empresa->id;
+            
+            // Usar Use Case DDD
+            $dto = CriarContratoDTO::fromArray($data);
+            $contratoDomain = $this->criarContratoUseCase->executar($dto);
+            
+            // Buscar modelo Eloquent para resposta
+            $contrato = Contrato::findOrFail($contratoDomain->id);
+            $contrato->load(['processo', 'empenhos']);
+            
             return response()->json($contrato, 201);
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             return response()->json([
                 'message' => 'Dados inválidos',
                 'errors' => $e->errors()

@@ -7,7 +7,10 @@ use App\Http\Controllers\Traits\HasDefaultActions;
 use App\Modules\Processo\Models\Processo;
 use App\Models\NotaFiscal;
 use App\Modules\NotaFiscal\Services\NotaFiscalService;
+use App\Application\NotaFiscal\UseCases\CriarNotaFiscalUseCase;
+use App\Application\NotaFiscal\DTOs\CriarNotaFiscalDTO;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class NotaFiscalController extends BaseApiController
 {
@@ -15,8 +18,10 @@ class NotaFiscalController extends BaseApiController
 
     protected NotaFiscalService $notaFiscalService;
 
-    public function __construct(NotaFiscalService $notaFiscalService)
-    {
+    public function __construct(
+        NotaFiscalService $notaFiscalService,
+        private CriarNotaFiscalUseCase $criarNotaFiscalUseCase,
+    ) {
         $this->notaFiscalService = $notaFiscalService;
         $this->service = $notaFiscalService; // Para HasDefaultActions
     }
@@ -73,10 +78,21 @@ class NotaFiscalController extends BaseApiController
         $empresa = $this->getEmpresaAtivaOrFail();
         
         try {
-            $notaFiscal = $this->notaFiscalService->store($processo, $request->all(), $request, $empresa->id);
+            // Preparar dados para DTO
+            $data = $request->all();
+            $data['processo_id'] = $processo->id;
+            $data['empresa_id'] = $empresa->id;
+            
+            // Usar Use Case DDD
+            $dto = CriarNotaFiscalDTO::fromArray($data);
+            $notaFiscalDomain = $this->criarNotaFiscalUseCase->executar($dto);
+            
+            // Buscar modelo Eloquent para resposta
+            $notaFiscal = NotaFiscal::findOrFail($notaFiscalDomain->id);
             $notaFiscal->load(['empenho', 'contrato', 'autorizacaoFornecimento', 'fornecedor']);
+            
             return response()->json($notaFiscal, 201);
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             return response()->json([
                 'message' => 'Dados inválidos',
                 'errors' => $e->errors()

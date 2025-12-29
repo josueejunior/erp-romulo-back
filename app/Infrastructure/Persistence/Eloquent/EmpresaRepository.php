@@ -1,0 +1,81 @@
+<?php
+
+namespace App\Infrastructure\Persistence\Eloquent;
+
+use App\Application\Tenant\DTOs\CriarTenantDTO;
+use App\Domain\Empresa\Entities\Empresa;
+use App\Domain\Empresa\Repositories\EmpresaRepositoryInterface;
+use App\Models\Empresa as EmpresaModel;
+
+/**
+ * Implementação do Repository de Empresa usando Eloquent
+ */
+class EmpresaRepository implements EmpresaRepositoryInterface
+{
+    /**
+     * Converter modelo Eloquent para entidade do domínio
+     */
+    private function toDomain(EmpresaModel $model): Empresa
+    {
+        return new Empresa(
+            id: $model->id,
+            tenantId: $model->tenant_id ?? 0, // Empresas estão no banco do tenant
+            razaoSocial: $model->razao_social,
+            cnpj: $model->cnpj,
+            email: $model->email,
+            status: $model->status ?? 'ativa',
+            endereco: $model->endereco ?? $model->logradouro,
+            cidade: $model->cidade,
+            estado: $model->estado,
+            cep: $model->cep,
+            telefones: $model->telefones,
+            emails: $model->emails,
+            bancoNome: $model->banco_nome,
+            bancoAgencia: $model->banco_agencia,
+            bancoConta: $model->banco_conta,
+            bancoTipo: $model->banco_tipo,
+            bancoPix: $model->banco_pix,
+            representanteLegal: $model->representante_legal,
+            logo: $model->logo,
+        );
+    }
+
+    public function criarNoTenant(int $tenantId, CriarTenantDTO $dto): Empresa
+    {
+        $model = EmpresaModel::create([
+            'razao_social' => $dto->razaoSocial,
+            'cnpj' => $dto->cnpj,
+            'email' => $dto->email,
+            'endereco' => $dto->endereco,
+            'cidade' => $dto->cidade,
+            'estado' => $dto->estado,
+            'cep' => $dto->cep,
+            'telefones' => $dto->telefones,
+            'emails' => $dto->emailsAdicionais,
+            'banco_nome' => $dto->banco,
+            'banco_agencia' => $dto->agencia,
+            'banco_conta' => $dto->conta,
+            'banco_tipo' => $dto->tipoConta,
+            'banco_pix' => $dto->pix,
+            'representante_legal' => $dto->representanteLegalNome,
+            'logo' => $dto->logo,
+            'status' => $dto->status,
+        ]);
+
+        return $this->toDomain($model);
+    }
+
+    public function buscarPorId(int $id): ?Empresa
+    {
+        $model = EmpresaModel::find($id);
+        return $model ? $this->toDomain($model) : null;
+    }
+
+    public function listar(): array
+    {
+        return EmpresaModel::all()->map(function ($model) {
+            return $this->toDomain($model);
+        })->toArray();
+    }
+}
+

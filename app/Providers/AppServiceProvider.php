@@ -37,6 +37,103 @@ class AppServiceProvider extends ServiceProvider
         \Illuminate\Support\Facades\Gate::policy(\App\Modules\Processo\Models\Processo::class, \App\Modules\Processo\Policies\ProcessoPolicy::class);
         \Illuminate\Support\Facades\Gate::policy(\App\Models\Contrato::class, \App\Policies\ContratoPolicy::class);
         \Illuminate\Support\Facades\Gate::policy(\App\Models\Orcamento::class, \App\Policies\OrcamentoPolicy::class);
+
+        // DDD: Bindings de Interfaces para Implementações
+        // Domain -> Infrastructure
+        $this->app->bind(
+            \App\Domain\Tenant\Repositories\TenantRepositoryInterface::class,
+            \App\Infrastructure\Persistence\Eloquent\TenantRepository::class
+        );
+
+        $this->app->bind(
+            \App\Domain\Tenant\Services\TenantDatabaseServiceInterface::class,
+            \App\Infrastructure\Tenant\TenantDatabaseService::class
+        );
+
+        $this->app->bind(
+            \App\Domain\Tenant\Services\TenantRolesServiceInterface::class,
+            \App\Infrastructure\Tenant\TenantRolesService::class
+        );
+
+        $this->app->bind(
+            \App\Domain\Empresa\Repositories\EmpresaRepositoryInterface::class,
+            \App\Infrastructure\Persistence\Eloquent\EmpresaRepository::class
+        );
+
+        $this->app->bind(
+            \App\Domain\Auth\Repositories\UserRepositoryInterface::class,
+            \App\Infrastructure\Persistence\Eloquent\UserRepository::class
+        );
+
+        $this->app->bind(
+            \App\Domain\Processo\Repositories\ProcessoRepositoryInterface::class,
+            \App\Infrastructure\Persistence\Eloquent\ProcessoRepository::class
+        );
+
+        $this->app->bind(
+            \App\Domain\Fornecedor\Repositories\FornecedorRepositoryInterface::class,
+            \App\Infrastructure\Persistence\Eloquent\FornecedorRepository::class
+        );
+
+        $this->app->bind(
+            \App\Domain\Contrato\Repositories\ContratoRepositoryInterface::class,
+            \App\Infrastructure\Persistence\Eloquent\ContratoRepository::class
+        );
+
+        $this->app->bind(
+            \App\Domain\Empenho\Repositories\EmpenhoRepositoryInterface::class,
+            \App\Infrastructure\Persistence\Eloquent\EmpenhoRepository::class
+        );
+
+        $this->app->bind(
+            \App\Domain\NotaFiscal\Repositories\NotaFiscalRepositoryInterface::class,
+            \App\Infrastructure\Persistence\Eloquent\NotaFiscalRepository::class
+        );
+
+        $this->app->bind(
+            \App\Domain\Orcamento\Repositories\OrcamentoRepositoryInterface::class,
+            \App\Infrastructure\Persistence\Eloquent\OrcamentoRepository::class
+        );
+
+        $this->app->bind(
+            \App\Domain\Orgao\Repositories\OrgaoRepositoryInterface::class,
+            \App\Infrastructure\Persistence\Eloquent\OrgaoRepository::class
+        );
+
+        $this->app->bind(
+            \App\Domain\Setor\Repositories\SetorRepositoryInterface::class,
+            \App\Infrastructure\Persistence\Eloquent\SetorRepository::class
+        );
+
+        $this->app->bind(
+            \App\Domain\AutorizacaoFornecimento\Repositories\AutorizacaoFornecimentoRepositoryInterface::class,
+            \App\Infrastructure\Persistence\Eloquent\AutorizacaoFornecimentoRepository::class
+        );
+
+        $this->app->bind(
+            \App\Domain\DocumentoHabilitacao\Repositories\DocumentoHabilitacaoRepositoryInterface::class,
+            \App\Infrastructure\Persistence\Eloquent\DocumentoHabilitacaoRepository::class
+        );
+
+        $this->app->bind(
+            \App\Domain\CustoIndireto\Repositories\CustoIndiretoRepositoryInterface::class,
+            \App\Infrastructure\Persistence\Eloquent\CustoIndiretoRepository::class
+        );
+
+        $this->app->bind(
+            \App\Domain\FormacaoPreco\Repositories\FormacaoPrecoRepositoryInterface::class,
+            \App\Infrastructure\Persistence\Eloquent\FormacaoPrecoRepository::class
+        );
+
+        $this->app->bind(
+            \App\Domain\ProcessoItem\Repositories\ProcessoItemRepositoryInterface::class,
+            \App\Infrastructure\Persistence\Eloquent\ProcessoItemRepository::class
+        );
+
+        $this->app->bind(
+            \App\Domain\OrcamentoItem\Repositories\OrcamentoItemRepositoryInterface::class,
+            \App\Infrastructure\Persistence\Eloquent\OrcamentoItemRepository::class
+        );
     }
 
     /**
