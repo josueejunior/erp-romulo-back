@@ -42,23 +42,6 @@ class JulgamentoController extends BaseApiController
         }
     }
 
-    public function edit(Processo $processo)
-    {
-        $empresa = $this->getEmpresaAtivaOrFail();
-
-        try {
-            $this->julgamentoService->validarProcessoEmpresa($processo, $empresa->id);
-            $this->julgamentoService->validarProcessoPodeEditar($processo);
-        } catch (\Exception $e) {
-            return redirect()->route('processos.show', $processo)
-                ->with('error', $e->getMessage());
-        }
-
-        $processo->load('itens');
-
-        return view('julgamentos.edit', compact('processo'));
-    }
-
     /**
      * API: Atualizar julgamento de um processo
      */

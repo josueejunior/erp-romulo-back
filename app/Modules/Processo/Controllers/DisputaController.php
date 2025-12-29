@@ -42,23 +42,6 @@ class DisputaController extends BaseApiController
         }
     }
 
-    public function edit(Processo $processo)
-    {
-        $empresa = $this->getEmpresaAtivaOrFail();
-
-        try {
-            $this->disputaService->validarProcessoEmpresa($processo, $empresa->id);
-            $this->disputaService->validarProcessoPodeEditar($processo);
-        } catch (\Exception $e) {
-            return redirect()->route('processos.show', $processo)
-                ->with('error', $e->getMessage());
-        }
-
-        $processo->load('itens');
-
-        return view('disputas.edit', compact('processo'));
-    }
-
     /**
      * API: Atualizar disputa de um processo
      */
