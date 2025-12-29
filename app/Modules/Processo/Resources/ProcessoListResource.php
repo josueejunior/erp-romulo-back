@@ -4,6 +4,7 @@ namespace App\Modules\Processo\Resources;
 
 use Illuminate\Http\Resources\Json\JsonResource;
 use Carbon\Carbon;
+use App\Modules\Processo\Resources\ProcessoItemResource;
 
 class ProcessoListResource extends JsonResource
 {
@@ -63,7 +64,7 @@ class ProcessoListResource extends JsonResource
             // Incluir itens com orçamentos quando carregados
             'itens' => $this->when(
                 $this->relationLoaded('itens'),
-                fn() => \App\Http\Resources\ProcessoItemResource::collection($this->itens)
+                fn() => ProcessoItemResource::collection($this->itens)
             ),
         ];
     }
