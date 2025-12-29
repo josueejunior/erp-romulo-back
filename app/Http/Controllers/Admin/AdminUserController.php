@@ -107,7 +107,7 @@ class AdminUserController extends Controller
                     'empresas.*' => 'required|integer|exists:empresas,id',
                     'empresa_id' => [
                         'nullable', // Tornado nullable para compatibilidade
-                        function ($attribute, $value, $fail) {
+                        function ($attribute, $value, $fail) use ($tenant) {
                             if ($value !== null) {
                                 if (!is_numeric($value)) {
                                     $fail('O ID da empresa deve ser um número válido.');
@@ -120,14 +120,37 @@ class AdminUserController extends Controller
                                     return;
                                 }
                                 
+                                // Verificar se a empresa existe no banco do tenant atual
+                                // O tenancy já foi inicializado acima
                                 if (!\App\Models\Empresa::where('id', $empresaId)->exists()) {
-                                    $fail('A empresa selecionada não existe.');
+                                    $fail('A empresa selecionada não existe neste tenant.');
                                 }
                             }
                         }
                     ],
                     'empresa_ativa_id' => 'nullable|integer|exists:empresas,id',
+                ], [
+                    'name.required' => 'O nome do usuário é obrigatório.',
+                    'email.required' => 'O e-mail do usuário é obrigatório.',
+                    'email.email' => 'O e-mail deve ser válido.',
+                    'email.unique' => 'Este e-mail já está em uso neste tenant.',
+                    'password.required' => 'A senha é obrigatória.',
+                    'password.min' => 'A senha deve ter no mínimo 8 caracteres.',
+                    'role.required' => 'O perfil (role) do usuário é obrigatório.',
+                    'role.in' => 'O perfil deve ser: Administrador, Operacional, Financeiro ou Consulta.',
+                    'empresas.min' => 'Selecione pelo menos uma empresa.',
+                    'empresas.*.required' => 'Cada empresa selecionada deve ter um ID válido.',
+                    'empresas.*.exists' => 'Uma ou mais empresas selecionadas não existem neste tenant.',
+                    'empresa_ativa_id.exists' => 'A empresa ativa selecionada não existe neste tenant.',
                 ]);
+                
+                // Verificar se há empresas disponíveis no tenant
+                $empresasDisponiveis = \App\Models\Empresa::count();
+                if ($empresasDisponiveis === 0) {
+                    throw ValidationException::withMessages([
+                        'empresas' => ['Este tenant não possui empresas cadastradas. Crie uma empresa primeiro antes de criar usuários.'],
+                    ]);
+                }
                 
                 // Validar que pelo menos uma empresa foi fornecida
                 if (empty($validated['empresas']) && empty($validated['empresa_id'])) {
@@ -143,19 +166,73 @@ class AdminUserController extends Controller
                 if (!empty($validated['empresa_id'])) {
                     $this->validateEmpresasInTenant([$validated['empresa_id']], $tenant);
                 }
-            } catch (ValidationException $e) {
-                // Personalizar mensagem de erro para email duplicado
-                if (isset($e->errors()['email'])) {
-                    throw ValidationException::withMessages([
-                        'email' => ['Este email já está em uso nesta empresa. Cada empresa deve ter usuários únicos.'],
-                    ]);
+                
+                // Validar que empresa_ativa_id está nas empresas associadas (se fornecido)
+                if (!empty($validated['empresa_ativa_id'])) {
+                    $empresasFornecidas = $validated['empresas'] ?? (!empty($validated['empresa_id']) ? [$validated['empresa_id']] : []);
+                    if (!empty($empresasFornecidas) && !in_array($validated['empresa_ativa_id'], $empresasFornecidas)) {
+                        throw ValidationException::withMessages([
+                            'empresa_ativa_id' => ['A empresa ativa deve estar entre as empresas selecionadas.'],
+                        ]);
+                    }
                 }
-                throw $e;
+            } catch (ValidationException $e) {
+                // Processar erros para garantir mensagens personalizadas
+                $errors = $e->errors();
+                $processedErrors = [];
+                
+                foreach ($errors as $field => $messages) {
+                    $processedErrors[$field] = array_map(function ($message) use ($field) {
+                        // Se a mensagem for uma chave de tradução, usar mensagem personalizada
+                        if ($message === 'validation.required' && $field === 'password') {
+                            return 'A senha é obrigatória.';
+                        }
+                        if ($message === 'validation.required' && $field === 'name') {
+                            return 'O nome do usuário é obrigatório.';
+                        }
+                        if ($message === 'validation.required' && $field === 'email') {
+                            return 'O e-mail do usuário é obrigatório.';
+                        }
+                        if ($message === 'validation.required' && $field === 'role') {
+                            return 'O perfil (role) do usuário é obrigatório.';
+                        }
+                        if ($message === 'validation.required' && $field === 'empresas') {
+                            return 'Selecione pelo menos uma empresa.';
+                        }
+                        if (str_contains($message, 'validation.required')) {
+                            return 'O campo ' . $field . ' é obrigatório.';
+                        }
+                        return $message;
+                    }, $messages);
+                }
+                
+                // Personalizar mensagem de erro para email duplicado
+                if (isset($processedErrors['email'])) {
+                    $processedErrors['email'] = ['Este email já está em uso neste tenant.'];
+                }
+                
+                throw ValidationException::withMessages($processedErrors);
             }
 
             // Determinar empresas a associar (priorizar array empresas[], senão usar empresa_id)
-            $empresasIds = $validated['empresas'] ?? [$validated['empresa_id']];
+            $empresasIds = !empty($validated['empresas']) 
+                ? $validated['empresas'] 
+                : (!empty($validated['empresa_id']) ? [$validated['empresa_id']] : []);
+            
+            // Validar que pelo menos uma empresa foi fornecida (já validado acima, mas garantir)
+            if (empty($empresasIds)) {
+                throw ValidationException::withMessages([
+                    'empresas' => ['Selecione pelo menos uma empresa.'],
+                ]);
+            }
+
+            // Determinar empresa ativa: usar a fornecida se estiver nas empresas selecionadas, senão usar a primeira
             $empresaAtivaId = $validated['empresa_ativa_id'] ?? $empresasIds[0];
+            
+            // Garantir que empresa_ativa_id está nas empresas associadas
+            if (!in_array($empresaAtivaId, $empresasIds)) {
+                $empresaAtivaId = $empresasIds[0];
+            }
 
             // Criar usuário
             $user = User::create([
@@ -168,7 +245,7 @@ class AdminUserController extends Controller
             // Atribuir role
             $user->assignRole($validated['role']);
 
-            // Associar usuário a todas as empresas
+            // Associar usuário a todas as empresas com o perfil correspondente ao role
             $syncData = [];
             foreach ($empresasIds as $empresaId) {
                 $syncData[$empresaId] = [
@@ -228,7 +305,7 @@ class AdminUserController extends Controller
                     'empresas.*' => 'required|integer|exists:empresas,id',
                     'empresa_id' => [
                         'sometimes',
-                        function ($attribute, $value, $fail) {
+                        function ($attribute, $value, $fail) use ($tenant) {
                             if ($value !== null) {
                                 if (!is_numeric($value)) {
                                     $fail('O ID da empresa deve ser um número válido.');
@@ -241,13 +318,27 @@ class AdminUserController extends Controller
                                     return;
                                 }
                                 
+                                // Verificar se a empresa existe no banco do tenant atual
+                                // O tenancy já foi inicializado acima
                                 if (!\App\Models\Empresa::where('id', $empresaId)->exists()) {
-                                    $fail('A empresa selecionada não existe.');
+                                    $fail('A empresa selecionada não existe neste tenant.');
                                 }
                             }
                         }
                     ],
                     'empresa_ativa_id' => 'sometimes|integer|exists:empresas,id',
+                ], [
+                    'name.required' => 'O nome do usuário é obrigatório.',
+                    'email.required' => 'O e-mail do usuário é obrigatório.',
+                    'email.email' => 'O e-mail deve ser válido.',
+                    'email.unique' => 'Este e-mail já está em uso neste tenant.',
+                    'password.min' => 'A senha deve ter no mínimo 8 caracteres.',
+                    'role.required' => 'O perfil (role) do usuário é obrigatório.',
+                    'role.in' => 'O perfil deve ser: Administrador, Operacional, Financeiro ou Consulta.',
+                    'empresas.min' => 'Selecione pelo menos uma empresa.',
+                    'empresas.*.required' => 'Cada empresa selecionada deve ter um ID válido.',
+                    'empresas.*.exists' => 'Uma ou mais empresas selecionadas não existem neste tenant.',
+                    'empresa_ativa_id.exists' => 'A empresa ativa selecionada não existe neste tenant.',
                 ]);
                 
                 // Validar que todas as empresas pertencem ao tenant atual
@@ -257,16 +348,64 @@ class AdminUserController extends Controller
                 if (!empty($validated['empresa_id'])) {
                     $this->validateEmpresasInTenant([$validated['empresa_id']], $tenant);
                 }
-            } catch (ValidationException $e) {
-                // Personalizar mensagem de erro para email duplicado
-                if ($e->errors()['email'] ?? null) {
-                    throw ValidationException::withMessages([
-                        'email' => ['Este email já está em uso nesta empresa. Cada empresa deve ter usuários únicos.'],
-                    ]);
+                
+                // Validar que empresa_ativa_id está nas empresas associadas (se fornecido)
+                if (!empty($validated['empresa_ativa_id'])) {
+                    $empresasFornecidas = $validated['empresas'] ?? (!empty($validated['empresa_id']) ? [$validated['empresa_id']] : []);
+                    
+                    // Se empresas foram fornecidas, validar que empresa_ativa_id está entre elas
+                    if (!empty($empresasFornecidas)) {
+                        if (!in_array($validated['empresa_ativa_id'], $empresasFornecidas)) {
+                            throw ValidationException::withMessages([
+                                'empresa_ativa_id' => ['A empresa ativa deve estar entre as empresas selecionadas.'],
+                            ]);
+                        }
+                    } else {
+                        // Se nenhuma empresa foi fornecida, validar que empresa_ativa_id está nas empresas já associadas
+                        $empresasAssociadas = $user->empresas->pluck('id')->toArray();
+                        if (!empty($empresasAssociadas) && !in_array($validated['empresa_ativa_id'], $empresasAssociadas)) {
+                            throw ValidationException::withMessages([
+                                'empresa_ativa_id' => ['A empresa ativa deve estar entre as empresas associadas ao usuário.'],
+                            ]);
+                        }
+                    }
                 }
-                throw $e;
+            } catch (ValidationException $e) {
+                // Processar erros para garantir mensagens personalizadas
+                $errors = $e->errors();
+                $processedErrors = [];
+                
+                foreach ($errors as $field => $messages) {
+                    $processedErrors[$field] = array_map(function ($message) use ($field) {
+                        // Se a mensagem for uma chave de tradução, usar mensagem personalizada
+                        if ($message === 'validation.required' && $field === 'name') {
+                            return 'O nome do usuário é obrigatório.';
+                        }
+                        if ($message === 'validation.required' && $field === 'email') {
+                            return 'O e-mail do usuário é obrigatório.';
+                        }
+                        if ($message === 'validation.required' && $field === 'role') {
+                            return 'O perfil (role) do usuário é obrigatório.';
+                        }
+                        if ($message === 'validation.required' && $field === 'empresas') {
+                            return 'Selecione pelo menos uma empresa.';
+                        }
+                        if (str_contains($message, 'validation.required')) {
+                            return 'O campo ' . $field . ' é obrigatório.';
+                        }
+                        return $message;
+                    }, $messages);
+                }
+                
+                // Personalizar mensagem de erro para email duplicado
+                if (isset($processedErrors['email'])) {
+                    $processedErrors['email'] = ['Este email já está em uso neste tenant.'];
+                }
+                
+                throw ValidationException::withMessages($processedErrors);
             }
 
+            // Atualizar campos básicos
             if (isset($validated['name'])) {
                 $user->name = $validated['name'];
             }
@@ -279,36 +418,48 @@ class AdminUserController extends Controller
                 $user->password = Hash::make($validated['password']);
             }
 
-            // Atualizar associações com empresas se fornecido
-            if (isset($validated['empresas'])) {
-                // Múltiplas empresas
+            // Atualizar associações com empresas
+            $empresasIds = null;
+            $roleParaPerfil = strtolower($validated['role'] ?? $user->getRoleNames()->first() ?? 'consulta');
+            
+            if (isset($validated['empresas']) && !empty($validated['empresas'])) {
+                // Múltiplas empresas fornecidas
+                $empresasIds = $validated['empresas'];
+            } elseif (isset($validated['empresa_id']) && !empty($validated['empresa_id'])) {
+                // Compatibilidade: apenas uma empresa fornecida
+                $empresasIds = [$validated['empresa_id']];
+            }
+            
+            // Se empresas foram fornecidas, atualizar associações
+            if ($empresasIds !== null) {
                 $syncData = [];
-                foreach ($validated['empresas'] as $empresaId) {
+                foreach ($empresasIds as $empresaId) {
                     $syncData[$empresaId] = [
-                        'perfil' => strtolower($validated['role'] ?? $user->getRoleNames()->first() ?? 'consulta')
+                        'perfil' => $roleParaPerfil
                     ];
                 }
                 $user->empresas()->sync($syncData);
                 
-                // Atualizar empresa ativa se fornecido, senão usar a primeira
-                $empresaAtivaId = $validated['empresa_ativa_id'] ?? $validated['empresas'][0];
-                if (in_array($empresaAtivaId, $validated['empresas'])) {
-                    $user->empresa_ativa_id = $empresaAtivaId;
+                // Atualizar empresa ativa
+                // Se empresa_ativa_id foi fornecido e está nas empresas associadas, usar ele
+                // Senão, usar a primeira empresa da lista
+                if (isset($validated['empresa_ativa_id']) && in_array($validated['empresa_ativa_id'], $empresasIds)) {
+                    $user->empresa_ativa_id = $validated['empresa_ativa_id'];
+                } else {
+                    // Usar a primeira empresa da lista
+                    $user->empresa_ativa_id = $empresasIds[0];
                 }
-            } elseif (isset($validated['empresa_id'])) {
-                // Compatibilidade: apenas uma empresa
-                $user->empresa_ativa_id = $validated['empresa_id'];
-                $user->empresas()->sync([$validated['empresa_id'] => [
-                    'perfil' => strtolower($validated['role'] ?? $user->getRoleNames()->first() ?? 'consulta')
-                ]]);
-            }
-            
-            // Atualizar empresa ativa separadamente se fornecido
-            if (isset($validated['empresa_ativa_id'])) {
-                // Verificar se a empresa ativa está nas empresas associadas
+            } elseif (isset($validated['empresa_ativa_id'])) {
+                // Apenas empresa_ativa_id foi fornecido (sem alterar empresas associadas)
+                // Verificar se a empresa ativa está nas empresas já associadas
                 $empresasAssociadas = $user->empresas->pluck('id')->toArray();
                 if (in_array($validated['empresa_ativa_id'], $empresasAssociadas)) {
                     $user->empresa_ativa_id = $validated['empresa_ativa_id'];
+                } else {
+                    // Se a empresa ativa não está nas associadas, usar a primeira disponível
+                    if (!empty($empresasAssociadas)) {
+                        $user->empresa_ativa_id = $empresasAssociadas[0];
+                    }
                 }
             }
 
@@ -435,6 +586,13 @@ class AdminUserController extends Controller
             $empresasInvalidas = array_diff($empresasIds, $empresasExistentes);
             
             if (!empty($empresasInvalidas)) {
+                // Se empresa_id foi usado, retornar erro específico
+                if (count($empresasInvalidas) === 1 && count($empresasIds) === 1) {
+                    throw ValidationException::withMessages([
+                        'empresa_id' => ['A empresa selecionada não existe neste tenant.']
+                    ]);
+                }
+                
                 throw ValidationException::withMessages([
                     'empresas' => ['As seguintes empresas não existem neste tenant: ' . implode(', ', $empresasInvalidas)]
                 ]);
