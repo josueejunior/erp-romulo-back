@@ -4,6 +4,8 @@ namespace App\Modules\Processo\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use App\Http\Resources\OrcamentoResource;
+use App\Http\Resources\FormacaoPrecoResource;
 
 class ProcessoItemResource extends JsonResource
 {

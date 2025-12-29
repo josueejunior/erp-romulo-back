@@ -4,7 +4,7 @@ namespace App\Modules\Processo\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use App\Http\Resources\OrgaoResource;
+use App\Modules\Orgao\Resources\OrgaoResource;
 use App\Http\Resources\SetorResource;
 use Carbon\Carbon;
 
