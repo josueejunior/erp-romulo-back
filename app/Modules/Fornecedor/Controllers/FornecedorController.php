@@ -6,9 +6,10 @@ use App\Http\Controllers\Api\BaseApiController;
 use App\Http\Resources\FornecedorResource;
 use App\Modules\Fornecedor\Models\Fornecedor;
 use App\Application\Fornecedor\UseCases\CriarFornecedorUseCase;
+use App\Application\Fornecedor\UseCases\AtualizarFornecedorUseCase;
 use App\Application\Fornecedor\DTOs\CriarFornecedorDTO;
+use App\Application\Fornecedor\DTOs\AtualizarFornecedorDTO;
 use App\Domain\Fornecedor\Repositories\FornecedorRepositoryInterface;
-use App\Domain\Fornecedor\Entities\Fornecedor as FornecedorDomain;
 use Illuminate\Http\Request;
 use App\Helpers\PermissionHelper;
 use App\Services\RedisService;
@@ -19,6 +20,7 @@ class FornecedorController extends BaseApiController
 {
     public function __construct(
         private CriarFornecedorUseCase $criarFornecedorUseCase,
+        private AtualizarFornecedorUseCase $atualizarFornecedorUseCase,
         private FornecedorRepositoryInterface $fornecedorRepository,
     ) {}
 
@@ -166,7 +168,7 @@ class FornecedorController extends BaseApiController
     }
 
     /**
-     * Atualizar fornecedor usando Repository DDD
+     * Atualizar fornecedor usando Use Case DDD
      */
     public function update(Request $request, Fornecedor $fornecedor): \Illuminate\Http\JsonResponse
     {
@@ -197,42 +199,22 @@ class FornecedorController extends BaseApiController
                 'is_transportadora' => 'nullable|boolean',
             ]);
 
-            $fornecedorDomain = $this->fornecedorRepository->buscarPorId($fornecedor->id);
+            // Criar DTO
+            $dto = AtualizarFornecedorDTO::fromRequest($request, $fornecedor->id);
+
+            // Executar Use Case (toda a lógica está aqui)
+            $fornecedorDomain = $this->atualizarFornecedorUseCase->executar($dto, $empresa->id);
             
-            if (!$fornecedorDomain || $fornecedorDomain->empresaId !== $empresa->id) {
-                return response()->json(['message' => 'Fornecedor não encontrado.'], 404);
-            }
-
-            $fornecedorAtualizado = new FornecedorDomain(
-                id: $fornecedorDomain->id,
-                empresaId: $fornecedorDomain->empresaId,
-                razaoSocial: $validated['razao_social'] ?? $fornecedorDomain->razaoSocial,
-                cnpj: $validated['cnpj'] ?? $fornecedorDomain->cnpj,
-                nomeFantasia: $validated['nome_fantasia'] ?? $fornecedorDomain->nomeFantasia,
-                cep: $validated['cep'] ?? $fornecedorDomain->cep,
-                logradouro: $validated['logradouro'] ?? $fornecedorDomain->logradouro,
-                numero: $validated['numero'] ?? $fornecedorDomain->numero,
-                bairro: $validated['bairro'] ?? $fornecedorDomain->bairro,
-                complemento: $validated['complemento'] ?? $fornecedorDomain->complemento,
-                cidade: $validated['cidade'] ?? $fornecedorDomain->cidade,
-                estado: $validated['estado'] ?? $fornecedorDomain->estado,
-                email: $validated['email'] ?? $fornecedorDomain->email,
-                telefone: $validated['telefone'] ?? $fornecedorDomain->telefone,
-                emails: $validated['emails'] ?? $fornecedorDomain->emails,
-                telefones: $validated['telefones'] ?? $fornecedorDomain->telefones,
-                contato: $validated['contato'] ?? $fornecedorDomain->contato,
-                observacoes: $validated['observacoes'] ?? $fornecedorDomain->observacoes,
-                isTransportadora: $validated['is_transportadora'] ?? $fornecedorDomain->isTransportadora,
-            );
-
-            $this->fornecedorRepository->atualizar($fornecedorAtualizado);
-            $fornecedor->refresh();
+            // Buscar modelo Eloquent para Resource
+            $fornecedor = Fornecedor::findOrFail($fornecedorDomain->id);
             
             $this->clearFornecedorCache();
 
             return response()->json(['data' => new FornecedorResource($fornecedor)]);
         } catch (ValidationException $e) {
             return response()->json(['message' => 'Erro de validação', 'errors' => $e->errors()], 422);
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         }

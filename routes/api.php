@@ -238,19 +238,21 @@ Route::prefix('admin')->group(function () {
             Route::post('/{tenant}/reativar', [AdminTenantController::class, 'reactivate']);
             
             // Gerenciamento de usuários das empresas
-            // Usar {userId} em vez de {user} para evitar model binding no banco central
-            // Os usuários estão no banco do tenant, não no banco central
-            Route::prefix('{tenant}/usuarios')->group(function () {
-                Route::get('/', [AdminUserController::class, 'index']);
-                Route::get('/{userId}', [AdminUserController::class, 'show'])->where('userId', '[0-9]+');
-                Route::post('/', [AdminUserController::class, 'store']);
-                Route::put('/{userId}', [AdminUserController::class, 'update'])->where('userId', '[0-9]+');
-                Route::delete('/{userId}', [AdminUserController::class, 'destroy'])->where('userId', '[0-9]+');
-                Route::post('/{userId}/reativar', [AdminUserController::class, 'reactivate'])->where('userId', '[0-9]+');
-            });
+            // Middleware InitializeTenant cuida do contexto do tenant automaticamente
+            Route::prefix('{tenant}/usuarios')
+                ->middleware([\App\Http\Middleware\InitializeTenant::class])
+                ->group(function () {
+                    Route::get('/', [AdminUserController::class, 'index']);
+                    Route::get('/{userId}', [AdminUserController::class, 'show'])->where('userId', '[0-9]+');
+                    Route::post('/', [AdminUserController::class, 'store']);
+                    Route::put('/{userId}', [AdminUserController::class, 'update'])->where('userId', '[0-9]+');
+                    Route::delete('/{userId}', [AdminUserController::class, 'destroy'])->where('userId', '[0-9]+');
+                    Route::post('/{userId}/reativar', [AdminUserController::class, 'reactivate'])->where('userId', '[0-9]+');
+                });
             
             // Empresas disponíveis para usuário
-            Route::get('/{tenant}/empresas-disponiveis', [AdminUserController::class, 'empresas']);
+            Route::get('/{tenant}/empresas-disponiveis', [AdminUserController::class, 'empresas'])
+                ->middleware([\App\Http\Middleware\InitializeTenant::class]);
         });
     });
 });

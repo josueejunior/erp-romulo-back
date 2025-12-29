@@ -4,6 +4,7 @@ namespace App\Application\Fornecedor\DTOs;
 
 /**
  * DTO para criação de fornecedor
+ * Transporta dados entre camadas sem expor entidades
  */
 class CriarFornecedorDTO
 {
@@ -28,6 +29,9 @@ class CriarFornecedorDTO
         public readonly bool $isTransportadora = false,
     ) {}
 
+    /**
+     * Criar DTO a partir de array
+     */
     public static function fromArray(array $data): self
     {
         return new self(

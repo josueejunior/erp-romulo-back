@@ -134,6 +134,18 @@ class AppServiceProvider extends ServiceProvider
             \App\Domain\OrcamentoItem\Repositories\OrcamentoItemRepositoryInterface::class,
             \App\Infrastructure\Persistence\Eloquent\OrcamentoItemRepository::class
         );
+
+        // Domain Services
+        $this->app->bind(
+            \App\Domain\Auth\Services\UserRoleServiceInterface::class,
+            \App\Infrastructure\Auth\UserRoleService::class
+        );
+
+        // Event Dispatcher
+        $this->app->bind(
+            \App\Domain\Shared\Events\EventDispatcherInterface::class,
+            \App\Infrastructure\Events\LaravelEventDispatcher::class
+        );
     }
 
     /**
@@ -159,5 +171,21 @@ class AppServiceProvider extends ServiceProvider
         Schedule::command('processos:atualizar-status')
             ->hourly()
             ->withoutOverlapping();
+
+        // Registrar Listeners para Domain Events
+        \Illuminate\Support\Facades\Event::listen(
+            \App\Domain\Auth\Events\UsuarioCriado::class,
+            \App\Listeners\UsuarioCriadoListener::class
+        );
+
+        \Illuminate\Support\Facades\Event::listen(
+            \App\Domain\Auth\Events\SenhaAlterada::class,
+            \App\Listeners\SenhaAlteradaListener::class
+        );
+
+        \Illuminate\Support\Facades\Event::listen(
+            \App\Domain\Tenant\Events\EmpresaVinculada::class,
+            \App\Listeners\EmpresaVinculadaListener::class
+        );
     }
 }
