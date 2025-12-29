@@ -3,6 +3,7 @@
 namespace App\Modules\Processo\Models;
 
 use App\Models\BaseModel;
+use App\Models\FormacaoPreco;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
