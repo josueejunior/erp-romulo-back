@@ -26,7 +26,7 @@ class Empresa extends BaseModel
         'estado',
         'email',
         'telefone',
-        'emails',
+        'emails_adicionais',
         'telefones',
         'banco_nome',
         'banco_agencia',
@@ -44,7 +44,7 @@ class Empresa extends BaseModel
     {
         return array_merge($this->getTimestampsCasts(), [
             'status' => 'string',
-            'emails' => 'array',
+            'emails_adicionais' => 'array',
             'telefones' => 'array',
         ]);
     }
