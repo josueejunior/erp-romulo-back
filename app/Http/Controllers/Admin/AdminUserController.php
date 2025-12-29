@@ -252,10 +252,23 @@ class AdminUserController extends Controller
                 'role' => 'nullable|string|in:Administrador,Operacional,Financeiro,Consulta',
             ];
             
-            // Se password foi fornecido e não está vazio, validar
-            if ($hasPassword && isset($data['password']) && !empty(trim($data['password']))) {
-                $rules['password'] = ['required', 'string', 'min:8', new \App\Rules\StrongPassword()];
+            // IMPORTANTE: Só validar password se realmente foi fornecido e não está vazio
+            // Se password não foi enviado ou está vazio, NÃO validar (é opcional no update)
+            if ($request->has('password')) {
+                $passwordValue = $request->input('password');
+                // Só validar se não estiver vazio após trim
+                if ($passwordValue && is_string($passwordValue) && trim($passwordValue) !== '') {
+                    $rules['password'] = ['required', 'string', 'min:8', new \App\Rules\StrongPassword()];
+                }
             }
+            // Se password não foi enviado no request, NÃO adicionar à validação (opcional no update)
+            
+            \Log::info('AdminUserController::update - Regras de validação', [
+                'rules' => array_keys($rules),
+                'has_password_rule' => isset($rules['password']),
+                'request_has_password' => $request->has('password'),
+                'password_value_empty' => $request->has('password') ? (empty(trim($request->input('password'))) : 'não enviado',
+            ]);
             
             $validated = $request->validate($rules, [
                 'role.in' => 'O perfil deve ser: Administrador, Operacional, Financeiro ou Consulta.',
