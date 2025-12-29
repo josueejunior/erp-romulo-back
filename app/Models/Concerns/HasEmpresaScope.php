@@ -35,11 +35,32 @@ trait HasEmpresaScope
 
     /**
      * Obtém empresa_id do contexto atual
-     * Usa IAuthIdentity para garantir consistência com BaseService
+     * Prioridade:
+     * 1. Container do Laravel (injetado pelo middleware)
+     * 2. IAuthIdentity (se disponível)
+     * 3. Usuário autenticado (empresa_ativa_id)
+     * 4. Header X-Empresa-ID
      */
     protected static function getEmpresaIdFromContext(): ?int
     {
-        // Usar IAuthIdentity para garantir consistência com BaseService
+        // 1. Tentar obter do container (injetado pelo middleware EnsureEmpresaAtivaContext)
+        try {
+            if (app()->bound('current_empresa_id')) {
+                $empresaId = app('current_empresa_id');
+                if ($empresaId) {
+                    return (int) $empresaId;
+                }
+            }
+        } catch (\Exception $e) {
+            // Container não disponível, continuar
+        }
+
+        // 2. Tentar obter do request (injetado pelo middleware)
+        if (request() && request()->attributes->has('empresa_id')) {
+            return (int) request()->attributes->get('empresa_id');
+        }
+
+        // 3. Usar IAuthIdentity para garantir consistência com BaseService
         try {
             $authIdentity = app(\App\Contracts\IAuthIdentity::class);
             if ($authIdentity) {
@@ -52,7 +73,7 @@ trait HasEmpresaScope
             // Se IAuthIdentity não estiver disponível, tentar método alternativo
         }
 
-        // Fallback: Tentar obter do usuário autenticado diretamente
+        // 4. Fallback: Tentar obter do usuário autenticado diretamente
         if (Auth::check()) {
             $user = Auth::user();
             
@@ -61,7 +82,7 @@ trait HasEmpresaScope
                 return $user->empresa_ativa_id;
             }
             
-            // Tentar obter do relacionamento
+            // Tentar obter do relacionamento (último recurso)
             try {
                 $empresa = $user->empresas()->first();
                 if ($empresa) {
@@ -72,7 +93,7 @@ trait HasEmpresaScope
             }
         }
 
-        // Tentar obter do request (header)
+        // 5. Tentar obter do header (para casos especiais)
         if (request() && request()->header('X-Empresa-ID')) {
             return (int) request()->header('X-Empresa-ID');
         }

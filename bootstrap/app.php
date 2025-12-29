@@ -14,6 +14,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'empresa.ativa' => \App\Http\Middleware\EnsureEmpresaAtiva::class,
+            'empresa.context' => \App\Http\Middleware\EnsureEmpresaAtivaContext::class,
             'tenancy' => \App\Http\Middleware\InitializeTenancyByRequestData::class,
             'rate.limit.redis' => \App\Http\Middleware\RateLimitRedis::class,
             'admin' => \App\Http\Middleware\EnsureAdmin::class,
@@ -24,6 +25,10 @@ return Application::configure(basePath: dirname(__DIR__))
             \Illuminate\Http\Middleware\HandleCors::class,
             \App\Http\Middleware\HandleApiErrors::class,
         ]);
+        
+        // Middleware de contexto de empresa deve rodar APÓS autenticação
+        // Usar append para rodar após todos os middlewares padrão (incluindo auth)
+        $middleware->append(\App\Http\Middleware\EnsureEmpresaAtivaContext::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

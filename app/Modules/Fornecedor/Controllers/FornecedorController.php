@@ -32,9 +32,24 @@ class FornecedorController extends BaseApiController
         $empresa = $this->getEmpresaAtivaOrFail();
         $tenantId = tenancy()->tenant?->id;
         
+        Log::debug('FornecedorController::index() - Empresa ativa identificada', [
+            'empresa_id' => $empresa->id,
+            'empresa_razao_social' => $empresa->razao_social,
+            'user_id' => auth()->id(),
+            'tenant_id' => $tenantId,
+        ]);
+        
         $filters = $request->all();
         $filters['empresa_id'] = $empresa->id;
-        $cacheKey = "fornecedores:{$tenantId}:{$empresa->id}:" . md5(json_encode($filters));
+        
+        Log::debug('FornecedorController::index() - Filtros aplicados', [
+            'filters' => $filters,
+        ]);
+        
+        // Chave de cache composta: tenant_{id}:empresa_{id}:fornecedores:index:{hash}
+        // Garante isolamento total entre tenants e empresas
+        $filtersHash = md5(json_encode($filters));
+        $cacheKey = "tenant_{$tenantId}:empresa_{$empresa->id}:fornecedores:index:{$filtersHash}";
         
         // Tentar obter do cache
         if ($tenantId && RedisService::isAvailable()) {
@@ -129,6 +144,12 @@ class FornecedorController extends BaseApiController
         try {
             $empresa = $this->getEmpresaAtivaOrFail();
             
+            Log::debug('FornecedorController::store() - Empresa ativa identificada', [
+                'empresa_id' => $empresa->id,
+                'empresa_razao_social' => $empresa->razao_social,
+                'user_id' => auth()->id(),
+            ]);
+            
             $validated = $request->validate([
                 'razao_social' => 'required|string|max:255',
                 'cnpj' => 'nullable|string|max:18',
@@ -153,9 +174,20 @@ class FornecedorController extends BaseApiController
 
             $validated['empresa_id'] = $empresa->id;
             
+            Log::debug('FornecedorController::store() - Criando fornecedor', [
+                'empresa_id' => $empresa->id,
+                'razao_social' => $validated['razao_social'] ?? null,
+            ]);
+            
             $dto = CriarFornecedorDTO::fromArray($validated);
             $fornecedorDomain = $this->criarFornecedorUseCase->executar($dto);
             $fornecedor = Fornecedor::findOrFail($fornecedorDomain->id);
+            
+            Log::info('FornecedorController::store() - Fornecedor criado com sucesso', [
+                'fornecedor_id' => $fornecedor->id,
+                'empresa_id' => $fornecedor->empresa_id,
+                'razao_social' => $fornecedor->razao_social,
+            ]);
             
             $this->clearFornecedorCache();
 
@@ -281,19 +313,37 @@ class FornecedorController extends BaseApiController
         $tenantId = tenancy()->tenant?->id;
         
         if ($tenantId && RedisService::isAvailable()) {
-            $pattern = "fornecedores:{$tenantId}:{$empresa->id}:*";
+            // Usar padrão de chave composta: tenant_{id}:empresa_{id}:fornecedores:*
+            $pattern = "tenant_{$tenantId}:empresa_{$empresa->id}:fornecedores:*";
+            
+            Log::debug('FornecedorController::clearFornecedorCache() - Limpando cache', [
+                'pattern' => $pattern,
+                'tenant_id' => $tenantId,
+                'empresa_id' => $empresa->id,
+            ]);
+            
             try {
                 $cursor = 0;
+                $totalKeys = 0;
                 do {
                     $result = \Illuminate\Support\Facades\Redis::scan($cursor, ['match' => $pattern, 'count' => 100]);
                     $cursor = $result[0];
                     $keys = $result[1];
                     if (!empty($keys)) {
+                        $totalKeys += count($keys);
                         \Illuminate\Support\Facades\Redis::del($keys);
                     }
                 } while ($cursor != 0);
+                
+                Log::info('FornecedorController::clearFornecedorCache() - Cache limpo', [
+                    'keys_deleted' => $totalKeys,
+                    'pattern' => $pattern,
+                ]);
             } catch (\Exception $e) {
-                Log::warning('Erro ao limpar cache de fornecedores: ' . $e->getMessage());
+                Log::warning('Erro ao limpar cache de fornecedores: ' . $e->getMessage(), [
+                    'pattern' => $pattern,
+                    'error' => $e->getMessage(),
+                ]);
             }
         }
     }
