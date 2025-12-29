@@ -101,56 +101,61 @@ class TenantRepository implements TenantRepositoryInterface
                     return $this->toDomain($model);
                 }
                 
-                // Se não tem ID, tentar refresh
-                \Log::warning('Tenant criado mas sem ID imediato, tentando refresh', [
+                // Se não tem ID, NÃO tentar refresh() (vai falhar se não tem ID)
+                // Em vez disso, buscar pelo CNPJ ou email imediatamente
+                \Log::warning('Tenant criado mas sem ID imediato, buscando pelo CNPJ/email', [
                     'model_exists' => $model->exists,
+                    'cnpj' => $data['cnpj'] ?? null,
+                    'email' => $data['email'] ?? null,
                 ]);
                 
-                $model->refresh();
-                
-                if ($model->id) {
-                    \Log::debug('Tenant criado com sucesso (ID gerado após refresh)', [
-                        'tenant_id' => $model->id,
-                        'razao_social' => $model->razao_social,
-                    ]);
-                    return $this->toDomain($model);
-                }
-                
-                // Se ainda não tem ID, tentar buscar pelo CNPJ ou outros campos únicos
+                // Tentar buscar pelo CNPJ primeiro (mais único)
                 if (!empty($data['cnpj'])) {
-                    \Log::warning('Tentando buscar tenant recém-criado pelo CNPJ', [
-                        'cnpj' => $data['cnpj'],
-                    ]);
                     $foundModel = TenantModel::where('cnpj', $data['cnpj'])->first();
                     if ($foundModel && $foundModel->id) {
                         \Log::debug('Tenant encontrado pelo CNPJ após criação', [
                             'tenant_id' => $foundModel->id,
+                            'razao_social' => $foundModel->razao_social,
                         ]);
                         return $this->toDomain($foundModel);
                     }
                 }
                 
-                // Última tentativa: buscar pelo email
+                // Se não encontrou pelo CNPJ, tentar pelo email
                 if (!empty($data['email'])) {
-                    \Log::warning('Tentando buscar tenant recém-criado pelo email', [
-                        'email' => $data['email'],
-                    ]);
                     $foundModel = TenantModel::where('email', $data['email'])->first();
                     if ($foundModel && $foundModel->id) {
                         \Log::debug('Tenant encontrado pelo email após criação', [
                             'tenant_id' => $foundModel->id,
+                            'razao_social' => $foundModel->razao_social,
                         ]);
                         return $this->toDomain($foundModel);
                     }
                 }
                 
-                // Se chegou aqui, realmente não tem ID
-                \Log::error('Tenant criado mas sem ID após todas as tentativas', [
+                // Se não encontrou nem pelo CNPJ nem pelo email, pode ser que o modelo
+                // foi criado mas ainda não está visível (problema de transação ou cache)
+                // Tentar buscar pelo último registro criado com os mesmos dados
+                $foundModel = TenantModel::where('razao_social', $data['razao_social'])
+                    ->where('cnpj', $data['cnpj'] ?? '')
+                    ->orderBy('id', 'desc')
+                    ->first();
+                
+                if ($foundModel && $foundModel->id) {
+                    \Log::debug('Tenant encontrado pela razão social e CNPJ após criação', [
+                        'tenant_id' => $foundModel->id,
+                        'razao_social' => $foundModel->razao_social,
+                    ]);
+                    return $this->toDomain($foundModel);
+                }
+                
+                // Se chegou aqui, realmente não conseguiu encontrar o tenant criado
+                \Log::error('Tenant criado mas não foi possível recuperar o ID', [
                     'model_exists' => $model->exists,
                     'model_attributes' => $model->getAttributes(),
                     'data' => $data,
                 ]);
-                throw new \RuntimeException('Falha ao criar tenant: o ID não foi gerado após salvar.');
+                throw new \RuntimeException('Falha ao criar tenant: o ID não foi gerado e não foi possível localizar o registro criado.');
                 
             } catch (\Illuminate\Database\QueryException $e) {
                 // Se create() falhar, tentar com save() manual
@@ -162,13 +167,36 @@ class TenantRepository implements TenantRepositoryInterface
                 $model->fill($data);
                 $saved = $model->save();
                 
-                if (!$saved || !$model->id) {
-                    \Log::error('TenantModel::save() também falhou', [
-                        'saved' => $saved,
-                        'model_id' => $model->id ?? null,
+                if (!$saved) {
+                    \Log::error('TenantModel::save() retornou false', [
                         'data' => $data,
+                        'error' => $e->getMessage(),
                     ]);
                     throw new \RuntimeException('Falha ao criar tenant: ' . $e->getMessage(), 0, $e);
+                }
+                
+                // Se save() funcionou mas não tem ID, buscar pelo CNPJ/email
+                if (!$model->id) {
+                    \Log::warning('Tenant salvo mas sem ID, buscando pelo CNPJ/email', [
+                        'cnpj' => $data['cnpj'] ?? null,
+                        'email' => $data['email'] ?? null,
+                    ]);
+                    
+                    if (!empty($data['cnpj'])) {
+                        $foundModel = TenantModel::where('cnpj', $data['cnpj'])->first();
+                        if ($foundModel && $foundModel->id) {
+                            return $this->toDomain($foundModel);
+                        }
+                    }
+                    
+                    if (!empty($data['email'])) {
+                        $foundModel = TenantModel::where('email', $data['email'])->first();
+                        if ($foundModel && $foundModel->id) {
+                            return $this->toDomain($foundModel);
+                        }
+                    }
+                    
+                    throw new \RuntimeException('Falha ao criar tenant: o ID não foi gerado após salvar.');
                 }
                 
                 \Log::debug('Tenant criado com sucesso usando save() manual', [
