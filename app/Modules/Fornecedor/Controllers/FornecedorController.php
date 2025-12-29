@@ -64,9 +64,53 @@ class FornecedorController extends BaseApiController
             $fornecedoresDomain = $this->fornecedorRepository->buscarComFiltros($filters);
             
             // Converter entidades de domínio para modelos Eloquent para Resource
-            $fornecedores = $fornecedoresDomain->getCollection()->map(function ($fornecedorDomain) {
-                return Fornecedor::findOrFail($fornecedorDomain->id);
-            });
+            // IMPORTANTE: Usar withoutGlobalScope temporariamente para buscar por ID,
+            // mas validar que o empresa_id corresponde ao esperado
+            $fornecedores = $fornecedoresDomain->getCollection()->map(function ($fornecedorDomain) use ($empresa) {
+                // Buscar sem Global Scope para evitar conflito, mas validar empresa_id
+                $model = Fornecedor::withoutGlobalScope('empresa')->find($fornecedorDomain->id);
+                
+                if (!$model) {
+                    Log::warning('Fornecedor não encontrado ao converter para modelo', [
+                        'fornecedor_id' => $fornecedorDomain->id,
+                        'empresa_id_esperado' => $empresa->id,
+                    ]);
+                    return null;
+                }
+                
+                // VALIDAÇÃO CRÍTICA: Garantir que o fornecedor pertence à empresa correta
+                if ($model->empresa_id != $empresa->id) {
+                    Log::error('Tentativa de acessar fornecedor de outra empresa - BLOQUEADO', [
+                        'fornecedor_id' => $fornecedorDomain->id,
+                        'fornecedor_empresa_id' => $model->empresa_id,
+                        'empresa_id_esperado' => $empresa->id,
+                        'empresa_id_domain' => $fornecedorDomain->empresaId,
+                        'user_id' => auth()->id(),
+                        'tenant_id' => tenancy()->tenant?->id,
+                    ]);
+                    return null; // Não retornar fornecedor de outra empresa
+                }
+                
+                // Validação adicional: verificar se empresa_id do domain corresponde
+                if ($fornecedorDomain->empresaId != $empresa->id) {
+                    Log::error('Inconsistência: empresa_id do domain não corresponde', [
+                        'fornecedor_id' => $fornecedorDomain->id,
+                        'empresa_id_domain' => $fornecedorDomain->empresaId,
+                        'empresa_id_model' => $model->empresa_id,
+                        'empresa_id_esperado' => $empresa->id,
+                    ]);
+                    return null;
+                }
+                
+                return $model;
+            })->filter(); // Remove nulls
+            
+            Log::debug('FornecedorController::index() - Conversão para modelos concluída', [
+                'empresa_id' => $empresa->id,
+                'total_domain' => $fornecedoresDomain->count(),
+                'total_apos_validacao' => $fornecedores->count(),
+                'ids_validos' => $fornecedores->pluck('id')->toArray(),
+            ]);
             
             // Criar paginator manual para manter estrutura
             $paginator = new \Illuminate\Pagination\LengthAwarePaginator(

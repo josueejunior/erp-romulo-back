@@ -72,8 +72,6 @@ class FornecedorRepository implements FornecedorRepositoryInterface
 
     public function buscarComFiltros(array $filtros = []): LengthAwarePaginator
     {
-        $query = FornecedorModel::query();
-
         // CRÍTICO: Sempre filtrar por empresa_id
         // Se não tiver empresa_id nos filtros, retornar vazio para segurança
         if (!isset($filtros['empresa_id']) || empty($filtros['empresa_id'])) {
@@ -89,8 +87,20 @@ class FornecedorRepository implements FornecedorRepositoryInterface
             );
         }
 
-        // Filtrar por empresa_id (obrigatório)
-        $query->where('empresa_id', $filtros['empresa_id']);
+        // IMPORTANTE: Remover Global Scope temporariamente para evitar duplicação de filtro
+        // O Global Scope aplica where('empresa_id', ...) automaticamente, mas vamos
+        // garantir que usamos o empresa_id dos filtros explicitamente
+        $query = FornecedorModel::withoutGlobalScope('empresa')->query();
+        
+        // Filtrar por empresa_id (obrigatório) - aplicação explícita
+        $query->where('fornecedores.empresa_id', $filtros['empresa_id'])
+              ->whereNotNull('fornecedores.empresa_id');
+        
+        \Log::debug('FornecedorRepository->buscarComFiltros() - Query construída', [
+            'empresa_id_filtro' => $filtros['empresa_id'],
+            'sql' => $query->toSql(),
+            'bindings' => $query->getBindings(),
+        ]);
 
         // Filtro por transportadoras
         if (isset($filtros['apenas_transportadoras']) && $filtros['apenas_transportadoras']) {
@@ -109,11 +119,31 @@ class FornecedorRepository implements FornecedorRepositoryInterface
         $perPage = $filtros['per_page'] ?? 15;
         $paginator = $query->orderBy('criado_em', 'desc')->paginate($perPage);
 
+        // Log detalhado dos IDs retornados para debug
+        $idsRetornados = $paginator->getCollection()->pluck('id')->toArray();
+        $empresasIdsRetornados = $paginator->getCollection()->pluck('empresa_id')->toArray();
+        
         \Log::debug('FornecedorRepository->buscarComFiltros() resultado', [
-            'empresa_id' => $filtros['empresa_id'],
+            'empresa_id_filtro' => $filtros['empresa_id'],
             'total' => $paginator->total(),
             'count' => $paginator->count(),
+            'ids_retornados' => $idsRetornados,
+            'empresas_ids_retornados' => $empresasIdsRetornados,
+            'empresas_unicas' => array_unique($empresasIdsRetornados),
         ]);
+        
+        // VALIDAÇÃO CRÍTICA: Verificar se todos os registros pertencem à empresa correta
+        $empresasInvalidas = array_filter($empresasIdsRetornados, function($empresaId) use ($filtros) {
+            return $empresaId != $filtros['empresa_id'];
+        });
+        
+        if (!empty($empresasInvalidas)) {
+            \Log::error('FornecedorRepository->buscarComFiltros() - DADOS DE OUTRA EMPRESA ENCONTRADOS!', [
+                'empresa_id_filtro' => $filtros['empresa_id'],
+                'empresas_invalidas' => array_values($empresasInvalidas),
+                'ids_invalidos' => array_keys($empresasInvalidas),
+            ]);
+        }
 
         $paginator->getCollection()->transform(function ($model) {
             return $this->toDomain($model);
