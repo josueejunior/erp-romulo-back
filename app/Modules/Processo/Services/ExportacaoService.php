@@ -64,8 +64,11 @@ class ExportacaoService
                 $query->orderBy('numero_item');
             },
             'itens.orcamentos' => function ($query) use ($processo) {
+                // Remover scope global que causa ambiguidade
+                $query->withoutGlobalScope('empresa');
                 // Especificar a tabela explicitamente para evitar ambiguidade de empresa_id
                 $query->where('orcamentos.empresa_id', $processo->empresa_id)
+                      ->whereNotNull('orcamentos.empresa_id')
                       ->with(['fornecedor', 'formacaoPreco']);
             }
         ]);
@@ -270,8 +273,11 @@ class ExportacaoService
                 $query->orderBy('numero_item');
             },
             'itens.orcamentos' => function ($query) use ($processo) {
+                // Remover scope global que causa ambiguidade
+                $query->withoutGlobalScope('empresa');
                 // Especificar a tabela explicitamente para evitar ambiguidade de empresa_id
                 $query->where('orcamentos.empresa_id', $processo->empresa_id)
+                      ->whereNotNull('orcamentos.empresa_id')
                       ->with(['fornecedor', 'formacaoPreco']);
             }
         ]);

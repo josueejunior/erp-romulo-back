@@ -94,14 +94,14 @@ class ProcessoItem extends BaseModel
             'orcamento_id' // Local key on orcamento_itens table
         );
         
-        // O scope global HasEmpresaScope aplica where('empresa_id', ...) automaticamente
-        // Mas em hasManyThrough com JOIN, isso causa ambiguidade
-        // Precisamos remover o scope global e aplicar o filtro explicitamente na tabela correta
+        // IMPORTANTE: Remover o scope global ANTES de qualquer filtro
+        // O HasEmpresaScope aplica where('empresa_id', ...) automaticamente
+        // Mas em hasManyThrough com JOIN, isso causa ambiguidade porque não especifica a tabela
+        $relation->withoutGlobalScope('empresa');
+        
+        // Aplicar o filtro explicitamente na tabela orcamentos
         $empresaId = $this->empresa_id ?? null;
         if ($empresaId) {
-            // Remover o scope global que aplica empresa_id sem especificar tabela
-            $relation->withoutGlobalScope('empresa');
-            // Aplicar o filtro explicitamente na tabela orcamentos
             $relation->where('orcamentos.empresa_id', $empresaId)
                      ->whereNotNull('orcamentos.empresa_id');
         }
