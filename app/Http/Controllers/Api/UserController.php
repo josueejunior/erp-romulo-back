@@ -273,70 +273,101 @@ class UserController extends BaseApiController
                 ]);
                 
                 foreach ($empresas as $empresa) {
-                    // Obter prefixo do cache do Laravel
-                    $cachePrefix = config('cache.prefix', '');
-                    if (!empty($cachePrefix) && !str_ends_with($cachePrefix, ':')) {
-                        $cachePrefix .= ':';
-                    }
-                    
-                    // Padrão com prefixo do Laravel Cache
-                    $pattern = $cachePrefix . "tenant_{$tenantId}:empresa_{$empresa->id}:fornecedores:*";
                     Log::debug('switchEmpresaAtiva - Limpando cache', [
-                        'pattern' => $pattern,
-                        'cache_prefix' => $cachePrefix,
                         'empresa_id' => $empresa->id,
+                        'tenant_id' => $tenantId,
                     ]);
                     
                     try {
+                        // O RedisService usa Cache::store('redis')->put() que adiciona prefixo automaticamente
+                        // Precisamos usar Redis::keys() ou Redis::scan() com o prefixo correto
+                        $cachePrefix = config('cache.prefix', '');
+                        if (!empty($cachePrefix) && !str_ends_with($cachePrefix, ':')) {
+                            $cachePrefix .= ':';
+                        }
+                        
+                        // Padrão base (sem prefixo - o Laravel adiciona)
+                        $basePattern = "tenant_{$tenantId}:empresa_{$empresa->id}:fornecedores:*";
+                        $patternWithPrefix = $cachePrefix . $basePattern;
+                        
+                        Log::debug('switchEmpresaAtiva - Buscando chaves', [
+                            'base_pattern' => $basePattern,
+                            'pattern_with_prefix' => $patternWithPrefix,
+                            'cache_prefix' => $cachePrefix,
+                        ]);
+                        
                         $totalKeysDeleted = 0;
-                        $cursor = 0;
-                        do {
-                            $result = Redis::scan($cursor, ['match' => $pattern, 'count' => 100]);
-                            $cursor = $result[0];
-                            $keys = $result[1];
-                            if (!empty($keys)) {
-                                $deleted = Redis::del($keys);
-                                $totalKeysDeleted += $deleted;
-                                Log::debug('switchEmpresaAtiva - Chaves deletadas', [
-                                    'pattern' => $pattern,
-                                    'keys_found' => count($keys),
-                                    'keys_deleted' => $deleted,
-                                    'total_deleted' => $totalKeysDeleted,
-                                    'sample_keys' => array_slice($keys, 0, 3), // Mostrar primeiras 3 chaves como exemplo
+                        $allKeys = [];
+                        
+                        // Método 1: Usar Redis::keys() (funciona, mas pode ser lento em produção)
+                        try {
+                            $keysFound = Redis::keys($patternWithPrefix);
+                            if (!empty($keysFound)) {
+                                $allKeys = array_merge($allKeys, $keysFound);
+                                Log::debug('switchEmpresaAtiva - Chaves encontradas via Redis::keys()', [
+                                    'keys_found' => count($keysFound),
+                                    'sample_keys' => array_slice($keysFound, 0, 5),
                                 ]);
                             }
-                        } while ($cursor != 0);
+                        } catch (\Exception $e) {
+                            Log::warning('Erro ao usar Redis::keys()', ['error' => $e->getMessage()]);
+                        }
                         
-                        // Também tentar limpar usando Cache facade (mais seguro)
-                        $cacheKey = "tenant_{$tenantId}:empresa_{$empresa->id}:fornecedores:index:*";
-                        try {
-                            // Buscar todas as chaves possíveis e deletar
-                            $allKeys = [];
-                            $cursor2 = 0;
-                            do {
-                                $result2 = Redis::scan($cursor2, ['match' => $pattern, 'count' => 1000]);
-                                $cursor2 = $result2[0];
-                                $keys2 = $result2[1];
-                                if (!empty($keys2)) {
-                                    $allKeys = array_merge($allKeys, $keys2);
+                        // Método 2: Se não encontrou, tentar sem prefixo
+                        if (empty($allKeys)) {
+                            try {
+                                $keysFound2 = Redis::keys($basePattern);
+                                if (!empty($keysFound2)) {
+                                    $allKeys = array_merge($allKeys, $keysFound2);
+                                    Log::debug('switchEmpresaAtiva - Chaves encontradas (sem prefixo)', [
+                                        'keys_found' => count($keysFound2),
+                                        'sample_keys' => array_slice($keysFound2, 0, 5),
+                                    ]);
                                 }
-                            } while ($cursor2 != 0);
-                            
-                            // Deletar usando Cache facade (remove prefixo automaticamente)
-                            foreach ($allKeys as $key) {
-                                // Remover prefixo da chave para usar com Cache facade
-                                $keyWithoutPrefix = str_replace($cachePrefix, '', $key);
-                                Cache::store('redis')->forget($keyWithoutPrefix);
+                            } catch (\Exception $e) {
+                                Log::warning('Erro ao buscar chaves sem prefixo', ['error' => $e->getMessage()]);
                             }
-                        } catch (\Exception $e2) {
-                            Log::warning('Erro ao limpar cache usando Cache facade', [
-                                'error' => $e2->getMessage(),
+                        }
+                        
+                        // Método 3: Usar Redis::scan() como fallback
+                        if (empty($allKeys)) {
+                            $cursor = 0;
+                            do {
+                                try {
+                                    $result = Redis::scan($cursor, ['match' => $patternWithPrefix, 'count' => 1000]);
+                                    $cursor = $result[0];
+                                    $keys = $result[1];
+                                    if (!empty($keys)) {
+                                        $allKeys = array_merge($allKeys, $keys);
+                                    }
+                                } catch (\Exception $e) {
+                                    Log::warning('Erro no Redis::scan()', ['error' => $e->getMessage()]);
+                                    break;
+                                }
+                            } while ($cursor != 0);
+                        }
+                        
+                        // Deletar todas as chaves encontradas
+                        if (!empty($allKeys)) {
+                            $deleted = Redis::del($allKeys);
+                            $totalKeysDeleted = $deleted;
+                            
+                            Log::info('switchEmpresaAtiva - Chaves deletadas', [
+                                'empresa_id' => $empresa->id,
+                                'total_keys_found' => count($allKeys),
+                                'total_keys_deleted' => $deleted,
+                                'sample_keys' => array_slice($allKeys, 0, 3),
+                            ]);
+                        } else {
+                            Log::warning('switchEmpresaAtiva - Nenhuma chave encontrada para deletar', [
+                                'empresa_id' => $empresa->id,
+                                'pattern_with_prefix' => $patternWithPrefix,
+                                'base_pattern' => $basePattern,
                             ]);
                         }
                         
-                        Log::info('switchEmpresaAtiva - Cache limpo com sucesso', [
+                        Log::info('switchEmpresaAtiva - Cache limpo', [
                             'empresa_id' => $empresa->id,
-                            'pattern' => $pattern,
                             'total_keys_deleted' => $totalKeysDeleted,
                         ]);
                     } catch (\Exception $e) {
