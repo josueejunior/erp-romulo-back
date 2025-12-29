@@ -7,9 +7,11 @@ use App\Domain\NotaFiscal\Repositories\NotaFiscalRepositoryInterface;
 use App\Models\NotaFiscal as NotaFiscalModel;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Carbon\Carbon;
+use App\Infrastructure\Persistence\Eloquent\Traits\HasModelRetrieval;
 
 class NotaFiscalRepository implements NotaFiscalRepositoryInterface
 {
+    use HasModelRetrieval;
     private function toDomain(NotaFiscalModel $model): NotaFiscal
     {
         return new NotaFiscal(
@@ -115,6 +117,50 @@ class NotaFiscalRepository implements NotaFiscalRepositoryInterface
     public function deletar(int $id): void
     {
         NotaFiscalModel::findOrFail($id)->delete();
+    }
+
+    /**
+     * Busca um modelo Eloquent por ID (para Resources do Laravel)
+     * Mantém o Global Scope de Empresa ativo para segurança
+     */
+    public function buscarModeloPorId(int $id, array $with = []): ?NotaFiscalModel
+    {
+        return $this->buscarModeloPorIdInternal($id, $with, false);
+    }
+
+    /**
+     * Busca notas fiscais por processo com filtros opcionais
+     * Retorna array de entidades de domínio
+     */
+    public function buscarPorProcesso(int $processoId, array $filtros = []): array
+    {
+        $query = NotaFiscalModel::where('processo_id', $processoId);
+
+        if (isset($filtros['tipo'])) {
+            $query->where('tipo', $filtros['tipo']);
+        }
+
+        if (isset($filtros['situacao'])) {
+            $query->where('situacao', $filtros['situacao']);
+        }
+
+        if (isset($filtros['empresa_id'])) {
+            $query->where('empresa_id', $filtros['empresa_id']);
+        }
+
+        $models = $query->get();
+
+        return $models->map(function ($model) {
+            return $this->toDomain($model);
+        })->toArray();
+    }
+
+    /**
+     * Retorna a classe do modelo Eloquent
+     */
+    protected function getModelClass(): ?string
+    {
+        return NotaFiscalModel::class;
     }
 }
 

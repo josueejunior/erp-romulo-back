@@ -9,6 +9,7 @@ interface AutorizacaoFornecimentoRepositoryInterface
 {
     public function criar(AutorizacaoFornecimento $autorizacao): AutorizacaoFornecimento;
     public function buscarPorId(int $id): ?AutorizacaoFornecimento;
+    public function buscarModeloPorId(int $id, array $with = []): ?\App\Models\AutorizacaoFornecimento;
     public function buscarComFiltros(array $filtros = []): LengthAwarePaginator;
     public function atualizar(AutorizacaoFornecimento $autorizacao): AutorizacaoFornecimento;
     public function deletar(int $id): void;

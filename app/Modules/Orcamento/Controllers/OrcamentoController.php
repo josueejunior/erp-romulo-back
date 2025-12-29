@@ -10,6 +10,9 @@ use App\Models\Orcamento;
 use App\Modules\Orcamento\Services\OrcamentoService;
 use App\Application\Orcamento\UseCases\CriarOrcamentoUseCase;
 use App\Application\Orcamento\DTOs\CriarOrcamentoDTO;
+use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
+use App\Domain\ProcessoItem\Repositories\ProcessoItemRepositoryInterface;
+use App\Domain\Orcamento\Repositories\OrcamentoRepositoryInterface;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
@@ -21,7 +24,11 @@ class OrcamentoController extends BaseApiController
     public function __construct(
         OrcamentoService $orcamentoService,
         private CriarOrcamentoUseCase $criarOrcamentoUseCase,
+        private ProcessoRepositoryInterface $processoRepository,
+        private ProcessoItemRepositoryInterface $processoItemRepository,
+        private OrcamentoRepositoryInterface $orcamentoRepository,
     ) {
+        parent::__construct(app(\App\Domain\Empresa\Repositories\EmpresaRepositoryInterface::class), app(\App\Domain\Auth\Repositories\UserRepositoryInterface::class));
         $this->orcamentoService = $orcamentoService;
         $this->service = $orcamentoService; // Para HasDefaultActions
     }
@@ -31,10 +38,20 @@ class OrcamentoController extends BaseApiController
      */
     public function list(Request $request)
     {
-        return $this->index($request, 
-            Processo::findOrFail($request->route()->parameter('processo')),
-            ProcessoItem::findOrFail($request->route()->parameter('item'))
-        );
+        $processoId = $request->route()->parameter('processo');
+        $itemId = $request->route()->parameter('item');
+        
+        $processoDomain = $this->processoRepository->buscarModeloPorId($processoId);
+        if (!$processoDomain) {
+            return response()->json(['message' => 'Processo não encontrado.'], 404);
+        }
+        
+        $itemModel = $this->processoItemRepository->buscarModeloPorId($itemId);
+        if (!$itemModel) {
+            return response()->json(['message' => 'Item não encontrado.'], 404);
+        }
+        
+        return $this->index($request, $processoDomain, $itemModel);
     }
 
     /**
@@ -42,11 +59,26 @@ class OrcamentoController extends BaseApiController
      */
     public function get(Request $request)
     {
-        return $this->show(
-            Processo::findOrFail($request->route()->parameter('processo')),
-            ProcessoItem::findOrFail($request->route()->parameter('item')),
-            Orcamento::findOrFail($request->route()->parameter('orcamento'))
-        );
+        $processoId = $request->route()->parameter('processo');
+        $itemId = $request->route()->parameter('item');
+        $orcamentoId = $request->route()->parameter('orcamento');
+        
+        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
+        if (!$processoModel) {
+            return response()->json(['message' => 'Processo não encontrado.'], 404);
+        }
+        
+        $itemModel = $this->processoItemRepository->buscarModeloPorId($itemId);
+        if (!$itemModel) {
+            return response()->json(['message' => 'Item não encontrado.'], 404);
+        }
+        
+        $orcamentoModel = $this->orcamentoRepository->buscarModeloPorId($orcamentoId);
+        if (!$orcamentoModel) {
+            return response()->json(['message' => 'Orçamento não encontrado.'], 404);
+        }
+        
+        return $this->show($processoModel, $itemModel, $orcamentoModel);
     }
 
     public function index(Request $request, Processo $processo, ProcessoItem $item)
@@ -72,11 +104,20 @@ class OrcamentoController extends BaseApiController
      */
     public function store(Request $request)
     {
-        $route = $request->route();
-        $processo = Processo::findOrFail($route->parameter('processo'));
-        $item = ProcessoItem::findOrFail($route->parameter('item'));
+        $processoId = $request->route()->parameter('processo');
+        $itemId = $request->route()->parameter('item');
         
-        return $this->storeWeb($request, $processo, $item);
+        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
+        if (!$processoModel) {
+            return response()->json(['message' => 'Processo não encontrado.'], 404);
+        }
+        
+        $itemModel = $this->processoItemRepository->buscarModeloPorId($itemId);
+        if (!$itemModel) {
+            return response()->json(['message' => 'Item não encontrado.'], 404);
+        }
+        
+        return $this->storeWeb($request, $processoModel, $itemModel);
     }
 
     /**
@@ -100,9 +141,15 @@ class OrcamentoController extends BaseApiController
             $dto = CriarOrcamentoDTO::fromArray($data);
             $orcamentoDomain = $this->criarOrcamentoUseCase->executar($dto);
             
-            // Buscar modelo Eloquent para Resource
-            $orcamento = Orcamento::findOrFail($orcamentoDomain->id);
-            $orcamento->load(['fornecedor', 'transportadora', 'itens.processoItem', 'itens.formacaoPreco']);
+            // Buscar modelo Eloquent para Resource usando repository
+            $orcamento = $this->orcamentoRepository->buscarModeloPorId(
+                $orcamentoDomain->id,
+                ['fornecedor', 'transportadora', 'itens.processoItem', 'itens.formacaoPreco']
+            );
+            
+            if (!$orcamento) {
+                return response()->json(['message' => 'Orçamento não encontrado após criação.'], 404);
+            }
             
             return new OrcamentoResource($orcamento);
         } catch (ValidationException $e) {
@@ -136,12 +183,25 @@ class OrcamentoController extends BaseApiController
      */
     public function update(Request $request, $id)
     {
-        $route = $request->route();
-        $processo = Processo::findOrFail($route->parameter('processo'));
-        $item = ProcessoItem::findOrFail($route->parameter('item'));
-        $orcamento = Orcamento::findOrFail($id);
+        $processoId = $request->route()->parameter('processo');
+        $itemId = $request->route()->parameter('item');
         
-        return $this->updateWeb($request, $processo, $item, $orcamento);
+        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
+        if (!$processoModel) {
+            return response()->json(['message' => 'Processo não encontrado.'], 404);
+        }
+        
+        $itemModel = $this->processoItemRepository->buscarModeloPorId($itemId);
+        if (!$itemModel) {
+            return response()->json(['message' => 'Item não encontrado.'], 404);
+        }
+        
+        $orcamentoModel = $this->orcamentoRepository->buscarModeloPorId($id);
+        if (!$orcamentoModel) {
+            return response()->json(['message' => 'Orçamento não encontrado.'], 404);
+        }
+        
+        return $this->updateWeb($request, $processoModel, $itemModel, $orcamentoModel);
     }
 
     /**
@@ -149,12 +209,25 @@ class OrcamentoController extends BaseApiController
      */
     public function destroy(Request $request, $id)
     {
-        $route = $request->route();
-        $processo = Processo::findOrFail($route->parameter('processo'));
-        $item = ProcessoItem::findOrFail($route->parameter('item'));
-        $orcamento = Orcamento::findOrFail($id);
+        $processoId = $request->route()->parameter('processo');
+        $itemId = $request->route()->parameter('item');
         
-        return $this->destroyWeb($processo, $item, $orcamento);
+        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
+        if (!$processoModel) {
+            return response()->json(['message' => 'Processo não encontrado.'], 404);
+        }
+        
+        $itemModel = $this->processoItemRepository->buscarModeloPorId($itemId);
+        if (!$itemModel) {
+            return response()->json(['message' => 'Item não encontrado.'], 404);
+        }
+        
+        $orcamentoModel = $this->orcamentoRepository->buscarModeloPorId($id);
+        if (!$orcamentoModel) {
+            return response()->json(['message' => 'Orçamento não encontrado.'], 404);
+        }
+        
+        return $this->destroyWeb($processoModel, $itemModel, $orcamentoModel);
     }
 
     /**

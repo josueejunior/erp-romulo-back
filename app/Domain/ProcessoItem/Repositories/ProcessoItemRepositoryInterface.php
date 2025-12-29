@@ -12,6 +12,7 @@ interface ProcessoItemRepositoryInterface
 {
     public function criar(ProcessoItem $processoItem): ProcessoItem;
     public function buscarPorId(int $id): ?ProcessoItem;
+    public function buscarModeloPorId(int $id, array $with = []): ?\App\Modules\Processo\Models\ProcessoItem;
     public function buscarPorProcesso(int $processoId): array;
     public function buscarComFiltros(array $filtros = []): LengthAwarePaginator;
     public function atualizar(ProcessoItem $processoItem): ProcessoItem;

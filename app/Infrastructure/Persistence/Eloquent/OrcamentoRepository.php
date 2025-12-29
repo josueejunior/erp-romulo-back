@@ -6,9 +6,11 @@ use App\Domain\Orcamento\Entities\Orcamento;
 use App\Domain\Orcamento\Repositories\OrcamentoRepositoryInterface;
 use App\Models\Orcamento as OrcamentoModel;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use App\Infrastructure\Persistence\Eloquent\Traits\HasModelRetrieval;
 
 class OrcamentoRepository implements OrcamentoRepositoryInterface
 {
+    use HasModelRetrieval;
     private function toDomain(OrcamentoModel $model): Orcamento
     {
         return new Orcamento(
@@ -90,6 +92,23 @@ class OrcamentoRepository implements OrcamentoRepositoryInterface
     public function deletar(int $id): void
     {
         OrcamentoModel::findOrFail($id)->delete();
+    }
+
+    /**
+     * Busca um modelo Eloquent por ID (para Resources do Laravel)
+     * Mantém o Global Scope de Empresa ativo para segurança
+     */
+    public function buscarModeloPorId(int $id, array $with = []): ?OrcamentoModel
+    {
+        return $this->buscarModeloPorIdInternal($id, $with, false);
+    }
+
+    /**
+     * Retorna a classe do modelo Eloquent
+     */
+    protected function getModelClass(): ?string
+    {
+        return OrcamentoModel::class;
     }
 }
 

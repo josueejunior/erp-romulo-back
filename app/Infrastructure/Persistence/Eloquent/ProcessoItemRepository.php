@@ -7,9 +7,11 @@ use App\Domain\ProcessoItem\Repositories\ProcessoItemRepositoryInterface;
 use App\Modules\Processo\Models\ProcessoItem as ProcessoItemModel;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Carbon\Carbon;
+use App\Infrastructure\Persistence\Eloquent\Traits\HasModelRetrieval;
 
 class ProcessoItemRepository implements ProcessoItemRepositoryInterface
 {
+    use HasModelRetrieval;
     private function toDomain(ProcessoItemModel $model): ProcessoItem
     {
         return new ProcessoItem(
@@ -141,6 +143,23 @@ class ProcessoItemRepository implements ProcessoItemRepositoryInterface
     public function deletar(int $id): void
     {
         ProcessoItemModel::findOrFail($id)->delete();
+    }
+
+    /**
+     * Busca um modelo Eloquent por ID (para Resources do Laravel)
+     * Mantém o Global Scope de Empresa ativo para segurança
+     */
+    public function buscarModeloPorId(int $id, array $with = []): ?ProcessoItemModel
+    {
+        return $this->buscarModeloPorIdInternal($id, $with, false);
+    }
+
+    /**
+     * Retorna a classe do modelo Eloquent
+     */
+    protected function getModelClass(): ?string
+    {
+        return ProcessoItemModel::class;
     }
 }
 

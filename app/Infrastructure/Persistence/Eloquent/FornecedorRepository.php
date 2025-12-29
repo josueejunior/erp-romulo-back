@@ -7,10 +7,11 @@ use App\Domain\Fornecedor\Repositories\FornecedorRepositoryInterface;
 use App\Modules\Fornecedor\Models\Fornecedor as FornecedorModel;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use App\Infrastructure\Persistence\Eloquent\Traits\IsolamentoEmpresaTrait;
+use App\Infrastructure\Persistence\Eloquent\Traits\HasModelRetrieval;
 
 class FornecedorRepository implements FornecedorRepositoryInterface
 {
-    use IsolamentoEmpresaTrait;
+    use IsolamentoEmpresaTrait, HasModelRetrieval;
     private function toDomain(FornecedorModel $model): Fornecedor
     {
         return new Fornecedor(
@@ -114,6 +115,23 @@ class FornecedorRepository implements FornecedorRepositoryInterface
     public function deletar(int $id): void
     {
         FornecedorModel::findOrFail($id)->delete();
+    }
+
+    /**
+     * Busca um modelo Eloquent por ID (para Resources do Laravel)
+     * Mantém o Global Scope de Empresa ativo para segurança
+     */
+    public function buscarModeloPorId(int $id, array $with = []): ?FornecedorModel
+    {
+        return $this->buscarModeloPorIdInternal($id, $with, false);
+    }
+
+    /**
+     * Retorna a classe do modelo Eloquent
+     */
+    protected function getModelClass(): ?string
+    {
+        return FornecedorModel::class;
     }
 }
 
