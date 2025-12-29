@@ -176,18 +176,39 @@ class AdminUserController extends Controller
     public function update(Request $request, Tenant $tenant, int $userId)
     {
         try {
-            // Normalizar password: string vazia ou apenas espaços vira null
+            // Normalizar password: string vazia ou apenas espaços remove o campo completamente
             $data = $request->all();
+            $hasPassword = false;
+            
+            // Verificar se password foi enviado e não está vazio
             if (isset($data['password'])) {
-                $password = is_string($data['password']) ? trim($data['password']) : $data['password'];
-                // Se for string vazia, null ou apenas espaços, remover do request
-                if ($password === '' || $password === null) {
+                $password = $data['password'];
+                
+                // Se for string, fazer trim
+                if (is_string($password)) {
+                    $password = trim($password);
+                }
+                
+                // Se for string vazia, null ou apenas espaços, remover completamente
+                if ($password === '' || $password === null || (is_string($password) && strlen($password) === 0)) {
                     unset($data['password']);
+                    $hasPassword = false;
                 } else {
+                    // Senha válida, manter
                     $data['password'] = $password;
+                    $hasPassword = true;
                 }
             }
-            $request->merge($data);
+            
+            // Recriar request completamente (replace remove campos não presentes)
+            $request->replace($data);
+            
+            // Log para debug
+            \Log::info('AdminUserController::update - Password normalizado', [
+                'has_password' => $hasPassword,
+                'password_in_request' => $request->has('password'),
+                'request_keys' => array_keys($request->all()),
+            ]);
 
             // Validação: senha só é validada se for fornecida e não vazia
             $rules = [
@@ -198,7 +219,7 @@ class AdminUserController extends Controller
             ];
             
             // Se password foi fornecido e não está vazio, validar
-            if ($request->has('password') && $request->input('password') !== null && trim($request->input('password')) !== '') {
+            if ($hasPassword && isset($data['password']) && !empty(trim($data['password']))) {
                 $rules['password'] = ['required', 'string', 'min:8', new \App\Rules\StrongPassword()];
             }
             
