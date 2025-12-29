@@ -7,6 +7,7 @@ use App\Modules\Processo\Models\Processo;
 use App\Models\CustoIndireto;
 use App\Modules\Relatorio\Services\FinanceiroService;
 use App\Services\RedisService;
+use App\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
 use App\Helpers\PermissionHelper;
 use Carbon\Carbon;
@@ -73,15 +74,18 @@ class RelatorioFinanceiroController extends BaseApiController
             ->whereNotNull('empresa_id')
             ->with(['itens', 'contratos', 'empenhos', 'notasFiscais']);
 
+        // Usar o timestamp customizado (criado_em) em vez de created_at
+        $createdAtColumn = Processo::CREATED_AT ?? Blueprint::CREATED_AT;
+
         if ($request->data_inicio) {
-            $query->where('created_at', '>=', $request->data_inicio);
+            $query->where($createdAtColumn, '>=', $request->data_inicio);
         }
 
         if ($request->data_fim) {
-            $query->where('created_at', '<=', $request->data_fim);
+            $query->where($createdAtColumn, '<=', $request->data_fim);
         }
 
-        $processos = $query->orderBy('created_at', 'desc')->get();
+        $processos = $query->orderBy($createdAtColumn, 'desc')->get();
 
         $totalReceber = 0;
         $totalCustosDiretos = 0;
