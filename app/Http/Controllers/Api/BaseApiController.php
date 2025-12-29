@@ -150,9 +150,21 @@ abstract class BaseApiController extends Controller
 
         // DomainException retorna 400 (Bad Request)
         if ($e instanceof \App\Domain\Exceptions\DomainException) {
-            return response()->json([
-                'message' => $e->getMessage(),
-            ], 400);
+            $statusCode = $e->getCode() ?: 400;
+            $response = ['message' => $e->getMessage()];
+            
+            // Adicionar contexto para BusinessRuleException
+            if ($e instanceof \App\Domain\Exceptions\BusinessRuleException) {
+                $response['rule'] = $e->rule;
+                $response['context'] = $e->context;
+            }
+            
+            // Adicionar erros para ValidationException
+            if ($e instanceof \App\Domain\Exceptions\ValidationException && !empty($e->errors)) {
+                $response['errors'] = $e->errors;
+            }
+            
+            return response()->json($response, $statusCode);
         }
 
         // ValidationException retorna 422 (Unprocessable Entity)
