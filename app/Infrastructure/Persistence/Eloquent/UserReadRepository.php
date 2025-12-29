@@ -63,7 +63,8 @@ class UserReadRepository implements UserReadRepositoryInterface
         \Log::info('UserReadRepository: Listando usuários', [
             'filtros' => $filtros,
             'tenant_id' => tenancy()->tenant?->id,
-            'tenant_db' => tenancy()->tenant?->database ?? 'central',
+            'tenant_razao_social' => tenancy()->tenant?->razao_social ?? 'N/A',
+            'tenancy_initialized' => tenancy()->initialized,
         ]);
 
         if (isset($filtros['search']) && !empty($filtros['search'])) {
