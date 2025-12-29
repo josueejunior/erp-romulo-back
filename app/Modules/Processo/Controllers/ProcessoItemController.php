@@ -6,6 +6,8 @@ use App\Http\Controllers\Api\BaseApiController;
 use App\Modules\Processo\Models\Processo;
 use App\Modules\Processo\Models\ProcessoItem;
 use App\Modules\Processo\Services\ProcessoItemService;
+use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
+use App\Domain\ProcessoItem\Repositories\ProcessoItemRepositoryInterface;
 use Illuminate\Http\Request;
 
 class ProcessoItemController extends BaseApiController
@@ -13,8 +15,11 @@ class ProcessoItemController extends BaseApiController
 
     protected ProcessoItemService $itemService;
 
-    public function __construct(ProcessoItemService $itemService)
-    {
+    public function __construct(
+        ProcessoItemService $itemService,
+        private ProcessoRepositoryInterface $processoRepository,
+        private ProcessoItemRepositoryInterface $processoItemRepository,
+    ) {
         $this->itemService = $itemService;
         $this->service = $itemService; // Para HasDefaultActions
     }
@@ -32,9 +37,11 @@ class ProcessoItemController extends BaseApiController
         }
 
         $empresa = $this->getEmpresaAtivaOrFail();
-        $processo = Processo::where('id', $processoId)
-            ->where('empresa_id', $empresa->id)
-            ->firstOrFail();
+        // Buscar via repository (DDD)
+        $processo = $this->processoRepository->buscarModeloPorId($processoId);
+        if (!$processo || $processo->empresa_id !== $empresa->id) {
+            return response()->json(['message' => 'Processo não encontrado'], 404);
+        }
 
         try {
             $this->itemService->validarProcessoEmpresa($processo, $empresa->id);
@@ -60,9 +67,11 @@ class ProcessoItemController extends BaseApiController
         }
 
         $empresa = $this->getEmpresaAtivaOrFail();
-        $item = ProcessoItem::where('id', $itemId)
-            ->where('empresa_id', $empresa->id)
-            ->firstOrFail();
+        // Buscar via repository (DDD)
+        $item = $this->processoItemRepository->buscarModeloPorId($itemId);
+        if (!$item || $item->empresa_id !== $empresa->id) {
+            return response()->json(['message' => 'Item não encontrado'], 404);
+        }
 
         return response()->json(['data' => $item]);
     }
@@ -80,9 +89,11 @@ class ProcessoItemController extends BaseApiController
         }
 
         $empresa = $this->getEmpresaAtivaOrFail();
-        $processo = Processo::where('id', $processoId)
-            ->where('empresa_id', $empresa->id)
-            ->firstOrFail();
+        // Buscar via repository (DDD)
+        $processo = $this->processoRepository->buscarModeloPorId($processoId);
+        if (!$processo || $processo->empresa_id !== $empresa->id) {
+            return response()->json(['message' => 'Processo não encontrado'], 404);
+        }
 
         try {
             $this->itemService->validarProcessoEmpresa($processo, $empresa->id);
@@ -113,13 +124,17 @@ class ProcessoItemController extends BaseApiController
         }
 
         $empresa = $this->getEmpresaAtivaOrFail();
-        $processo = Processo::where('id', $processoId)
-            ->where('empresa_id', $empresa->id)
-            ->firstOrFail();
+        // Buscar via repository (DDD)
+        $processo = $this->processoRepository->buscarModeloPorId($processoId);
+        if (!$processo || $processo->empresa_id !== $empresa->id) {
+            return response()->json(['message' => 'Processo não encontrado'], 404);
+        }
         
-        $item = ProcessoItem::where('id', $id)
-            ->where('empresa_id', $empresa->id)
-            ->firstOrFail();
+        // Buscar via repository (DDD)
+        $item = $this->processoItemRepository->buscarModeloPorId($id);
+        if (!$item || $item->empresa_id !== $empresa->id) {
+            return response()->json(['message' => 'Item não encontrado'], 404);
+        }
 
         try {
             $this->itemService->validarProcessoEmpresa($processo, $empresa->id);
@@ -151,13 +166,17 @@ class ProcessoItemController extends BaseApiController
         }
 
         $empresa = $this->getEmpresaAtivaOrFail();
-        $processo = Processo::where('id', $processoId)
-            ->where('empresa_id', $empresa->id)
-            ->firstOrFail();
+        // Buscar via repository (DDD)
+        $processo = $this->processoRepository->buscarModeloPorId($processoId);
+        if (!$processo || $processo->empresa_id !== $empresa->id) {
+            return response()->json(['message' => 'Processo não encontrado'], 404);
+        }
         
-        $item = ProcessoItem::where('id', $id)
-            ->where('empresa_id', $empresa->id)
-            ->firstOrFail();
+        // Buscar via repository (DDD)
+        $item = $this->processoItemRepository->buscarModeloPorId($id);
+        if (!$item || $item->empresa_id !== $empresa->id) {
+            return response()->json(['message' => 'Item não encontrado'], 404);
+        }
 
         try {
             $this->itemService->validarProcessoEmpresa($processo, $empresa->id);
