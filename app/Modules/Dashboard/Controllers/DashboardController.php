@@ -3,14 +3,12 @@
 namespace App\Modules\Dashboard\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
-use App\Http\Controllers\Traits\HasDefaultActions;
 use App\Modules\Dashboard\Services\DashboardService;
 use App\Services\RedisService;
 use Illuminate\Http\Request;
 
 class DashboardController extends BaseApiController
 {
-    use HasDefaultActions;
 
     protected DashboardService $dashboardService;
 

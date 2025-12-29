@@ -27,7 +27,7 @@ use App\Modules\Processo\Controllers\ExportacaoController as ApiExportacaoContro
 use App\Modules\Processo\Controllers\SaldoController as ApiSaldoController;
 use App\Http\Controllers\Api\UserController as ApiUserController;
 use App\Http\Controllers\Api\PlanoController as ApiPlanoController;
-use App\Http\Controllers\Api\AssinaturaController as ApiAssinaturaController;
+// use App\Http\Controllers\Api\AssinaturaController as ApiAssinaturaController; // Controller não existe ainda
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Admin\AdminTenantController;
 use App\Http\Controllers\Admin\AdminUserController;
@@ -204,6 +204,8 @@ Route::prefix('v1')->group(function () {
         });
 
         // Assinaturas (requer autenticação e tenancy)
+        // TODO: Criar AssinaturaController antes de descomentar
+        /*
         Route::prefix('assinaturas')->group(function () {
             // Rotas específicas ANTES de rotas com parâmetros
             Route::get('/atual', [ApiAssinaturaController::class, 'atual']);
@@ -213,6 +215,7 @@ Route::prefix('v1')->group(function () {
             Route::post('/{assinatura}/renovar', [ApiAssinaturaController::class, 'renovar']);
             Route::post('/{assinatura}/cancelar', [ApiAssinaturaController::class, 'cancelar']);
         });
+        */
     });
 });
 

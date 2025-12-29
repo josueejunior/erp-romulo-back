@@ -3,7 +3,6 @@
 namespace App\Modules\Processo\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Http\Controllers\Traits\HasDefaultActions;
 use App\Http\Controllers\Traits\HasAuthContext;
 use App\Modules\Processo\Services\ProcessoService;
 use App\Modules\Processo\Models\Processo;
@@ -26,7 +25,7 @@ use Illuminate\Http\JsonResponse;
  */
 class ProcessoController extends Controller
 {
-    use HasDefaultActions, HasAuthContext;
+    use HasAuthContext;
 
     /**
      * Classe do modelo para casting de dados no store
