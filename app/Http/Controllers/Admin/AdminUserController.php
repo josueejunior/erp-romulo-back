@@ -122,18 +122,44 @@ class AdminUserController extends Controller
     public function store(Request $request, Tenant $tenant)
     {
         try {
-            $validated = $request->validate([
+            \Log::info('AdminUserController::store - Iniciando', [
+                'tenant_id' => $tenant->id,
+                'request_data' => $request->except(['password']), // Não logar senha
+                'has_empresas' => $request->has('empresas'),
+                'has_empresa_id' => $request->has('empresa_id'),
+                'has_empresa_ativa_id' => $request->has('empresa_ativa_id'),
+            ]);
+            
+            // Validação: aceitar empresa_id OU empresas (array)
+            $rules = [
                 'name' => 'required|string|max:255',
                 'email' => 'required|email|max:255',
                 'password' => ['required', 'string', 'min:8', new \App\Rules\StrongPassword()],
-                'empresa_id' => 'required|integer',
                 'role' => 'nullable|string|in:Administrador,Operacional,Financeiro,Consulta',
-            ], [
+            ];
+            
+            // Se empresas for enviado, validar como array
+            // Se não, validar empresa_id como obrigatório
+            // IMPORTANTE: Validação de exists será feita no UseCase (já no contexto do tenant)
+            if ($request->has('empresas') && is_array($request->input('empresas'))) {
+                $rules['empresas'] = 'required|array|min:1';
+                $rules['empresas.*'] = 'integer';
+            } else {
+                $rules['empresa_id'] = 'required|integer';
+            }
+            
+            $validated = $request->validate($rules, [
                 'name.required' => 'O nome é obrigatório.',
                 'email.required' => 'O e-mail é obrigatório.',
                 'password.required' => 'A senha é obrigatória.',
                 'empresa_id.required' => 'A empresa é obrigatória.',
+                'empresas.required' => 'Selecione pelo menos uma empresa.',
+                'empresas.min' => 'Selecione pelo menos uma empresa.',
                 'role.in' => 'O perfil deve ser: Administrador, Operacional, Financeiro ou Consulta.',
+            ]);
+            
+            \Log::info('AdminUserController::store - Validação passou', [
+                'validated_keys' => array_keys($validated),
             ]);
 
             // Criar TenantContext explícito (não depende de request())

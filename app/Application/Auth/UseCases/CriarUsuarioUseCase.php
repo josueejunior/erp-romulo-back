@@ -64,6 +64,19 @@ class CriarUsuarioUseCase
         // Persistir e associar empresa (infraestrutura)
         $user = $this->userRepository->criar($user, $dto->empresaId, $dto->role);
 
+        // Se múltiplas empresas foram fornecidas, sincronizar
+        if ($dto->empresas !== null && !empty($dto->empresas)) {
+            // Validar que todas as empresas existem no tenant
+            foreach ($dto->empresas as $empresaId) {
+                $empresa = $this->empresaRepository->buscarPorId($empresaId);
+                if (!$empresa) {
+                    throw new DomainException("Empresa ID {$empresaId} não encontrada neste tenant.");
+                }
+            }
+            // Sincronizar empresas
+            $this->userRepository->sincronizarEmpresas($user->id, $dto->empresas);
+        }
+
         // Atribuir role usando Domain Service
         $this->roleService->atribuirRole($user, $dto->role);
 
