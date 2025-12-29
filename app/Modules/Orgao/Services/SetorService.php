@@ -29,8 +29,25 @@ class SetorService extends BaseService
 
         // Filtro por órgão
         if (isset($params['orgao_id'])) {
+            // Garantir que orgao_id seja sempre um inteiro
+            $orgaoId = $params['orgao_id'];
+            
+            // Se for array ou objeto, tentar extrair o ID
+            if (is_array($orgaoId)) {
+                $orgaoId = $orgaoId['id'] ?? $orgaoId['value'] ?? null;
+            } elseif (is_object($orgaoId)) {
+                $orgaoId = $orgaoId->id ?? $orgaoId->value ?? null;
+            }
+            
+            // Converter para inteiro
+            $orgaoId = filter_var($orgaoId, FILTER_VALIDATE_INT);
+            
+            if ($orgaoId === false || $orgaoId === null) {
+                throw new \Exception('ID do órgão inválido.');
+            }
+            
             $empresaId = $this->getEmpresaId();
-            $orgao = Orgao::where('id', $params['orgao_id'])
+            $orgao = Orgao::where('id', $orgaoId)
                 ->where('empresa_id', $empresaId)
                 ->first();
             
@@ -38,7 +55,7 @@ class SetorService extends BaseService
                 throw new \Exception('Órgão não encontrado ou não pertence à empresa ativa.');
             }
             
-            $builder->where('orgao_id', $params['orgao_id']);
+            $builder->where('orgao_id', $orgaoId);
         }
 
         // Busca livre
