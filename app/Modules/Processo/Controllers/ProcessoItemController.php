@@ -2,13 +2,13 @@
 
 namespace App\Modules\Processo\Controllers;
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\BaseApiController;
 use App\Modules\Processo\Models\Processo;
 use App\Modules\Processo\Models\ProcessoItem;
 use App\Modules\Processo\Services\ProcessoItemService;
 use Illuminate\Http\Request;
 
-class ProcessoItemController extends Controller
+class ProcessoItemController extends BaseApiController
 {
 
     protected ProcessoItemService $itemService;
