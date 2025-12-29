@@ -2,17 +2,15 @@
 
 namespace App\Modules\Orgao\Controllers;
 
-use App\Http\Controllers\Api\RoutingController;
-use App\Http\Controllers\Traits\HasDefaultActions;
+use App\Http\Controllers\Controller;
 use App\Http\Resources\OrgaoResource;
 use App\Models\Orgao;
 use App\Modules\Orgao\Services\OrgaoService;
 use Illuminate\Http\Request;
 use App\Helpers\PermissionHelper;
 
-class OrgaoController extends RoutingController
+class OrgaoController extends Controller
 {
-    use HasDefaultActions;
 
     public function __construct(OrgaoService $service)
     {
@@ -233,8 +231,8 @@ class OrgaoController extends RoutingController
 
     public function destroy(Orgao $orgao)
     {
-        // Converter para chamar o método do trait HasDefaultActions
-        return parent::destroy(request(), $orgao->id);
+        // Chamar handleDestroy diretamente
+        return $this->handleDestroy(request(), $orgao->id);
     }
 }
 
