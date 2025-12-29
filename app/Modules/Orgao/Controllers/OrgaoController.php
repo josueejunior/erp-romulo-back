@@ -11,10 +11,22 @@ use App\Helpers\PermissionHelper;
 
 class OrgaoController extends Controller
 {
+    protected OrgaoService $service;
 
     public function __construct(OrgaoService $service)
     {
         $this->service = $service;
+    }
+
+    /**
+     * Extrai o ID da rota
+     */
+    protected function getRouteId($route): ?int
+    {
+        $parameters = $route->parameters();
+        // Tentar 'orgao' primeiro, depois 'id'
+        $id = $parameters['orgao'] ?? $parameters['id'] ?? null;
+        return $id ? (int) $id : null;
     }
     /**
      * Sobrescrever handleList para usar OrgaoResource
@@ -118,9 +130,28 @@ class OrgaoController extends Controller
         }
     }
 
+    /**
+     * Método para Route::module - Listar órgãos
+     */
+    public function list(Request $request)
+    {
+        return $this->handleList($request);
+    }
+
+    /**
+     * Método padrão Laravel - Listar órgãos
+     */
     public function index(Request $request)
     {
         return $this->handleList($request);
+    }
+
+    /**
+     * Método para Route::module - Buscar um órgão
+     */
+    public function get(Request $request)
+    {
+        return $this->handleGet($request);
     }
 
     /**
