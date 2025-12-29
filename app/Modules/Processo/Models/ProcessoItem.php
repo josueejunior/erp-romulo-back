@@ -8,6 +8,7 @@ use App\Models\Orcamento;
 use App\Models\OrcamentoItem;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class ProcessoItem extends BaseModel
 {
@@ -81,7 +82,16 @@ class ProcessoItem extends BaseModel
 
     public function orcamentos(): HasMany
     {
-        return $this->hasMany(Orcamento::class);
+        // Relacionamento através de orcamento_itens (nova estrutura)
+        // Usa hasManyThrough para evitar erro se processo_item_id não existir em orcamentos
+        return $this->hasManyThrough(
+            Orcamento::class,
+            OrcamentoItem::class,
+            'processo_item_id', // Foreign key on orcamento_itens table
+            'id', // Foreign key on orcamentos table
+            'id', // Local key on processo_itens table
+            'orcamento_id' // Local key on orcamento_itens table
+        );
     }
 
     public function orcamentoItens(): HasMany
@@ -96,17 +106,23 @@ class ProcessoItem extends BaseModel
 
     public function getOrcamentoEscolhidoAttribute(): ?Orcamento
     {
-        // Primeiro tentar buscar na estrutura antiga (compatibilidade)
-        $orcamentoAntigo = $this->orcamentos()->where('fornecedor_escolhido', true)->first();
-        if ($orcamentoAntigo) {
-            return $orcamentoAntigo;
+        // Buscar na nova estrutura (orcamento_itens) - estrutura atual
+        $orcamentoItem = $this->orcamentoItens()->where('fornecedor_escolhido', true)->first();
+        if ($orcamentoItem && $orcamentoItem->orcamento) {
+            return $orcamentoItem->orcamento;
         }
 
-        // Se não encontrar, buscar na nova estrutura (orcamento_itens)
-        $orcamentoItem = $this->orcamentoItens()->where('fornecedor_escolhido', true)->first();
-        if ($orcamentoItem) {
-            // Retornar o orçamento relacionado
-            return $orcamentoItem->orcamento;
+        // Fallback: tentar buscar diretamente nos orçamentos (estrutura antiga - compatibilidade)
+        // Isso só funcionará se a coluna processo_item_id existir na tabela orcamentos
+        try {
+            $orcamentoAntigo = Orcamento::where('processo_item_id', $this->id)
+                ->where('fornecedor_escolhido', true)
+                ->first();
+            if ($orcamentoAntigo) {
+                return $orcamentoAntigo;
+            }
+        } catch (\Exception $e) {
+            // Se a coluna não existir, ignorar o erro e continuar
         }
 
         return null;
