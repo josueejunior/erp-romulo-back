@@ -45,13 +45,23 @@ class GetUserUseCase
                 
                 // Transformar para formato esperado pelo frontend
                 // $empresas retorna objetos Empresa do domínio com razaoSocial (camelCase)
-                $empresasList = array_map(function($empresa) {
-                    return [
-                        'id' => $empresa->id,
-                        'razao_social' => $empresa->razaoSocial ?? '',
-                        'cnpj' => $empresa->cnpj ?? null,
-                    ];
-                }, $empresas);
+                // Remover duplicatas baseado no ID da empresa
+                $empresasUnicas = [];
+                $idsProcessados = [];
+                
+                foreach ($empresas as $empresa) {
+                    // Evitar duplicatas baseado no ID
+                    if (!in_array($empresa->id, $idsProcessados)) {
+                        $empresasUnicas[] = [
+                            'id' => $empresa->id,
+                            'razao_social' => $empresa->razaoSocial ?? '',
+                            'cnpj' => $empresa->cnpj ?? null,
+                        ];
+                        $idsProcessados[] = $empresa->id;
+                    }
+                }
+                
+                $empresasList = $empresasUnicas;
                 
                 if (method_exists($user, 'empresa_ativa_id') && $user->empresa_ativa_id) {
                     $empresaAtiva = $this->userRepository->buscarEmpresaAtiva($user->id);
