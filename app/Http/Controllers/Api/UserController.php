@@ -16,6 +16,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Facades\Cache;
+use App\Services\RedisService;
 use Illuminate\Validation\ValidationException;
 use DomainException;
 
@@ -279,95 +280,19 @@ class UserController extends BaseApiController
                     ]);
                     
                     try {
-                        // O RedisService usa Cache::store('redis')->put() que adiciona prefixo automaticamente
-                        // Precisamos usar Redis::keys() ou Redis::scan() com o prefixo correto
-                        $cachePrefix = config('cache.prefix', '');
-                        if (!empty($cachePrefix) && !str_ends_with($cachePrefix, ':')) {
-                            $cachePrefix .= ':';
-                        }
+                        // Usar RedisService::forgetByPattern() para limpar cache
+                        $pattern = "tenant_{$tenantId}:empresa_{$empresa->id}:fornecedores:*";
                         
-                        // Padrão base (sem prefixo - o Laravel adiciona)
-                        $basePattern = "tenant_{$tenantId}:empresa_{$empresa->id}:fornecedores:*";
-                        $patternWithPrefix = $cachePrefix . $basePattern;
-                        
-                        Log::debug('switchEmpresaAtiva - Buscando chaves', [
-                            'base_pattern' => $basePattern,
-                            'pattern_with_prefix' => $patternWithPrefix,
-                            'cache_prefix' => $cachePrefix,
+                        Log::debug('switchEmpresaAtiva - Limpando cache usando RedisService', [
+                            'pattern' => $pattern,
+                            'empresa_id' => $empresa->id,
                         ]);
                         
-                        $totalKeysDeleted = 0;
-                        $allKeys = [];
-                        
-                        // Método 1: Usar Redis::keys() (funciona, mas pode ser lento em produção)
-                        try {
-                            $keysFound = Redis::keys($patternWithPrefix);
-                            if (!empty($keysFound)) {
-                                $allKeys = array_merge($allKeys, $keysFound);
-                                Log::debug('switchEmpresaAtiva - Chaves encontradas via Redis::keys()', [
-                                    'keys_found' => count($keysFound),
-                                    'sample_keys' => array_slice($keysFound, 0, 5),
-                                ]);
-                            }
-                        } catch (\Exception $e) {
-                            Log::warning('Erro ao usar Redis::keys()', ['error' => $e->getMessage()]);
-                        }
-                        
-                        // Método 2: Se não encontrou, tentar sem prefixo
-                        if (empty($allKeys)) {
-                            try {
-                                $keysFound2 = Redis::keys($basePattern);
-                                if (!empty($keysFound2)) {
-                                    $allKeys = array_merge($allKeys, $keysFound2);
-                                    Log::debug('switchEmpresaAtiva - Chaves encontradas (sem prefixo)', [
-                                        'keys_found' => count($keysFound2),
-                                        'sample_keys' => array_slice($keysFound2, 0, 5),
-                                    ]);
-                                }
-                            } catch (\Exception $e) {
-                                Log::warning('Erro ao buscar chaves sem prefixo', ['error' => $e->getMessage()]);
-                            }
-                        }
-                        
-                        // Método 3: Usar Redis::scan() como fallback
-                        if (empty($allKeys)) {
-                            $cursor = 0;
-                            do {
-                                try {
-                                    $result = Redis::scan($cursor, ['match' => $patternWithPrefix, 'count' => 1000]);
-                                    $cursor = $result[0];
-                                    $keys = $result[1];
-                                    if (!empty($keys)) {
-                                        $allKeys = array_merge($allKeys, $keys);
-                                    }
-                                } catch (\Exception $e) {
-                                    Log::warning('Erro no Redis::scan()', ['error' => $e->getMessage()]);
-                                    break;
-                                }
-                            } while ($cursor != 0);
-                        }
-                        
-                        // Deletar todas as chaves encontradas
-                        if (!empty($allKeys)) {
-                            $deleted = Redis::del($allKeys);
-                            $totalKeysDeleted = $deleted;
-                            
-                            Log::info('switchEmpresaAtiva - Chaves deletadas', [
-                                'empresa_id' => $empresa->id,
-                                'total_keys_found' => count($allKeys),
-                                'total_keys_deleted' => $deleted,
-                                'sample_keys' => array_slice($allKeys, 0, 3),
-                            ]);
-                        } else {
-                            Log::warning('switchEmpresaAtiva - Nenhuma chave encontrada para deletar', [
-                                'empresa_id' => $empresa->id,
-                                'pattern_with_prefix' => $patternWithPrefix,
-                                'base_pattern' => $basePattern,
-                            ]);
-                        }
+                        $totalKeysDeleted = RedisService::forgetByPattern($pattern);
                         
                         Log::info('switchEmpresaAtiva - Cache limpo', [
                             'empresa_id' => $empresa->id,
+                            'pattern' => $pattern,
                             'total_keys_deleted' => $totalKeysDeleted,
                         ]);
                     } catch (\Exception $e) {

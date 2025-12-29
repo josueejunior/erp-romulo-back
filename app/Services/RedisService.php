@@ -818,6 +818,57 @@ class RedisService
         }
     }
 
+    /**
+     * Limpar cache por padrão (wildcard)
+     * 
+     * @param string $pattern Padrão da chave (ex: "tenant_1:empresa_2:fornecedores:*")
+     * @return int Número de chaves deletadas
+     */
+    public static function forgetByPattern(string $pattern): int
+    {
+        if (!self::isAvailable()) {
+            return 0;
+        }
+        
+        try {
+            $redis = Cache::store('redis')->getStore()->getRedis();
+            $cachePrefix = config('cache.prefix', '');
+            if (!empty($cachePrefix) && !str_ends_with($cachePrefix, ':')) {
+                $cachePrefix .= ':';
+            }
+            
+            $patternWithPrefix = $cachePrefix . $pattern;
+            
+            // Buscar todas as chaves que correspondem ao padrão
+            $keys = $redis->keys($patternWithPrefix);
+            
+            // Se não encontrou com prefixo, tentar sem prefixo
+            if (empty($keys)) {
+                $keys = $redis->keys($pattern);
+            }
+            
+            if (!empty($keys)) {
+                // Remover duplicatas
+                $keys = array_unique($keys);
+                $deleted = $redis->del($keys);
+                
+                Log::info('RedisService::forgetByPattern() - Cache limpo', [
+                    'pattern' => $pattern,
+                    'pattern_with_prefix' => $patternWithPrefix,
+                    'keys_found' => count($keys),
+                    'keys_deleted' => $deleted,
+                ]);
+                
+                return $deleted;
+            }
+            
+            return 0;
+        } catch (\Exception $e) {
+            Log::warning("Erro ao limpar cache por padrão '{$pattern}': " . $e->getMessage());
+            return 0;
+        }
+    }
+
     public static function isAvailable(): bool
     {
         try {
