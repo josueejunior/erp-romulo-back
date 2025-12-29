@@ -158,6 +158,107 @@ class AdminUserController extends Controller
     }
 
     /**
+     * Buscar usuário específico de forma GLOBAL (busca em todos os tenants)
+     * 
+     * Retorna o usuário com TODAS as empresas de TODOS os tenants onde ele existe.
+     */
+    public function showGlobal(Request $request, int $userId)
+    {
+        try {
+            \Log::info('AdminUserController::showGlobal - Buscando usuário', ['userId' => $userId]);
+            
+            // Buscar todos os tenants ativos
+            $allTenants = Tenant::where('status', 'ativa')
+                ->orWhereNull('status')
+                ->get();
+            
+            $userData = null;
+            $todasEmpresas = [];
+            $todosTenantsDoUsuario = [];
+            
+            foreach ($allTenants as $tenantModel) {
+                try {
+                    tenancy()->initialize($tenantModel);
+                    
+                    $user = \App\Modules\Auth\Models\User::with(['empresas', 'roles'])
+                        ->withTrashed()
+                        ->find($userId);
+                    
+                    if ($user) {
+                        // Coletar dados do usuário (usar o primeiro encontrado como base)
+                        if (!$userData) {
+                            $userData = [
+                                'id' => $user->id,
+                                'name' => $user->name,
+                                'email' => $user->email,
+                                'roles_list' => $user->roles->pluck('name')->toArray(),
+                                'empresa_ativa_id' => $user->empresa_ativa_id,
+                                'deleted_at' => $user->deleted_at,
+                            ];
+                        }
+                        
+                        // Coletar empresas deste tenant
+                        foreach ($user->empresas as $empresa) {
+                            $todasEmpresas[] = [
+                                'id' => $empresa->id,
+                                'razao_social' => $empresa->razao_social,
+                                'cnpj' => $empresa->cnpj,
+                                'tenant_id' => $tenantModel->id,
+                                'tenant_razao_social' => $tenantModel->razao_social,
+                            ];
+                        }
+                        
+                        $todosTenantsDoUsuario[] = [
+                            'id' => $tenantModel->id,
+                            'razao_social' => $tenantModel->razao_social,
+                        ];
+                    }
+                    
+                    tenancy()->end();
+                } catch (\Exception $e) {
+                    Log::warning('Erro ao buscar usuário no tenant', [
+                        'tenant_id' => $tenantModel->id,
+                        'userId' => $userId,
+                        'error' => $e->getMessage(),
+                    ]);
+                    
+                    if (tenancy()->initialized) {
+                        tenancy()->end();
+                    }
+                }
+            }
+            
+            if (!$userData) {
+                return response()->json(['message' => 'Usuário não encontrado.'], 404);
+            }
+            
+            // Consolidar dados
+            $userData['empresas'] = $todasEmpresas;
+            $userData['empresas_list'] = $todasEmpresas;
+            $userData['tenants'] = $todosTenantsDoUsuario;
+            
+            \Log::info('AdminUserController::showGlobal - Usuário encontrado', [
+                'userId' => $userId,
+                'totalEmpresas' => count($todasEmpresas),
+                'totalTenants' => count($todosTenantsDoUsuario),
+            ]);
+            
+            return ApiResponse::item($userData);
+        } catch (\Exception $e) {
+            Log::error('Erro ao buscar usuário globalmente', [
+                'userId' => $userId,
+                'error' => $e->getMessage(),
+            ]);
+            
+            if (tenancy()->initialized) {
+                tenancy()->end();
+            }
+            
+            return response()->json(['message' => 'Erro ao buscar usuário.'], 500);
+        }
+    }
+
+    /**
      * Listar usuários de uma empresa (tenant)
      * Middleware InitializeTenant cuida do contexto
      * Usa ReadRepository (CQRS) - controller nunca conhece Eloquent
