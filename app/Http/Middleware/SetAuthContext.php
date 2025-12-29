@@ -36,10 +36,14 @@ class SetAuthContext
         $scope = $scope ?? static::$scope;
 
         /**
-         * Faz a autenticação através do AuthGuard mapeado para uso
-         * Caso não exista token ou seja inválido, irá lançar uma exceção
+         * Verificar se o usuário está autenticado
+         * O middleware auth:sanctum já faz a verificação antes, mas garantimos aqui
          */
-        auth('sanctum')->check();
+        if (!auth('sanctum')->check()) {
+            return response()->json([
+                'message' => 'Não autenticado. Faça login para continuar.',
+            ], 401);
+        }
 
         /**
          * Seta um atributo com o valor do escopo para facilitar o uso

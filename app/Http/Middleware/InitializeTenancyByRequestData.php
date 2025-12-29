@@ -39,12 +39,25 @@ class InitializeTenancyByRequestData extends IdentificationMiddleware
         ]);
 
         if (!$tenantId) {
+            // Se for admin, não precisa de tenant
+            $user = $request->user();
+            if ($user && $user instanceof \App\Modules\Auth\Models\AdminUser) {
+                \Log::debug('Admin user detectado, pulando inicialização de tenancy', [
+                    'user_id' => $user->id,
+                    'url' => $request->url()
+                ]);
+                return $next($request);
+            }
+            
             \Log::warning('Tenant ID não fornecido', [
                 'url' => $request->url(),
+                'user_id' => $user?->id,
+                'user_type' => $user ? get_class($user) : null,
                 'headers' => $request->headers->all()
             ]);
             return response()->json([
-                'message' => 'Tenant ID não fornecido. Use o header X-Tenant-ID ou inclua tenant_id no request.'
+                'message' => 'Tenant ID não fornecido. Use o header X-Tenant-ID ou inclua tenant_id no request.',
+                'code' => 'TENANT_ID_REQUIRED'
             ], 400);
         }
 
