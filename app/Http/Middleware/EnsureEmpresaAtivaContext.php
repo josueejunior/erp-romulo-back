@@ -37,9 +37,36 @@ class EnsureEmpresaAtivaContext
             return $next($request);
         }
 
-        // Verificar se tem empresa_ativa_id
+        // Prioridade 1: Header X-Empresa-ID (quando usuário troca empresa)
         $empresaId = null;
-        if (method_exists($user, 'empresa_ativa_id') && $user->empresa_ativa_id) {
+        if ($request->header('X-Empresa-ID')) {
+            $empresaIdFromHeader = (int) $request->header('X-Empresa-ID');
+            
+            // Verificar se o usuário tem acesso a esta empresa
+            $temAcesso = $user->empresas()->where('empresas.id', $empresaIdFromHeader)->exists();
+            if ($temAcesso) {
+                $empresaId = $empresaIdFromHeader;
+                
+                // Se empresa_ativa_id do usuário for diferente, atualizar
+                if (method_exists($user, 'empresa_ativa_id') && $user->empresa_ativa_id !== $empresaId) {
+                    $user->empresa_ativa_id = $empresaId;
+                    $user->save();
+                    
+                    Log::info('Empresa ativa atualizada via header X-Empresa-ID', [
+                        'user_id' => $user->id,
+                        'empresa_id' => $empresaId,
+                    ]);
+                }
+            } else {
+                Log::warning('Usuário tentou acessar empresa sem permissão via header', [
+                    'user_id' => $user->id,
+                    'empresa_id_header' => $empresaIdFromHeader,
+                ]);
+            }
+        }
+        
+        // Prioridade 2: empresa_ativa_id do usuário (se header não foi fornecido)
+        if (!$empresaId && method_exists($user, 'empresa_ativa_id') && $user->empresa_ativa_id) {
             $empresaId = $user->empresa_ativa_id;
             
             // Verificar se a empresa existe
