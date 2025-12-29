@@ -7,9 +7,11 @@ use App\Domain\AutorizacaoFornecimento\Repositories\AutorizacaoFornecimentoRepos
 use App\Models\AutorizacaoFornecimento as AutorizacaoFornecimentoModel;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Carbon\Carbon;
+use App\Infrastructure\Persistence\Eloquent\Traits\HasModelRetrieval;
 
 class AutorizacaoFornecimentoRepository implements AutorizacaoFornecimentoRepositoryInterface
 {
+    use HasModelRetrieval;
     private function toDomain(AutorizacaoFornecimentoModel $model): AutorizacaoFornecimento
     {
         return new AutorizacaoFornecimento(
@@ -107,6 +109,23 @@ class AutorizacaoFornecimentoRepository implements AutorizacaoFornecimentoReposi
     public function deletar(int $id): void
     {
         AutorizacaoFornecimentoModel::findOrFail($id)->delete();
+    }
+
+    /**
+     * Busca um modelo Eloquent por ID (para Resources do Laravel)
+     * Mantém o Global Scope de Empresa ativo para segurança
+     */
+    public function buscarModeloPorId(int $id, array $with = []): ?AutorizacaoFornecimentoModel
+    {
+        return $this->buscarModeloPorIdInternal($id, $with, false);
+    }
+
+    /**
+     * Retorna a classe do modelo Eloquent
+     */
+    protected function getModelClass(): ?string
+    {
+        return AutorizacaoFornecimentoModel::class;
     }
 }
 

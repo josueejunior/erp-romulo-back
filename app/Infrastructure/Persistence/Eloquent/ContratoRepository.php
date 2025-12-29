@@ -7,9 +7,11 @@ use App\Domain\Contrato\Repositories\ContratoRepositoryInterface;
 use App\Models\Contrato as ContratoModel;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Carbon\Carbon;
+use App\Infrastructure\Persistence\Eloquent\Traits\HasModelRetrieval;
 
 class ContratoRepository implements ContratoRepositoryInterface
 {
+    use HasModelRetrieval;
     private function toDomain(ContratoModel $model): Contrato
     {
         return new Contrato(
@@ -105,6 +107,23 @@ class ContratoRepository implements ContratoRepositoryInterface
     public function deletar(int $id): void
     {
         ContratoModel::findOrFail($id)->delete();
+    }
+
+    /**
+     * Busca um modelo Eloquent por ID (para Resources do Laravel)
+     * Mantém o Global Scope de Empresa ativo para segurança
+     */
+    public function buscarModeloPorId(int $id, array $with = []): ?ContratoModel
+    {
+        return $this->buscarModeloPorIdInternal($id, $with, false);
+    }
+
+    /**
+     * Retorna a classe do modelo Eloquent
+     */
+    protected function getModelClass(): ?string
+    {
+        return ContratoModel::class;
     }
 }
 

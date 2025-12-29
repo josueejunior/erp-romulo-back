@@ -8,6 +8,8 @@ use App\Models\Contrato;
 use App\Modules\Contrato\Services\ContratoService;
 use App\Application\Contrato\UseCases\CriarContratoUseCase;
 use App\Application\Contrato\DTOs\CriarContratoDTO;
+use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
+use App\Domain\Contrato\Repositories\ContratoRepositoryInterface;
 use App\Services\RedisService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -19,7 +21,10 @@ class ContratoController extends BaseApiController
     public function __construct(
         ContratoService $contratoService,
         private CriarContratoUseCase $criarContratoUseCase,
+        private ProcessoRepositoryInterface $processoRepository,
+        private ContratoRepositoryInterface $contratoRepository,
     ) {
+        parent::__construct(app(\App\Domain\Empresa\Repositories\EmpresaRepositoryInterface::class), app(\App\Domain\Auth\Repositories\UserRepositoryInterface::class));
         $this->contratoService = $contratoService;
     }
 
@@ -28,7 +33,12 @@ class ContratoController extends BaseApiController
      */
     public function list(Request $request)
     {
-        return $this->index(Processo::findOrFail($request->route()->parameter('processo')));
+        $processoId = $request->route()->parameter('processo');
+        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
+        if (!$processoModel) {
+            return response()->json(['message' => 'Processo não encontrado.'], 404);
+        }
+        return $this->index($processoModel);
     }
 
     /**
@@ -36,10 +46,20 @@ class ContratoController extends BaseApiController
      */
     public function get(Request $request)
     {
-        return $this->show(
-            Processo::findOrFail($request->route()->parameter('processo')),
-            Contrato::findOrFail($request->route()->parameter('contrato'))
-        );
+        $processoId = $request->route()->parameter('processo');
+        $contratoId = $request->route()->parameter('contrato');
+        
+        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
+        if (!$processoModel) {
+            return response()->json(['message' => 'Processo não encontrado.'], 404);
+        }
+        
+        $contratoModel = $this->contratoRepository->buscarModeloPorId($contratoId);
+        if (!$contratoModel) {
+            return response()->json(['message' => 'Contrato não encontrado.'], 404);
+        }
+        
+        return $this->show($processoModel, $contratoModel);
     }
 
     /**
@@ -122,10 +142,13 @@ class ContratoController extends BaseApiController
      */
     public function store(Request $request)
     {
-        $route = $request->route();
-        $processo = Processo::findOrFail($route->parameter('processo'));
+        $processoId = $request->route()->parameter('processo');
+        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
+        if (!$processoModel) {
+            return response()->json(['message' => 'Processo não encontrado.'], 404);
+        }
         
-        return $this->storeWeb($request, $processo);
+        return $this->storeWeb($request, $processoModel);
     }
 
     /**
@@ -184,11 +207,19 @@ class ContratoController extends BaseApiController
      */
     public function update(Request $request, $id)
     {
-        $route = $request->route();
-        $processo = Processo::findOrFail($route->parameter('processo'));
-        $contrato = Contrato::findOrFail($id);
+        $processoId = $request->route()->parameter('processo');
         
-        return $this->updateWeb($request, $processo, $contrato);
+        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
+        if (!$processoModel) {
+            return response()->json(['message' => 'Processo não encontrado.'], 404);
+        }
+        
+        $contratoModel = $this->contratoRepository->buscarModeloPorId($id);
+        if (!$contratoModel) {
+            return response()->json(['message' => 'Contrato não encontrado.'], 404);
+        }
+        
+        return $this->updateWeb($request, $processoModel, $contratoModel);
     }
 
     /**
@@ -196,11 +227,19 @@ class ContratoController extends BaseApiController
      */
     public function destroy(Request $request, $id)
     {
-        $route = $request->route();
-        $processo = Processo::findOrFail($route->parameter('processo'));
-        $contrato = Contrato::findOrFail($id);
+        $processoId = $request->route()->parameter('processo');
         
-        return $this->destroyWeb($processo, $contrato);
+        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
+        if (!$processoModel) {
+            return response()->json(['message' => 'Processo não encontrado.'], 404);
+        }
+        
+        $contratoModel = $this->contratoRepository->buscarModeloPorId($id);
+        if (!$contratoModel) {
+            return response()->json(['message' => 'Contrato não encontrado.'], 404);
+        }
+        
+        return $this->destroyWeb($processoModel, $contratoModel);
     }
 
     /**

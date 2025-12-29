@@ -9,6 +9,9 @@ use App\Modules\Processo\Models\ProcessoItem;
 use App\Models\Orcamento;
 use App\Models\FormacaoPreco;
 use App\Modules\Orcamento\Services\FormacaoPrecoService;
+use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
+use App\Domain\ProcessoItem\Repositories\ProcessoItemRepositoryInterface;
+use App\Domain\Orcamento\Repositories\OrcamentoRepositoryInterface;
 use Illuminate\Http\Request;
 
 class FormacaoPrecoController extends BaseApiController
@@ -16,8 +19,13 @@ class FormacaoPrecoController extends BaseApiController
 
     protected FormacaoPrecoService $formacaoPrecoService;
 
-    public function __construct(FormacaoPrecoService $formacaoPrecoService)
-    {
+    public function __construct(
+        FormacaoPrecoService $formacaoPrecoService,
+        private ProcessoRepositoryInterface $processoRepository,
+        private ProcessoItemRepositoryInterface $processoItemRepository,
+        private OrcamentoRepositoryInterface $orcamentoRepository,
+    ) {
+        parent::__construct(app(\App\Domain\Empresa\Repositories\EmpresaRepositoryInterface::class), app(\App\Domain\Auth\Repositories\UserRepositoryInterface::class));
         $this->formacaoPrecoService = $formacaoPrecoService;
         $this->service = $formacaoPrecoService; // Para HasDefaultActions
     }
@@ -36,11 +44,26 @@ class FormacaoPrecoController extends BaseApiController
      */
     public function get(Request $request)
     {
-        return $this->show(
-            Processo::findOrFail($request->route()->parameter('processo')),
-            ProcessoItem::findOrFail($request->route()->parameter('item')),
-            Orcamento::findOrFail($request->route()->parameter('orcamento'))
-        );
+        $processoId = $request->route()->parameter('processo');
+        $itemId = $request->route()->parameter('item');
+        $orcamentoId = $request->route()->parameter('orcamento');
+        
+        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
+        if (!$processoModel) {
+            return response()->json(['message' => 'Processo não encontrado.'], 404);
+        }
+        
+        $itemModel = $this->processoItemRepository->buscarModeloPorId($itemId);
+        if (!$itemModel) {
+            return response()->json(['message' => 'Item não encontrado.'], 404);
+        }
+        
+        $orcamentoModel = $this->orcamentoRepository->buscarModeloPorId($orcamentoId);
+        if (!$orcamentoModel) {
+            return response()->json(['message' => 'Orçamento não encontrado.'], 404);
+        }
+        
+        return $this->show($processoModel, $itemModel, $orcamentoModel);
     }
 
     public function show(Processo $processo, ProcessoItem $item, Orcamento $orcamento)
@@ -62,12 +85,26 @@ class FormacaoPrecoController extends BaseApiController
      */
     public function store(Request $request)
     {
-        $route = $request->route();
-        $processo = Processo::findOrFail($route->parameter('processo'));
-        $item = ProcessoItem::findOrFail($route->parameter('item'));
-        $orcamento = Orcamento::findOrFail($route->parameter('orcamento'));
+        $processoId = $request->route()->parameter('processo');
+        $itemId = $request->route()->parameter('item');
+        $orcamentoId = $request->route()->parameter('orcamento');
         
-        return $this->storeWeb($request, $processo, $item, $orcamento);
+        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
+        if (!$processoModel) {
+            return response()->json(['message' => 'Processo não encontrado.'], 404);
+        }
+        
+        $itemModel = $this->processoItemRepository->buscarModeloPorId($itemId);
+        if (!$itemModel) {
+            return response()->json(['message' => 'Item não encontrado.'], 404);
+        }
+        
+        $orcamentoModel = $this->orcamentoRepository->buscarModeloPorId($orcamentoId);
+        if (!$orcamentoModel) {
+            return response()->json(['message' => 'Orçamento não encontrado.'], 404);
+        }
+        
+        return $this->storeWeb($request, $processoModel, $itemModel, $orcamentoModel);
     }
 
     /**
@@ -75,13 +112,28 @@ class FormacaoPrecoController extends BaseApiController
      */
     public function update(Request $request, $id)
     {
-        $route = $request->route();
-        $processo = Processo::findOrFail($route->parameter('processo'));
-        $item = ProcessoItem::findOrFail($route->parameter('item'));
-        $orcamento = Orcamento::findOrFail($route->parameter('orcamento'));
+        $processoId = $request->route()->parameter('processo');
+        $itemId = $request->route()->parameter('item');
+        $orcamentoId = $request->route()->parameter('orcamento');
+        
+        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
+        if (!$processoModel) {
+            return response()->json(['message' => 'Processo não encontrado.'], 404);
+        }
+        
+        $itemModel = $this->processoItemRepository->buscarModeloPorId($itemId);
+        if (!$itemModel) {
+            return response()->json(['message' => 'Item não encontrado.'], 404);
+        }
+        
+        $orcamentoModel = $this->orcamentoRepository->buscarModeloPorId($orcamentoId);
+        if (!$orcamentoModel) {
+            return response()->json(['message' => 'Orçamento não encontrado.'], 404);
+        }
+        
         $formacaoPreco = FormacaoPreco::findOrFail($id);
         
-        return $this->updateWeb($request, $processo, $item, $orcamento, $formacaoPreco);
+        return $this->updateWeb($request, $processoModel, $itemModel, $orcamentoModel, $formacaoPreco);
     }
 
     /**

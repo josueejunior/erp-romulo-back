@@ -6,6 +6,8 @@ use App\Http\Controllers\Api\BaseApiController;
 use App\Modules\Processo\Models\Processo;
 use App\Models\AutorizacaoFornecimento;
 use App\Modules\AutorizacaoFornecimento\Services\AutorizacaoFornecimentoService;
+use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
+use App\Domain\AutorizacaoFornecimento\Repositories\AutorizacaoFornecimentoRepositoryInterface;
 use Illuminate\Http\Request;
 
 class AutorizacaoFornecimentoController extends BaseApiController
@@ -13,8 +15,12 @@ class AutorizacaoFornecimentoController extends BaseApiController
 
     protected AutorizacaoFornecimentoService $afService;
 
-    public function __construct(AutorizacaoFornecimentoService $afService)
-    {
+    public function __construct(
+        AutorizacaoFornecimentoService $afService,
+        private ProcessoRepositoryInterface $processoRepository,
+        private AutorizacaoFornecimentoRepositoryInterface $autorizacaoFornecimentoRepository,
+    ) {
+        parent::__construct(app(\App\Domain\Empresa\Repositories\EmpresaRepositoryInterface::class), app(\App\Domain\Auth\Repositories\UserRepositoryInterface::class));
         $this->afService = $afService;
         $this->service = $afService; // Para HasDefaultActions
     }
@@ -24,7 +30,12 @@ class AutorizacaoFornecimentoController extends BaseApiController
      */
     public function list(Request $request)
     {
-        return $this->index(Processo::findOrFail($request->route()->parameter('processo')));
+        $processoId = $request->route()->parameter('processo');
+        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
+        if (!$processoModel) {
+            return response()->json(['message' => 'Processo não encontrado.'], 404);
+        }
+        return $this->index($processoModel);
     }
 
     /**
@@ -32,10 +43,20 @@ class AutorizacaoFornecimentoController extends BaseApiController
      */
     public function get(Request $request)
     {
-        return $this->show(
-            Processo::findOrFail($request->route()->parameter('processo')),
-            AutorizacaoFornecimento::findOrFail($request->route()->parameter('autorizacaoFornecimento'))
-        );
+        $processoId = $request->route()->parameter('processo');
+        $autorizacaoId = $request->route()->parameter('autorizacaoFornecimento');
+        
+        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
+        if (!$processoModel) {
+            return response()->json(['message' => 'Processo não encontrado.'], 404);
+        }
+        
+        $autorizacaoModel = $this->autorizacaoFornecimentoRepository->buscarModeloPorId($autorizacaoId);
+        if (!$autorizacaoModel) {
+            return response()->json(['message' => 'Autorização de fornecimento não encontrada.'], 404);
+        }
+        
+        return $this->show($processoModel, $autorizacaoModel);
     }
 
     public function index(Processo $processo)
@@ -57,10 +78,13 @@ class AutorizacaoFornecimentoController extends BaseApiController
      */
     public function store(Request $request)
     {
-        $route = $request->route();
-        $processo = Processo::findOrFail($route->parameter('processo'));
+        $processoId = $request->route()->parameter('processo');
+        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
+        if (!$processoModel) {
+            return response()->json(['message' => 'Processo não encontrado.'], 404);
+        }
         
-        return $this->storeWeb($request, $processo);
+        return $this->storeWeb($request, $processoModel);
     }
 
     /**
@@ -104,11 +128,19 @@ class AutorizacaoFornecimentoController extends BaseApiController
      */
     public function update(Request $request, $id)
     {
-        $route = $request->route();
-        $processo = Processo::findOrFail($route->parameter('processo'));
-        $autorizacaoFornecimento = AutorizacaoFornecimento::findOrFail($id);
+        $processoId = $request->route()->parameter('processo');
         
-        return $this->updateWeb($request, $processo, $autorizacaoFornecimento);
+        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
+        if (!$processoModel) {
+            return response()->json(['message' => 'Processo não encontrado.'], 404);
+        }
+        
+        $autorizacaoModel = $this->autorizacaoFornecimentoRepository->buscarModeloPorId($id);
+        if (!$autorizacaoModel) {
+            return response()->json(['message' => 'Autorização de fornecimento não encontrada.'], 404);
+        }
+        
+        return $this->updateWeb($request, $processoModel, $autorizacaoModel);
     }
 
     /**
@@ -116,11 +148,19 @@ class AutorizacaoFornecimentoController extends BaseApiController
      */
     public function destroy(Request $request, $id)
     {
-        $route = $request->route();
-        $processo = Processo::findOrFail($route->parameter('processo'));
-        $autorizacaoFornecimento = AutorizacaoFornecimento::findOrFail($id);
+        $processoId = $request->route()->parameter('processo');
         
-        return $this->destroyWeb($processo, $autorizacaoFornecimento);
+        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
+        if (!$processoModel) {
+            return response()->json(['message' => 'Processo não encontrado.'], 404);
+        }
+        
+        $autorizacaoModel = $this->autorizacaoFornecimentoRepository->buscarModeloPorId($id);
+        if (!$autorizacaoModel) {
+            return response()->json(['message' => 'Autorização de fornecimento não encontrada.'], 404);
+        }
+        
+        return $this->destroyWeb($processoModel, $autorizacaoModel);
     }
 
     /**
