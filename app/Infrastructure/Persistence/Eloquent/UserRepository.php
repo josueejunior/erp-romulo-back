@@ -231,6 +231,17 @@ class UserRepository implements UserRepositoryInterface
     public function atualizarEmpresaAtiva(int $userId, int $empresaId): User
     {
         $model = UserModel::findOrFail($userId);
+        
+        // Validar se o usuário tem acesso a esta empresa (regra de negócio no Repository)
+        $empresas = $this->buscarEmpresas($userId);
+        $temAcesso = collect($empresas)->contains(function ($empresa) use ($empresaId) {
+            return $empresa->id === $empresaId;
+        });
+        
+        if (!$temAcesso) {
+            throw new \App\Domain\Exceptions\DomainException('Você não tem acesso a esta empresa.');
+        }
+        
         $model->empresa_ativa_id = $empresaId;
         $model->save();
         

@@ -831,7 +831,6 @@ class RedisService
         }
         
         try {
-            $redis = Cache::store('redis')->getStore()->getRedis();
             $cachePrefix = config('cache.prefix', '');
             if (!empty($cachePrefix) && !str_ends_with($cachePrefix, ':')) {
                 $cachePrefix .= ':';
@@ -839,32 +838,91 @@ class RedisService
             
             $patternWithPrefix = $cachePrefix . $pattern;
             
-            // Buscar todas as chaves que correspondem ao padrão
-            $keys = $redis->keys($patternWithPrefix);
+            Log::debug('RedisService::forgetByPattern() - Buscando chaves', [
+                'pattern' => $pattern,
+                'pattern_with_prefix' => $patternWithPrefix,
+                'cache_prefix' => $cachePrefix,
+            ]);
             
-            // Se não encontrou com prefixo, tentar sem prefixo
-            if (empty($keys)) {
-                $keys = $redis->keys($pattern);
+            // Usar Redis facade diretamente (mais confiável)
+            $allKeys = [];
+            
+            // Método 1: Tentar com prefixo
+            try {
+                $keys = Redis::keys($patternWithPrefix);
+                if (!empty($keys)) {
+                    $allKeys = array_merge($allKeys, $keys);
+                    Log::debug('RedisService::forgetByPattern() - Chaves encontradas (com prefixo)', [
+                        'keys_found' => count($keys),
+                        'sample_keys' => array_slice($keys, 0, 3),
+                    ]);
+                }
+            } catch (\Exception $e) {
+                Log::warning('Erro ao buscar chaves com prefixo', ['error' => $e->getMessage()]);
             }
             
-            if (!empty($keys)) {
+            // Método 2: Tentar sem prefixo (caso o cache não use)
+            if (empty($allKeys)) {
+                try {
+                    $keys = Redis::keys($pattern);
+                    if (!empty($keys)) {
+                        $allKeys = array_merge($allKeys, $keys);
+                        Log::debug('RedisService::forgetByPattern() - Chaves encontradas (sem prefixo)', [
+                            'keys_found' => count($keys),
+                            'sample_keys' => array_slice($keys, 0, 3),
+                        ]);
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Erro ao buscar chaves sem prefixo', ['error' => $e->getMessage()]);
+                }
+            }
+            
+            // Método 3: Tentar usando a conexão do Cache store
+            if (empty($allKeys)) {
+                try {
+                    $store = Cache::store('redis');
+                    $redisConnection = $store->getStore()->connection();
+                    if (method_exists($redisConnection, 'keys')) {
+                        $keys = $redisConnection->keys($patternWithPrefix);
+                        if (!empty($keys)) {
+                            $allKeys = array_merge($allKeys, $keys);
+                            Log::debug('RedisService::forgetByPattern() - Chaves encontradas (via Cache store)', [
+                                'keys_found' => count($keys),
+                            ]);
+                        }
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Erro ao buscar chaves via Cache store', ['error' => $e->getMessage()]);
+                }
+            }
+            
+            if (!empty($allKeys)) {
                 // Remover duplicatas
-                $keys = array_unique($keys);
-                $deleted = $redis->del($keys);
+                $allKeys = array_unique($allKeys);
+                $deleted = Redis::del($allKeys);
                 
                 Log::info('RedisService::forgetByPattern() - Cache limpo', [
                     'pattern' => $pattern,
                     'pattern_with_prefix' => $patternWithPrefix,
-                    'keys_found' => count($keys),
+                    'keys_found' => count($allKeys),
                     'keys_deleted' => $deleted,
+                    'sample_keys' => array_slice($allKeys, 0, 3),
                 ]);
                 
                 return $deleted;
             }
             
+            Log::warning('RedisService::forgetByPattern() - Nenhuma chave encontrada', [
+                'pattern' => $pattern,
+                'pattern_with_prefix' => $patternWithPrefix,
+            ]);
+            
             return 0;
         } catch (\Exception $e) {
-            Log::warning("Erro ao limpar cache por padrão '{$pattern}': " . $e->getMessage());
+            Log::warning("Erro ao limpar cache por padrão '{$pattern}'", [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
             return 0;
         }
     }

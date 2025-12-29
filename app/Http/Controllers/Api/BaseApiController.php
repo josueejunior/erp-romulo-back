@@ -126,5 +126,49 @@ abstract class BaseApiController extends Controller
         
         return $empresaModel;
     }
+
+    /**
+     * Tratamento centralizado de exceções
+     * 
+     * @param \Exception $e
+     * @param string $mensagemPadrao
+     * @return JsonResponse
+     */
+    protected function handleException(\Exception $e, string $mensagemPadrao = 'Erro ao processar requisição'): JsonResponse
+    {
+        \Log::error($mensagemPadrao, [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+        ]);
+
+        // DomainException retorna 400 (Bad Request)
+        if ($e instanceof \App\Domain\Exceptions\DomainException) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+
+        // ValidationException retorna 422 (Unprocessable Entity)
+        if ($e instanceof \Illuminate\Validation\ValidationException) {
+            return response()->json([
+                'message' => 'Erro de validação',
+                'errors' => $e->errors(),
+            ], 422);
+        }
+
+        // HttpException retorna o código HTTP da exceção
+        if ($e instanceof \Symfony\Component\HttpKernel\Exception\HttpException) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], $e->getStatusCode());
+        }
+
+        // Outras exceções retornam 500 (Internal Server Error)
+        return response()->json([
+            'message' => $mensagemPadrao . ': ' . $e->getMessage(),
+        ], 500);
+    }
 }
 

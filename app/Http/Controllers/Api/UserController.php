@@ -31,43 +31,30 @@ class UserController extends BaseApiController
     ) {}
 
     /**
-     * Listar usuários
+     * Listar usuários - Refatorado para maior fluidez
      */
     public function list(Request $request): JsonResponse
     {
         try {
-            $filtros = $request->all();
-            $usuariosDomain = $this->listarUsuariosUseCase->executar($filtros);
+            // Deixe o UseCase lidar com a paginação e filtros
+            $paginado = $this->listarUsuariosUseCase->executar($request->all());
             
-            // Converter entidades de domínio para modelos Eloquent para resposta
-            $usuarios = $usuariosDomain->getCollection()->map(function ($usuarioDomain) {
-                return $this->userRepository->buscarModeloPorId($usuarioDomain->id);
-            })->filter();
-            
-            // Criar paginator manual
-            $paginator = new \Illuminate\Pagination\LengthAwarePaginator(
-                $usuarios,
-                $usuariosDomain->total(),
-                $usuariosDomain->perPage(),
-                $usuariosDomain->currentPage(),
-                ['path' => $request->url(), 'query' => $request->query()]
-            );
+            // Transformação simples usando o Repository para garantir o Eloquent (para o Resource)
+            $items = collect($paginado->items())->map(fn($u) => 
+                $this->userRepository->buscarModeloPorId($u->id)
+            )->filter();
             
             return response()->json([
-                'data' => $paginator->items(),
+                'data' => $items->values()->all(),
                 'meta' => [
-                    'current_page' => $paginator->currentPage(),
-                    'last_page' => $paginator->lastPage(),
-                    'per_page' => $paginator->perPage(),
-                    'total' => $paginator->total(),
+                    'current_page' => $paginado->currentPage(),
+                    'last_page' => $paginado->lastPage(),
+                    'per_page' => $paginado->perPage(),
+                    'total' => $paginado->total(),
                 ],
             ]);
         } catch (\Exception $e) {
-            Log::error('Erro ao listar usuários', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-            return response()->json(['message' => 'Erro ao listar usuários: ' . $e->getMessage()], 500);
+            return $this->handleException($e, 'Erro ao listar usuários');
         }
     }
 
@@ -87,11 +74,7 @@ class UserController extends BaseApiController
             
             return response()->json(['data' => $userModel]);
         } catch (\Exception $e) {
-            Log::error('Erro ao buscar usuário', [
-                'user_id' => $id,
-                'error' => $e->getMessage(),
-            ]);
-            return response()->json(['message' => 'Erro ao buscar usuário: ' . $e->getMessage()], 500);
+            return $this->handleException($e, 'Erro ao buscar usuário');
         }
     }
 
@@ -132,19 +115,8 @@ class UserController extends BaseApiController
             $userModel = $this->userRepository->buscarModeloPorId($usuarioDomain->id);
 
             return response()->json(['data' => $userModel], 201);
-        } catch (DomainException $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
-        } catch (ValidationException $e) {
-            return response()->json([
-                'message' => 'Erro de validação',
-                'errors' => $e->errors(),
-            ], 422);
         } catch (\Exception $e) {
-            Log::error('Erro ao criar usuário', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-            return response()->json(['message' => 'Erro ao criar usuário: ' . $e->getMessage()], 500);
+            return $this->handleException($e, 'Erro ao criar usuário');
         }
     }
 
@@ -186,20 +158,8 @@ class UserController extends BaseApiController
             $userModel = $this->userRepository->buscarModeloPorId($usuarioDomain->id);
 
             return response()->json(['data' => $userModel]);
-        } catch (DomainException $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
-        } catch (ValidationException $e) {
-            return response()->json([
-                'message' => 'Erro de validação',
-                'errors' => $e->errors(),
-            ], 422);
         } catch (\Exception $e) {
-            Log::error('Erro ao atualizar usuário', [
-                'user_id' => $id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-            return response()->json(['message' => 'Erro ao atualizar usuário: ' . $e->getMessage()], 500);
+            return $this->handleException($e, 'Erro ao atualizar usuário');
         }
     }
 
@@ -211,19 +171,13 @@ class UserController extends BaseApiController
         try {
             $this->deletarUsuarioUseCase->executar($id);
             return response()->json(['message' => 'Usuário deletado com sucesso'], 204);
-        } catch (DomainException $e) {
-            return response()->json(['message' => $e->getMessage()], 404);
         } catch (\Exception $e) {
-            Log::error('Erro ao deletar usuário', [
-                'user_id' => $id,
-                'error' => $e->getMessage(),
-            ]);
-            return response()->json(['message' => 'Erro ao deletar usuário: ' . $e->getMessage()], 500);
+            return $this->handleException($e, 'Erro ao deletar usuário');
         }
     }
 
     /**
-     * Trocar empresa ativa do usuário autenticado
+     * Trocar empresa ativa do usuário autenticado - Refatorado para performance
      */
     public function switchEmpresaAtiva(Request $request): JsonResponse
     {
@@ -240,99 +194,37 @@ class UserController extends BaseApiController
                 'empresa_ativa_id' => 'required|integer|exists:empresas,id',
             ]);
 
-            $empresaId = $validated['empresa_ativa_id'];
+            $novaEmpresaId = $validated['empresa_ativa_id'];
+            $antigaEmpresaId = $user->empresa_ativa_id;
 
-            // Verificar se o usuário tem acesso a esta empresa via repository
-            $empresas = $this->userRepository->buscarEmpresas($user->id);
-            $temAcesso = collect($empresas)->contains(function ($empresa) use ($empresaId) {
-                return $empresa->id === $empresaId;
-            });
+            // 1. Delega a validação de acesso e atualização para o domínio/repo
+            // O Repository já valida se o usuário tem acesso à empresa
+            $this->userRepository->atualizarEmpresaAtiva($user->id, $novaEmpresaId);
 
-            if (!$temAcesso) {
-                return response()->json([
-                    'message' => 'Você não tem acesso a esta empresa.'
-                ], 403);
-            }
-
-            // Atualizar empresa ativa usando o repository
-            $userDomain = $this->userRepository->atualizarEmpresaAtiva($user->id, $empresaId);
-
-            // Limpar cache relacionado a fornecedores e outras entidades da empresa antiga e nova
+            // 2. Limpeza de cache cirúrgica (Apenas da nova empresa para forçar refresh de dados)
             $tenantId = tenancy()->tenant?->id;
-            Log::info('switchEmpresaAtiva - Iniciando limpeza de cache', [
-                'user_id' => $user->id,
-                'empresa_id' => $empresaId,
-                'tenant_id' => $tenantId,
-            ]);
-            
             if ($tenantId) {
-                // Limpar cache de fornecedores para todas as empresas do usuário
-                $empresas = $this->userRepository->buscarEmpresas($user->id);
-                Log::debug('switchEmpresaAtiva - Empresas encontradas para limpar cache', [
-                    'total_empresas' => count($empresas),
-                    'empresas_ids' => array_map(fn($e) => $e->id, $empresas),
-                ]);
+                // Limpa apenas o contexto da nova empresa ativa
+                $pattern = "tenant_{$tenantId}:empresa_{$novaEmpresaId}:*";
+                $totalKeysDeleted = RedisService::forgetByPattern($pattern);
                 
-                foreach ($empresas as $empresa) {
-                    Log::debug('switchEmpresaAtiva - Limpando cache', [
-                        'empresa_id' => $empresa->id,
-                        'tenant_id' => $tenantId,
-                    ]);
-                    
-                    try {
-                        // Usar RedisService::forgetByPattern() para limpar cache
-                        $pattern = "tenant_{$tenantId}:empresa_{$empresa->id}:fornecedores:*";
-                        
-                        Log::debug('switchEmpresaAtiva - Limpando cache usando RedisService', [
-                            'pattern' => $pattern,
-                            'empresa_id' => $empresa->id,
-                        ]);
-                        
-                        $totalKeysDeleted = RedisService::forgetByPattern($pattern);
-                        
-                        Log::info('switchEmpresaAtiva - Cache limpo', [
-                            'empresa_id' => $empresa->id,
-                            'pattern' => $pattern,
-                            'total_keys_deleted' => $totalKeysDeleted,
-                        ]);
-                    } catch (\Exception $e) {
-                        Log::warning("Erro ao limpar cache de fornecedores para empresa {$empresa->id}", [
-                            'error' => $e->getMessage(),
-                            'trace' => $e->getTraceAsString(),
-                        ]);
-                    }
-                }
-            } else {
-                Log::warning('switchEmpresaAtiva - Tenant ID não encontrado, não é possível limpar cache');
+                Log::info('Cache invalidado para troca de empresa', [
+                    'pattern' => $pattern,
+                    'total_keys_deleted' => $totalKeysDeleted,
+                    'user_id' => $user->id,
+                    'empresa_id_antiga' => $antigaEmpresaId,
+                    'empresa_id_nova' => $novaEmpresaId,
+                ]);
             }
-
-            Log::info('Empresa ativa alterada', [
-                'user_id' => $user->id,
-                'empresa_id' => $empresaId,
-            ]);
 
             return response()->json([
                 'message' => 'Empresa ativa alterada com sucesso.',
                 'data' => [
-                    'user_id' => $userDomain->id,
-                    'empresa_ativa_id' => $empresaId,
+                    'empresa_ativa_id' => $novaEmpresaId
                 ],
             ]);
-        } catch (ValidationException $e) {
-            return response()->json([
-                'message' => 'Erro de validação',
-                'errors' => $e->errors(),
-            ], 422);
         } catch (\Exception $e) {
-            Log::error('Erro ao trocar empresa ativa', [
-                'user_id' => auth()->id(),
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-
-            return response()->json([
-                'message' => 'Erro ao trocar empresa ativa: ' . $e->getMessage(),
-            ], 500);
+            return $this->handleException($e, 'Erro ao trocar empresa ativa');
         }
     }
 }
