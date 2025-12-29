@@ -142,13 +142,53 @@ class AdminUserController extends Controller
             ];
             
             // Se empresas for enviado, validar como array
-            // Se não, validar empresa_id como obrigatório
+            // Se não, validar empresa_id OU empresa_ativa_id como obrigatório
             // IMPORTANTE: Validação de exists será feita no UseCase (já no contexto do tenant)
-            if ($request->has('empresas') && is_array($request->input('empresas'))) {
+            $empresasInput = $request->input('empresas');
+            // Verificar se empresas existe e é um array não vazio
+            $hasEmpresasArray = ($request->has('empresas') || array_key_exists('empresas', $request->all())) 
+                && is_array($empresasInput) 
+                && count($empresasInput) > 0;
+            
+            \Log::debug('AdminUserController::store - Verificando empresas', [
+                'has_empresas_key' => $request->has('empresas'),
+                'empresas_in_all' => array_key_exists('empresas', $request->all()),
+                'empresas_input' => $empresasInput,
+                'is_array' => is_array($empresasInput),
+                'count' => is_array($empresasInput) ? count($empresasInput) : 0,
+                'has_empresas_array' => $hasEmpresasArray,
+            ]);
+            
+            if ($hasEmpresasArray) {
                 $rules['empresas'] = 'required|array|min:1';
                 $rules['empresas.*'] = 'integer';
+                // empresa_ativa_id é opcional quando empresas é fornecido
+                if ($request->has('empresa_ativa_id') || array_key_exists('empresa_ativa_id', $request->all())) {
+                    $rules['empresa_ativa_id'] = 'nullable|integer';
+                }
             } else {
-                $rules['empresa_id'] = 'required|integer';
+                // Se não tem empresas array, precisa de empresa_id OU empresa_ativa_id
+                $hasEmpresaId = $request->has('empresa_id') || array_key_exists('empresa_id', $request->all());
+                $hasEmpresaAtivaId = $request->has('empresa_ativa_id') || array_key_exists('empresa_ativa_id', $request->all());
+                
+                \Log::debug('AdminUserController::store - Verificando empresa_id/empresa_ativa_id', [
+                    'has_empresa_id' => $hasEmpresaId,
+                    'has_empresa_ativa_id' => $hasEmpresaAtivaId,
+                ]);
+                
+                if (!$hasEmpresaId && !$hasEmpresaAtivaId) {
+                    // Nenhum dos dois foi fornecido, exigir pelo menos um
+                    $rules['empresa_id'] = 'required_without:empresa_ativa_id|integer';
+                    $rules['empresa_ativa_id'] = 'required_without:empresa_id|integer';
+                } else {
+                    // Pelo menos um foi fornecido, validar o que foi enviado
+                    if ($hasEmpresaId) {
+                        $rules['empresa_id'] = 'required|integer';
+                    }
+                    if ($hasEmpresaAtivaId) {
+                        $rules['empresa_ativa_id'] = 'required|integer';
+                    }
+                }
             }
             
             $validated = $request->validate($rules, [
@@ -236,9 +276,28 @@ class AdminUserController extends Controller
             $rules = [
                 'name' => 'sometimes|required|string|max:255',
                 'email' => 'sometimes|required|email|max:255',
-                'empresa_id' => 'sometimes|required|integer',
                 'role' => 'nullable|string|in:Administrador,Operacional,Financeiro,Consulta',
             ];
+            
+            // Aceitar empresas (array) OU empresa_id OU empresa_ativa_id
+            $empresasInput = $request->input('empresas');
+            $hasEmpresasArray = $request->has('empresas') && is_array($empresasInput) && !empty($empresasInput);
+            
+            if ($hasEmpresasArray) {
+                $rules['empresas'] = 'sometimes|required|array|min:1';
+                $rules['empresas.*'] = 'integer';
+                if ($request->has('empresa_ativa_id')) {
+                    $rules['empresa_ativa_id'] = 'sometimes|nullable|integer';
+                }
+            } else {
+                // Se não tem empresas array, aceitar empresa_id OU empresa_ativa_id (opcional em update)
+                if ($request->has('empresa_id')) {
+                    $rules['empresa_id'] = 'sometimes|required|integer';
+                }
+                if ($request->has('empresa_ativa_id')) {
+                    $rules['empresa_ativa_id'] = 'sometimes|required|integer';
+                }
+            }
             
             // ⚠️ NUNCA use 'required' aqui para password em update
             // Só valida senha se ela EXISTIR (já foi normalizada acima)
