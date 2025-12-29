@@ -54,20 +54,20 @@ class AuthController extends Controller
                 // Autenticar como admin
                 $token = $adminUser->createToken('admin-token', ['admin'])->plainTextToken;
                 
+                // Retornar no formato esperado pelo frontend
+                // O frontend espera data.token diretamente, não data.data.token
                 return response()->json([
                     'message' => 'Login realizado com sucesso!',
                     'success' => true,
-                    'data' => [
-                        'user' => [
-                            'id' => $adminUser->id,
-                            'name' => $adminUser->name,
-                            'email' => $adminUser->email,
-                        ],
-                        'tenant' => null, // Admin não tem tenant
-                        'empresa' => null, // Admin não tem empresa
-                        'token' => $token,
-                        'is_admin' => true,
+                    'user' => [
+                        'id' => $adminUser->id,
+                        'name' => $adminUser->name,
+                        'email' => $adminUser->email,
                     ],
+                    'tenant' => null, // Admin não tem tenant
+                    'empresa' => null, // Admin não tem empresa
+                    'token' => $token,
+                    'is_admin' => true,
                 ]);
             }
 
@@ -77,10 +77,16 @@ class AuthController extends Controller
             // Executar Use Case (aqui está a lógica)
             $data = $this->loginUseCase->executar($dto);
 
+            // Retornar no formato esperado pelo frontend
+            // O frontend espera data.token diretamente, não data.data.token
             return response()->json([
                 'message' => 'Login realizado com sucesso!',
                 'success' => true,
-                'data' => $data,
+                'user' => $data['user'],
+                'tenant' => $data['tenant'],
+                'empresa' => $data['empresa'],
+                'token' => $data['token'],
+                'is_admin' => false,
             ]);
 
         } catch (ValidationException $e) {
@@ -135,10 +141,15 @@ class AuthController extends Controller
             // Executar Use Case (aqui está a lógica)
             $data = $this->registerUseCase->executar($dto);
 
+            // Retornar no formato esperado pelo frontend
             return response()->json([
                 'message' => 'Usuário registrado com sucesso!',
                 'success' => true,
-                'data' => $data,
+                'user' => $data['user'],
+                'tenant' => $data['tenant'],
+                'empresa' => $data['empresa'],
+                'token' => $data['token'],
+                'is_admin' => false,
             ], 201);
 
         } catch (ValidationException $e) {
