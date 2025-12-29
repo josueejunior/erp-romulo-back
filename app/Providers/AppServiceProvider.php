@@ -146,6 +146,12 @@ class AppServiceProvider extends ServiceProvider
             \App\Domain\Shared\Events\EventDispatcherInterface::class,
             \App\Infrastructure\Events\LaravelEventDispatcher::class
         );
+
+        // Read Repositories (CQRS - Query Side)
+        $this->app->bind(
+            \App\Domain\Auth\Repositories\UserReadRepositoryInterface::class,
+            \App\Infrastructure\Persistence\Eloquent\UserReadRepository::class
+        );
     }
 
     /**

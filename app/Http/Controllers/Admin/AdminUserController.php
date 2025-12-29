@@ -34,6 +34,7 @@ class AdminUserController extends Controller
     /**
      * Listar usuários de uma empresa (tenant)
      * Middleware InitializeTenant cuida do contexto
+     * Usa ReadRepository (CQRS) - controller nunca conhece Eloquent
      */
     public function index(Request $request, Tenant $tenant)
     {
@@ -43,20 +44,11 @@ class AdminUserController extends Controller
                 'per_page' => $request->per_page ?? 15,
             ];
 
-            $users = $this->userRepository->buscarComFiltros($filtros);
-
-            // Converter entidades do domínio para array
-            $data = $users->getCollection()->map(function ($user) {
-                return [
-                    'id' => $user->id,
-                    'name' => $user->nome,
-                    'email' => $user->email,
-                    'empresa_ativa_id' => $user->empresaAtivaId,
-                ];
-            });
+            // Usar ReadRepository (não conhece Eloquent)
+            $users = $this->userReadRepository->listarComRelacionamentos($filtros);
 
             return response()->json([
-                'data' => $data,
+                'data' => $users->items(),
                 'pagination' => [
                     'current_page' => $users->currentPage(),
                     'per_page' => $users->perPage(),
@@ -72,32 +64,19 @@ class AdminUserController extends Controller
 
     /**
      * Buscar usuário específico
+     * Usa ReadRepository - controller nunca conhece Eloquent
      */
     public function show(Request $request, Tenant $tenant, int $userId)
     {
         try {
-            $user = $this->userRepository->buscarPorId($userId);
+            // Usar ReadRepository (não conhece Eloquent)
+            $userData = $this->userReadRepository->buscarComRelacionamentos($userId);
 
-            if (!$user) {
+            if (!$userData) {
                 return response()->json(['message' => 'Usuário não encontrado.'], 404);
             }
 
-            // Buscar modelo Eloquent para roles/empresas (pode ser melhorado com Domain Service)
-            $userModel = \App\Modules\Auth\Models\User::with(['empresas', 'roles'])->find($userId);
-
-            return response()->json([
-                'data' => [
-                    'id' => $user->id,
-                    'name' => $user->nome,
-                    'email' => $user->email,
-                    'empresa_ativa_id' => $user->empresaAtivaId,
-                    'roles' => $userModel?->roles->pluck('name') ?? [],
-                    'empresas' => $userModel?->empresas->map(fn($e) => [
-                        'id' => $e->id,
-                        'razao_social' => $e->razao_social,
-                    ]) ?? [],
-                ],
-            ]);
+            return response()->json(['data' => $userData]);
         } catch (\Exception $e) {
             Log::error('Erro ao buscar usuário', ['error' => $e->getMessage()]);
             return response()->json(['message' => 'Erro ao buscar usuário.'], 500);
@@ -183,20 +162,20 @@ class AdminUserController extends Controller
                 'role.in' => 'O perfil deve ser: Administrador, Operacional, Financeiro ou Consulta.',
             ]);
 
-            // Criar DTO
-            $dto = AtualizarUsuarioDTO::fromRequest($request, $tenant->id, $userId);
+            // Criar TenantContext explícito (não depende de request())
+            $context = TenantContext::create($tenant->id);
+
+            // Criar DTO (sem tenantId - vem do context)
+            $dto = AtualizarUsuarioDTO::fromRequest($request, $userId);
 
             // Executar Use Case (toda a lógica está aqui)
-            $user = $this->atualizarUsuarioUseCase->executar($dto);
+            $user = $this->atualizarUsuarioUseCase->executar($dto, $context);
 
+            // Usar Presenter (controller não conhece estrutura do domínio)
             return response()->json([
                 'message' => 'Usuário atualizado com sucesso!',
                 'success' => true,
-                'data' => [
-                    'id' => $user->id,
-                    'name' => $user->nome,
-                    'email' => $user->email,
-                ],
+                'data' => UserPresenter::fromDomain($user),
             ]);
         } catch (ValidationException $e) {
             return response()->json([
