@@ -338,32 +338,90 @@ class AdminUserController extends Controller
     }
 
     /**
-     * Listar empresas disponíveis para o usuário
+     * Listar empresas disponíveis de TODOS os tenants
+     * 
+     * Esta rota é usada para vincular usuários a múltiplas empresas de diferentes tenants.
+     * Por isso, retorna empresas de todos os tenants, não apenas do tenant atual.
      */
     public function empresas(Request $request, Tenant $tenant)
     {
         try {
-            $empresas = \Illuminate\Support\Facades\DB::table('empresas')
-                ->select('id', 'razao_social', 'cnpj', 'status')
-                ->where('status', 'ativa')
-                ->orderBy('razao_social')
+            // Salvar estado do tenancy atual (se houver)
+            $wasInitialized = tenancy()->initialized;
+            $previousTenant = tenancy()->tenant;
+            
+            // Buscar todos os tenants ativos
+            $allTenants = \App\Models\Tenant::where('status', 'ativa')
+                ->orWhereNull('status')
                 ->get();
-
-            // Garantir que seja sempre um array (mesmo que vazio)
-            // Frontend espera isso para usar .filter()
-            $empresasArray = $empresas->map(function ($empresa) {
-                return [
-                    'id' => (int) $empresa->id,
-                    'razao_social' => $empresa->razao_social,
-                    'cnpj' => $empresa->cnpj,
-                    'status' => $empresa->status,
-                ];
-            })->values()->toArray();
-
+            
+            $allEmpresas = [];
+            
+            // Para cada tenant, buscar suas empresas
+            foreach ($allTenants as $tenantModel) {
+                try {
+                    // Inicializar tenancy para este tenant
+                    tenancy()->initialize($tenantModel);
+                    
+                    // Buscar empresas deste tenant
+                    $empresas = \Illuminate\Support\Facades\DB::table('empresas')
+                        ->select('id', 'razao_social', 'cnpj', 'status')
+                        ->where('status', 'ativa')
+                        ->get();
+                    
+                    // Adicionar ao array consolidado
+                    foreach ($empresas as $empresa) {
+                        $allEmpresas[] = [
+                            'id' => (int) $empresa->id,
+                            'razao_social' => $empresa->razao_social,
+                            'cnpj' => $empresa->cnpj,
+                            'status' => $empresa->status,
+                            'tenant_id' => $tenantModel->id, // Incluir ID do tenant para referência
+                            'tenant_razao_social' => $tenantModel->razao_social, // Nome do tenant para contexto
+                        ];
+                    }
+                    
+                    // Finalizar tenancy deste tenant
+                    tenancy()->end();
+                } catch (\Exception $e) {
+                    // Se falhar em um tenant, continuar com os outros
+                    Log::warning('Erro ao buscar empresas do tenant', [
+                        'tenant_id' => $tenantModel->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                    
+                    // Garantir que o tenancy foi finalizado mesmo em caso de erro
+                    if (tenancy()->initialized) {
+                        tenancy()->end();
+                    }
+                }
+            }
+            
+            // Restaurar tenancy anterior (se havia)
+            if ($wasInitialized && $previousTenant) {
+                tenancy()->initialize($previousTenant);
+            } elseif ($wasInitialized) {
+                tenancy()->end();
+            }
+            
+            // Ordenar por razão social
+            usort($allEmpresas, function ($a, $b) {
+                return strcmp($a['razao_social'], $b['razao_social']);
+            });
+            
             // Usar ResponseBuilder padronizado (sempre retorna array)
-            return ApiResponse::collection($empresasArray ?: []);
+            return ApiResponse::collection($allEmpresas);
         } catch (\Exception $e) {
-            Log::error('Erro ao listar empresas', ['error' => $e->getMessage()]);
+            // Garantir que o tenancy seja finalizado mesmo em caso de erro
+            if (tenancy()->initialized) {
+                tenancy()->end();
+            }
+            
+            Log::error('Erro ao listar empresas de todos os tenants', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            
             // Em caso de erro, retornar array vazio para não quebrar o frontend
             return response()->json([
                 'data' => [],

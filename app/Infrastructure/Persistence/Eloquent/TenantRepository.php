@@ -81,43 +81,102 @@ class TenantRepository implements TenantRepositoryInterface
                 'cnpj' => $data['cnpj'] ?? null,
             ]);
             
-            $model = TenantModel::create($data);
-            
-            if (!$model) {
-                \Log::error('TenantModel::create() retornou null', [
-                    'data' => $data,
+            // Tentar criar usando create() primeiro (método padrão do Eloquent)
+            try {
+                $model = TenantModel::create($data);
+                
+                if (!$model) {
+                    \Log::error('TenantModel::create() retornou null', [
+                        'data' => $data,
+                    ]);
+                    throw new \RuntimeException('Falha ao criar o tenant no banco de dados. O modelo não foi criado.');
+                }
+                
+                // Verificar se o ID foi gerado imediatamente
+                if ($model->id) {
+                    \Log::debug('Tenant criado com sucesso (ID gerado imediatamente)', [
+                        'tenant_id' => $model->id,
+                        'razao_social' => $model->razao_social,
+                    ]);
+                    return $this->toDomain($model);
+                }
+                
+                // Se não tem ID, tentar refresh
+                \Log::warning('Tenant criado mas sem ID imediato, tentando refresh', [
+                    'model_exists' => $model->exists,
                 ]);
-                throw new \RuntimeException('Falha ao criar o tenant no banco de dados. O modelo não foi criado.');
-            }
-            
-            \Log::debug('Tenant criado com sucesso', [
-                'tenant_id' => $model->id,
-                'razao_social' => $model->razao_social,
-            ]);
-            
-            // Verificar se o modelo tem ID (deve ter após create())
-            if (!$model->id) {
-                \Log::error('Tenant criado mas sem ID', [
+                
+                $model->refresh();
+                
+                if ($model->id) {
+                    \Log::debug('Tenant criado com sucesso (ID gerado após refresh)', [
+                        'tenant_id' => $model->id,
+                        'razao_social' => $model->razao_social,
+                    ]);
+                    return $this->toDomain($model);
+                }
+                
+                // Se ainda não tem ID, tentar buscar pelo CNPJ ou outros campos únicos
+                if (!empty($data['cnpj'])) {
+                    \Log::warning('Tentando buscar tenant recém-criado pelo CNPJ', [
+                        'cnpj' => $data['cnpj'],
+                    ]);
+                    $foundModel = TenantModel::where('cnpj', $data['cnpj'])->first();
+                    if ($foundModel && $foundModel->id) {
+                        \Log::debug('Tenant encontrado pelo CNPJ após criação', [
+                            'tenant_id' => $foundModel->id,
+                        ]);
+                        return $this->toDomain($foundModel);
+                    }
+                }
+                
+                // Última tentativa: buscar pelo email
+                if (!empty($data['email'])) {
+                    \Log::warning('Tentando buscar tenant recém-criado pelo email', [
+                        'email' => $data['email'],
+                    ]);
+                    $foundModel = TenantModel::where('email', $data['email'])->first();
+                    if ($foundModel && $foundModel->id) {
+                        \Log::debug('Tenant encontrado pelo email após criação', [
+                            'tenant_id' => $foundModel->id,
+                        ]);
+                        return $this->toDomain($foundModel);
+                    }
+                }
+                
+                // Se chegou aqui, realmente não tem ID
+                \Log::error('Tenant criado mas sem ID após todas as tentativas', [
                     'model_exists' => $model->exists,
                     'model_attributes' => $model->getAttributes(),
+                    'data' => $data,
                 ]);
-                throw new \RuntimeException('Falha ao criar tenant: o ID não foi gerado.');
-            }
-            
-            // Recarregar o modelo do banco para garantir que temos todos os dados atualizados
-            // Se fresh() falhar, usar o modelo diretamente (já tem o ID)
-            $freshModel = $model->fresh();
-            
-            if (!$freshModel) {
-                \Log::warning('TenantModel::fresh() retornou null, usando modelo original', [
+                throw new \RuntimeException('Falha ao criar tenant: o ID não foi gerado após salvar.');
+                
+            } catch (\Illuminate\Database\QueryException $e) {
+                // Se create() falhar, tentar com save() manual
+                \Log::warning('TenantModel::create() falhou, tentando com save() manual', [
+                    'error' => $e->getMessage(),
+                ]);
+                
+                $model = new TenantModel();
+                $model->fill($data);
+                $saved = $model->save();
+                
+                if (!$saved || !$model->id) {
+                    \Log::error('TenantModel::save() também falhou', [
+                        'saved' => $saved,
+                        'model_id' => $model->id ?? null,
+                        'data' => $data,
+                    ]);
+                    throw new \RuntimeException('Falha ao criar tenant: ' . $e->getMessage(), 0, $e);
+                }
+                
+                \Log::debug('Tenant criado com sucesso usando save() manual', [
                     'tenant_id' => $model->id,
-                    'model_exists' => $model->exists,
                 ]);
-                // Usar o modelo original se fresh() falhar (pode acontecer em alguns casos raros)
-                $freshModel = $model;
+                
+                return $this->toDomain($model);
             }
-            
-            return $this->toDomain($freshModel);
         } catch (\Illuminate\Database\QueryException $e) {
             // Erro de banco de dados (constraints, duplicatas, etc.)
             \Log::error('Erro de banco de dados ao criar tenant', [
