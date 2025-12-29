@@ -3,7 +3,6 @@
 namespace App\Modules\Orcamento\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
-use App\Http\Controllers\Traits\HasDefaultActions;
 use App\Http\Resources\FormacaoPrecoResource;
 use App\Modules\Processo\Models\Processo;
 use App\Modules\Processo\Models\ProcessoItem;
@@ -14,7 +13,6 @@ use Illuminate\Http\Request;
 
 class FormacaoPrecoController extends BaseApiController
 {
-    use HasDefaultActions;
 
     protected FormacaoPrecoService $formacaoPrecoService;
 

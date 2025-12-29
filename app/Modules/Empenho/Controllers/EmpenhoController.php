@@ -3,7 +3,6 @@
 namespace App\Modules\Empenho\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
-use App\Http\Controllers\Traits\HasDefaultActions;
 use App\Modules\Processo\Models\Processo;
 use App\Models\Empenho;
 use App\Modules\Empenho\Services\EmpenhoService;
@@ -14,7 +13,6 @@ use Illuminate\Validation\ValidationException;
 
 class EmpenhoController extends BaseApiController
 {
-    use HasDefaultActions;
 
     protected EmpenhoService $empenhoService;
 

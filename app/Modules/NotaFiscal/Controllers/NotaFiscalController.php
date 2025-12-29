@@ -3,7 +3,6 @@
 namespace App\Modules\NotaFiscal\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
-use App\Http\Controllers\Traits\HasDefaultActions;
 use App\Modules\Processo\Models\Processo;
 use App\Models\NotaFiscal;
 use App\Modules\NotaFiscal\Services\NotaFiscalService;
@@ -14,7 +13,6 @@ use Illuminate\Validation\ValidationException;
 
 class NotaFiscalController extends BaseApiController
 {
-    use HasDefaultActions;
 
     protected NotaFiscalService $notaFiscalService;
 

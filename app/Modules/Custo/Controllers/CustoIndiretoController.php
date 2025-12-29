@@ -2,15 +2,13 @@
 
 namespace App\Modules\Custo\Controllers;
 
-use App\Http\Controllers\Api\RoutingController;
-use App\Http\Controllers\Traits\HasDefaultActions;
+use App\Http\Controllers\Controller;
 use App\Models\CustoIndireto;
 use App\Modules\Custo\Services\CustoIndiretoService;
 use Illuminate\Http\Request;
 
-class CustoIndiretoController extends RoutingController
+class CustoIndiretoController extends Controller
 {
-    use HasDefaultActions;
 
     public function __construct(CustoIndiretoService $service)
     {

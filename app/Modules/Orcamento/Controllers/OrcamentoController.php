@@ -3,7 +3,6 @@
 namespace App\Modules\Orcamento\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
-use App\Http\Controllers\Traits\HasDefaultActions;
 use App\Http\Resources\OrcamentoResource;
 use App\Modules\Processo\Models\Processo;
 use App\Modules\Processo\Models\ProcessoItem;
@@ -16,7 +15,6 @@ use Illuminate\Validation\ValidationException;
 
 class OrcamentoController extends BaseApiController
 {
-    use HasDefaultActions;
 
     protected OrcamentoService $orcamentoService;
 

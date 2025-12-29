@@ -3,7 +3,6 @@
 namespace App\Modules\Documento\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
-use App\Http\Controllers\Traits\HasDefaultActions;
 use App\Models\DocumentoHabilitacao;
 use App\Modules\Documento\Services\DocumentoHabilitacaoService;
 use Illuminate\Http\Request;
@@ -11,7 +10,6 @@ use App\Helpers\PermissionHelper;
 
 class DocumentoHabilitacaoController extends BaseApiController
 {
-    use HasDefaultActions;
 
     public function __construct(DocumentoHabilitacaoService $service)
     {

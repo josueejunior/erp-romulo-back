@@ -18,7 +18,7 @@ use Illuminate\Http\JsonResponse;
  * 
  * Segue o padrão de controllers do sistema:
  * - Estende Controller (que estende RoutingController)
- * - Usa HasDefaultActions para ações padrão (get, list, store, update, destroy)
+ * - Implementa métodos CRUD diretamente
  * - Usa HasAuthContext para acessar contexto de autenticação
  * - Injeta ProcessoService no construtor
  * - Define $storeDataCast para casting de dados

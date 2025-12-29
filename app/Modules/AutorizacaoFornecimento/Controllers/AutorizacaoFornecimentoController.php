@@ -3,7 +3,6 @@
 namespace App\Modules\AutorizacaoFornecimento\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
-use App\Http\Controllers\Traits\HasDefaultActions;
 use App\Modules\Processo\Models\Processo;
 use App\Models\AutorizacaoFornecimento;
 use App\Modules\AutorizacaoFornecimento\Services\AutorizacaoFornecimentoService;
@@ -11,7 +10,6 @@ use Illuminate\Http\Request;
 
 class AutorizacaoFornecimentoController extends BaseApiController
 {
-    use HasDefaultActions;
 
     protected AutorizacaoFornecimentoService $afService;
 
