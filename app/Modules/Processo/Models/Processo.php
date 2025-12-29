@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Models\Traits\HasSoftDeletesWithEmpresa;
 use App\Models\Concerns\BelongsToEmpresa;
 use App\Models\Empresa;
-use App\Models\Orgao;
+use App\Modules\Orgao\Models\Orgao;
 use App\Models\Setor;
 use App\Models\Contrato;
 use App\Models\AutorizacaoFornecimento;

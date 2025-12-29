@@ -348,7 +348,7 @@ class ContratoService
         // Filtro: órgão
         if (!empty($filtros['orgao_id'])) {
             // Validar que o órgão pertence à empresa
-            $orgao = \App\Models\Orgao::where('id', $filtros['orgao_id'])
+            $orgao = \App\Modules\Orgao\Models\Orgao::where('id', $filtros['orgao_id'])
                 ->where('empresa_id', $empresaId)
                 ->first();
             

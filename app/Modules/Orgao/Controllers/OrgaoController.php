@@ -3,8 +3,8 @@
 namespace App\Modules\Orgao\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Http\Resources\OrgaoResource;
-use App\Models\Orgao;
+use App\Modules\Orgao\Resources\OrgaoResource;
+use App\Modules\Orgao\Models\Orgao;
 use App\Modules\Orgao\Services\OrgaoService;
 use Illuminate\Http\Request;
 use App\Helpers\PermissionHelper;

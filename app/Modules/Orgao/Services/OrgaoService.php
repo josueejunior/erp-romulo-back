@@ -3,7 +3,7 @@
 namespace App\Modules\Orgao\Services;
 
 use App\Services\BaseService;
-use App\Models\Orgao;
+use App\Modules\Orgao\Models\Orgao;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Validator;
 
