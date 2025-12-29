@@ -183,5 +183,202 @@ class RelatorioFinanceiroController extends BaseApiController
 
         return response()->json($resultado);
     }
+
+    /**
+     * Exporta relatório financeiro em PDF ou CSV
+     */
+    public function exportar(Request $request)
+    {
+        if (!PermissionHelper::canViewFinancialReports()) {
+            return response()->json([
+                'message' => 'Você não tem permissão para exportar relatórios financeiros.',
+            ], 403);
+        }
+
+        $formato = $request->formato ?? 'pdf';
+        $tipo = $request->tipo ?? 'completo';
+        $empresa = $this->getEmpresaAtivaOrFail();
+
+        try {
+            if ($request->mes || $request->tipo === 'mensal') {
+                // Exportar gestão mensal
+                $mes = $request->mes 
+                    ? Carbon::createFromFormat('Y-m', $request->mes)
+                    : Carbon::now();
+                
+                $data = $this->financeiroService->calcularGestaoFinanceiraMensal($mes, $empresa->id);
+                
+                if ($formato === 'csv') {
+                    return $this->exportarCSVMensal($data, $mes);
+                } else {
+                    return $this->exportarPDFMensal($data, $mes);
+                }
+            } else {
+                // Exportar processos em execução
+                $filters = [
+                    'data_inicio' => $request->data_inicio,
+                    'data_fim' => $request->data_fim,
+                ];
+                
+                $data = $this->index($request)->getData(true);
+                
+                if ($formato === 'csv') {
+                    return $this->exportarCSVExecucao($data, $filters);
+                } else {
+                    return $this->exportarPDFExecucao($data, $filters);
+                }
+            }
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Erro ao exportar relatório: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Exporta relatório mensal em CSV
+     */
+    protected function exportarCSVMensal($data, Carbon $mes): \Illuminate\Http\Response
+    {
+        $resumo = $data['resumo'] ?? [];
+        $processos = $data['processos'] ?? [];
+        
+        $filename = "relatorio_financeiro_mensal_{$mes->format('Y-m')}.csv";
+        
+        $headers = [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ];
+
+        $callback = function() use ($resumo, $processos, $mes) {
+            $file = fopen('php://output', 'w');
+            
+            // BOM para UTF-8
+            fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
+            
+            // Cabeçalho
+            fputcsv($file, ['Relatório Financeiro Mensal'], ';');
+            fputcsv($file, ["Período: {$mes->format('m/Y')}"], ';');
+            fputcsv($file, []); // Linha em branco
+            
+            // Resumo
+            fputcsv($file, ['RESUMO'], ';');
+            fputcsv($file, ['Receita Total', 'Custos Diretos', 'Custos Indiretos', 'Lucro Bruto', 'Lucro Líquido', 'Margem Bruta (%)', 'Margem Líquida (%)'], ';');
+            fputcsv($file, [
+                number_format($resumo['receita_total'] ?? 0, 2, ',', '.'),
+                number_format($resumo['custos_diretos'] ?? 0, 2, ',', '.'),
+                number_format($resumo['custos_indiretos'] ?? 0, 2, ',', '.'),
+                number_format($resumo['lucro_bruto'] ?? 0, 2, ',', '.'),
+                number_format($resumo['lucro_liquido'] ?? 0, 2, ',', '.'),
+                number_format($resumo['margem_bruta'] ?? 0, 2, ',', '.'),
+                number_format($resumo['margem_liquida'] ?? 0, 2, ',', '.'),
+            ], ';');
+            fputcsv($file, []); // Linha em branco
+            
+            // Processos
+            if (count($processos) > 0) {
+                fputcsv($file, ['PROCESSOS ENCERRADOS'], ';');
+                fputcsv($file, ['Processo', 'Data Recebimento', 'Receita', 'Custos Diretos', 'Lucro Bruto', 'Margem (%)'], ';');
+                foreach ($processos as $processo) {
+                    fputcsv($file, [
+                        $processo['numero_modalidade'] ?? '',
+                        $processo['data_recebimento'] ?? '',
+                        number_format($processo['receita'] ?? 0, 2, ',', '.'),
+                        number_format($processo['custos_diretos'] ?? 0, 2, ',', '.'),
+                        number_format($processo['lucro_bruto'] ?? 0, 2, ',', '.'),
+                        number_format($processo['margem'] ?? 0, 2, ',', '.'),
+                    ], ';');
+                }
+            }
+            
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
+    /**
+     * Exporta relatório de execução em CSV
+     */
+    protected function exportarCSVExecucao($data, array $filters): \Illuminate\Http\Response
+    {
+        $resumo = $data['resumo'] ?? [];
+        $processos = $data['processos'] ?? [];
+        
+        $filename = "relatorio_financeiro_execucao_" . date('Y-m-d') . ".csv";
+        
+        $headers = [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ];
+
+        $callback = function() use ($resumo, $processos, $filters) {
+            $file = fopen('php://output', 'w');
+            
+            // BOM para UTF-8
+            fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
+            
+            // Cabeçalho
+            fputcsv($file, ['Relatório Financeiro - Processos em Execução'], ';');
+            if ($filters['data_inicio'] || $filters['data_fim']) {
+                fputcsv($file, [
+                    "Período: " . ($filters['data_inicio'] ?? 'Início') . " a " . ($filters['data_fim'] ?? 'Fim')
+                ], ';');
+            }
+            fputcsv($file, []); // Linha em branco
+            
+            // Resumo
+            fputcsv($file, ['RESUMO'], ';');
+            fputcsv($file, ['Total a Receber', 'Custos Diretos', 'Custos Indiretos', 'Lucro Bruto', 'Lucro Líquido', 'Margem Bruta (%)', 'Margem Líquida (%)'], ';');
+            fputcsv($file, [
+                number_format($resumo['total_receber'] ?? 0, 2, ',', '.'),
+                number_format($resumo['total_custos_diretos'] ?? 0, 2, ',', '.'),
+                number_format($resumo['total_custos_indiretos'] ?? 0, 2, ',', '.'),
+                number_format($resumo['lucro_bruto'] ?? 0, 2, ',', '.'),
+                number_format($resumo['lucro_liquido'] ?? 0, 2, ',', '.'),
+                number_format($resumo['margem_bruta'] ?? 0, 2, ',', '.'),
+                number_format($resumo['margem_liquida'] ?? 0, 2, ',', '.'),
+            ], ';');
+            fputcsv($file, []); // Linha em branco
+            
+            // Processos
+            if (count($processos) > 0) {
+                fputcsv($file, ['PROCESSOS EM EXECUÇÃO'], ';');
+                fputcsv($file, ['Processo', 'Objeto', 'Receita', 'Custos Diretos', 'Lucro', 'Margem (%)'], ';');
+                foreach ($processos as $processo) {
+                    fputcsv($file, [
+                        $processo['numero_modalidade'] ?? '',
+                        $processo['objeto_resumido'] ?? '',
+                        number_format($processo['receita'] ?? 0, 2, ',', '.'),
+                        number_format($processo['custos_diretos'] ?? 0, 2, ',', '.'),
+                        number_format($processo['lucro'] ?? 0, 2, ',', '.'),
+                        number_format($processo['margem'] ?? 0, 2, ',', '.'),
+                    ], ';');
+                }
+            }
+            
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
+    /**
+     * Exporta relatório mensal em PDF (simplificado - retorna HTML por enquanto)
+     */
+    protected function exportarPDFMensal($data, Carbon $mes): \Illuminate\Http\Response
+    {
+        // Por enquanto, retornar CSV já que PDF requer biblioteca externa
+        return $this->exportarCSVMensal($data, $mes);
+    }
+
+    /**
+     * Exporta relatório de execução em PDF (simplificado - retorna HTML por enquanto)
+     */
+    protected function exportarPDFExecucao($data, array $filters): \Illuminate\Http\Response
+    {
+        // Por enquanto, retornar CSV já que PDF requer biblioteca externa
+        return $this->exportarCSVExecucao($data, $filters);
+    }
 }
 

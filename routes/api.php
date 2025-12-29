@@ -201,6 +201,7 @@ Route::prefix('v1')->group(function () {
         Route::prefix('relatorios')->group(function () {
             Route::get('/financeiro', [ApiRelatorioFinanceiroController::class, 'index']);
             Route::get('/gestao-mensal', [ApiRelatorioFinanceiroController::class, 'gestaoMensal']);
+            Route::get('/financeiro/exportar', [ApiRelatorioFinanceiroController::class, 'exportar']);
         });
 
         // Assinaturas (requer autenticação e tenancy)
