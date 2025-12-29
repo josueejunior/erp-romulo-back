@@ -58,11 +58,27 @@ class OrgaoObserver
         
         // Limpar cache específico de órgãos
         $cacheKey = "orgaos:{$tenantId}:{$orgao->empresa_id}";
-        RedisService::delete($cacheKey);
+        RedisService::forget($cacheKey);
         
         // Limpar cache de listagem
         $listCacheKey = "orgaos:list:{$tenantId}:{$orgao->empresa_id}";
-        RedisService::delete($listCacheKey);
+        RedisService::forget($listCacheKey);
+        
+        // Limpar todos os caches de órgãos com padrão (para garantir)
+        $pattern = "orgaos:{$tenantId}:{$orgao->empresa_id}:*";
+        try {
+            $cursor = 0;
+            do {
+                $result = \Illuminate\Support\Facades\Redis::scan($cursor, ['match' => $pattern, 'count' => 100]);
+                $cursor = $result[0];
+                $keys = $result[1];
+                if (!empty($keys)) {
+                    \Illuminate\Support\Facades\Redis::del($keys);
+                }
+            } while ($cursor != 0);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::warning('Erro ao limpar cache de órgãos: ' . $e->getMessage());
+        }
     }
 }
 
