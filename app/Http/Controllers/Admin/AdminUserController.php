@@ -298,15 +298,38 @@ class AdminUserController extends Controller
                             ->ignore($user->id)
                             ->whereNull('excluido_em'), // Ignorar soft deleted
                     ],
-                    'password' => ['nullable', 'string', 'min:8', new \App\Rules\StrongPassword()],
+                    'password' => [
+                        'nullable',
+                        'sometimes',
+                        function ($attribute, $value, $fail) {
+                            // Se for string vazia, tratar como null (não alterar senha)
+                            if ($value === '' || $value === null) {
+                                return;
+                            }
+                            // Se fornecida, validar
+                            if (!is_string($value) || strlen($value) < 8) {
+                                $fail('A senha deve ter no mínimo 8 caracteres.');
+                                return;
+                            }
+                            $rule = new \App\Rules\StrongPassword();
+                            if (!$rule->passes($attribute, $value)) {
+                                $fail($rule->message());
+                            }
+                        }
+                    ],
                     'role' => 'sometimes|required|string|in:Administrador,Operacional,Financeiro,Consulta',
                     // Aceitar múltiplas empresas ou uma única (compatibilidade)
                     'empresas' => 'sometimes|array|min:1',
                     'empresas.*' => 'required|integer|exists:empresas,id',
                     'empresa_id' => [
                         'sometimes',
-                        function ($attribute, $value, $fail) use ($tenant) {
-                            if ($value !== null) {
+                        function ($attribute, $value, $fail) use ($request, $tenant) {
+                            // Se empresas[] foi fornecido, ignorar empresa_id (compatibilidade)
+                            if ($request->has('empresas') && !empty($request->input('empresas'))) {
+                                return; // Ignorar validação se empresas[] foi fornecido
+                            }
+                            
+                            if ($value !== null && $value !== '') {
                                 if (!is_numeric($value)) {
                                     $fail('O ID da empresa deve ser um número válido.');
                                     return;
@@ -378,6 +401,7 @@ class AdminUserController extends Controller
                 foreach ($errors as $field => $messages) {
                     $processedErrors[$field] = array_map(function ($message) use ($field) {
                         // Se a mensagem for uma chave de tradução, usar mensagem personalizada
+                        // IMPORTANTE: Não converter mensagens de validação para campos nullable/optional
                         if ($message === 'validation.required' && $field === 'name') {
                             return 'O nome do usuário é obrigatório.';
                         }
@@ -389,6 +413,12 @@ class AdminUserController extends Controller
                         }
                         if ($message === 'validation.required' && $field === 'empresas') {
                             return 'Selecione pelo menos uma empresa.';
+                        }
+                        // Não converter mensagens de required para password no update (é nullable)
+                        if ($message === 'validation.required' && $field === 'password') {
+                            // Se chegou aqui, pode ser um erro real ou uma conversão incorreta
+                            // Deixar a mensagem original passar
+                            return $message;
                         }
                         if (str_contains($message, 'validation.required')) {
                             return 'O campo ' . $field . ' é obrigatório.';
@@ -403,6 +433,16 @@ class AdminUserController extends Controller
                 }
                 
                 throw ValidationException::withMessages($processedErrors);
+            }
+
+            // Remover empresa_id dos validados se empresas[] foi fornecido (evitar conflito)
+            if (isset($validated['empresas']) && !empty($validated['empresas'])) {
+                unset($validated['empresa_id']);
+            }
+            
+            // Remover password se for string vazia (não alterar senha)
+            if (isset($validated['password']) && ($validated['password'] === '' || $validated['password'] === null)) {
+                unset($validated['password']);
             }
 
             // Atualizar campos básicos
