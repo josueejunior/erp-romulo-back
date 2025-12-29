@@ -267,7 +267,7 @@ class AdminUserController extends Controller
                 'rules' => array_keys($rules),
                 'has_password_rule' => isset($rules['password']),
                 'request_has_password' => $request->has('password'),
-                'password_value_empty' => $request->has('password') ? (empty(trim($request->input('password'))) : 'não enviado',
+                'password_value_empty' => $request->has('password') ? (empty(trim($request->input('password')))) : 'não enviado',
             ]);
             
             $validated = $request->validate($rules, [
