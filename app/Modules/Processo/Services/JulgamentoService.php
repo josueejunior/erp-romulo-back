@@ -73,6 +73,8 @@ class JulgamentoService
         $temAceito = false;
 
         foreach ($itensData as $itemData) {
+            // Buscar item via repository se existir, senão usar modelo diretamente
+            // Nota: ProcessoItem pode não ter repository ainda, então usar modelo por enquanto
             $item = ProcessoItem::find($itemData['id']);
             if (!$item || $item->processo_id !== $processo->id) {
                 continue;

@@ -3,6 +3,7 @@
 namespace App\Modules\Processo\Services;
 
 use App\Services\BaseService;
+use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Modules\Processo\Models\Processo;
 use App\Modules\Processo\Services\ProcessoStatusService;
 use App\Rules\DbTypeRule;
@@ -21,6 +22,12 @@ class ProcessoService extends BaseService
      * Model class name
      */
     protected static string $model = Processo::class;
+
+    public function __construct(
+        private ProcessoRepositoryInterface $processoRepository,
+    ) {
+        parent::__construct();
+    }
 
     /**
      * Criar parâmetros para busca por ID
@@ -296,7 +303,15 @@ class ProcessoService extends BaseService
             ];
         }
 
-        $baseQuery = Processo::where('empresa_id', $empresaId)
+        // Usar ProcessoRepository para obter resumo básico
+        $resumo = $this->processoRepository->obterResumo([
+            'empresa_id' => $empresaId,
+        ]);
+        
+        // Para cálculos complexos, usar modelos Eloquent diretamente (necessário para relacionamentos)
+        // Mas garantir isolamento por empresa_id
+        $baseQuery = Processo::withoutGlobalScope('empresa')
+            ->where('empresa_id', $empresaId)
             ->whereNotNull('empresa_id');
 
         // Aplicar filtros (mas não para os cálculos de stats)
@@ -313,18 +328,27 @@ class ProcessoService extends BaseService
         if (isset($filtros['search']) && $filtros['search']) {
             $search = $filtros['search'];
             $queryComFiltros->where(function($q) use ($search) {
-                $q->where('numero_modalidade', 'like', "%{$search}%")
-                  ->orWhere('numero_processo_administrativo', 'like', "%{$search}%")
-                  ->orWhere('objeto_resumido', 'like', "%{$search}%");
+                $q->where('numero_modalidade', 'ilike', "%{$search}%")
+                  ->orWhere('numero_processo_administrativo', 'ilike', "%{$search}%")
+                  ->orWhere('objeto_resumido', 'ilike', "%{$search}%");
             });
         }
 
-        // Contar por status (usando query com filtros)
-        $participacao = (clone $queryComFiltros)->where('status', 'participacao')->count();
-        $julgamento = (clone $queryComFiltros)->where('status', 'julgamento_habilitacao')->count();
-        $execucao = (clone $queryComFiltros)->where('status', 'execucao')->count();
-        $pagamento = (clone $queryComFiltros)->where('status', 'pagamento')->count();
-        $encerramento = (clone $queryComFiltros)->where('status', 'encerramento')->count();
+        // Contar por status usando repository quando possível
+        $filtrosParticipacao = array_merge($filtros, ['empresa_id' => $empresaId, 'status' => 'participacao', 'per_page' => 1]);
+        $participacao = $this->processoRepository->buscarComFiltros($filtrosParticipacao)->total();
+        
+        $filtrosJulgamento = array_merge($filtros, ['empresa_id' => $empresaId, 'status' => 'julgamento_habilitacao', 'per_page' => 1]);
+        $julgamento = $this->processoRepository->buscarComFiltros($filtrosJulgamento)->total();
+        
+        $filtrosExecucao = array_merge($filtros, ['empresa_id' => $empresaId, 'status' => 'execucao', 'per_page' => 1]);
+        $execucao = $this->processoRepository->buscarComFiltros($filtrosExecucao)->total();
+        
+        $filtrosPagamento = array_merge($filtros, ['empresa_id' => $empresaId, 'status' => 'pagamento', 'per_page' => 1]);
+        $pagamento = $this->processoRepository->buscarComFiltros($filtrosPagamento)->total();
+        
+        $filtrosEncerramento = array_merge($filtros, ['empresa_id' => $empresaId, 'status' => 'encerramento', 'per_page' => 1]);
+        $encerramento = $this->processoRepository->buscarComFiltros($filtrosEncerramento)->total();
 
         // Contar processos com alertas (precisa carregar processos e verificar alertas)
         // Por enquanto, retornar 0 - pode ser implementado depois se necessário
