@@ -125,6 +125,8 @@ class AdminUserController extends Controller
             \Log::info('AdminUserController::store - Iniciando', [
                 'tenant_id' => $tenant->id,
                 'request_data' => $request->except(['password']), // Não logar senha
+                'has_password' => $request->has('password'),
+                'password_empty' => $request->has('password') && (empty($request->input('password')) || trim($request->input('password')) === ''),
                 'has_empresas' => $request->has('empresas'),
                 'has_empresa_id' => $request->has('empresa_id'),
                 'has_empresa_ativa_id' => $request->has('empresa_ativa_id'),
@@ -178,6 +180,12 @@ class AdminUserController extends Controller
                 201
             );
         } catch (ValidationException $e) {
+            \Log::error('AdminUserController::store - Erro de validação', [
+                'errors' => $e->errors(),
+                'request_data' => $request->except(['password']),
+                'has_password' => $request->has('password'),
+                'password_empty' => $request->has('password') && (empty($request->input('password')) || trim($request->input('password')) === ''),
+            ]);
             return response()->json([
                 'message' => 'Dados inválidos.',
                 'errors' => $e->errors(),
