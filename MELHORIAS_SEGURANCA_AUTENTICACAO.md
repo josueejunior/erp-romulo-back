@@ -193,3 +193,5 @@ return response()->json([...])
    - Admin e usuário comum têm mesma estrutura
    - Valores `null` quando não aplicável
 
+
+

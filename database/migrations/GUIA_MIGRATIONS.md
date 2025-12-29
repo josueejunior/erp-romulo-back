@@ -182,3 +182,5 @@ php artisan migrate:refresh
 6. **Timestamps em português**: Use `datetimes()` se quiser `criado_em`
 
 
+
+

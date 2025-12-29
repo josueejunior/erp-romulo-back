@@ -228,6 +228,9 @@ Route::prefix('admin')->group(function () {
         Route::post('/logout', [AdminAuthController::class, 'logout']);
         Route::get('/me', [AdminAuthController::class, 'me']);
         
+        // Rota global para listar TODOS os usuários de TODOS os tenants
+        Route::get('/usuarios', [AdminUserController::class, 'indexGlobal']);
+        
         // Gerenciamento de empresas (tenants)
         Route::prefix('empresas')->group(function () {
             Route::get('/', [AdminTenantController::class, 'index']);

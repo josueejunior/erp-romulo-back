@@ -208,3 +208,5 @@ class CustoIndireto extends Model
 
 Este padrão mantém o código limpo, aproveita a inferência de tipos do PHP 8.1+, e garante consistência em todo o sistema.
 
+
+

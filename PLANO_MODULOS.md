@@ -254,3 +254,5 @@ app/
 6. **Testes**: Garantir que todos os testes continuem funcionando
 
 
+
+

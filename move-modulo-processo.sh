@@ -59,3 +59,5 @@ echo "  4. Service Providers (AppServiceProvider)"
 echo "  5. Composer autoload (se necessário)"
 
 
+
+

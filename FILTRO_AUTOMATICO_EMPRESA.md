@@ -178,3 +178,5 @@ public function list(array $params = []): LengthAwarePaginator
 3. Remover filtros manuais de outros services
 
 
+
+

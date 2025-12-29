@@ -150,3 +150,5 @@ php artisan db:seed --class=DashboardDemoSeeder
 - Sempre use `withTimestamps()` para modelos que usam timestamps customizados
 
 
+
+

@@ -148,3 +148,5 @@ class MeuModel extends BaseModel
 2. Criar traits para padrões comuns (ex: relacionamento com Processo)
 3. Adicionar mais métodos úteis ao BaseModel conforme necessário
 
+
+

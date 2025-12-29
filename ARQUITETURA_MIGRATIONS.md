@@ -248,3 +248,5 @@ Para migrar migrations existentes:
 5. Usar `datetimes()` em vez de `timestamps()` se quiser nomes em português
 
 
+
+

@@ -33,6 +33,131 @@ class AdminUserController extends Controller
     ) {}
 
     /**
+     * Listar TODOS os usuários de TODOS os tenants (visão global)
+     * 
+     * Esta rota permite ao admin ver todos os usuários do sistema
+     * sem precisar fazer múltiplas requisições por tenant.
+     */
+    public function indexGlobal(Request $request)
+    {
+        try {
+            \Log::info('AdminUserController::indexGlobal - Listando usuários de todos os tenants');
+            
+            // Buscar todos os tenants ativos
+            $allTenants = Tenant::where('status', 'ativa')
+                ->orWhereNull('status')
+                ->get();
+            
+            $allUsers = [];
+            
+            foreach ($allTenants as $tenantModel) {
+                try {
+                    // Inicializar tenancy para este tenant
+                    tenancy()->initialize($tenantModel);
+                    
+                    // Buscar usuários com suas empresas
+                    $users = \App\Modules\Auth\Models\User::with(['empresas', 'roles'])
+                        ->withTrashed() // Incluir inativos
+                        ->get();
+                    
+                    foreach ($users as $user) {
+                        // Verificar se usuário já existe na lista (por email)
+                        $existingIndex = null;
+                        foreach ($allUsers as $index => $existingUser) {
+                            if ($existingUser['email'] === $user->email) {
+                                $existingIndex = $index;
+                                break;
+                            }
+                        }
+                        
+                        // Preparar dados das empresas com tenant_id
+                        $empresasComTenant = $user->empresas->map(function ($empresa) use ($tenantModel) {
+                            return [
+                                'id' => $empresa->id,
+                                'razao_social' => $empresa->razao_social,
+                                'cnpj' => $empresa->cnpj,
+                                'tenant_id' => $tenantModel->id,
+                                'tenant_razao_social' => $tenantModel->razao_social,
+                            ];
+                        })->toArray();
+                        
+                        if ($existingIndex !== null) {
+                            // Usuário já existe - adicionar empresas deste tenant
+                            $allUsers[$existingIndex]['empresas'] = array_merge(
+                                $allUsers[$existingIndex]['empresas'],
+                                $empresasComTenant
+                            );
+                            $allUsers[$existingIndex]['tenants'][] = [
+                                'id' => $tenantModel->id,
+                                'razao_social' => $tenantModel->razao_social,
+                            ];
+                        } else {
+                            // Novo usuário
+                            $allUsers[] = [
+                                'id' => $user->id,
+                                'name' => $user->name,
+                                'email' => $user->email,
+                                'roles_list' => $user->roles->pluck('name')->toArray(),
+                                'empresas' => $empresasComTenant,
+                                'empresa_ativa_id' => $user->empresa_ativa_id,
+                                'deleted_at' => $user->deleted_at,
+                                'tenants' => [[
+                                    'id' => $tenantModel->id,
+                                    'razao_social' => $tenantModel->razao_social,
+                                ]],
+                                'primary_tenant_id' => $tenantModel->id, // Primeiro tenant onde foi encontrado
+                            ];
+                        }
+                    }
+                    
+                    tenancy()->end();
+                } catch (\Exception $e) {
+                    Log::warning('Erro ao buscar usuários do tenant', [
+                        'tenant_id' => $tenantModel->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                    
+                    if (tenancy()->initialized) {
+                        tenancy()->end();
+                    }
+                }
+            }
+            
+            // Aplicar filtros se necessário
+            $search = $request->input('search');
+            if ($search) {
+                $allUsers = array_filter($allUsers, function ($user) use ($search) {
+                    return stripos($user['name'], $search) !== false 
+                        || stripos($user['email'], $search) !== false;
+                });
+                $allUsers = array_values($allUsers); // Reindexar
+            }
+            
+            // Ordenar por nome
+            usort($allUsers, function ($a, $b) {
+                return strcmp($a['name'], $b['name']);
+            });
+            
+            \Log::info('AdminUserController::indexGlobal - Usuários consolidados', [
+                'total_users' => count($allUsers),
+            ]);
+            
+            return ApiResponse::collection($allUsers);
+        } catch (\Exception $e) {
+            Log::error('Erro ao listar usuários globalmente', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            
+            if (tenancy()->initialized) {
+                tenancy()->end();
+            }
+            
+            return response()->json(['message' => 'Erro ao listar usuários.'], 500);
+        }
+    }
+
+    /**
      * Listar usuários de uma empresa (tenant)
      * Middleware InitializeTenant cuida do contexto
      * Usa ReadRepository (CQRS) - controller nunca conhece Eloquent

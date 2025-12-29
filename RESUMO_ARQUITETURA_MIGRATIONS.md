@@ -119,3 +119,5 @@ Todas as migrations futuras devem usar:
 - Constantes de tamanho padronizadas
 
 
+
+

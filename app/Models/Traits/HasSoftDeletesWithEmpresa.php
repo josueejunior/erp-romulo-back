@@ -25,3 +25,5 @@ trait HasSoftDeletesWithEmpresa
     use SoftDeletes, HasEmpresaScope;
 }
 
+
+

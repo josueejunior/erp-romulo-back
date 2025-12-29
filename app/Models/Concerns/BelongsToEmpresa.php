@@ -22,3 +22,5 @@ trait BelongsToEmpresa
 }
 
 
+
+
