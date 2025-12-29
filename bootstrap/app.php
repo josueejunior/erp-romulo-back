@@ -16,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'empresa.ativa' => \App\Http\Middleware\EnsureEmpresaAtiva::class,
             'tenancy' => \App\Http\Middleware\InitializeTenancyByRequestData::class,
             'rate.limit.redis' => \App\Http\Middleware\RateLimitRedis::class,
+            'admin' => \App\Http\Middleware\EnsureAdmin::class,
         ]);
         
         // Configurar CORS para React

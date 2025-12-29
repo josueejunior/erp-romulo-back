@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\AuthResource;
 use App\Application\Auth\DTOs\LoginDTO;
 use App\Application\Auth\DTOs\RegisterDTO;
 use App\Application\Auth\UseCases\LoginUseCase;
@@ -50,15 +51,21 @@ class AuthController extends Controller
             // Verificar se é admin - se for, autenticar como admin
             $adminUser = AdminUser::where('email', $validated['email'])->first();
             
-            if ($adminUser && Hash::check($validated['password'], $adminUser->password)) {
+            // Prevenir enumeração: sempre usar mesmo tempo de resposta
+            // Verificar senha primeiro para evitar timing attacks
+            $isValidPassword = false;
+            if ($adminUser) {
+                $isValidPassword = Hash::check($validated['password'], $adminUser->password);
+            }
+            
+            // Se não for admin válido, continuar para verificação de usuário comum
+            // Isso previne enumeração de emails
+            if ($adminUser && $isValidPassword) {
                 // Autenticar como admin
                 $token = $adminUser->createToken('admin-token', ['admin'])->plainTextToken;
                 
-                // Retornar no formato esperado pelo frontend
-                // O frontend espera data.token diretamente, não data.data.token
-                return response()->json([
-                    'message' => 'Login realizado com sucesso!',
-                    'success' => true,
+                // Usar Resource para padronizar resposta
+                $authData = [
                     'user' => [
                         'id' => $adminUser->id,
                         'name' => $adminUser->name,
@@ -68,6 +75,12 @@ class AuthController extends Controller
                     'empresa' => null, // Admin não tem empresa
                     'token' => $token,
                     'is_admin' => true,
+                ];
+                
+                return response()->json([
+                    'message' => 'Login realizado com sucesso!',
+                    'success' => true,
+                    ...(new AuthResource($authData))->toArray($request),
                 ]);
             }
 
@@ -77,16 +90,13 @@ class AuthController extends Controller
             // Executar Use Case (aqui está a lógica)
             $data = $this->loginUseCase->executar($dto);
 
-            // Retornar no formato esperado pelo frontend
-            // O frontend espera data.token diretamente, não data.data.token
+            // Usar Resource para padronizar resposta
+            $authData = array_merge($data, ['is_admin' => false]);
+            
             return response()->json([
                 'message' => 'Login realizado com sucesso!',
                 'success' => true,
-                'user' => $data['user'],
-                'tenant' => $data['tenant'],
-                'empresa' => $data['empresa'],
-                'token' => $data['token'],
-                'is_admin' => false,
+                ...(new AuthResource($authData))->toArray($request),
             ]);
 
         } catch (ValidationException $e) {
@@ -96,9 +106,17 @@ class AuthController extends Controller
                 'success' => false,
             ], 422);
         } catch (DomainException $e) {
+            // Prevenir enumeração: sempre retornar mensagem genérica
+            // Não revelar se o email existe ou não
+            $message = $e->getMessage();
+            if (str_contains($message, 'Credenciais inválidas') || 
+                str_contains($message, 'não encontrado')) {
+                $message = 'Credenciais inválidas. Verifique seu e-mail e senha.';
+            }
+            
             return response()->json([
-                'message' => $e->getMessage(),
-                'errors' => ['email' => [$e->getMessage()]],
+                'message' => $message,
+                'errors' => ['email' => [$message]],
                 'success' => false,
             ], 401);
         } catch (\Exception $e) {

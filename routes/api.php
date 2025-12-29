@@ -222,8 +222,8 @@ Route::prefix('admin')->group(function () {
     Route::post('/login', [AdminAuthController::class, 'login'])
         ->middleware(['throttle:3,1', 'throttle:5,60']);
     
-    // Rotas protegidas
-    Route::middleware(['auth:sanctum', \App\Http\Middleware\SetAuthContext::class . ':admin', \App\Http\Middleware\IsSuperAdmin::class])->group(function () {
+    // Rotas protegidas - usar middleware 'admin' que valida no backend
+    Route::middleware(['auth:sanctum', 'admin'])->group(function () {
         // Autenticação admin
         Route::post('/logout', [AdminAuthController::class, 'logout']);
         Route::get('/me', [AdminAuthController::class, 'me']);
