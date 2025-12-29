@@ -21,6 +21,8 @@ use App\Observers\ContratoObserver;
 use App\Observers\EmpenhoObserver;
 use App\Observers\NotaFiscalObserver;
 use App\Observers\AuditObserver;
+use App\Observers\ProcessoItemVinculoObserver;
+use App\Modules\Processo\Models\ProcessoItemVinculo;
 use Laravel\Sanctum\Sanctum;
 use App\Modules\Auth\Models\PersonalAccessToken;
 use Illuminate\Database\Eloquent\Relations\Relation;
@@ -175,6 +177,7 @@ class AppServiceProvider extends ServiceProvider
         NotaFiscal::observe([NotaFiscalObserver::class, AuditObserver::class]);
         Orcamento::observe(AuditObserver::class);
         AutorizacaoFornecimento::observe(AuditObserver::class);
+        ProcessoItemVinculo::observe([ProcessoItemVinculoObserver::class, AuditObserver::class]);
         
         // Agendar atualização automática de status dos processos
         // Executa a cada hora para verificar processos que passaram da sessão pública

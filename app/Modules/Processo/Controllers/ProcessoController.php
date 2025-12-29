@@ -162,6 +162,33 @@ class ProcessoController extends Controller
     }
 
     /**
+     * POST /processos/{processo}/confirmar-pagamento
+     * Confirma pagamento do processo e atualiza saldos
+     */
+    public function confirmarPagamento(Request $request, Processo $processo): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'data_recebimento' => 'nullable|date',
+            ]);
+
+            $processo = $this->processoService->confirmarPagamento(
+                $processo,
+                $validated['data_recebimento'] ?? null
+            );
+
+            return response()->json([
+                'message' => 'Pagamento confirmado e saldos atualizados com sucesso',
+                'data' => new ProcessoResource($processo)
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 400);
+        }
+    }
+
+    /**
      * GET /processos - Listar processos
      * Método chamado pelo Route::module()
      */

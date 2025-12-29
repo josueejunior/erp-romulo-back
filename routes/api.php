@@ -102,6 +102,7 @@ Route::prefix('v1')->group(function () {
                 Route::post('/mover-julgamento', [ApiProcessoController::class, 'moverParaJulgamento']);
                 Route::post('/marcar-vencido', [ApiProcessoController::class, 'marcarVencido']);
                 Route::post('/marcar-perdido', [ApiProcessoController::class, 'marcarPerdido']);
+                Route::post('/confirmar-pagamento', [ApiProcessoController::class, 'confirmarPagamento']);
                 Route::get('/sugerir-status', [ApiProcessoController::class, 'sugerirStatus']);
                 
                 // Exportação
@@ -134,6 +135,13 @@ Route::prefix('v1')->group(function () {
                                 Route::module('formacao-preco', ApiFormacaoPrecoController::class, 'formacaoPreco')
                                     ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
                             });
+                        
+                        // Vínculos (Contrato/AF/Empenho)
+                        Route::get('/vinculos', [\App\Modules\Processo\Controllers\ProcessoItemVinculoController::class, 'list']);
+                        Route::get('/vinculos/{vinculo}', [\App\Modules\Processo\Controllers\ProcessoItemVinculoController::class, 'get']);
+                        Route::post('/vinculos', [\App\Modules\Processo\Controllers\ProcessoItemVinculoController::class, 'store']);
+                        Route::put('/vinculos/{vinculo}', [\App\Modules\Processo\Controllers\ProcessoItemVinculoController::class, 'update']);
+                        Route::delete('/vinculos/{vinculo}', [\App\Modules\Processo\Controllers\ProcessoItemVinculoController::class, 'destroy']);
                     });
                 Route::post('/itens/importar', [ApiProcessoItemController::class, 'importar']);
                 

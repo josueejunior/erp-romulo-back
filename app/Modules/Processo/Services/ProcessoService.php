@@ -477,5 +477,48 @@ class ProcessoService extends BaseService
             'sugestoes' => $sugestoes
         ];
     }
+
+    /**
+     * Confirma pagamento do processo e atualiza saldos
+     */
+    public function confirmarPagamento(Processo $processo, ?string $dataRecebimento = null): Processo
+    {
+        $empresaId = $this->getEmpresaId();
+        
+        if ($processo->empresa_id !== $empresaId) {
+            throw new \Exception('Processo não encontrado ou não pertence à empresa ativa.');
+        }
+
+        if ($processo->status !== 'execucao') {
+            throw new \Exception('Apenas processos em execução podem ter pagamento confirmado.');
+        }
+
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($processo, $dataRecebimento) {
+            // Atualizar data de recebimento
+            $processo->data_recebimento_pagamento = $dataRecebimento ? \Carbon\Carbon::parse($dataRecebimento) : now();
+            
+            // Atualizar valores financeiros de todos os itens
+            foreach ($processo->itens as $item) {
+                $item->atualizarValoresFinanceiros();
+            }
+            
+            // Verificar se todos os itens foram pagos
+            $todosItensPagos = $processo->itens()
+                ->whereIn('status_item', ['aceito', 'aceito_habilitado'])
+                ->get()
+                ->every(function ($item) {
+                    return $item->saldo_aberto <= 0;
+                });
+
+            // Se todos os itens foram pagos, mudar status para encerramento
+            if ($todosItensPagos && $processo->itens()->whereIn('status_item', ['aceito', 'aceito_habilitado'])->count() > 0) {
+                $processo->status = 'encerramento';
+            }
+
+            $processo->save();
+
+            return $processo->load(['orgao', 'setor', 'itens']);
+        });
+    }
 }
 
