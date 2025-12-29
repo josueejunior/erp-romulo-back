@@ -94,6 +94,18 @@ class ProcessoItem extends BaseModel
             'orcamento_id' // Local key on orcamento_itens table
         );
         
+        // O scope global HasEmpresaScope aplica where('empresa_id', ...) automaticamente
+        // Mas em hasManyThrough com JOIN, isso causa ambiguidade
+        // Precisamos remover o scope global e aplicar o filtro explicitamente na tabela correta
+        $empresaId = $this->empresa_id ?? null;
+        if ($empresaId) {
+            // Remover o scope global que aplica empresa_id sem especificar tabela
+            $relation->withoutGlobalScope('empresa');
+            // Aplicar o filtro explicitamente na tabela orcamentos
+            $relation->where('orcamentos.empresa_id', $empresaId)
+                     ->whereNotNull('orcamentos.empresa_id');
+        }
+        
         // Ordenar pela coluna correta de timestamp (criado_em, não created_at)
         // Especificar a tabela explicitamente para evitar ambiguidade
         return $relation->orderBy('orcamentos.' . Blueprint::CREATED_AT, 'desc');
