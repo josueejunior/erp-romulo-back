@@ -42,8 +42,8 @@ class EmpenhoController extends BaseApiController
                 return response()->json(['message' => 'Processo não encontrado'], 404);
             }
             
-            // Buscar modelo Eloquent para compatibilidade com métodos existentes
-            $processo = Processo::find($processoDomain->id);
+            // Buscar modelo Eloquent via repository (DDD)
+            $processo = $this->processoRepository->buscarModeloPorId($processoDomain->id);
             if (!$processo) {
                 return response()->json(['message' => 'Processo não encontrado'], 404);
             }
@@ -77,9 +77,9 @@ class EmpenhoController extends BaseApiController
                 return response()->json(['message' => 'Empenho não encontrado'], 404);
             }
             
-            // Buscar modelos Eloquent para compatibilidade
-            $processo = Processo::find($processoDomain->id);
-            $empenho = Empenho::find($empenhoDomain->id);
+            // Buscar modelos Eloquent via repositories (DDD)
+            $processo = $this->processoRepository->buscarModeloPorId($processoDomain->id);
+            $empenho = $this->empenhoRepository->buscarModeloPorId($empenhoDomain->id);
             
             if (!$processo || !$empenho) {
                 return response()->json(['message' => 'Processo ou empenho não encontrado'], 404);
@@ -123,8 +123,8 @@ class EmpenhoController extends BaseApiController
                 return response()->json(['message' => 'Processo não encontrado'], 404);
             }
             
-            // Buscar modelo Eloquent para compatibilidade
-            $processo = Processo::find($processoDomain->id);
+            // Buscar modelo Eloquent via repository (DDD)
+            $processo = $this->processoRepository->buscarModeloPorId($processoDomain->id);
             if (!$processo) {
                 return response()->json(['message' => 'Processo não encontrado'], 404);
             }
@@ -156,9 +156,16 @@ class EmpenhoController extends BaseApiController
             $dto = CriarEmpenhoDTO::fromArray($data);
             $empenhoDomain = $this->criarEmpenhoUseCase->executar($dto);
             
-            // Buscar modelo Eloquent para resposta
-            $empenho = Empenho::findOrFail($empenhoDomain->id);
-            $empenho->load(['processo', 'contrato', 'autorizacaoFornecimento']);
+            // Buscar modelo Eloquent via repository (DDD)
+            $empenho = $this->empenhoRepository->buscarModeloPorId($empenhoDomain->id, [
+                'processo', 
+                'contrato', 
+                'autorizacaoFornecimento'
+            ]);
+            
+            if (!$empenho) {
+                return response()->json(['message' => 'Empenho não encontrado após criação.'], 404);
+            }
             
             return response()->json($empenho, 201);
         } catch (ValidationException $e) {
@@ -205,9 +212,9 @@ class EmpenhoController extends BaseApiController
                 return response()->json(['message' => 'Empenho não encontrado'], 404);
             }
             
-            // Buscar modelos Eloquent para compatibilidade
-            $processo = Processo::find($processoDomain->id);
-            $empenho = Empenho::find($empenhoDomain->id);
+            // Buscar modelos Eloquent via repositories (DDD)
+            $processo = $this->processoRepository->buscarModeloPorId($processoDomain->id);
+            $empenho = $this->empenhoRepository->buscarModeloPorId($empenhoDomain->id);
             
             if (!$processo || !$empenho) {
                 return response()->json(['message' => 'Processo ou empenho não encontrado'], 404);
@@ -242,9 +249,9 @@ class EmpenhoController extends BaseApiController
                 return response()->json(['message' => 'Empenho não encontrado'], 404);
             }
             
-            // Buscar modelos Eloquent para compatibilidade
-            $processo = Processo::find($processoDomain->id);
-            $empenho = Empenho::find($empenhoDomain->id);
+            // Buscar modelos Eloquent via repositories (DDD)
+            $processo = $this->processoRepository->buscarModeloPorId($processoDomain->id);
+            $empenho = $this->empenhoRepository->buscarModeloPorId($empenhoDomain->id);
             
             if (!$processo || !$empenho) {
                 return response()->json(['message' => 'Processo ou empenho não encontrado'], 404);

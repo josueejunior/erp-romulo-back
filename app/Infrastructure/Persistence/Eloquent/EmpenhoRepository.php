@@ -63,6 +63,17 @@ class EmpenhoRepository implements EmpenhoRepositoryInterface
         return $model ? $this->toDomain($model) : null;
     }
 
+    public function buscarModeloPorId(int $id, array $with = []): ?EmpenhoModel
+    {
+        $query = EmpenhoModel::query();
+        
+        if (!empty($with)) {
+            $query->with($with);
+        }
+        
+        return $query->find($id);
+    }
+
     public function buscarComFiltros(array $filtros = []): LengthAwarePaginator
     {
         $query = EmpenhoModel::query();

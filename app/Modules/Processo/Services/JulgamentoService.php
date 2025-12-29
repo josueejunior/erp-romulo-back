@@ -5,6 +5,7 @@ namespace App\Modules\Processo\Services;
 use App\Modules\Processo\Models\Processo;
 use App\Modules\Processo\Models\ProcessoItem;
 use App\Modules\Processo\Services\ProcessoStatusService;
+use App\Domain\ProcessoItem\Repositories\ProcessoItemRepositoryInterface;
 use Illuminate\Support\Facades\Validator;
 
 /**
@@ -14,8 +15,10 @@ class JulgamentoService
 {
     protected ProcessoStatusService $statusService;
 
-    public function __construct(ProcessoStatusService $statusService)
-    {
+    public function __construct(
+        ProcessoStatusService $statusService,
+        private ProcessoItemRepositoryInterface $processoItemRepository,
+    ) {
         $this->statusService = $statusService;
     }
 
@@ -73,9 +76,8 @@ class JulgamentoService
         $temAceito = false;
 
         foreach ($itensData as $itemData) {
-            // Buscar item via repository se existir, senão usar modelo diretamente
-            // Nota: ProcessoItem pode não ter repository ainda, então usar modelo por enquanto
-            $item = ProcessoItem::find($itemData['id']);
+            // Buscar item via repository (DDD)
+            $item = $this->processoItemRepository->buscarModeloPorId($itemData['id']);
             if (!$item || $item->processo_id !== $processo->id) {
                 continue;
             }
