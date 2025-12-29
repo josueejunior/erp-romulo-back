@@ -13,6 +13,7 @@ use App\Domain\Auth\Repositories\UserReadRepositoryInterface;
 use App\Domain\Shared\ValueObjects\TenantContext;
 use App\Http\Responses\ApiResponse;
 use App\Models\Tenant;
+use App\Models\Empresa;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -656,7 +657,7 @@ class AdminUserController extends Controller
             ]);
             
             // Buscar empresas do tenant atual usando Eloquent (respeita tenancy)
-            $empresas = \App\Models\Empresa::select('id', 'razao_social', 'cnpj', 'status')
+            $empresas = Empresa::select('id', 'razao_social', 'cnpj', 'status')
                 ->orderBy('razao_social')
                 ->get();
             
