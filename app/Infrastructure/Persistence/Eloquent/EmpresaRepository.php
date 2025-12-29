@@ -34,7 +34,7 @@ class EmpresaRepository implements EmpresaRepositoryInterface
             bancoAgencia: $model->banco_agencia,
             bancoConta: $model->banco_conta,
             bancoTipo: $model->banco_tipo,
-            bancoPix: $model->banco_pix,
+            bancoPix: null, // Coluna não existe na tabela empresas
             representanteLegal: $model->representante_legal,
             logo: $model->logo,
         );
@@ -46,7 +46,7 @@ class EmpresaRepository implements EmpresaRepositoryInterface
             'razao_social' => $dto->razaoSocial,
             'cnpj' => $dto->cnpj,
             'email' => $dto->email,
-            'endereco' => $dto->endereco,
+            'logradouro' => $dto->endereco, // A migration cria 'logradouro', não 'endereco'
             'cidade' => $dto->cidade,
             'estado' => $dto->estado,
             'cep' => $dto->cep,
@@ -56,7 +56,7 @@ class EmpresaRepository implements EmpresaRepositoryInterface
             'banco_agencia' => $dto->agencia,
             'banco_conta' => $dto->conta,
             'banco_tipo' => $dto->tipoConta,
-            'banco_pix' => $dto->pix,
+            // 'banco_pix' => $dto->pix, // Coluna não existe na tabela empresas
             'representante_legal' => $dto->representanteLegalNome,
             'logo' => $dto->logo,
             'status' => $dto->status,

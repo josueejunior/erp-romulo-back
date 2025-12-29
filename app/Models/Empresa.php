@@ -33,7 +33,7 @@ class Empresa extends BaseModel
         'banco_conta',
         'banco_tipo',
         'banco_codigo',
-        'banco_pix',
+        // 'banco_pix', // Coluna não existe na migration
         'dados_bancarios_observacoes',
         'representante_legal',
         'logo',
