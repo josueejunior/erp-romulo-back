@@ -238,13 +238,15 @@ Route::prefix('admin')->group(function () {
             Route::post('/{tenant}/reativar', [AdminTenantController::class, 'reactivate']);
             
             // Gerenciamento de usuários das empresas
+            // Usar {userId} em vez de {user} para evitar model binding no banco central
+            // Os usuários estão no banco do tenant, não no banco central
             Route::prefix('{tenant}/usuarios')->group(function () {
                 Route::get('/', [AdminUserController::class, 'index']);
-                Route::get('/{user}', [AdminUserController::class, 'show']);
+                Route::get('/{userId}', [AdminUserController::class, 'show'])->where('userId', '[0-9]+');
                 Route::post('/', [AdminUserController::class, 'store']);
-                Route::put('/{user}', [AdminUserController::class, 'update']);
-                Route::delete('/{user}', [AdminUserController::class, 'destroy']);
-                Route::post('/{user}/reativar', [AdminUserController::class, 'reactivate']);
+                Route::put('/{userId}', [AdminUserController::class, 'update'])->where('userId', '[0-9]+');
+                Route::delete('/{userId}', [AdminUserController::class, 'destroy'])->where('userId', '[0-9]+');
+                Route::post('/{userId}/reativar', [AdminUserController::class, 'reactivate'])->where('userId', '[0-9]+');
             });
             
             // Empresas disponíveis para usuário
