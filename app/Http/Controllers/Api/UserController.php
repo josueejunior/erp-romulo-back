@@ -201,20 +201,33 @@ class UserController extends BaseApiController
             // O Repository já valida se o usuário tem acesso à empresa
             $this->userRepository->atualizarEmpresaAtiva($user->id, $novaEmpresaId);
 
-            // 2. Limpeza de cache cirúrgica (Apenas da nova empresa para forçar refresh de dados)
+            // 2. Limpeza de cache cirúrgica usando Tags (mais eficiente)
             $tenantId = tenancy()->tenant?->id;
             if ($tenantId) {
-                // Limpa apenas o contexto da nova empresa ativa
-                $pattern = "tenant_{$tenantId}:empresa_{$novaEmpresaId}:*";
-                $totalKeysDeleted = RedisService::forgetByPattern($pattern);
+                // Tentar usar tags primeiro (mais rápido e eficiente)
+                $tags = ["tenant_{$tenantId}", "empresa_{$novaEmpresaId}"];
+                $tagsSuccess = RedisService::forgetByTags($tags);
                 
-                Log::info('Cache invalidado para troca de empresa', [
-                    'pattern' => $pattern,
-                    'total_keys_deleted' => $totalKeysDeleted,
-                    'user_id' => $user->id,
-                    'empresa_id_antiga' => $antigaEmpresaId,
-                    'empresa_id_nova' => $novaEmpresaId,
-                ]);
+                if (!$tagsSuccess) {
+                    // Fallback para pattern matching
+                    $pattern = "tenant_{$tenantId}:empresa_{$novaEmpresaId}:*";
+                    $totalKeysDeleted = RedisService::forgetByPattern($pattern);
+                    
+                    Log::info('Cache invalidado para troca de empresa (fallback pattern)', [
+                        'pattern' => $pattern,
+                        'total_keys_deleted' => $totalKeysDeleted,
+                        'user_id' => $user->id,
+                        'empresa_id_antiga' => $antigaEmpresaId,
+                        'empresa_id_nova' => $novaEmpresaId,
+                    ]);
+                } else {
+                    Log::info('Cache invalidado para troca de empresa (tags)', [
+                        'tags' => $tags,
+                        'user_id' => $user->id,
+                        'empresa_id_antiga' => $antigaEmpresaId,
+                        'empresa_id_nova' => $novaEmpresaId,
+                    ]);
+                }
             }
 
             return response()->json([

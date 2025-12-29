@@ -40,38 +40,43 @@ abstract class BaseApiController extends Controller
             $user->refresh();
         }
         
+        $idDoBanco = $user->empresa_ativa_id;
+        $idDoHeader = request()->header('X-Empresa-ID') ? (int) request()->header('X-Empresa-ID') : null;
+        
         \Log::debug('BaseApiController::getEmpresaAtivaOrFail()', [
             'user_id' => $user->id,
-            'user_empresa_ativa_id' => $user->empresa_ativa_id ?? null,
+            'user_empresa_ativa_id' => $idDoBanco,
+            'x_empresa_id_header' => $idDoHeader,
             'tenant_id' => tenancy()->tenant?->id,
-            'x_empresa_id_header' => request()->header('X-Empresa-ID'),
         ]);
         
-        // Verificar se o header X-Empresa-ID foi enviado (prioridade máxima)
-        $empresaIdFromHeader = request()->header('X-Empresa-ID');
-        \Log::debug('BaseApiController::getEmpresaAtivaOrFail() - Verificando header X-Empresa-ID', [
-            'x_empresa_id_header' => $empresaIdFromHeader,
-            'all_headers' => request()->headers->all(),
-        ]);
+        // VALIDAÇÃO CRÍTICA: O banco de dados é a fonte de verdade
+        // Se o header diverge do banco, usar o banco e logar warning
+        if ($idDoHeader && $idDoHeader !== $idDoBanco) {
+            \Log::warning('BaseApiController::getEmpresaAtivaOrFail() - Header divergente do banco', [
+                'header' => $idDoHeader,
+                'banco' => $idDoBanco,
+                'user_id' => $user->id,
+            ]);
+            // Usar o banco como fonte de verdade (mais seguro)
+            $idDoHeader = null;
+        }
         
-        if ($empresaIdFromHeader) {
-            $empresaModel = $empresaRepository->buscarModeloPorId((int) $empresaIdFromHeader);
+        // Prioridade 1: Se o header está alinhado com o banco, usar ele
+        if ($idDoHeader && $idDoHeader === $idDoBanco) {
+            $empresaModel = $empresaRepository->buscarModeloPorId($idDoHeader);
             if ($empresaModel) {
-                \Log::debug('BaseApiController::getEmpresaAtivaOrFail() - Empresa encontrada via header X-Empresa-ID', [
+                \Log::debug('BaseApiController::getEmpresaAtivaOrFail() - Empresa encontrada via header (validado)', [
                     'empresa_id' => $empresaModel->id,
                     'empresa_razao_social' => $empresaModel->razao_social,
                 ]);
                 return $empresaModel;
-            } else {
-                \Log::warning('BaseApiController::getEmpresaAtivaOrFail() - Empresa não encontrada via header X-Empresa-ID', [
-                    'empresa_id_header' => $empresaIdFromHeader,
-                ]);
             }
         }
         
-        // Se o usuário tem empresa_ativa_id, buscar essa empresa via repository
-        if ($user->empresa_ativa_id) {
-            $empresaModel = $empresaRepository->buscarModeloPorId($user->empresa_ativa_id);
+        // Prioridade 2: Se o usuário tem empresa_ativa_id no banco, usar ela
+        if ($idDoBanco) {
+            $empresaModel = $empresaRepository->buscarModeloPorId($idDoBanco);
             if ($empresaModel) {
                 \Log::debug('BaseApiController::getEmpresaAtivaOrFail() - Empresa encontrada por empresa_ativa_id', [
                     'empresa_id' => $empresaModel->id,
@@ -80,7 +85,7 @@ abstract class BaseApiController extends Controller
                 return $empresaModel;
             } else {
                 \Log::warning('BaseApiController::getEmpresaAtivaOrFail() - Empresa não encontrada pelo empresa_ativa_id', [
-                    'empresa_ativa_id' => $user->empresa_ativa_id,
+                    'empresa_ativa_id' => $idDoBanco,
                 ]);
             }
         }
