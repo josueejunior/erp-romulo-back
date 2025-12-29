@@ -231,6 +231,28 @@ class ProcessoRepository implements ProcessoRepositoryInterface
             }
         }
 
+        // Filtro para processos encerrados (com data de recebimento)
+        if (isset($filtros['data_recebimento_pagamento_inicio']) && isset($filtros['data_recebimento_pagamento_fim'])) {
+            $query->whereNotNull('data_recebimento_pagamento')
+                  ->whereBetween('data_recebimento_pagamento', [
+                      $filtros['data_recebimento_pagamento_inicio'],
+                      $filtros['data_recebimento_pagamento_fim']
+                  ]);
+        } elseif (isset($filtros['data_recebimento_pagamento_inicio'])) {
+            $query->whereNotNull('data_recebimento_pagamento')
+                  ->where('data_recebimento_pagamento', '>=', $filtros['data_recebimento_pagamento_inicio']);
+        } elseif (isset($filtros['data_recebimento_pagamento_fim'])) {
+            $query->whereNotNull('data_recebimento_pagamento')
+                  ->where('data_recebimento_pagamento', '<=', $filtros['data_recebimento_pagamento_fim']);
+        }
+
+        // Filtro para processos com itens aceitos
+        if (isset($filtros['tem_item_aceito']) && $filtros['tem_item_aceito']) {
+            $query->whereHas('itens', function ($q) {
+                $q->whereIn('status_item', ['aceito', 'aceito_habilitado']);
+            });
+        }
+
         if (!empty($with)) {
             $query->with($with);
         }
