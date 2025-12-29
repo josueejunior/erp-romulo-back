@@ -55,12 +55,12 @@ Route::prefix('v1')->group(function () {
         ->only(['list', 'get']);
 
     // Rotas públicas (autenticação)
-    // Rate limiting mais restritivo no login para prevenir brute force
-    // 5 tentativas por minuto por IP, bloqueio após 10 tentativas falhas
+    // Rate limiting: aumentado para desenvolvimento/testes
+    // Em produção, considere reduzir para prevenir brute force
     Route::post('/auth/login', [AuthController::class, 'login'])
-        ->middleware(['throttle:5,1', 'throttle:10,60']); // 5/min, 10/hora
+        ->middleware(['throttle:20,1', 'throttle:50,60']); // 20/min, 50/hora
     Route::post('/auth/register', [AuthController::class, 'register'])
-        ->middleware(['throttle:3,1', 'throttle:5,60']); // 3/min, 5/hora
+        ->middleware(['throttle:10,1', 'throttle:20,60']); // 10/min, 20/hora
 
     // Rotas autenticadas
     // Rate limiting: 120 requisições por minuto, 1000 por hora
