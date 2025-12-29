@@ -49,25 +49,29 @@ class FornecedorController extends BaseApiController
         // Chave de cache composta: tenant_{id}:empresa_{id}:fornecedores:index:{hash}
         // Garante isolamento total entre tenants e empresas
         $filtersHash = md5(json_encode($filters));
-        $cacheKey = "tenant_{$tenantId}:empresa_{$empresa->id}:fornecedores:index:{$filtersHash}";
+        $cacheKey = "fornecedores:index:{$filtersHash}";
+        $tags = ["tenant_{$tenantId}", "empresa_{$empresa->id}"];
         
         Log::debug('FornecedorController::index() - Verificando cache', [
             'cache_key' => $cacheKey,
+            'tags' => $tags,
             'empresa_id' => $empresa->id,
         ]);
         
-        // Tentar obter do cache
+        // Tentar obter do cache usando tags (mais eficiente)
         if ($tenantId && RedisService::isAvailable()) {
-            $cached = RedisService::get($cacheKey);
+            $cached = RedisService::getWithTags($cacheKey, $tags);
             if ($cached !== null) {
                 Log::debug('FornecedorController::index() - Cache HIT', [
                     'cache_key' => $cacheKey,
+                    'tags' => $tags,
                     'total_cached' => $cached['meta']['total'] ?? count($cached['data'] ?? []),
                 ]);
                 return response()->json($cached);
             } else {
                 Log::debug('FornecedorController::index() - Cache MISS', [
                     'cache_key' => $cacheKey,
+                    'tags' => $tags,
                 ]);
             }
         }
@@ -146,9 +150,13 @@ class FornecedorController extends BaseApiController
                 ],
             ];
 
-            // Salvar no cache (5 minutos)
+            // Salvar no cache com tags (5 minutos) - permite invalidação eficiente
             if ($tenantId && RedisService::isAvailable()) {
-                RedisService::set($cacheKey, $responseData, 300);
+                RedisService::setWithTags($cacheKey, $responseData, $tags, 300);
+                Log::debug('FornecedorController::index() - Cache salvo com tags', [
+                    'cache_key' => $cacheKey,
+                    'tags' => $tags,
+                ]);
             }
 
             return response()->json($responseData);
@@ -359,36 +367,29 @@ class FornecedorController extends BaseApiController
         $tenantId = tenancy()->tenant?->id;
         
         if ($tenantId && RedisService::isAvailable()) {
-            // Usar padrão de chave composta: tenant_{id}:empresa_{id}:fornecedores:*
-            $pattern = "tenant_{$tenantId}:empresa_{$empresa->id}:fornecedores:*";
+            $tags = ["tenant_{$tenantId}", "empresa_{$empresa->id}"];
             
-            Log::debug('FornecedorController::clearFornecedorCache() - Limpando cache', [
-                'pattern' => $pattern,
+            Log::debug('FornecedorController::clearFornecedorCache() - Limpando cache com tags', [
+                'tags' => $tags,
                 'tenant_id' => $tenantId,
                 'empresa_id' => $empresa->id,
             ]);
             
-            try {
-                $cursor = 0;
-                $totalKeys = 0;
-                do {
-                    $result = \Illuminate\Support\Facades\Redis::scan($cursor, ['match' => $pattern, 'count' => 100]);
-                    $cursor = $result[0];
-                    $keys = $result[1];
-                    if (!empty($keys)) {
-                        $totalKeys += count($keys);
-                        \Illuminate\Support\Facades\Redis::del($keys);
-                    }
-                } while ($cursor != 0);
+            // Tentar usar tags primeiro (mais rápido)
+            $tagsSuccess = RedisService::forgetByTags($tags);
+            
+            if (!$tagsSuccess) {
+                // Fallback para pattern matching
+                $pattern = "tenant_{$tenantId}:empresa_{$empresa->id}:fornecedores:*";
+                $totalKeysDeleted = RedisService::forgetByPattern($pattern);
                 
-                Log::info('FornecedorController::clearFornecedorCache() - Cache limpo', [
-                    'keys_deleted' => $totalKeys,
+                Log::info('FornecedorController::clearFornecedorCache() - Cache limpo (fallback pattern)', [
+                    'keys_deleted' => $totalKeysDeleted,
                     'pattern' => $pattern,
                 ]);
-            } catch (\Exception $e) {
-                Log::warning('Erro ao limpar cache de fornecedores: ' . $e->getMessage(), [
-                    'pattern' => $pattern,
-                    'error' => $e->getMessage(),
+            } else {
+                Log::info('FornecedorController::clearFornecedorCache() - Cache limpo (tags)', [
+                    'tags' => $tags,
                 ]);
             }
         }

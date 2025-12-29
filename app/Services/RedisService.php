@@ -805,6 +805,60 @@ class RedisService
         }
     }
 
+    /**
+     * Salvar cache com tags (mais eficiente para invalidação)
+     * 
+     * @param string $key Chave do cache
+     * @param mixed $value Valor a ser cacheado
+     * @param array $tags Array de tags (ex: ["tenant_1", "empresa_2"])
+     * @param int $ttl Tempo de vida em segundos
+     */
+    public static function setWithTags(string $key, $value, array $tags, int $ttl = 300): void
+    {
+        if (!self::isAvailable()) {
+            return;
+        }
+        
+        try {
+            $store = Cache::store('redis');
+            if (method_exists($store, 'tags')) {
+                $store->tags($tags)->put($key, $value, $ttl);
+            } else {
+                // Fallback para método sem tags
+                self::set($key, $value, $ttl);
+            }
+        } catch (\Exception $e) {
+            Log::warning("Erro ao salvar cache com tags '{$key}': " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Obter cache com tags
+     * 
+     * @param string $key Chave do cache
+     * @param array $tags Array de tags (ex: ["tenant_1", "empresa_2"])
+     * @return mixed
+     */
+    public static function getWithTags(string $key, array $tags)
+    {
+        if (!self::isAvailable()) {
+            return null;
+        }
+        
+        try {
+            $store = Cache::store('redis');
+            if (method_exists($store, 'tags')) {
+                return $store->tags($tags)->get($key);
+            } else {
+                // Fallback para método sem tags
+                return self::get($key);
+            }
+        } catch (\Exception $e) {
+            Log::warning("Erro ao obter cache com tags '{$key}': " . $e->getMessage());
+            return null;
+        }
+    }
+
     public static function forget(string $key): void
     {
         if (!self::isAvailable()) {
