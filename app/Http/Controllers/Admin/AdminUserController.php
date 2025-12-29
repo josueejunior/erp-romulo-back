@@ -176,20 +176,33 @@ class AdminUserController extends Controller
     public function update(Request $request, Tenant $tenant, int $userId)
     {
         try {
-            // Normalizar password: string vazia vira null
+            // Normalizar password: string vazia ou apenas espaços vira null
             $data = $request->all();
-            if (isset($data['password']) && trim($data['password']) === '') {
-                $data['password'] = null;
+            if (isset($data['password'])) {
+                $password = is_string($data['password']) ? trim($data['password']) : $data['password'];
+                // Se for string vazia, null ou apenas espaços, remover do request
+                if ($password === '' || $password === null) {
+                    unset($data['password']);
+                } else {
+                    $data['password'] = $password;
+                }
             }
             $request->merge($data);
 
-            $validated = $request->validate([
+            // Validação: senha só é validada se for fornecida e não vazia
+            $rules = [
                 'name' => 'sometimes|required|string|max:255',
                 'email' => 'sometimes|required|email|max:255',
-                'password' => ['nullable', 'string', 'min:8', new \App\Rules\StrongPassword()],
                 'empresa_id' => 'sometimes|required|integer',
                 'role' => 'nullable|string|in:Administrador,Operacional,Financeiro,Consulta',
-            ], [
+            ];
+            
+            // Se password foi fornecido e não está vazio, validar
+            if ($request->has('password') && $request->input('password') !== null && trim($request->input('password')) !== '') {
+                $rules['password'] = ['required', 'string', 'min:8', new \App\Rules\StrongPassword()];
+            }
+            
+            $validated = $request->validate($rules, [
                 'role.in' => 'O perfil deve ser: Administrador, Operacional, Financeiro ou Consulta.',
             ]);
 
