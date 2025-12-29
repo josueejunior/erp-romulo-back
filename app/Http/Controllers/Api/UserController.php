@@ -14,6 +14,7 @@ use App\Domain\Shared\ValueObjects\TenantContext;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Redis;
 use Illuminate\Validation\ValidationException;
 use DomainException;
 
