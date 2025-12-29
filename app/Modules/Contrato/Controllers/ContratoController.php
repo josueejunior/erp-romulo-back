@@ -171,9 +171,15 @@ class ContratoController extends BaseApiController
             $dto = CriarContratoDTO::fromArray($data);
             $contratoDomain = $this->criarContratoUseCase->executar($dto);
             
-            // Buscar modelo Eloquent para resposta
-            $contrato = Contrato::findOrFail($contratoDomain->id);
-            $contrato->load(['processo', 'empenhos']);
+            // Buscar modelo Eloquent para resposta usando repository
+            $contrato = $this->contratoRepository->buscarModeloPorId(
+                $contratoDomain->id,
+                ['processo', 'empenhos']
+            );
+            
+            if (!$contrato) {
+                return response()->json(['message' => 'Contrato não encontrado após criação.'], 404);
+            }
             
             return response()->json($contrato, 201);
         } catch (ValidationException $e) {

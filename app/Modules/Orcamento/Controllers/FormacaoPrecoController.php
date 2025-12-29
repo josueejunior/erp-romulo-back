@@ -12,6 +12,7 @@ use App\Modules\Orcamento\Services\FormacaoPrecoService;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\ProcessoItem\Repositories\ProcessoItemRepositoryInterface;
 use App\Domain\Orcamento\Repositories\OrcamentoRepositoryInterface;
+use App\Domain\FormacaoPreco\Repositories\FormacaoPrecoRepositoryInterface;
 use Illuminate\Http\Request;
 
 class FormacaoPrecoController extends BaseApiController
@@ -24,6 +25,7 @@ class FormacaoPrecoController extends BaseApiController
         private ProcessoRepositoryInterface $processoRepository,
         private ProcessoItemRepositoryInterface $processoItemRepository,
         private OrcamentoRepositoryInterface $orcamentoRepository,
+        private FormacaoPrecoRepositoryInterface $formacaoPrecoRepository,
     ) {
         parent::__construct(app(\App\Domain\Empresa\Repositories\EmpresaRepositoryInterface::class), app(\App\Domain\Auth\Repositories\UserRepositoryInterface::class));
         $this->formacaoPrecoService = $formacaoPrecoService;
@@ -131,9 +133,12 @@ class FormacaoPrecoController extends BaseApiController
             return response()->json(['message' => 'Orçamento não encontrado.'], 404);
         }
         
-        $formacaoPreco = FormacaoPreco::findOrFail($id);
+        $formacaoPrecoModel = $this->formacaoPrecoRepository->buscarModeloPorId($id);
+        if (!$formacaoPrecoModel) {
+            return response()->json(['message' => 'Formação de preço não encontrada.'], 404);
+        }
         
-        return $this->updateWeb($request, $processoModel, $itemModel, $orcamentoModel, $formacaoPreco);
+        return $this->updateWeb($request, $processoModel, $itemModel, $orcamentoModel, $formacaoPrecoModel);
     }
 
     /**
