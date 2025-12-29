@@ -2,12 +2,17 @@
 
 namespace App\Modules\Calendario\Services;
 
+use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Modules\Processo\Models\Processo;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
 class CalendarioService
 {
+    public function __construct(
+        private ProcessoRepositoryInterface $processoRepository,
+    ) {}
+
     /**
      * Retorna processos para o calendário de disputas
      * Inclui preços mínimos calculados
@@ -18,38 +23,43 @@ class CalendarioService
         $dataInicio = $dataInicio ?? Carbon::now();
         $dataFim = $dataFim ?? Carbon::now()->addDays(60);
 
-        // Buscar processos em participação (incluindo pendentes: adiado, suspenso, cancelado)
-        $query = Processo::where('status', 'participacao');
-        
-        // Filtrar por empresa se fornecido
-        if ($empresaId) {
-            $query->where('empresa_id', $empresaId);
+        if (!$empresaId) {
+            throw new \InvalidArgumentException('empresa_id é obrigatório para buscar processos do calendário');
         }
+
+        // Buscar processos usando repository (com relacionamentos para cálculos)
+        $filtros = [
+            'empresa_id' => $empresaId,
+            'status' => 'participacao',
+            'data_hora_sessao_publica_inicio' => $dataInicio,
+            'data_hora_sessao_publica_fim' => $dataFim,
+        ];
+
+        $with = [
+            'orgao',
+            'setor',
+            'itens' => function ($query) {
+                $query->with([
+                    'orcamentos.formacaoPreco',
+                    'orcamentos.fornecedor',
+                    'orcamentoItens.orcamento.fornecedor',
+                    'orcamentoItens.formacaoPreco'
+                ]);
+            }
+        ];
+
+        // Buscar modelos Eloquent com relacionamentos (necessário para cálculos)
+        $processos = $this->processoRepository->buscarModelosComFiltros($filtros, $with);
         
-        $processos = $query
-            ->where(function($query) use ($dataInicio, $dataFim) {
-                // Processos com data de sessão no período OU processos pendentes (sem data específica)
-                $query->whereBetween('data_hora_sessao_publica', [$dataInicio, $dataFim])
-                      ->orWhere(function($q) {
-                          // Processos pendentes (adiado, suspenso, cancelado) - mostrar sempre
-                          $q->whereIn('status_participacao', ['adiado', 'suspenso', 'cancelado']);
-                      });
-            })
-            ->with([
-                'orgao',
-                'setor',
-                'itens' => function ($query) {
-                    $query->with([
-                        'orcamentos.formacaoPreco',
-                        'orcamentos.fornecedor',
-                        'orcamentoItens.orcamento.fornecedor',
-                        'orcamentoItens.formacaoPreco'
-                    ]);
-                }
-            ])
-            ->orderBy('data_hora_sessao_publica')
-            ->orderBy('status_participacao')
-            ->get();
+        // Filtrar processos pendentes (adiado, suspenso, cancelado) que não têm data
+        $processosPendentes = $this->processoRepository->buscarModelosComFiltros([
+            'empresa_id' => $empresaId,
+            'status' => 'participacao',
+            'status_participacao' => ['adiado', 'suspenso', 'cancelado'],
+        ], $with);
+        
+        // Combinar e remover duplicatas
+        $processos = $processos->merge($processosPendentes)->unique('id');
 
         return $processos->map(function ($processo) {
             $precosMinimos = $this->calcularPrecosMinimosProcesso($processo);
@@ -206,24 +216,28 @@ class CalendarioService
         $dataInicio = $dataInicio ?? Carbon::now();
         $dataFim = $dataFim ?? Carbon::now()->addDays(30);
 
-        $query = Processo::where('status', 'julgamento_habilitacao');
-        
-        // Filtrar por empresa se fornecido
-        if ($empresaId) {
-            $query->where('empresa_id', $empresaId);
+        if (!$empresaId) {
+            throw new \InvalidArgumentException('empresa_id é obrigatório para buscar processos do calendário');
         }
-        
-        $processos = $query
-            ->with([
-                'orgao',
-                'setor',
-                'itens' => function ($query) {
-                    // Incluir todos os itens do processo em julgamento
-                    // Não filtrar apenas por lembretes, pois processos podem estar em julgamento sem lembretes
-                }
-            ])
-            ->orderBy('data_hora_sessao_publica')
-            ->get();
+
+        $filtros = [
+            'empresa_id' => $empresaId,
+            'status' => 'julgamento_habilitacao',
+            'data_hora_sessao_publica_inicio' => $dataInicio,
+            'data_hora_sessao_publica_fim' => $dataFim,
+        ];
+
+        $with = [
+            'orgao',
+            'setor',
+            'itens' => function ($query) {
+                // Incluir todos os itens do processo em julgamento
+                // Não filtrar apenas por lembretes, pois processos podem estar em julgamento sem lembretes
+            }
+        ];
+
+        // Buscar modelos Eloquent com relacionamentos
+        $processos = $this->processoRepository->buscarModelosComFiltros($filtros, $with);
 
         return $processos->map(function ($processo) {
             // Incluir todos os itens do processo, não apenas os com lembretes
@@ -262,20 +276,24 @@ class CalendarioService
      */
     public function getAvisosUrgentes(?int $empresaId = null): array
     {
+        if (!$empresaId) {
+            throw new \InvalidArgumentException('empresa_id é obrigatório para buscar avisos urgentes');
+        }
+
         $hoje = Carbon::now();
         $proximos3Dias = $hoje->copy()->addDays(3);
 
-        $query = Processo::where('status', 'participacao')
-            ->whereBetween('data_hora_sessao_publica', [$hoje, $proximos3Dias]);
-        
-        // Filtrar por empresa se fornecido
-        if ($empresaId) {
-            $query->where('empresa_id', $empresaId);
-        }
-        
-        $processosDisputa = $query
-            ->with(['orgao', 'setor'])
-            ->get();
+        $filtros = [
+            'empresa_id' => $empresaId,
+            'status' => 'participacao',
+            'data_hora_sessao_publica_inicio' => $hoje,
+            'data_hora_sessao_publica_fim' => $proximos3Dias,
+        ];
+
+        $with = ['orgao', 'setor'];
+
+        // Buscar modelos Eloquent com relacionamentos
+        $processosDisputa = $this->processoRepository->buscarModelosComFiltros($filtros, $with);
 
         $avisos = [];
 

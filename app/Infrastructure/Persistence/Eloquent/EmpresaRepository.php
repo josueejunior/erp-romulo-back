@@ -97,5 +97,14 @@ class EmpresaRepository implements EmpresaRepositoryInterface
             return $this->toDomain($model);
         })->toArray();
     }
+
+    /**
+     * Buscar modelo Eloquent por ID (para casos especiais onde precisa do modelo, não da entidade)
+     * Use apenas quando realmente necessário (ex: BaseApiController que precisa de relacionamentos)
+     */
+    public function buscarModeloPorId(int $id): ?EmpresaModel
+    {
+        return EmpresaModel::find($id);
+    }
 }
 

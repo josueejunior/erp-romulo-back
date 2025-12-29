@@ -2,12 +2,16 @@
 
 namespace App\Modules\Processo\Services;
 
+use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Modules\Processo\Models\Processo;
 use App\Modules\Processo\Models\ProcessoItem;
 use Carbon\Carbon;
 
 class ProcessoStatusService
 {
+    public function __construct(
+        private ProcessoRepositoryInterface $processoRepository,
+    ) {}
     /**
      * Verifica se o processo deve sugerir mudança para julgamento_habilitacao
      * (após data/hora da sessão pública)
@@ -213,16 +217,15 @@ class ProcessoStatusService
         ];
 
         // Processos em participação que já passaram da sessão pública
-        // Sempre filtrar por empresa_id não nulo para garantir isolamento
-        $queryParticipacao = Processo::where('status', 'participacao')
-            ->where('data_hora_sessao_publica', '<=', now())
-            ->whereNotNull('empresa_id');
+        // Usar ProcessoRepository para buscar processos
+        $filtrosParticipacao = [
+            'empresa_id' => $empresaId,
+            'status' => 'participacao',
+            'data_hora_sessao_publica_fim' => now(),
+        ];
         
-        if ($empresaId) {
-            $queryParticipacao->where('empresa_id', $empresaId);
-        }
-        
-        $processosParticipacao = $queryParticipacao->get();
+        // Buscar modelos Eloquent (necessário para alterar status)
+        $processosParticipacao = $this->processoRepository->buscarModelosComFiltros($filtrosParticipacao);
 
         foreach ($processosParticipacao as $processo) {
             try {
@@ -236,15 +239,14 @@ class ProcessoStatusService
         }
 
         // Processos em julgamento que devem ser marcados como perdidos
-        // Sempre filtrar por empresa_id não nulo para garantir isolamento
-        $queryJulgamento = Processo::where('status', 'julgamento_habilitacao')
-            ->whereNotNull('empresa_id');
+        // Usar ProcessoRepository para buscar processos
+        $filtrosJulgamento = [
+            'empresa_id' => $empresaId,
+            'status' => 'julgamento_habilitacao',
+        ];
         
-        if ($empresaId) {
-            $queryJulgamento->where('empresa_id', $empresaId);
-        }
-        
-        $processosJulgamento = $queryJulgamento->get();
+        // Buscar modelos Eloquent (necessário para alterar status)
+        $processosJulgamento = $this->processoRepository->buscarModelosComFiltros($filtrosJulgamento);
 
         foreach ($processosJulgamento as $processo) {
             if ($this->deveSugerirPerdido($processo)) {

@@ -24,5 +24,13 @@ interface EmpresaRepositoryInterface
      * Listar todas as empresas do tenant atual
      */
     public function listar(): array;
+
+    /**
+     * Buscar modelo Eloquent por ID (para casos especiais onde precisa do modelo, não da entidade)
+     * Use apenas quando realmente necessário (ex: BaseApiController que precisa de relacionamentos)
+     * 
+     * @return \App\Models\Empresa|null
+     */
+    public function buscarModeloPorId(int $id): ?\App\Models\Empresa;
 }
 

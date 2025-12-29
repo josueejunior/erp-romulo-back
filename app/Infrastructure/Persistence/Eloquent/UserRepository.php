@@ -114,8 +114,8 @@ class UserRepository implements UserRepositoryInterface
         if (isset($filtros['search']) && !empty($filtros['search'])) {
             $search = $filtros['search'];
             $query->where(function($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%");
+                $q->where('name', 'ilike', "%{$search}%")
+                  ->orWhere('email', 'ilike', "%{$search}%");
             });
         }
 
@@ -128,6 +128,15 @@ class UserRepository implements UserRepositoryInterface
         });
 
         return $paginator;
+    }
+
+    /**
+     * Buscar modelo Eloquent por ID (para casos especiais onde precisa do modelo, não da entidade)
+     * Use apenas quando realmente necessário (ex: controllers que precisam de relacionamentos)
+     */
+    public function buscarModeloPorId(int $id): ?UserModel
+    {
+        return UserModel::with(['empresas', 'roles'])->find($id);
     }
 
     public function atualizar(User $user): User

@@ -5,14 +5,19 @@ namespace App\Modules\Processo\Services;
 use App\Modules\Processo\Models\ProcessoItem;
 use App\Modules\Processo\Models\ProcessoItemVinculo;
 use App\Modules\Processo\Models\Processo;
-use App\Models\Contrato;
-use App\Models\AutorizacaoFornecimento;
-use App\Models\Empenho;
+use App\Domain\Contrato\Repositories\ContratoRepositoryInterface;
+use App\Domain\AutorizacaoFornecimento\Repositories\AutorizacaoFornecimentoRepositoryInterface;
+use App\Domain\Empenho\Repositories\EmpenhoRepositoryInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 class ProcessoItemVinculoService
 {
+    public function __construct(
+        private ContratoRepositoryInterface $contratoRepository,
+        private AutorizacaoFornecimentoRepositoryInterface $autorizacaoRepository,
+        private EmpenhoRepositoryInterface $empenhoRepository,
+    ) {}
     /**
      * Valida dados para criar/atualizar vínculo
      */
@@ -89,22 +94,22 @@ class ProcessoItemVinculoService
     public function validateDocumentoProcesso(array $data, Processo $processo): void
     {
         if (!empty($data['contrato_id'])) {
-            $contrato = Contrato::find($data['contrato_id']);
-            if (!$contrato || $contrato->processo_id !== $processo->id) {
+            $contrato = $this->contratoRepository->buscarPorId($data['contrato_id']);
+            if (!$contrato || $contrato->processoId !== $processo->id) {
                 throw new \Exception('O contrato não pertence a este processo.');
             }
         }
 
         if (!empty($data['autorizacao_fornecimento_id'])) {
-            $af = AutorizacaoFornecimento::find($data['autorizacao_fornecimento_id']);
-            if (!$af || $af->processo_id !== $processo->id) {
+            $af = $this->autorizacaoRepository->buscarPorId($data['autorizacao_fornecimento_id']);
+            if (!$af || $af->processoId !== $processo->id) {
                 throw new \Exception('A autorização de fornecimento não pertence a este processo.');
             }
         }
 
         if (!empty($data['empenho_id'])) {
-            $empenho = Empenho::find($data['empenho_id']);
-            if (!$empenho || $empenho->processo_id !== $processo->id) {
+            $empenho = $this->empenhoRepository->buscarPorId($data['empenho_id']);
+            if (!$empenho || $empenho->processoId !== $processo->id) {
                 throw new \Exception('O empenho não pertence a este processo.');
             }
         }

@@ -6,9 +6,11 @@ use App\Domain\Setor\Entities\Setor;
 use App\Domain\Setor\Repositories\SetorRepositoryInterface;
 use App\Models\Setor as SetorModel;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use App\Infrastructure\Persistence\Eloquent\Traits\IsolamentoEmpresaTrait;
 
 class SetorRepository implements SetorRepositoryInterface
 {
+    use IsolamentoEmpresaTrait;
     private function toDomain(SetorModel $model): Setor
     {
         return new Setor(
@@ -48,11 +50,8 @@ class SetorRepository implements SetorRepositoryInterface
 
     public function buscarComFiltros(array $filtros = []): LengthAwarePaginator
     {
-        $query = SetorModel::query();
-
-        if (isset($filtros['empresa_id'])) {
-            $query->where('empresa_id', $filtros['empresa_id']);
-        }
+        // Aplicar filtro de empresa_id com isolamento
+        $query = $this->aplicarFiltroEmpresa(SetorModel::class, $filtros);
 
         if (isset($filtros['orgao_id'])) {
             $query->where('orgao_id', $filtros['orgao_id']);
@@ -60,6 +59,9 @@ class SetorRepository implements SetorRepositoryInterface
 
         $perPage = $filtros['per_page'] ?? 15;
         $paginator = $query->orderBy('criado_em', 'desc')->paginate($perPage);
+
+        // Validar que todos os registros pertencem à empresa correta
+        $this->validarEmpresaIds($paginator, $filtros['empresa_id']);
 
         $paginator->getCollection()->transform(function ($model) {
             return $this->toDomain($model);

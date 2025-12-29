@@ -2,90 +2,122 @@
 
 namespace App\Modules\Dashboard\Services;
 
-use App\Modules\Processo\Models\Processo;
-use App\Models\DocumentoHabilitacao;
+use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
+use App\Domain\DocumentoHabilitacao\Repositories\DocumentoHabilitacaoRepositoryInterface;
+use Carbon\Carbon;
 
 class DashboardService
 {
+    public function __construct(
+        private ProcessoRepositoryInterface $processoRepository,
+        private DocumentoHabilitacaoRepositoryInterface $documentoRepository,
+    ) {}
+
     /**
      * Obter dados do dashboard
      */
     public function obterDadosDashboard(int $empresaId): array
     {
-        $processosParticipacao = Processo::where('empresa_id', $empresaId)
-            ->whereNotNull('empresa_id')
-            ->where('status', 'participacao')
-            ->count();
+        // Usar repository para contar processos por status
+        $processosParticipacao = $this->processoRepository->buscarComFiltros([
+            'empresa_id' => $empresaId,
+            'status' => 'participacao',
+            'per_page' => 1,
+        ])->total();
 
-        $processosJulgamento = Processo::where('empresa_id', $empresaId)
-            ->whereNotNull('empresa_id')
-            ->where('status', 'julgamento_habilitacao')
-            ->count();
+        $processosJulgamento = $this->processoRepository->buscarComFiltros([
+            'empresa_id' => $empresaId,
+            'status' => 'julgamento_habilitacao',
+            'per_page' => 1,
+        ])->total();
 
-        $processosExecucao = Processo::where('empresa_id', $empresaId)
-            ->whereNotNull('empresa_id')
-            ->where('status', 'execucao')
-            ->count();
+        $processosExecucao = $this->processoRepository->buscarComFiltros([
+            'empresa_id' => $empresaId,
+            'status' => 'execucao',
+            'per_page' => 1,
+        ])->total();
 
-        $processosPagamento = Processo::where('empresa_id', $empresaId)
-            ->whereNotNull('empresa_id')
-            ->where('status', 'pagamento')
-            ->count();
+        $processosPagamento = $this->processoRepository->buscarComFiltros([
+            'empresa_id' => $empresaId,
+            'status' => 'pagamento',
+            'per_page' => 1,
+        ])->total();
 
-        $processosEncerramento = Processo::where('empresa_id', $empresaId)
-            ->whereNotNull('empresa_id')
-            ->where('status', 'encerramento')
-            ->count();
+        $processosEncerramento = $this->processoRepository->buscarComFiltros([
+            'empresa_id' => $empresaId,
+            'status' => 'encerramento',
+            'per_page' => 1,
+        ])->total();
 
-        $processosPerdidos = Processo::where('empresa_id', $empresaId)
-            ->whereNotNull('empresa_id')
-            ->where('status', 'perdido')
-            ->count();
+        $processosPerdidos = $this->processoRepository->buscarComFiltros([
+            'empresa_id' => $empresaId,
+            'status' => 'perdido',
+            'per_page' => 1,
+        ])->total();
 
-        $processosArquivados = Processo::where('empresa_id', $empresaId)
-            ->whereNotNull('empresa_id')
-            ->where('status', 'arquivado')
-            ->count();
+        $processosArquivados = $this->processoRepository->buscarComFiltros([
+            'empresa_id' => $empresaId,
+            'status' => 'arquivado',
+            'per_page' => 1,
+        ])->total();
 
-        $proximasDisputas = Processo::where('empresa_id', $empresaId)
-            ->whereNotNull('empresa_id')
-            ->whereIn('status', ['participacao', 'julgamento_habilitacao'])
-            ->where('data_hora_sessao_publica', '>=', now())
-            ->orderBy('data_hora_sessao_publica', 'asc')
-            ->limit(5)
-            ->select(['id', 'numero_modalidade', 'data_hora_sessao_publica', 'objeto_resumido'])
-            ->get()
-            ->map(function($processo) {
-                return [
-                    'id' => $processo->id,
-                    'numero_modalidade' => $processo->numero_modalidade,
-                    'data_hora_sessao_publica' => $processo->data_hora_sessao_publica,
-                    'objeto_resumido' => $processo->objeto_resumido,
-                ];
-            });
+        // Buscar próximas disputas usando repository
+        $proximasDisputasPaginator = $this->processoRepository->buscarComFiltros([
+            'empresa_id' => $empresaId,
+            'status' => ['participacao', 'julgamento_habilitacao'],
+            'data_hora_sessao_publica_inicio' => now(),
+            'per_page' => 5,
+        ]);
 
-        $documentosVencendo = DocumentoHabilitacao::where('empresa_id', $empresaId)
-            ->whereNotNull('empresa_id')
-            ->whereNotNull('data_validade')
-            ->where('data_validade', '>=', now())
-            ->where('data_validade', '<=', now()->addDays(30))
-            ->orderBy('data_validade', 'asc')
-            ->get(['id', 'tipo', 'numero', 'data_validade']);
+        $proximasDisputas = $proximasDisputasPaginator->getCollection()->map(function($processo) {
+            return [
+                'id' => $processo->id,
+                'numero_modalidade' => $processo->numeroModalidade,
+                'data_hora_sessao_publica' => $processo->dataHoraSessaoPublica?->toDateTimeString(),
+                'objeto_resumido' => $processo->objetoResumido,
+            ];
+        })->toArray();
 
-        $documentosVencidos = DocumentoHabilitacao::where('empresa_id', $empresaId)
-            ->whereNotNull('empresa_id')
-            ->whereNotNull('data_validade')
-            ->where('data_validade', '<', now())
-            ->orderBy('data_validade', 'desc')
-            ->limit(5)
-            ->get(['id', 'tipo', 'numero', 'data_validade']);
+        // Buscar documentos usando repository
+        $documentosVencendoPaginator = $this->documentoRepository->buscarComFiltros([
+            'empresa_id' => $empresaId,
+            'data_validade_inicio' => now(),
+            'data_validade_fim' => now()->addDays(30),
+            'per_page' => 100, // Limite alto para pegar todos
+        ]);
 
-        $documentosUrgentes = DocumentoHabilitacao::where('empresa_id', $empresaId)
-            ->whereNotNull('empresa_id')
-            ->whereNotNull('data_validade')
-            ->where('data_validade', '>=', now())
-            ->where('data_validade', '<=', now()->addDays(7))
-            ->count();
+        $documentosVencendo = $documentosVencendoPaginator->getCollection()->map(function($documento) {
+            return [
+                'id' => $documento->id,
+                'tipo' => $documento->tipo,
+                'numero' => $documento->numero,
+                'data_validade' => $documento->dataValidade?->toDateString(),
+            ];
+        })->toArray();
+
+        $documentosVencidosPaginator = $this->documentoRepository->buscarComFiltros([
+            'empresa_id' => $empresaId,
+            'data_validade_fim' => now(),
+            'per_page' => 5,
+        ]);
+
+        $documentosVencidos = $documentosVencidosPaginator->getCollection()->map(function($documento) {
+            return [
+                'id' => $documento->id,
+                'tipo' => $documento->tipo,
+                'numero' => $documento->numero,
+                'data_validade' => $documento->dataValidade?->toDateString(),
+            ];
+        })->toArray();
+
+        $documentosUrgentesPaginator = $this->documentoRepository->buscarComFiltros([
+            'empresa_id' => $empresaId,
+            'data_validade_inicio' => now(),
+            'data_validade_fim' => now()->addDays(7),
+            'per_page' => 1,
+        ]);
+
+        $documentosUrgentes = $documentosUrgentesPaginator->total();
 
         return [
             'processos' => [

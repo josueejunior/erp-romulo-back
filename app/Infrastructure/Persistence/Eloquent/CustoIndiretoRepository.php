@@ -7,9 +7,11 @@ use App\Domain\CustoIndireto\Repositories\CustoIndiretoRepositoryInterface;
 use App\Models\CustoIndireto as CustoIndiretoModel;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Carbon\Carbon;
+use App\Infrastructure\Persistence\Eloquent\Traits\IsolamentoEmpresaTrait;
 
 class CustoIndiretoRepository implements CustoIndiretoRepositoryInterface
 {
+    use IsolamentoEmpresaTrait;
     private function toDomain(CustoIndiretoModel $model): CustoIndireto
     {
         return new CustoIndireto(
@@ -49,11 +51,8 @@ class CustoIndiretoRepository implements CustoIndiretoRepositoryInterface
 
     public function buscarComFiltros(array $filtros = []): LengthAwarePaginator
     {
-        $query = CustoIndiretoModel::query();
-
-        if (isset($filtros['empresa_id'])) {
-            $query->where('empresa_id', $filtros['empresa_id']);
-        }
+        // Aplicar filtro de empresa_id com isolamento
+        $query = $this->aplicarFiltroEmpresa(CustoIndiretoModel::class, $filtros);
 
         if (isset($filtros['categoria'])) {
             $query->where('categoria', $filtros['categoria']);
@@ -61,6 +60,9 @@ class CustoIndiretoRepository implements CustoIndiretoRepositoryInterface
 
         $perPage = $filtros['per_page'] ?? 15;
         $paginator = $query->orderBy('criado_em', 'desc')->paginate($perPage);
+
+        // Validar que todos os registros pertencem à empresa correta
+        $this->validarEmpresaIds($paginator, $filtros['empresa_id']);
 
         $paginator->getCollection()->transform(function ($model) {
             return $this->toDomain($model);

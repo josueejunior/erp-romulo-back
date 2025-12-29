@@ -4,19 +4,23 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Empresa;
+use App\Domain\Empresa\Repositories\EmpresaRepositoryInterface;
+use App\Domain\Auth\Repositories\UserRepositoryInterface;
 use Illuminate\Http\Request;
 
 /**
  * Controller base para APIs que precisam de empresa ativa
  * 
  * Fornece métodos auxiliares comuns para controllers de API
+ * 
+ * Refatorado para usar DDD (repositories)
  */
 abstract class BaseApiController extends Controller
 {
     /**
      * Obtém a empresa ativa do usuário autenticado ou lança exceção
      * 
-     * @return Empresa
+     * @return Empresa Modelo Eloquent (necessário para relacionamentos)
      * @throws \Symfony\Component\HttpKernel\Exception\HttpException
      */
     protected function getEmpresaAtivaOrFail(): Empresa
@@ -33,15 +37,18 @@ abstract class BaseApiController extends Controller
             'tenant_id' => tenancy()->tenant?->id,
         ]);
         
-        // Se o usuário tem empresa_ativa_id, buscar essa empresa
+        $empresaRepository = app(EmpresaRepositoryInterface::class);
+        $userRepository = app(UserRepositoryInterface::class);
+        
+        // Se o usuário tem empresa_ativa_id, buscar essa empresa via repository
         if ($user->empresa_ativa_id) {
-            $empresa = Empresa::find($user->empresa_ativa_id);
-            if ($empresa) {
+            $empresaModel = $empresaRepository->buscarModeloPorId($user->empresa_ativa_id);
+            if ($empresaModel) {
                 \Log::debug('BaseApiController::getEmpresaAtivaOrFail() - Empresa encontrada por empresa_ativa_id', [
-                    'empresa_id' => $empresa->id,
-                    'empresa_razao_social' => $empresa->razao_social,
+                    'empresa_id' => $empresaModel->id,
+                    'empresa_razao_social' => $empresaModel->razao_social,
                 ]);
-                return $empresa;
+                return $empresaModel;
             } else {
                 \Log::warning('BaseApiController::getEmpresaAtivaOrFail() - Empresa não encontrada pelo empresa_ativa_id', [
                     'empresa_ativa_id' => $user->empresa_ativa_id,
@@ -49,33 +56,46 @@ abstract class BaseApiController extends Controller
             }
         }
         
-        // Se não tem empresa ativa definida, buscar primeira empresa do usuário
-        $empresa = $user->empresas()->first();
+        // Se não tem empresa ativa definida, buscar primeira empresa do usuário via repository
+        $empresas = $userRepository->buscarEmpresas($user->id);
         
-        if (!$empresa) {
+        if (empty($empresas)) {
             \Log::error('BaseApiController::getEmpresaAtivaOrFail() - Usuário sem empresas', [
                 'user_id' => $user->id,
             ]);
             abort(403, 'Você não tem acesso a nenhuma empresa.');
         }
         
+        // Pegar primeira empresa e buscar modelo Eloquent
+        $primeiraEmpresa = $empresas[0];
+        $empresaModel = $empresaRepository->buscarModeloPorId($primeiraEmpresa->id);
+        
+        if (!$empresaModel) {
+            \Log::error('BaseApiController::getEmpresaAtivaOrFail() - Modelo não encontrado após buscar empresas', [
+                'user_id' => $user->id,
+                'empresa_id' => $primeiraEmpresa->id,
+            ]);
+            abort(403, 'Erro ao buscar empresa.');
+        }
+        
         // Se encontrou empresa mas não estava definida como ativa, atualizar
-        if ($user->empresa_ativa_id !== $empresa->id) {
+        if ($user->empresa_ativa_id !== $empresaModel->id) {
             \Log::info('BaseApiController::getEmpresaAtivaOrFail() - Atualizando empresa_ativa_id', [
                 'user_id' => $user->id,
                 'empresa_ativa_id_antigo' => $user->empresa_ativa_id,
-                'empresa_ativa_id_novo' => $empresa->id,
+                'empresa_ativa_id_novo' => $empresaModel->id,
             ]);
-            $user->empresa_ativa_id = $empresa->id;
-            $user->save();
+            
+            // Atualizar via repository
+            $userRepository->atualizarEmpresaAtiva($user->id, $empresaModel->id);
         }
         
         \Log::debug('BaseApiController::getEmpresaAtivaOrFail() - Retornando empresa', [
-            'empresa_id' => $empresa->id,
-            'empresa_razao_social' => $empresa->razao_social,
+            'empresa_id' => $empresaModel->id,
+            'empresa_razao_social' => $empresaModel->razao_social,
         ]);
         
-        return $empresa;
+        return $empresaModel;
     }
 }
 

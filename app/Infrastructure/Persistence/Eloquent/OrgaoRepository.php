@@ -6,9 +6,11 @@ use App\Domain\Orgao\Entities\Orgao;
 use App\Domain\Orgao\Repositories\OrgaoRepositoryInterface;
 use App\Models\Orgao as OrgaoModel;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use App\Infrastructure\Persistence\Eloquent\Traits\IsolamentoEmpresaTrait;
 
 class OrgaoRepository implements OrgaoRepositoryInterface
 {
+    use IsolamentoEmpresaTrait;
     private function toDomain(OrgaoModel $model): Orgao
     {
         return new Orgao(
@@ -68,11 +70,8 @@ class OrgaoRepository implements OrgaoRepositoryInterface
 
     public function buscarComFiltros(array $filtros = []): LengthAwarePaginator
     {
-        $query = OrgaoModel::query();
-
-        if (isset($filtros['empresa_id'])) {
-            $query->where('empresa_id', $filtros['empresa_id']);
-        }
+        // Aplicar filtro de empresa_id com isolamento
+        $query = $this->aplicarFiltroEmpresa(OrgaoModel::class, $filtros);
 
         if (isset($filtros['search']) && !empty($filtros['search'])) {
             $search = $filtros['search'];
@@ -85,6 +84,9 @@ class OrgaoRepository implements OrgaoRepositoryInterface
 
         $perPage = $filtros['per_page'] ?? 15;
         $paginator = $query->orderBy('criado_em', 'desc')->paginate($perPage);
+
+        // Validar que todos os registros pertencem à empresa correta
+        $this->validarEmpresaIds($paginator, $filtros['empresa_id']);
 
         $paginator->getCollection()->transform(function ($model) {
             return $this->toDomain($model);

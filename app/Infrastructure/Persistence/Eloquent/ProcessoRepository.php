@@ -7,12 +7,14 @@ use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Modules\Processo\Models\Processo as ProcessoModel;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Carbon\Carbon;
+use App\Infrastructure\Persistence\Eloquent\Traits\IsolamentoEmpresaTrait;
 
 /**
  * Implementação do Repository de Processo usando Eloquent
  */
 class ProcessoRepository implements ProcessoRepositoryInterface
 {
+    use IsolamentoEmpresaTrait;
     /**
      * Converter modelo Eloquent para entidade do domínio
      */
@@ -106,14 +108,23 @@ class ProcessoRepository implements ProcessoRepositoryInterface
 
     public function buscarComFiltros(array $filtros = []): LengthAwarePaginator
     {
-        $query = ProcessoModel::query();
-
-        if (isset($filtros['empresa_id'])) {
-            $query->where('empresa_id', $filtros['empresa_id']);
-        }
+        // Aplicar filtro de empresa_id com isolamento
+        $query = $this->aplicarFiltroEmpresa(ProcessoModel::class, $filtros);
 
         if (isset($filtros['status'])) {
-            $query->where('status', $filtros['status']);
+            if (is_array($filtros['status'])) {
+                $query->whereIn('status', $filtros['status']);
+            } else {
+                $query->where('status', $filtros['status']);
+            }
+        }
+
+        if (isset($filtros['data_hora_sessao_publica_inicio'])) {
+            $query->where('data_hora_sessao_publica', '>=', $filtros['data_hora_sessao_publica_inicio']);
+        }
+
+        if (isset($filtros['data_hora_sessao_publica_fim'])) {
+            $query->where('data_hora_sessao_publica', '<=', $filtros['data_hora_sessao_publica_fim']);
         }
 
         if (isset($filtros['search']) && !empty($filtros['search'])) {
@@ -126,7 +137,18 @@ class ProcessoRepository implements ProcessoRepositoryInterface
         }
 
         $perPage = $filtros['per_page'] ?? 15;
-        $paginator = $query->orderBy('criado_em', 'desc')->paginate($perPage);
+        
+        // Ordenar por data_hora_sessao_publica se for para próximas disputas
+        if (isset($filtros['data_hora_sessao_publica_inicio'])) {
+            $query->orderBy('data_hora_sessao_publica', 'asc');
+        } else {
+            $query->orderBy('criado_em', 'desc');
+        }
+        
+        $paginator = $query->paginate($perPage);
+
+        // Validar que todos os registros pertencem à empresa correta
+        $this->validarEmpresaIds($paginator, $filtros['empresa_id']);
 
         // Converter cada item para entidade do domínio
         $paginator->getCollection()->transform(function ($model) {
@@ -150,11 +172,8 @@ class ProcessoRepository implements ProcessoRepositoryInterface
 
     public function obterResumo(array $filtros = []): array
     {
-        $query = ProcessoModel::query();
-
-        if (isset($filtros['empresa_id'])) {
-            $query->where('empresa_id', $filtros['empresa_id']);
-        }
+        // Aplicar filtro de empresa_id com isolamento
+        $query = $this->aplicarFiltroEmpresa(ProcessoModel::class, $filtros);
 
         return [
             'total' => $query->count(),
@@ -163,6 +182,70 @@ class ProcessoRepository implements ProcessoRepositoryInterface
                 ->pluck('total', 'status')
                 ->toArray(),
         ];
+    }
+
+    /**
+     * Buscar modelo Eloquent por ID com relacionamentos (para casos especiais)
+     * Use apenas quando realmente necessário (ex: CalendarioService que precisa de relacionamentos)
+     */
+    public function buscarModeloPorId(int $id, array $with = []): ?ProcessoModel
+    {
+        $query = ProcessoModel::withoutGlobalScope('empresa');
+        
+        if (!empty($with)) {
+            $query->with($with);
+        }
+        
+        return $query->find($id);
+    }
+
+    /**
+     * Buscar modelos Eloquent com relacionamentos (para casos especiais)
+     * Use apenas quando realmente necessário (ex: CalendarioService)
+     */
+    public function buscarModelosComFiltros(array $filtros = [], array $with = []): \Illuminate\Database\Eloquent\Collection
+    {
+        $query = $this->aplicarFiltroEmpresa(ProcessoModel::class, $filtros);
+
+        if (isset($filtros['status'])) {
+            if (is_array($filtros['status'])) {
+                $query->whereIn('status', $filtros['status']);
+            } else {
+                $query->where('status', $filtros['status']);
+            }
+        }
+
+        if (isset($filtros['data_hora_sessao_publica_inicio'])) {
+            $query->where('data_hora_sessao_publica', '>=', $filtros['data_hora_sessao_publica_inicio']);
+        }
+
+        if (isset($filtros['data_hora_sessao_publica_fim'])) {
+            $query->where('data_hora_sessao_publica', '<=', $filtros['data_hora_sessao_publica_fim']);
+        }
+
+        if (isset($filtros['status_participacao'])) {
+            if (is_array($filtros['status_participacao'])) {
+                $query->whereIn('status_participacao', $filtros['status_participacao']);
+            } else {
+                $query->where('status_participacao', $filtros['status_participacao']);
+            }
+        }
+
+        if (!empty($with)) {
+            $query->with($with);
+        }
+
+        if (isset($filtros['data_hora_sessao_publica_inicio'])) {
+            $query->orderBy('data_hora_sessao_publica', 'asc');
+        } else {
+            $query->orderBy('criado_em', 'desc');
+        }
+
+        if (isset($filtros['limit'])) {
+            $query->limit($filtros['limit']);
+        }
+
+        return $query->get();
     }
 }
 

@@ -8,8 +8,11 @@ use App\Models\Empenho;
 use App\Modules\Empenho\Services\EmpenhoService;
 use App\Application\Empenho\UseCases\CriarEmpenhoUseCase;
 use App\Application\Empenho\DTOs\CriarEmpenhoDTO;
+use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
+use App\Domain\Empenho\Repositories\EmpenhoRepositoryInterface;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Log;
 
 class EmpenhoController extends BaseApiController
 {
@@ -19,6 +22,8 @@ class EmpenhoController extends BaseApiController
     public function __construct(
         EmpenhoService $empenhoService,
         private CriarEmpenhoUseCase $criarEmpenhoUseCase,
+        private ProcessoRepositoryInterface $processoRepository,
+        private EmpenhoRepositoryInterface $empenhoRepository,
     ) {
         $this->empenhoService = $empenhoService;
         $this->service = $empenhoService; // Para HasDefaultActions
@@ -29,7 +34,28 @@ class EmpenhoController extends BaseApiController
      */
     public function list(Request $request)
     {
-        return $this->index(Processo::findOrFail($request->route()->parameter('processo')));
+        try {
+            $processoId = $request->route()->parameter('processo');
+            $processoDomain = $this->processoRepository->buscarPorId($processoId);
+            
+            if (!$processoDomain) {
+                return response()->json(['message' => 'Processo não encontrado'], 404);
+            }
+            
+            // Buscar modelo Eloquent para compatibilidade com métodos existentes
+            $processo = Processo::find($processoDomain->id);
+            if (!$processo) {
+                return response()->json(['message' => 'Processo não encontrado'], 404);
+            }
+            
+            return $this->index($processo);
+        } catch (\Exception $e) {
+            Log::error('Erro ao buscar processo para listar empenhos', [
+                'processo_id' => $request->route()->parameter('processo'),
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json(['message' => 'Erro ao buscar processo: ' . $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -37,10 +63,37 @@ class EmpenhoController extends BaseApiController
      */
     public function get(Request $request)
     {
-        return $this->show(
-            Processo::findOrFail($request->route()->parameter('processo')),
-            Empenho::findOrFail($request->route()->parameter('empenho'))
-        );
+        try {
+            $processoId = $request->route()->parameter('processo');
+            $empenhoId = $request->route()->parameter('empenho');
+            
+            $processoDomain = $this->processoRepository->buscarPorId($processoId);
+            if (!$processoDomain) {
+                return response()->json(['message' => 'Processo não encontrado'], 404);
+            }
+            
+            $empenhoDomain = $this->empenhoRepository->buscarPorId($empenhoId);
+            if (!$empenhoDomain) {
+                return response()->json(['message' => 'Empenho não encontrado'], 404);
+            }
+            
+            // Buscar modelos Eloquent para compatibilidade
+            $processo = Processo::find($processoDomain->id);
+            $empenho = Empenho::find($empenhoDomain->id);
+            
+            if (!$processo || !$empenho) {
+                return response()->json(['message' => 'Processo ou empenho não encontrado'], 404);
+            }
+            
+            return $this->show($processo, $empenho);
+        } catch (\Exception $e) {
+            Log::error('Erro ao buscar empenho', [
+                'processo_id' => $request->route()->parameter('processo'),
+                'empenho_id' => $request->route()->parameter('empenho'),
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json(['message' => 'Erro ao buscar empenho: ' . $e->getMessage()], 500);
+        }
     }
 
     public function index(Processo $processo)
@@ -62,10 +115,28 @@ class EmpenhoController extends BaseApiController
      */
     public function store(Request $request)
     {
-        $route = $request->route();
-        $processo = Processo::findOrFail($route->parameter('processo'));
-        
-        return $this->storeWeb($request, $processo);
+        try {
+            $processoId = $request->route()->parameter('processo');
+            $processoDomain = $this->processoRepository->buscarPorId($processoId);
+            
+            if (!$processoDomain) {
+                return response()->json(['message' => 'Processo não encontrado'], 404);
+            }
+            
+            // Buscar modelo Eloquent para compatibilidade
+            $processo = Processo::find($processoDomain->id);
+            if (!$processo) {
+                return response()->json(['message' => 'Processo não encontrado'], 404);
+            }
+            
+            return $this->storeWeb($request, $processo);
+        } catch (\Exception $e) {
+            Log::error('Erro ao buscar processo para criar empenho', [
+                'processo_id' => $request->route()->parameter('processo'),
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json(['message' => 'Erro ao buscar processo: ' . $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -121,11 +192,36 @@ class EmpenhoController extends BaseApiController
      */
     public function update(Request $request, $id)
     {
-        $route = $request->route();
-        $processo = Processo::findOrFail($route->parameter('processo'));
-        $empenho = Empenho::findOrFail($id);
-        
-        return $this->updateWeb($request, $processo, $empenho);
+        try {
+            $processoId = $request->route()->parameter('processo');
+            
+            $processoDomain = $this->processoRepository->buscarPorId($processoId);
+            if (!$processoDomain) {
+                return response()->json(['message' => 'Processo não encontrado'], 404);
+            }
+            
+            $empenhoDomain = $this->empenhoRepository->buscarPorId($id);
+            if (!$empenhoDomain) {
+                return response()->json(['message' => 'Empenho não encontrado'], 404);
+            }
+            
+            // Buscar modelos Eloquent para compatibilidade
+            $processo = Processo::find($processoDomain->id);
+            $empenho = Empenho::find($empenhoDomain->id);
+            
+            if (!$processo || !$empenho) {
+                return response()->json(['message' => 'Processo ou empenho não encontrado'], 404);
+            }
+            
+            return $this->updateWeb($request, $processo, $empenho);
+        } catch (\Exception $e) {
+            Log::error('Erro ao buscar processo/empenho para atualizar', [
+                'processo_id' => $request->route()->parameter('processo'),
+                'empenho_id' => $id,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json(['message' => 'Erro ao buscar processo ou empenho: ' . $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -133,11 +229,36 @@ class EmpenhoController extends BaseApiController
      */
     public function destroy(Request $request, $id)
     {
-        $route = $request->route();
-        $processo = Processo::findOrFail($route->parameter('processo'));
-        $empenho = Empenho::findOrFail($id);
-        
-        return $this->destroyWeb($processo, $empenho);
+        try {
+            $processoId = $request->route()->parameter('processo');
+            
+            $processoDomain = $this->processoRepository->buscarPorId($processoId);
+            if (!$processoDomain) {
+                return response()->json(['message' => 'Processo não encontrado'], 404);
+            }
+            
+            $empenhoDomain = $this->empenhoRepository->buscarPorId($id);
+            if (!$empenhoDomain) {
+                return response()->json(['message' => 'Empenho não encontrado'], 404);
+            }
+            
+            // Buscar modelos Eloquent para compatibilidade
+            $processo = Processo::find($processoDomain->id);
+            $empenho = Empenho::find($empenhoDomain->id);
+            
+            if (!$processo || !$empenho) {
+                return response()->json(['message' => 'Processo ou empenho não encontrado'], 404);
+            }
+            
+            return $this->destroyWeb($processo, $empenho);
+        } catch (\Exception $e) {
+            Log::error('Erro ao buscar processo/empenho para deletar', [
+                'processo_id' => $request->route()->parameter('processo'),
+                'empenho_id' => $id,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json(['message' => 'Erro ao buscar processo ou empenho: ' . $e->getMessage()], 500);
+        }
     }
 
     /**
