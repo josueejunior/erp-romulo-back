@@ -66,5 +66,10 @@ interface UserRepositoryInterface
      * Atualizar role do usuário
      */
     public function atualizarRole(int $userId, string $role): void;
+
+    /**
+     * Sincronizar empresas do usuário
+     */
+    public function sincronizarEmpresas(int $userId, array $empresasIds): void;
 }
 

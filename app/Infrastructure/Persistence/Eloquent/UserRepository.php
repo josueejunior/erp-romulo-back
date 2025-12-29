@@ -154,5 +154,14 @@ class UserRepository implements UserRepositoryInterface
         $model = UserModel::findOrFail($userId);
         $model->syncRoles([$role]);
     }
+
+    /**
+     * Sincronizar empresas do usuário
+     */
+    public function sincronizarEmpresas(int $userId, array $empresasIds): void
+    {
+        $model = UserModel::findOrFail($userId);
+        $model->empresas()->sync($empresasIds);
+    }
 }
 

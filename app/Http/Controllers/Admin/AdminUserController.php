@@ -258,8 +258,18 @@ class AdminUserController extends Controller
                 ->orderBy('razao_social')
                 ->get();
 
+            // Garantir que seja um array (frontend espera isso para usar .filter())
+            $empresasArray = $empresas->map(function ($empresa) {
+                return [
+                    'id' => (int) $empresa->id,
+                    'razao_social' => $empresa->razao_social,
+                    'cnpj' => $empresa->cnpj,
+                    'status' => $empresa->status,
+                ];
+            })->values()->toArray();
+
             return response()->json([
-                'data' => $empresas,
+                'data' => $empresasArray,
             ]);
         } catch (\Exception $e) {
             Log::error('Erro ao listar empresas', ['error' => $e->getMessage()]);

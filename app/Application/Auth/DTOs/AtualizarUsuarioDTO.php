@@ -15,6 +15,7 @@ class AtualizarUsuarioDTO
         public readonly ?string $email = null,
         public readonly ?string $senha = null,
         public readonly ?int $empresaId = null,
+        public readonly ?array $empresas = null, // Array de IDs de empresas
         public readonly ?string $role = null,
     ) {}
 
@@ -32,12 +33,26 @@ class AtualizarUsuarioDTO
         $senha = $request->input('password');
         $senha = ($senha && trim($senha) !== '') ? trim($senha) : null;
 
+        // Normalizar empresas: garantir que seja array de inteiros
+        $empresas = $request->input('empresas');
+        if ($empresas && !is_array($empresas)) {
+            $empresas = [$empresas];
+        }
+        if ($empresas) {
+            $empresas = array_filter(array_map('intval', $empresas), fn($id) => $id > 0);
+            $empresas = !empty($empresas) ? array_values($empresas) : null;
+        }
+
+        // empresa_id pode vir separado ou como empresa_ativa_id
+        $empresaId = $request->input('empresa_id') ?? $request->input('empresa_ativa_id');
+
         return new self(
             userId: $userId,
             nome: $request->input('name'),
             email: $request->input('email'),
             senha: $senha, // Pode ser null no update
-            empresaId: $request->input('empresa_id'),
+            empresaId: $empresaId ? (int) $empresaId : null,
+            empresas: $empresas, // Array de IDs de empresas
             role: $role,
         );
     }

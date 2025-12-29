@@ -74,6 +74,18 @@ class AtualizarUsuarioUseCase
             $this->userRepository->atualizarRole($userAtualizado->id, $dto->role);
         }
 
+        // Se empresas foram fornecidas, sincronizar
+        if ($dto->empresas !== null && !empty($dto->empresas)) {
+            // Validar que todas as empresas existem no tenant
+            foreach ($dto->empresas as $empresaId) {
+                $empresa = $this->empresaRepository->buscarPorId($empresaId);
+                if (!$empresa) {
+                    throw new DomainException("Empresa ID {$empresaId} não encontrada neste tenant.");
+                }
+            }
+            $this->userRepository->sincronizarEmpresas($userAtualizado->id, $dto->empresas);
+        }
+
         // Disparar Domain Event se senha foi alterada
         if ($dto->senha) {
             $this->eventDispatcher->dispatch(
