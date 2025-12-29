@@ -214,6 +214,8 @@ class AdminUserController extends Controller
             $data = $request->all();
             $hasPassword = false;
             
+            return $data['password'];
+
             // Verificar se password foi enviado e não está vazio
             if (isset($data['password'])) {
                 $password = $data['password'];
