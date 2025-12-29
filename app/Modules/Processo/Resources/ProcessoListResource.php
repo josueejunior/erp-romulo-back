@@ -39,15 +39,23 @@ class ProcessoListResource extends JsonResource
             'numero_modalidade' => $this->numero_modalidade,
             'modalidade' => $this->modalidade,
             'numero_processo_administrativo' => $this->numero_processo_administrativo,
-            'orgao' => [
-                'id' => $this->orgao->id ?? null,
-                'uasg' => $this->orgao->uasg ?? null,
-                'razao_social' => $this->orgao->razao_social ?? null,
-            ],
-            'setor' => [
-                'id' => $this->setor->id ?? null,
-                'nome' => $this->setor->nome ?? null,
-            ],
+            'orgao' => $this->when(
+                $this->relationLoaded('orgao') && $this->orgao,
+                [
+                    'id' => $this->orgao->id ?? null,
+                    'uasg' => $this->orgao->uasg ?? null,
+                    'razao_social' => $this->orgao->razao_social ?? null,
+                ],
+                null
+            ),
+            'setor' => $this->when(
+                $this->relationLoaded('setor') && $this->setor,
+                [
+                    'id' => $this->setor->id ?? null,
+                    'nome' => $this->setor->nome ?? null,
+                ],
+                null
+            ),
             'objeto_resumido' => $this->objeto_resumido,
             'status' => $this->status,
             'status_label' => $this->getStatusLabel(),

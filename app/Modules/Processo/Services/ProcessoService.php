@@ -111,10 +111,10 @@ class ProcessoService extends BaseService
             });
         }
 
-        // Carregar relacionamentos
-        if (isset($params['with']) && is_array($params['with'])) {
-            $builder->with($params['with']);
-        }
+        // Carregar relacionamentos padrão necessários para ProcessoListResource
+        $defaultWith = ['orgao', 'setor'];
+        $with = array_merge($defaultWith, $params['with'] ?? []);
+        $builder->with(array_unique($with));
 
         // Ordenação - usar constante do modelo para timestamps customizados
         $modelClass = static::$model;
