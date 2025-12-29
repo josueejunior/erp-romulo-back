@@ -34,7 +34,8 @@ trait IsolamentoEmpresaTrait
         // IMPORTANTE: Remover Global Scope temporariamente para evitar duplicação de filtro
         // O Global Scope aplica where('empresa_id', ...) automaticamente, mas vamos
         // garantir que usamos o empresa_id dos filtros explicitamente
-        $query = $modelClass::withoutGlobalScope('empresa')->query();
+        // withoutGlobalScope() já retorna um Builder, não precisa chamar query() novamente
+        $query = $modelClass::withoutGlobalScope('empresa');
         
         // Obter nome da tabela do modelo
         $model = new $modelClass();

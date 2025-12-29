@@ -26,7 +26,7 @@ class ProcessoService extends BaseService
     public function __construct(
         private ProcessoRepositoryInterface $processoRepository,
     ) {
-        parent::__construct();
+        // BaseService não tem construtor, não precisa chamar parent::__construct()
     }
 
     /**
