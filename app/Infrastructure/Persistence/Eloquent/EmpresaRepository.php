@@ -42,6 +42,20 @@ class EmpresaRepository implements EmpresaRepositoryInterface
 
     public function criarNoTenant(int $tenantId, CriarTenantDTO $dto): Empresa
     {
+        // Verificar se tenancy está inicializado
+        if (!tenancy()->initialized) {
+            \Log::warning('Tenancy não inicializado ao criar empresa no tenant', [
+                'tenant_id' => $tenantId,
+            ]);
+            throw new \RuntimeException('Tenancy não está inicializado. Não é possível criar empresa.');
+        }
+        
+        \Log::debug('Criando empresa no tenant', [
+            'tenant_id' => $tenantId,
+            'razao_social' => $dto->razaoSocial,
+            'database' => \Illuminate\Support\Facades\DB::connection()->getDatabaseName(),
+        ]);
+        
         $model = EmpresaModel::create([
             'razao_social' => $dto->razaoSocial,
             'cnpj' => $dto->cnpj,
@@ -59,7 +73,13 @@ class EmpresaRepository implements EmpresaRepositoryInterface
             // 'banco_pix' => $dto->pix, // Coluna não existe na tabela empresas
             'representante_legal' => $dto->representanteLegalNome,
             'logo' => $dto->logo,
-            'status' => $dto->status,
+            'status' => $dto->status ?? 'ativa',
+        ]);
+        
+        \Log::debug('Empresa criada no tenant', [
+            'tenant_id' => $tenantId,
+            'empresa_id' => $model->id,
+            'razao_social' => $model->razao_social,
         ]);
 
         return $this->toDomain($model);

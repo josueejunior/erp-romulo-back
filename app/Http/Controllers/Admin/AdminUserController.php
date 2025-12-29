@@ -644,12 +644,26 @@ class AdminUserController extends Controller
     public function empresas(Request $request, Tenant $tenant)
     {
         try {
-            // O middleware InitializeTenant já inicializou o tenancy para o tenant da rota
-            // Buscar empresas do tenant atual (incluir todas, não apenas ativas)
-            $empresas = \Illuminate\Support\Facades\DB::table('empresas')
-                ->select('id', 'razao_social', 'cnpj', 'status')
+            // Garantir que o tenancy está inicializado
+            if (!tenancy()->initialized) {
+                tenancy()->initialize($tenant);
+            }
+            
+            Log::debug('Buscando empresas do tenant', [
+                'tenant_id' => $tenant->id,
+                'tenancy_initialized' => tenancy()->initialized,
+                'current_database' => tenancy()->initialized ? \Illuminate\Support\Facades\DB::connection()->getDatabaseName() : null,
+            ]);
+            
+            // Buscar empresas do tenant atual usando Eloquent (respeita tenancy)
+            $empresas = \App\Models\Empresa::select('id', 'razao_social', 'cnpj', 'status')
                 ->orderBy('razao_social')
                 ->get();
+            
+            Log::debug('Empresas encontradas no tenant', [
+                'tenant_id' => $tenant->id,
+                'count' => $empresas->count(),
+            ]);
             
             // Remover duplicatas baseado no ID
             $empresasUnicas = [];
@@ -668,11 +682,17 @@ class AdminUserController extends Controller
                 }
             }
             
+            Log::debug('Empresas únicas após remoção de duplicatas', [
+                'tenant_id' => $tenant->id,
+                'count' => count($empresasUnicas),
+            ]);
+            
             // Usar ResponseBuilder padronizado (sempre retorna array)
             return ApiResponse::collection($empresasUnicas);
         } catch (\Exception $e) {
             Log::error('Erro ao listar empresas do tenant', [
                 'tenant_id' => $tenant->id,
+                'tenancy_initialized' => tenancy()->initialized,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
@@ -680,7 +700,7 @@ class AdminUserController extends Controller
             // Em caso de erro, retornar array vazio para não quebrar o frontend
             return response()->json([
                 'data' => [],
-                'message' => 'Erro ao listar empresas.',
+                'message' => 'Erro ao listar empresas: ' . $e->getMessage(),
             ], 500);
         }
     }
