@@ -24,7 +24,7 @@ class ContratoController extends BaseApiController
         private ProcessoRepositoryInterface $processoRepository,
         private ContratoRepositoryInterface $contratoRepository,
     ) {
-        parent::__construct(app(\App\Domain\Empresa\Repositories\EmpresaRepositoryInterface::class), app(\App\Domain\Auth\Repositories\UserRepositoryInterface::class));
+        // BaseApiController não tem construtor, não precisa chamar parent::__construct()
         $this->contratoService = $contratoService;
     }
 
