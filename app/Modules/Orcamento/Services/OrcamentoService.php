@@ -325,7 +325,7 @@ class OrcamentoService
     {
         return $item->orcamentos()
             ->with(['fornecedor', 'transportadora', 'formacaoPreco'])
-            ->orderBy('created_at', 'desc')
+            ->orderBy(\App\Database\Schema\Blueprint::CREATED_AT, 'desc')
             ->get();
     }
 
@@ -336,7 +336,7 @@ class OrcamentoService
     {
         return $processo->orcamentos()
             ->with(['fornecedor', 'transportadora', 'itens.processoItem', 'itens.formacaoPreco'])
-            ->orderBy('created_at', 'desc')
+            ->orderBy(\App\Database\Schema\Blueprint::CREATED_AT, 'desc')
             ->get();
     }
 
