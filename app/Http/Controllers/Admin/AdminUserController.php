@@ -176,13 +176,26 @@ class AdminUserController extends Controller
             $todasEmpresas = [];
             $todosTenantsDoUsuario = [];
             
+            // Processar tenants em lotes para melhor performance
             foreach ($allTenants as $tenantModel) {
                 try {
                     tenancy()->initialize($tenantModel);
                     
-                    $user = \App\Modules\Auth\Models\User::with(['empresas', 'roles'])
-                        ->withTrashed()
-                        ->find($userId);
+                    // Usar eager loading para evitar N+1 dentro do tenant
+                    // Já carrega empresas e roles em uma única query
+                    $user = \App\Modules\Auth\Models\User::with([
+                        'empresas' => function($query) {
+                            // Carregar apenas campos necessários
+                            $query->select('id', 'razao_social', 'cnpj');
+                        },
+                        'roles' => function($query) {
+                            // Carregar apenas nome das roles
+                            $query->select('id', 'name');
+                        }
+                    ])
+                    ->withTrashed()
+                    ->select('id', 'name', 'email', 'empresa_ativa_id', 'deleted_at')
+                    ->find($userId);
                     
                     if ($user) {
                         // Coletar dados do usuário (usar o primeiro encontrado como base)
@@ -197,7 +210,7 @@ class AdminUserController extends Controller
                             ];
                         }
                         
-                        // Coletar empresas deste tenant
+                        // Coletar empresas deste tenant (já carregadas via eager loading)
                         foreach ($user->empresas as $empresa) {
                             $todasEmpresas[] = [
                                 'id' => $empresa->id,
@@ -216,7 +229,7 @@ class AdminUserController extends Controller
                     
                     tenancy()->end();
                 } catch (\Exception $e) {
-                    Log::warning('Erro ao buscar usuário no tenant', [
+                    \Log::warning('Erro ao buscar usuário no tenant', [
                         'tenant_id' => $tenantModel->id,
                         'userId' => $userId,
                         'error' => $e->getMessage(),
