@@ -166,18 +166,30 @@ class ProcessoController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $params = $this->processoService->createListParamBag($request->all());
-        $processos = $this->processoService->list($params);
+        try {
+            $params = $this->processoService->createListParamBag($request->all());
+            $processos = $this->processoService->list($params);
 
-        return response()->json([
-            'data' => ProcessoListResource::collection($processos->items()),
-            'meta' => [
-                'current_page' => $processos->currentPage(),
-                'last_page' => $processos->lastPage(),
-                'per_page' => $processos->perPage(),
-                'total' => $processos->total(),
-            ]
-        ]);
+            return response()->json([
+                'data' => ProcessoListResource::collection($processos->items()),
+                'meta' => [
+                    'current_page' => $processos->currentPage(),
+                    'last_page' => $processos->lastPage(),
+                    'per_page' => $processos->perPage(),
+                    'total' => $processos->total(),
+                ]
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Erro ao listar processos', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'request_params' => $request->all(),
+            ]);
+            
+            return response()->json([
+                'message' => 'Erro ao listar processos: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**

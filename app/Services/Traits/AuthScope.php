@@ -33,7 +33,26 @@ trait AuthScope
      */
     protected function getEmpresaId(): ?int
     {
-        return $this->getAuthIdentity()?->getEmpresaId();
+        $identity = $this->getAuthIdentity();
+        if ($identity && $identity->getEmpresaId()) {
+            return $identity->getEmpresaId();
+        }
+        
+        // Fallback: obter do usuário autenticado diretamente
+        $user = Auth::user();
+        if ($user && property_exists($user, 'empresa_ativa_id')) {
+            return $user->empresa_ativa_id;
+        }
+        
+        // Tentar obter do relacionamento
+        if ($user && method_exists($user, 'empresas')) {
+            $empresa = $user->empresas()->first();
+            if ($empresa) {
+                return $empresa->id;
+            }
+        }
+        
+        return null;
     }
 
     /**
