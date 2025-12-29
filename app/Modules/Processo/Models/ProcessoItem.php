@@ -11,6 +11,7 @@ class ProcessoItem extends BaseModel
     protected $table = 'processo_itens';
 
     protected $fillable = [
+        'empresa_id',
         'processo_id',
         'numero_item',
         'codigo_interno',
