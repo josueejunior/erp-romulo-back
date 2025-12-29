@@ -63,8 +63,10 @@ class ExportacaoService
             'itens' => function ($query) {
                 $query->orderBy('numero_item');
             },
-            'itens.orcamentos' => function ($query) {
-                $query->with(['fornecedor', 'formacaoPreco']);
+            'itens.orcamentos' => function ($query) use ($processo) {
+                // Especificar a tabela explicitamente para evitar ambiguidade de empresa_id
+                $query->where('orcamentos.empresa_id', $processo->empresa_id)
+                      ->with(['fornecedor', 'formacaoPreco']);
             }
         ]);
 
@@ -267,8 +269,10 @@ class ExportacaoService
             'itens' => function ($query) {
                 $query->orderBy('numero_item');
             },
-            'itens.orcamentos' => function ($query) {
-                $query->with(['fornecedor', 'formacaoPreco']);
+            'itens.orcamentos' => function ($query) use ($processo) {
+                // Especificar a tabela explicitamente para evitar ambiguidade de empresa_id
+                $query->where('orcamentos.empresa_id', $processo->empresa_id)
+                      ->with(['fornecedor', 'formacaoPreco']);
             }
         ]);
 

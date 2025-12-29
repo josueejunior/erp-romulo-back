@@ -95,7 +95,8 @@ class ProcessoItem extends BaseModel
         );
         
         // Ordenar pela coluna correta de timestamp (criado_em, não created_at)
-        return $relation->orderBy(Blueprint::CREATED_AT, 'desc');
+        // Especificar a tabela explicitamente para evitar ambiguidade
+        return $relation->orderBy('orcamentos.' . Blueprint::CREATED_AT, 'desc');
     }
 
     public function orcamentoItens(): HasMany
