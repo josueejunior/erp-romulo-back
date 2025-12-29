@@ -209,7 +209,6 @@ class AdminUserController extends Controller
      */
     public function update(Request $request, Tenant $tenant, int $userId)
     {
-        return "cu";
         try {
             // Normalizar password: string vazia ou apenas espaços remove o campo completamente
             $data = $request->all();
