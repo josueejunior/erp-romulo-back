@@ -13,7 +13,7 @@ class LoginDTO
     public function __construct(
         public readonly string $email,
         public readonly string $password,
-        public readonly string $tenantId,
+        public readonly ?string $tenantId = null,
     ) {}
 
     /**
@@ -24,7 +24,7 @@ class LoginDTO
         return new self(
             email: $request->input('email'),
             password: $request->input('password'),
-            tenantId: $request->input('tenant_id'),
+            tenantId: $request->input('tenant_id'), // Opcional - será detectado automaticamente se não fornecido
         );
     }
 }

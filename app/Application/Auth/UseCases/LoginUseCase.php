@@ -7,6 +7,7 @@ use App\Domain\Auth\Repositories\UserRepositoryInterface;
 use App\Domain\Shared\ValueObjects\Email;
 use App\Domain\Shared\ValueObjects\Senha;
 use App\Models\Tenant;
+use App\Modules\Auth\Models\AdminUser;
 use DomainException;
 
 /**
@@ -25,20 +26,28 @@ class LoginUseCase
      */
     public function executar(LoginDTO $dto): array
     {
-        // Buscar tenant no banco central
-        $tenant = Tenant::find($dto->tenantId);
-        
-        if (!$tenant) {
-            throw new DomainException('Tenant não encontrado.');
+        // Validar email usando Value Object
+        $email = Email::criar($dto->email);
+
+        // Se tenant_id não foi fornecido, tentar detectar automaticamente
+        $tenant = null;
+        if ($dto->tenantId) {
+            $tenant = Tenant::find($dto->tenantId);
+            if (!$tenant) {
+                throw new DomainException('Tenant não encontrado.');
+            }
+        } else {
+            // Buscar tenant automaticamente pelo email
+            $tenant = $this->buscarTenantPorEmail($email->value);
+            if (!$tenant) {
+                throw new DomainException('Usuário não encontrado em nenhum tenant. Verifique suas credenciais.');
+            }
         }
 
         // Inicializar contexto do tenant
         tenancy()->initialize($tenant);
 
         try {
-            // Validar email usando Value Object
-            $email = Email::criar($dto->email);
-            
             // Buscar usuário no banco do tenant através do repository
             $user = $this->userRepository->buscarPorEmail($email->value);
 
@@ -94,6 +103,45 @@ class LoginUseCase
                 tenancy()->end();
             }
         }
+    }
+
+    /**
+     * Buscar tenant automaticamente pelo email do usuário
+     * Itera por todos os tenants procurando o usuário
+     */
+    private function buscarTenantPorEmail(string $email): ?Tenant
+    {
+        // Buscar em todos os tenants
+        $tenants = Tenant::all();
+        
+        foreach ($tenants as $tenant) {
+            try {
+                // Inicializar contexto do tenant
+                tenancy()->initialize($tenant);
+                
+                try {
+                    // Tentar buscar usuário neste tenant
+                    $user = $this->userRepository->buscarPorEmail($email);
+                    if ($user) {
+                        return $tenant; // Usuário encontrado neste tenant
+                    }
+                } finally {
+                    // Sempre finalizar contexto
+                    if (tenancy()->initialized) {
+                        tenancy()->end();
+                    }
+                }
+            } catch (\Exception $e) {
+                // Se houver erro ao acessar o tenant, continuar para o próximo
+                \Log::warning("Erro ao buscar usuário no tenant {$tenant->id}: " . $e->getMessage());
+                if (tenancy()->initialized) {
+                    tenancy()->end();
+                }
+                continue;
+            }
+        }
+        
+        return null; // Usuário não encontrado em nenhum tenant
     }
 }
 

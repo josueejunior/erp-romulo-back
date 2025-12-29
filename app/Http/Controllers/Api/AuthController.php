@@ -9,7 +9,9 @@ use App\Application\Auth\UseCases\LoginUseCase;
 use App\Application\Auth\UseCases\RegisterUseCase;
 use App\Application\Auth\UseCases\LogoutUseCase;
 use App\Application\Auth\UseCases\GetUserUseCase;
+use App\Modules\Auth\Models\AdminUser;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
 use DomainException;
@@ -35,15 +37,39 @@ class AuthController extends Controller
     {
         try {
             // Validação básica (apenas formato dos dados)
+            // tenant_id é opcional - será detectado automaticamente pelo email
             $validated = $request->validate([
                 'email' => 'required|email',
                 'password' => 'required|string',
-                'tenant_id' => 'required|string',
+                'tenant_id' => 'nullable|string',
             ], [
                 'email.required' => 'O e-mail é obrigatório.',
                 'password.required' => 'A senha é obrigatória.',
-                'tenant_id.required' => 'O Tenant ID é obrigatório.',
             ]);
+
+            // Verificar se é admin - se for, autenticar como admin
+            $adminUser = AdminUser::where('email', $validated['email'])->first();
+            
+            if ($adminUser && Hash::check($validated['password'], $adminUser->password)) {
+                // Autenticar como admin
+                $token = $adminUser->createToken('admin-token', ['admin'])->plainTextToken;
+                
+                return response()->json([
+                    'message' => 'Login realizado com sucesso!',
+                    'success' => true,
+                    'data' => [
+                        'user' => [
+                            'id' => $adminUser->id,
+                            'name' => $adminUser->name,
+                            'email' => $adminUser->email,
+                        ],
+                        'tenant' => null, // Admin não tem tenant
+                        'empresa' => null, // Admin não tem empresa
+                        'token' => $token,
+                        'is_admin' => true,
+                    ],
+                ]);
+            }
 
             // Criar DTO
             $dto = LoginDTO::fromRequest($request);
