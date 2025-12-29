@@ -4,66 +4,50 @@ namespace Tests\Unit\Domain\Fornecedor;
 
 use Tests\TestCase;
 use App\Domain\Fornecedor\Entities\Fornecedor;
-use App\Domain\Shared\ValueObjects\Cnpj;
-use App\Domain\Shared\ValueObjects\Email;
-use App\Domain\Exceptions\BusinessRuleException;
+use App\Domain\Factories\FornecedorFactory;
+use App\Domain\Exceptions\DomainException;
 
 class FornecedorTest extends TestCase
 {
     public function test_deve_criar_fornecedor_com_dados_validos(): void
     {
         // Arrange & Act
-        $fornecedor = new Fornecedor(
-            id: null,
-            razaoSocial: 'Fornecedor Teste LTDA',
-            nomeFantasia: 'Fornecedor Teste',
-            cnpj: new Cnpj('12345678000190'),
-            cep: '12345678',
-            logradouro: 'Rua Teste',
-            numero: '123',
-            bairro: 'Centro',
-            cidade: 'São Paulo',
-            estado: 'SP',
-            email: new Email('teste@fornecedor.com'),
-            telefone: '11999999999',
-            emails: [],
-            telefones: [],
-            contato: null,
-            observacoes: null,
-            isTransportadora: false,
-        );
+        $fornecedor = FornecedorFactory::criarParaTeste([
+            'razao_social' => 'Fornecedor Teste LTDA',
+            'nome_fantasia' => 'Fornecedor Teste',
+            'cnpj' => '12345678000190',
+            'empresa_id' => 1,
+        ]);
         
         // Assert
         $this->assertEquals('Fornecedor Teste LTDA', $fornecedor->razaoSocial);
         $this->assertEquals('Fornecedor Teste', $fornecedor->nomeFantasia);
-        $this->assertInstanceOf(Cnpj::class, $fornecedor->cnpj);
+        $this->assertEquals('12345678000190', $fornecedor->cnpj);
         $this->assertFalse($fornecedor->isTransportadora);
     }
     
-    public function test_deve_validar_cnpj_obrigatorio_para_fornecedor(): void
+    public function test_deve_validar_razao_social_obrigatoria(): void
     {
         // Arrange & Act & Assert
-        $this->expectException(\TypeError::class);
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage('A razão social é obrigatória.');
         
-        new Fornecedor(
-            id: null,
-            razaoSocial: 'Fornecedor Teste',
-            nomeFantasia: null,
-            cnpj: null, // CNPJ obrigatório
-            cep: null,
-            logradouro: null,
-            numero: null,
-            bairro: null,
-            cidade: null,
-            estado: null,
-            email: null,
-            telefone: null,
-            emails: [],
-            telefones: [],
-            contato: null,
-            observacoes: null,
-            isTransportadora: false,
-        );
+        FornecedorFactory::criar([
+            'razao_social' => '',
+            'empresa_id' => 1,
+        ]);
+    }
+    
+    public function test_deve_validar_empresa_obrigatoria(): void
+    {
+        // Arrange & Act & Assert
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage('A empresa é obrigatória.');
+        
+        FornecedorFactory::criar([
+            'razao_social' => 'Fornecedor Teste',
+            'empresa_id' => 0,
+        ]);
     }
 }
 

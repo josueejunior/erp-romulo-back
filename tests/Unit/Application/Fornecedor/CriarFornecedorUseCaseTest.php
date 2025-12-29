@@ -44,6 +44,7 @@ class CriarFornecedorUseCaseTest extends TestCase
             'razao_social' => 'Fornecedor Teste LTDA',
             'cnpj' => '12345678000190',
             'nome_fantasia' => 'Fornecedor Teste',
+            'empresa_id' => 1,
         ]);
         
         $this->repositoryMock

@@ -3,8 +3,6 @@
 namespace App\Domain\Factories;
 
 use App\Domain\Fornecedor\Entities\Fornecedor;
-use App\Domain\Shared\ValueObjects\Cnpj;
-use App\Domain\Shared\ValueObjects\Email;
 
 /**
  * Factory para criar entidades Fornecedor
@@ -19,10 +17,11 @@ class FornecedorFactory
     public static function criar(array $dados): Fornecedor
     {
         return new Fornecedor(
-            id: null, // Novo registro
+            id: $dados['id'] ?? null,
+            empresaId: $dados['empresa_id'] ?? 1,
             razaoSocial: $dados['razao_social'] ?? '',
+            cnpj: $dados['cnpj'] ?? null,
             nomeFantasia: $dados['nome_fantasia'] ?? null,
-            cnpj: isset($dados['cnpj']) ? new Cnpj($dados['cnpj']) : null,
             cep: $dados['cep'] ?? null,
             logradouro: $dados['logradouro'] ?? null,
             numero: $dados['numero'] ?? null,
@@ -30,10 +29,10 @@ class FornecedorFactory
             complemento: $dados['complemento'] ?? null,
             cidade: $dados['cidade'] ?? null,
             estado: $dados['estado'] ?? null,
-            email: isset($dados['email']) ? new Email($dados['email']) : null,
+            email: $dados['email'] ?? null,
             telefone: $dados['telefone'] ?? null,
-            emails: $dados['emails'] ?? [],
-            telefones: $dados['telefones'] ?? [],
+            emails: $dados['emails'] ?? null,
+            telefones: $dados['telefones'] ?? null,
             contato: $dados['contato'] ?? null,
             observacoes: $dados['observacoes'] ?? null,
             isTransportadora: $dados['is_transportadora'] ?? false,
@@ -49,6 +48,7 @@ class FornecedorFactory
             'razao_social' => 'Fornecedor Teste LTDA',
             'cnpj' => '12345678000190',
             'email' => 'teste@fornecedor.com',
+            'empresa_id' => 1,
             'is_transportadora' => false,
         ];
         
