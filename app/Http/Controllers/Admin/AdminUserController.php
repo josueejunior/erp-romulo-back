@@ -211,53 +211,28 @@ class AdminUserController extends Controller
     public function update(Request $request, Tenant $tenant, int $userId)
     {
         try {
-            // Normalizar password: string vazia ou apenas espaços remove o campo completamente
+            // 🔥 NORMALIZAÇÃO ANTES DE VALIDAR (regra de ouro)
+            // Se password existir mas estiver vazio → remove completamente
             $data = $request->all();
-            $hasPassword = false;
-
-            // Verificar se password foi enviado e não está vazio
-            // IMPORTANTE: Remover password vazio ANTES de qualquer validação
-            if (isset($data['password'])) {
-                $password = $data['password'];
-                
-                // Se for string, fazer trim
-                if (is_string($password)) {
-                    $password = trim($password);
-                }
-                
-                // Se for string vazia, null ou apenas espaços, remover completamente
-                if ($password === '' || $password === null || (is_string($password) && strlen($password) === 0)) {
+            
+            if (array_key_exists('password', $data)) {
+                // Se password existir mas estiver vazio → remove
+                if (trim((string) $data['password']) === '') {
                     unset($data['password']);
-                    $hasPassword = false;
-                } else {
-                    // Senha válida, manter
-                    $data['password'] = $password;
-                    $hasPassword = true;
                 }
-            } else {
-                // Password não foi enviado
-                $hasPassword = false;
             }
             
             // Recriar request completamente (replace remove campos não presentes)
-            // IMPORTANTE: Isso remove o campo password se ele estava vazio
             $request->replace($data);
             
             \Log::info('AdminUserController::update - Request após normalização', [
                 'request_keys' => array_keys($request->all()),
                 'has_password_in_request' => $request->has('password'),
-                'has_password_flag' => $hasPassword,
-            ]);
-            
-            // Log para debug
-            \Log::info('AdminUserController::update - Password normalizado', [
-                'has_password' => $hasPassword,
-                'password_in_request' => $request->has('password'),
-                'request_keys' => array_keys($request->all()),
             ]);
 
-            // Validação de FORMATO apenas (Controller não valida regra de negócio)
-            // Regras de força de senha ficam no Value Object Senha (Domain)
+            // 🔥 VALIDAÇÃO CORRETA (regra de ouro)
+            // Senha em update NUNCA deve ser required
+            // Ela deve ser: opcional, validada apenas se existir, ignorada se vazia
             $rules = [
                 'name' => 'sometimes|required|string|max:255',
                 'email' => 'sometimes|required|email|max:255',
@@ -265,25 +240,17 @@ class AdminUserController extends Controller
                 'role' => 'nullable|string|in:Administrador,Operacional,Financeiro,Consulta',
             ];
             
-            // IMPORTANTE: Controller só valida FORMATO (string, não vazio)
-            // Validação de FORÇA da senha fica no Value Object Senha (Domain)
-            // Se password não foi enviado ou está vazio, NÃO validar (é opcional no update)
-            if ($hasPassword && $request->has('password')) {
-                $passwordValue = $request->input('password');
-                // Só validar formato básico: é string e não está vazio
-                // A força da senha será validada pelo Value Object Senha no UseCase
-                if ($passwordValue && is_string($passwordValue) && trim($passwordValue) !== '') {
-                    $rules['password'] = ['required', 'string', 'min:1']; // Apenas formato básico
-                }
+            // ⚠️ NUNCA use 'required' aqui para password em update
+            // Só valida senha se ela EXISTIR (já foi normalizada acima)
+            if ($request->has('password')) {
+                // Apenas formato básico - força validada no Value Object Senha (Domain)
+                $rules['password'] = ['string', 'min:1'];
             }
-            // Se password não foi enviado no request ou está vazio, NÃO adicionar à validação (opcional no update)
             
             \Log::info('AdminUserController::update - Regras de validação', [
                 'rules' => array_keys($rules),
                 'has_password_rule' => isset($rules['password']),
-                'has_password_flag' => $hasPassword,
                 'request_has_password' => $request->has('password'),
-                'password_value' => $request->has('password') ? (strlen($request->input('password')) > 0 ? '***' : 'vazio') : 'não enviado',
             ]);
             
             $validated = $request->validate($rules, [
@@ -309,8 +276,6 @@ class AdminUserController extends Controller
                 'errors' => $e->errors(),
                 'request_data' => $request->except(['password']),
                 'has_password' => $request->has('password'),
-                'has_password_flag' => $hasPassword ?? false,
-                'password_value' => $request->has('password') ? (strlen($request->input('password')) > 0 ? '***' : 'vazio') : 'não enviado',
                 'rules_applied' => array_keys($rules ?? []),
             ]);
             return response()->json([
