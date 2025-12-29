@@ -7,9 +7,10 @@ use App\Domain\Auth\Entities\User;
 use App\Domain\Auth\Repositories\UserRepositoryInterface;
 use App\Domain\Empresa\Repositories\EmpresaRepositoryInterface;
 use App\Domain\Shared\ValueObjects\TenantContext;
+use App\Domain\Shared\ValueObjects\Senha;
+use App\Domain\Shared\ValueObjects\Email;
 use App\Domain\Shared\Events\EventDispatcherInterface;
 use App\Domain\Auth\Events\SenhaAlterada;
-use Illuminate\Support\Facades\Hash;
 use DomainException;
 
 /**
@@ -41,9 +42,18 @@ class AtualizarUsuarioUseCase
             throw new DomainException('Usuário não pertence ao tenant atual.');
         }
 
-        // Validar email se foi alterado
+        // Validar email se foi alterado (usando Value Object Email)
+        $email = null;
         if ($dto->email && $dto->email !== $userExistente->email) {
-            if ($this->userRepository->emailExiste($dto->email, $dto->userId)) {
+            // Value Object Email valida formato e normaliza automaticamente
+            try {
+                $email = Email::criar($dto->email);
+            } catch (DomainException $e) {
+                throw new DomainException('E-mail inválido: ' . $e->getMessage());
+            }
+            
+            // Regra de negócio: verificar se email já existe
+            if ($this->userRepository->emailExiste($email->value, $dto->userId)) {
                 throw new DomainException('Este e-mail já está cadastrado.');
             }
         }
@@ -56,13 +66,24 @@ class AtualizarUsuarioUseCase
             }
         }
 
+        // Processar senha usando Value Object Senha (valida força automaticamente)
+        $senhaHash = $userExistente->senhaHash;
+        $senhaFoiAlterada = false;
+        
+        if ($dto->senha) {
+            // Value Object Senha valida força e faz hash automaticamente
+            $senha = Senha::fromPlainText($dto->senha, validateStrength: true);
+            $senhaHash = $senha->hash;
+            $senhaFoiAlterada = true;
+        }
+
         // Criar nova instância com dados atualizados
         $userAtualizado = new User(
             id: $userExistente->id,
             tenantId: $userExistente->tenantId,
             nome: $dto->nome ?? $userExistente->nome,
-            email: $dto->email ?? $userExistente->email,
-            senhaHash: $dto->senha ? Hash::make($dto->senha) : $userExistente->senhaHash,
+            email: $email ? $email->value : ($dto->email ?? $userExistente->email),
+            senhaHash: $senhaHash,
             empresaAtivaId: $dto->empresaId ?? $userExistente->empresaAtivaId,
         );
 
@@ -156,7 +177,7 @@ class AtualizarUsuarioUseCase
         }
 
         // Disparar Domain Event se senha foi alterada
-        if ($dto->senha) {
+        if ($senhaFoiAlterada) {
             $this->eventDispatcher->dispatch(
                 new SenhaAlterada(
                     userId: $userAtualizado->id,

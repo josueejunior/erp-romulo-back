@@ -132,11 +132,12 @@ class AdminUserController extends Controller
                 'has_empresa_ativa_id' => $request->has('empresa_ativa_id'),
             ]);
             
-            // Validação: aceitar empresa_id OU empresas (array)
+            // Validação de FORMATO apenas (Controller não valida regra de negócio)
+            // Regras de força de senha ficam no Value Object Senha (Domain)
             $rules = [
                 'name' => 'required|string|max:255',
                 'email' => 'required|email|max:255',
-                'password' => ['required', 'string', 'min:8', new \App\Rules\StrongPassword()],
+                'password' => ['required', 'string', 'min:1'], // Apenas formato básico - força validada no Domain
                 'role' => 'nullable|string|in:Administrador,Operacional,Financeiro,Consulta',
             ];
             
@@ -215,6 +216,7 @@ class AdminUserController extends Controller
             $hasPassword = false;
 
             // Verificar se password foi enviado e não está vazio
+            // IMPORTANTE: Remover password vazio ANTES de qualquer validação
             if (isset($data['password'])) {
                 $password = $data['password'];
                 
@@ -232,10 +234,20 @@ class AdminUserController extends Controller
                     $data['password'] = $password;
                     $hasPassword = true;
                 }
+            } else {
+                // Password não foi enviado
+                $hasPassword = false;
             }
             
             // Recriar request completamente (replace remove campos não presentes)
+            // IMPORTANTE: Isso remove o campo password se ele estava vazio
             $request->replace($data);
+            
+            \Log::info('AdminUserController::update - Request após normalização', [
+                'request_keys' => array_keys($request->all()),
+                'has_password_in_request' => $request->has('password'),
+                'has_password_flag' => $hasPassword,
+            ]);
             
             // Log para debug
             \Log::info('AdminUserController::update - Password normalizado', [
@@ -244,7 +256,8 @@ class AdminUserController extends Controller
                 'request_keys' => array_keys($request->all()),
             ]);
 
-            // Validação: senha só é validada se for fornecida e não vazia
+            // Validação de FORMATO apenas (Controller não valida regra de negócio)
+            // Regras de força de senha ficam no Value Object Senha (Domain)
             $rules = [
                 'name' => 'sometimes|required|string|max:255',
                 'email' => 'sometimes|required|email|max:255',
@@ -252,22 +265,25 @@ class AdminUserController extends Controller
                 'role' => 'nullable|string|in:Administrador,Operacional,Financeiro,Consulta',
             ];
             
-            // IMPORTANTE: Só validar password se realmente foi fornecido e não está vazio
+            // IMPORTANTE: Controller só valida FORMATO (string, não vazio)
+            // Validação de FORÇA da senha fica no Value Object Senha (Domain)
             // Se password não foi enviado ou está vazio, NÃO validar (é opcional no update)
-            if ($request->has('password')) {
+            if ($hasPassword && $request->has('password')) {
                 $passwordValue = $request->input('password');
-                // Só validar se não estiver vazio após trim
+                // Só validar formato básico: é string e não está vazio
+                // A força da senha será validada pelo Value Object Senha no UseCase
                 if ($passwordValue && is_string($passwordValue) && trim($passwordValue) !== '') {
-                    $rules['password'] = ['required', 'string', 'min:8', new \App\Rules\StrongPassword()];
+                    $rules['password'] = ['required', 'string', 'min:1']; // Apenas formato básico
                 }
             }
-            // Se password não foi enviado no request, NÃO adicionar à validação (opcional no update)
+            // Se password não foi enviado no request ou está vazio, NÃO adicionar à validação (opcional no update)
             
             \Log::info('AdminUserController::update - Regras de validação', [
                 'rules' => array_keys($rules),
                 'has_password_rule' => isset($rules['password']),
+                'has_password_flag' => $hasPassword,
                 'request_has_password' => $request->has('password'),
-                'password_value_empty' => $request->has('password') ? (empty(trim($request->input('password')))) : 'não enviado',
+                'password_value' => $request->has('password') ? (strlen($request->input('password')) > 0 ? '***' : 'vazio') : 'não enviado',
             ]);
             
             $validated = $request->validate($rules, [
@@ -289,6 +305,14 @@ class AdminUserController extends Controller
                 UserPresenter::fromDomain($user)
             );
         } catch (ValidationException $e) {
+            \Log::error('AdminUserController::update - Erro de validação', [
+                'errors' => $e->errors(),
+                'request_data' => $request->except(['password']),
+                'has_password' => $request->has('password'),
+                'has_password_flag' => $hasPassword ?? false,
+                'password_value' => $request->has('password') ? (strlen($request->input('password')) > 0 ? '***' : 'vazio') : 'não enviado',
+                'rules_applied' => array_keys($rules ?? []),
+            ]);
             return response()->json([
                 'message' => 'Dados inválidos.',
                 'errors' => $e->errors(),
