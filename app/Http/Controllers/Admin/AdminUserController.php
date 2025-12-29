@@ -422,10 +422,10 @@ class AdminUserController extends Controller
                     // Inicializar tenancy para este tenant
                     tenancy()->initialize($tenantModel);
                     
-                    // Buscar empresas deste tenant
+                    // Buscar empresas deste tenant (incluir todas, não apenas ativas)
+                    // Permitir selecionar empresas inativas também para flexibilidade
                     $empresas = \Illuminate\Support\Facades\DB::table('empresas')
                         ->select('id', 'razao_social', 'cnpj', 'status')
-                        ->where('status', 'ativa')
                         ->get();
                     
                     // Adicionar ao array consolidado
