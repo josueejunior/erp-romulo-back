@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Application\Tenant\UseCases\CriarTenantUseCase;
 use App\Application\Tenant\DTOs\CriarTenantDTO;
 use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
+use App\Http\Responses\ApiResponse;
 use App\Models\Tenant;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -45,8 +46,8 @@ class AdminTenantController extends Controller
 
             $tenants = $this->tenantRepository->buscarComFiltros($filters);
 
-            // Converter entidades do domínio para array
-            $data = $tenants->getCollection()->map(function ($tenant) {
+            // Converter entidades do domínio para array e usar ResponseBuilder padronizado
+            return ApiResponse::paginated($tenants, function ($tenant) {
                 return [
                     'id' => $tenant->id,
                     'razao_social' => $tenant->razaoSocial,
@@ -57,16 +58,6 @@ class AdminTenantController extends Controller
                     'estado' => $tenant->estado,
                 ];
             });
-
-            return response()->json([
-                'data' => $data,
-                'pagination' => [
-                    'current_page' => $tenants->currentPage(),
-                    'per_page' => $tenants->perPage(),
-                    'total' => $tenants->total(),
-                    'last_page' => $tenants->lastPage(),
-                ],
-            ]);
         } catch (\Exception $e) {
             Log::error('Erro ao listar empresas', ['error' => $e->getMessage()]);
             return response()->json(['message' => 'Erro ao listar empresas.'], 500);
@@ -85,18 +76,18 @@ class AdminTenantController extends Controller
                 return response()->json(['message' => 'Empresa não encontrada.'], 404);
             }
 
-            // Retornar objeto único (show retorna um item, index retorna array)
-            return response()->json([
-                'data' => [
-                    'id' => $tenantDomain->id,
-                    'razao_social' => $tenantDomain->razaoSocial,
-                    'cnpj' => $tenantDomain->cnpj,
-                    'email' => $tenantDomain->email,
-                    'status' => $tenantDomain->status,
-                    'cidade' => $tenantDomain->cidade,
-                    'estado' => $tenantDomain->estado,
-                ],
-            ]);
+            // Retornar como array padronizado (frontend pode usar .filter() sem problemas)
+            $tenantData = [
+                'id' => $tenantDomain->id,
+                'razao_social' => $tenantDomain->razaoSocial,
+                'cnpj' => $tenantDomain->cnpj,
+                'email' => $tenantDomain->email,
+                'status' => $tenantDomain->status,
+                'cidade' => $tenantDomain->cidade,
+                'estado' => $tenantDomain->estado,
+            ];
+
+            return ApiResponse::item($tenantData);
         } catch (\Exception $e) {
             Log::error('Erro ao buscar empresa', ['error' => $e->getMessage()]);
             return response()->json(['message' => 'Erro ao buscar empresa.'], 500);

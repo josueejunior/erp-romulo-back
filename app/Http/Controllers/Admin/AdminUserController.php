@@ -11,6 +11,7 @@ use App\Application\Auth\Presenters\UserPresenter;
 use App\Domain\Auth\Repositories\UserRepositoryInterface;
 use App\Domain\Auth\Repositories\UserReadRepositoryInterface;
 use App\Domain\Shared\ValueObjects\TenantContext;
+use App\Http\Responses\ApiResponse;
 use App\Models\Tenant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -47,16 +48,8 @@ class AdminUserController extends Controller
             // Usar ReadRepository (não conhece Eloquent)
             $users = $this->userReadRepository->listarComRelacionamentos($filtros);
 
-            // items() já retorna array (garantido pelo ReadRepository)
-            return response()->json([
-                'data' => $users->items(),
-                'current_page' => $users->currentPage(),
-                'per_page' => $users->perPage(),
-                'total' => $users->total(),
-                'last_page' => $users->lastPage(),
-                'from' => $users->firstItem(),
-                'to' => $users->lastItem(),
-            ]);
+            // Usar ResponseBuilder padronizado
+            return ApiResponse::paginated($users);
         } catch (\Exception $e) {
             Log::error('Erro ao listar usuários', ['error' => $e->getMessage()]);
             return response()->json(['message' => 'Erro ao listar usuários.'], 500);
@@ -84,9 +77,8 @@ class AdminUserController extends Controller
             $userData['roles_list'] = is_array($userData['roles_list'] ?? null) ? $userData['roles_list'] : $userData['roles'];
             $userData['empresas_list'] = is_array($userData['empresas_list'] ?? null) ? $userData['empresas_list'] : $userData['empresas'];
 
-            // Frontend espera o objeto diretamente em response.data (sem wrapper 'data')
-            // Axios já desempacota response.data, então retornamos o objeto diretamente
-            return response()->json($userData);
+            // Retornar como array padronizado (frontend pode usar .filter() sem problemas)
+            return ApiResponse::item($userData);
         } catch (\Exception $e) {
             Log::error('Erro ao buscar usuário', ['error' => $e->getMessage()]);
             return response()->json(['message' => 'Erro ao buscar usuário.'], 500);
@@ -123,12 +115,12 @@ class AdminUserController extends Controller
             // Executar Use Case (toda a lógica está aqui)
             $user = $this->criarUsuarioUseCase->executar($dto, $context);
 
-            // Usar Presenter (controller não conhece estrutura do domínio)
-            return response()->json([
-                'message' => 'Usuário criado com sucesso!',
-                'success' => true,
-                'data' => UserPresenter::fromDomain($user),
-            ], 201);
+            // Usar ResponseBuilder padronizado
+            return ApiResponse::success(
+                'Usuário criado com sucesso!',
+                UserPresenter::fromDomain($user),
+                201
+            );
         } catch (ValidationException $e) {
             return response()->json([
                 'message' => 'Dados inválidos.',
@@ -180,12 +172,11 @@ class AdminUserController extends Controller
             // Executar Use Case (toda a lógica está aqui)
             $user = $this->atualizarUsuarioUseCase->executar($dto, $context);
 
-            // Usar Presenter (controller não conhece estrutura do domínio)
-            return response()->json([
-                'message' => 'Usuário atualizado com sucesso!',
-                'success' => true,
-                'data' => UserPresenter::fromDomain($user),
-            ]);
+            // Usar ResponseBuilder padronizado
+            return ApiResponse::success(
+                'Usuário atualizado com sucesso!',
+                UserPresenter::fromDomain($user)
+            );
         } catch (ValidationException $e) {
             return response()->json([
                 'message' => 'Dados inválidos.',
@@ -269,10 +260,8 @@ class AdminUserController extends Controller
                 ];
             })->values()->toArray();
 
-            // Sempre retornar array, mesmo que vazio
-            return response()->json([
-                'data' => $empresasArray ?: [], // Garantir array vazio se não houver empresas
-            ]);
+            // Usar ResponseBuilder padronizado (sempre retorna array)
+            return ApiResponse::collection($empresasArray ?: []);
         } catch (\Exception $e) {
             Log::error('Erro ao listar empresas', ['error' => $e->getMessage()]);
             // Em caso de erro, retornar array vazio para não quebrar o frontend
