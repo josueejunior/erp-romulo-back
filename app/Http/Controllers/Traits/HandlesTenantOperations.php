@@ -60,6 +60,8 @@ trait HandlesTenantOperations
     {
         $messages = [
             'razao_social.required' => 'A razão social da empresa é obrigatória.',
+            'cnpj.unique' => 'Este CNPJ já está cadastrado no sistema.',
+            'email.email' => 'O e-mail deve ser válido.',
             'admin_email.email' => 'O e-mail do administrador deve ser válido.',
             'admin_password.min' => 'A senha deve ter no mínimo 8 caracteres.',
         ];
@@ -108,9 +110,23 @@ trait HandlesTenantOperations
             return response()->json($response, 201);
 
         } catch (ValidationException $e) {
+            // Processar erros para garantir mensagens personalizadas
+            $errors = $e->errors();
+            $processedErrors = [];
+            
+            foreach ($errors as $field => $messages) {
+                $processedErrors[$field] = array_map(function ($message) use ($field) {
+                    // Se a mensagem for uma chave de tradução, usar mensagem personalizada
+                    if ($message === 'validation.unique' && $field === 'cnpj') {
+                        return 'Este CNPJ já está cadastrado no sistema.';
+                    }
+                    return $message;
+                }, $messages);
+            }
+            
             return response()->json([
                 'message' => 'Dados inválidos. Verifique os campos preenchidos.',
-                'errors' => $e->errors(),
+                'errors' => $processedErrors,
                 'success' => false,
             ], 422);
         } catch (\Exception $e) {

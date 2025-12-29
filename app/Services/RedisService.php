@@ -250,17 +250,35 @@ class RedisService
         }
         
         try {
+            $prefix = config('cache.prefix', 'laravel_cache:');
+            if (!empty($prefix) && !str_ends_with($prefix, ':')) {
+                $prefix .= ':';
+            }
+            
             // Limpar rate limits customizados
             $keys = Redis::keys('rate_limit:*');
             if (!empty($keys)) {
                 Redis::del($keys);
             }
             
-            // Limpar rate limits do Laravel padrão (usando cache)
-            $prefix = config('cache.prefix', '');
-            $laravelKeys = Redis::keys($prefix . 'illuminate_rate_limit:*');
-            if (!empty($laravelKeys)) {
-                Redis::del($laravelKeys);
+            // Limpar rate limits do Laravel padrão (vários formatos possíveis)
+            $patterns = [
+                $prefix . 'illuminate_rate_limit:*',
+                $prefix . 'throttle:*',
+                'throttle:*',
+                'laravel_cache:throttle:*',
+                'laravel_cache:illuminate_rate_limit:*',
+            ];
+            
+            foreach ($patterns as $pattern) {
+                try {
+                    $laravelKeys = Redis::keys($pattern);
+                    if (!empty($laravelKeys)) {
+                        Redis::del($laravelKeys);
+                    }
+                } catch (\Exception $e) {
+                    // Ignorar erros de padrões específicos
+                }
             }
             
             // Também limpar via Cache facade para garantir

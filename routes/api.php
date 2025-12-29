@@ -45,8 +45,10 @@ use App\Http\Controllers\Admin\AdminUserController;
 
 Route::prefix('v1')->group(function () {
     // Rotas públicas (central) - Gerenciamento de Tenants/Empresas
+    // Rate limiting mais permissivo para criação de tenants (10/min, 20/hora)
     Route::module('tenants', TenantController::class, 'tenant')
-        ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
+        ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy'])
+        ->middleware(['throttle:10,1', 'throttle:20,60']);
 
     // Rotas públicas - Planos (podem ser visualizados sem autenticação)
     Route::module('planos', ApiPlanoController::class, 'plano')

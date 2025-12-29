@@ -45,10 +45,18 @@ class HandleApiErrors
                 'retry_after' => $retryAfter,
             ]);
             
+            $message = 'Muitas requisições. Por favor, aguarde ' . (int) $retryAfter . ' segundo(s) antes de tentar novamente.';
+            if ($retryAfter >= 60) {
+                $minutes = round($retryAfter / 60);
+                $message = "Muitas requisições. Por favor, aguarde {$minutes} minuto(s) antes de tentar novamente.";
+            }
+            
             return response()->json([
-                'message' => 'Muitas requisições. Por favor, aguarde alguns instantes antes de tentar novamente.',
+                'message' => $message,
+                'error' => 'Too Many Attempts.',
                 'retry_after' => (int) $retryAfter,
                 'retry_after_seconds' => (int) $retryAfter,
+                'success' => false,
             ], 429)->withHeaders([
                 'Retry-After' => $retryAfter,
                 'X-RateLimit-Limit' => $headers['X-RateLimit-Limit'] ?? '120',
