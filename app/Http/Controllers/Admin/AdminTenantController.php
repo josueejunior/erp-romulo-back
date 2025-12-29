@@ -129,15 +129,15 @@ class AdminTenantController extends Controller
                 'cnpj.unique' => 'Este CNPJ já está cadastrado no sistema.',
             ]);
 
-            // Criar DTO
-            $dto = CriarTenantDTO::fromArray($validated);
+            // Criar DTO - REMOVER dados de admin para não criar usuário automaticamente
+            $validatedSemAdmin = $validated;
+            unset($validatedSemAdmin['admin_name'], $validatedSemAdmin['admin_email'], $validatedSemAdmin['admin_password']);
+            $dto = CriarTenantDTO::fromArray($validatedSemAdmin);
 
-            // Executar Use Case - cria tenant, banco de dados separado, empresa e admin (se fornecido)
+            // Executar Use Case - cria tenant, banco de dados separado e empresa (SEM criar usuário)
             $result = $this->criarTenantUseCase->executar($dto, requireAdmin: false);
 
-            $message = $result['admin_user'] 
-                ? 'Empresa criada com sucesso! Banco de dados separado criado e usuário administrador configurado.'
-                : 'Empresa criada com sucesso! Banco de dados separado criado.';
+            $message = 'Empresa criada com sucesso! Banco de dados separado criado. Agora você pode criar usuários para esta empresa.';
 
             return response()->json([
                 'message' => $message,
@@ -154,11 +154,6 @@ class AdminTenantController extends Controller
                         'id' => $result['empresa']->id,
                         'razao_social' => $result['empresa']->razaoSocial,
                     ],
-                    'admin_user' => $result['admin_user'] ? [
-                        'id' => $result['admin_user']->id,
-                        'name' => $result['admin_user']->name,
-                        'email' => $result['admin_user']->email,
-                    ] : null,
                 ],
             ], 201);
 
