@@ -62,12 +62,21 @@ class TenantService
     public function createTenantDatabase(Tenant $tenant): void
     {
         try {
+            // Recarregar o tenant do banco para garantir que está totalmente persistido
+            // e acessível quando o CreateDatabase job tentar encontrá-lo
+            $tenant->refresh();
+            
+            // Encontrar o tenant novamente pelo ID para garantir que está acessível
+            // Isso resolve o problema de "No query results for model" quando o job tenta buscar o tenant
+            $tenant = Tenant::findOrFail($tenant->id);
+            
             CreateDatabase::dispatchSync($tenant);
             MigrateDatabase::dispatchSync($tenant);
         } catch (\Exception $e) {
             Log::error('Erro ao criar banco do tenant', [
-                'tenant_id' => $tenant->id,
+                'tenant_id' => $tenant->id ?? null,
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
             throw new \Exception('Erro ao criar o banco de dados da empresa: ' . $e->getMessage());
         }
@@ -147,14 +156,32 @@ class TenantService
         $tenantData = $this->prepareTenantData($validated);
         // Não definir 'id' - deixar o banco gerar automaticamente com auto-increment
 
+        // Criar tenant primeiro (fora da transação principal)
+        // Isso garante que o tenant está commitado no banco antes do CreateDatabase job tentar encontrá-lo
+        $tenant = Tenant::create($tenantData);
+        
+        // Recarregar o tenant do banco para garantir que está totalmente persistido
+        $tenant->refresh();
+
+        try {
+            // Criar banco de dados do tenant
+            $this->createTenantDatabase($tenant);
+        } catch (\Exception $e) {
+            // Se falhar ao criar o banco, deletar o tenant criado
+            try {
+                $tenant->delete();
+            } catch (\Exception $deleteException) {
+                Log::warning('Erro ao deletar tenant após falha na criação do banco', [
+                    'tenant_id' => $tenant->id,
+                    'error' => $deleteException->getMessage(),
+                ]);
+            }
+            throw $e;
+        }
+
         DB::beginTransaction();
 
         try {
-            // Criar tenant
-            $tenant = Tenant::create($tenantData);
-
-            // Criar banco de dados do tenant
-            $this->createTenantDatabase($tenant);
 
             // Inicializar contexto do tenant
             tenancy()->initialize($tenant);
@@ -201,7 +228,10 @@ class TenantService
             }
 
         } catch (\Exception $e) {
-            DB::rollBack();
+            // Só fazer rollback se houver uma transação ativa
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
             throw $e;
         }
     }
