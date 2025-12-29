@@ -9,6 +9,7 @@ use App\Models\OrcamentoItem;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+use App\Database\Schema\Blueprint;
 
 class ProcessoItem extends BaseModel
 {
@@ -80,11 +81,11 @@ class ProcessoItem extends BaseModel
         return $this->belongsTo(Processo::class);
     }
 
-    public function orcamentos(): HasMany
+    public function orcamentos(): HasManyThrough
     {
         // Relacionamento através de orcamento_itens (nova estrutura)
         // Usa hasManyThrough para evitar erro se processo_item_id não existir em orcamentos
-        return $this->hasManyThrough(
+        $relation = $this->hasManyThrough(
             Orcamento::class,
             OrcamentoItem::class,
             'processo_item_id', // Foreign key on orcamento_itens table
@@ -92,6 +93,9 @@ class ProcessoItem extends BaseModel
             'id', // Local key on processo_itens table
             'orcamento_id' // Local key on orcamento_itens table
         );
+        
+        // Ordenar pela coluna correta de timestamp (criado_em, não created_at)
+        return $relation->orderBy(Blueprint::CREATED_AT, 'desc');
     }
 
     public function orcamentoItens(): HasMany
