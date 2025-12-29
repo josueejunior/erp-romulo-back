@@ -55,15 +55,24 @@ class ApiResponse
      */
     public static function paginated(LengthAwarePaginator $paginator, ?callable $transformer = null): JsonResponse
     {
-        $items = $paginator->getCollection();
+        // Obter items - pode ser Collection ou array
+        $items = $paginator->items();
+        
+        // Se for Collection, converter para array
+        if ($items instanceof \Illuminate\Support\Collection) {
+            $items = $items->toArray();
+        }
+        
+        // Garantir que seja array
+        $itemsArray = is_array($items) ? $items : [];
 
         // Aplicar transformer se fornecido
         if ($transformer && is_callable($transformer)) {
-            $items = $items->map($transformer);
+            $itemsArray = array_map($transformer, $itemsArray);
         }
 
-        // Converter Collection para array garantido
-        $itemsArray = $items->values()->toArray();
+        // Garantir que seja array indexado numericamente
+        $itemsArray = array_values($itemsArray);
 
         return response()->json([
             'data' => $itemsArray,
