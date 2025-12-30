@@ -83,6 +83,18 @@ class PaymentController extends BaseApiController
                     ]);
                 }
 
+                // IMPORTANTE: Atualizar tenant com assinatura atual (mesmo para planos gratuitos)
+                $tenant->update([
+                    'plano_atual_id' => $plano->id,
+                    'assinatura_atual_id' => $assinaturaModel->id,
+                ]);
+
+                Log::info('Assinatura gratuita criada e vinculada ao tenant', [
+                    'tenant_id' => $tenant->id,
+                    'assinatura_id' => $assinaturaModel->id,
+                    'plano_id' => $plano->id,
+                ]);
+
                 return response()->json([
                     'message' => 'Assinatura gratuita ativada com sucesso',
                     'data' => [

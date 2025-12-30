@@ -7,9 +7,14 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 use App\Models\Tenant;
 use App\Modules\Assinatura\Models\Assinatura;
+use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
 
 class CheckSubscription
 {
+    public function __construct(
+        private AssinaturaRepositoryInterface $assinaturaRepository,
+    ) {}
+
     /**
      * Handle an incoming request.
      *
@@ -38,8 +43,72 @@ class CheckSubscription
             ], 404);
         }
 
-        // Verificar assinatura
-        $assinatura = $tenant->assinaturaAtual;
+        // Verificar assinatura usando repository DDD
+        // O repository já cuida do contexto do tenant
+        try {
+            $assinaturaDomain = $this->assinaturaRepository->buscarAssinaturaAtual($tenant->id);
+            
+            if (!$assinaturaDomain) {
+                return response()->json([
+                    'message' => 'Nenhuma assinatura encontrada. Contrate um plano para continuar usando o sistema.',
+                    'code' => 'NO_SUBSCRIPTION',
+                    'action' => 'subscribe'
+                ], 403);
+            }
+            
+            // Converter para modelo para usar métodos como isAtiva()
+            $assinatura = Assinatura::find($assinaturaDomain->id);
+            
+            if (!$assinatura) {
+                return response()->json([
+                    'message' => 'Nenhuma assinatura encontrada. Contrate um plano para continuar usando o sistema.',
+                    'code' => 'NO_SUBSCRIPTION',
+                    'action' => 'subscribe'
+                ], 403);
+            }
+        } catch (\Exception $e) {
+            \Log::error('Erro ao buscar assinatura no middleware', [
+                'tenant_id' => $tenant->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            
+            // Em caso de erro, tentar buscar diretamente
+            try {
+                $jaInicializado = tenancy()->initialized;
+                if (!$jaInicializado) {
+                    tenancy()->initialize($tenant);
+                }
+                
+                $assinatura = Assinatura::where('tenant_id', $tenant->id)
+                    ->where('status', '!=', 'cancelada')
+                    ->orderBy('data_fim', 'desc')
+                    ->first();
+                
+                if (!$jaInicializado) {
+                    tenancy()->end();
+                }
+                
+                if (!$assinatura) {
+                    return response()->json([
+                        'message' => 'Nenhuma assinatura encontrada. Contrate um plano para continuar usando o sistema.',
+                        'code' => 'NO_SUBSCRIPTION',
+                        'action' => 'subscribe'
+                    ], 403);
+                }
+            } catch (\Exception $e2) {
+                \Log::error('Erro ao buscar assinatura diretamente', [
+                    'tenant_id' => $tenant->id,
+                    'error' => $e2->getMessage(),
+                ]);
+                
+                return response()->json([
+                    'message' => 'Nenhuma assinatura encontrada. Contrate um plano para continuar usando o sistema.',
+                    'code' => 'NO_SUBSCRIPTION',
+                    'action' => 'subscribe'
+                ], 403);
+            }
+        }
 
         if (!$assinatura) {
             return response()->json([

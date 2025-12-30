@@ -59,28 +59,50 @@ class AssinaturaRepository implements AssinaturaRepositoryInterface
 
         $assinatura = null;
 
-        // Se o tenant tem assinatura_atual_id, buscar por ele
-        if ($tenant->assinatura_atual_id) {
-            $model = AssinaturaModel::with('plano')
-                ->where('tenant_id', $tenantId)
-                ->where('id', $tenant->assinatura_atual_id)
-                ->first();
-            
-            if ($model) {
-                $assinatura = $this->toDomain($model);
+        // Inicializar contexto do tenant para buscar no banco correto
+        $jaInicializado = tenancy()->initialized;
+        try {
+            if (!$jaInicializado) {
+                tenancy()->initialize($tenant);
             }
-        }
 
-        // Se não encontrou, buscar a assinatura mais recente do tenant
-        if (!$assinatura) {
-            $model = AssinaturaModel::with('plano')
-                ->where('tenant_id', $tenantId)
-                ->orderBy('data_fim', 'desc')
-                ->orderBy('criado_em', 'desc')
-                ->first();
-            
-            if ($model) {
-                $assinatura = $this->toDomain($model);
+            // Se o tenant tem assinatura_atual_id, buscar por ele
+            if ($tenant->assinatura_atual_id) {
+                $model = AssinaturaModel::with('plano')
+                    ->where('tenant_id', $tenantId)
+                    ->where('id', $tenant->assinatura_atual_id)
+                    ->first();
+                
+                if ($model) {
+                    $assinatura = $this->toDomain($model);
+                }
+            }
+
+            // Se não encontrou, buscar a assinatura mais recente do tenant
+            if (!$assinatura) {
+                $model = AssinaturaModel::with('plano')
+                    ->where('tenant_id', $tenantId)
+                    ->where('status', '!=', 'cancelada')
+                    ->orderBy('data_fim', 'desc')
+                    ->orderBy('criado_em', 'desc')
+                    ->first();
+                
+                if ($model) {
+                    $assinatura = $this->toDomain($model);
+                    
+                    // Se encontrou e o tenant não tinha assinatura_atual_id, atualizar
+                    if (!$tenant->assinatura_atual_id) {
+                        $tenant->update([
+                            'assinatura_atual_id' => $model->id,
+                            'plano_atual_id' => $model->plano_id,
+                        ]);
+                    }
+                }
+            }
+        } finally {
+            // Sempre finalizar o contexto se foi inicializado aqui
+            if (!$jaInicializado && tenancy()->initialized) {
+                tenancy()->end();
             }
         }
 
