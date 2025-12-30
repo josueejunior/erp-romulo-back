@@ -9,7 +9,7 @@ interface ContratoRepositoryInterface
 {
     public function criar(Contrato $contrato): Contrato;
     public function buscarPorId(int $id): ?Contrato;
-    public function buscarModeloPorId(int $id, array $with = []): ?\App\Models\Contrato;
+    public function buscarModeloPorId(int $id, array $with = []): ?\App\Modules\Contrato\Models\Contrato;
     public function buscarComFiltros(array $filtros = []): LengthAwarePaginator;
     public function atualizar(Contrato $contrato): Contrato;
     public function deletar(int $id): void;

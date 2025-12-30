@@ -79,12 +79,12 @@ class AuditObserver
 
         // Lista de modelos que devem ser auditados
         $auditableModels = [
-            \App\Models\Processo::class,
-            \App\Models\Contrato::class,
-            \App\Models\Orcamento::class,
-            \App\Models\NotaFiscal::class,
-            \App\Models\Empenho::class,
-            \App\Models\AutorizacaoFornecimento::class,
+            \App\Modules\Processo\Models\Processo::class,
+            \App\Modules\Contrato\Models\Contrato::class,
+            \App\Modules\Orcamento\Models\Orcamento::class,
+            \App\Modules\NotaFiscal\Models\NotaFiscal::class,
+            \App\Modules\Empenho\Models\Empenho::class,
+            \App\Modules\AutorizacaoFornecimento\Models\AutorizacaoFornecimento::class,
         ];
 
         return in_array(get_class($model), $auditableModels);

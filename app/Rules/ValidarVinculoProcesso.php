@@ -23,13 +23,13 @@ class ValidarVinculoProcesso implements Rule
         
         switch ($this->tipo) {
             case 'contrato':
-                $doc = \App\Models\Contrato::find($value);
+                $doc = \App\Modules\Contrato\Models\Contrato::find($value);
                 break;
             case 'empenho':
-                $doc = \App\Models\Empenho::find($value);
+                $doc = \App\Modules\Empenho\Models\Empenho::find($value);
                 break;
             case 'af':
-                $doc = \App\Models\AutorizacaoFornecimento::find($value);
+                $doc = \App\Modules\AutorizacaoFornecimento\Models\AutorizacaoFornecimento::find($value);
                 break;
             default:
                 return false;

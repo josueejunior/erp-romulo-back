@@ -40,7 +40,7 @@ class AppServiceProvider extends ServiceProvider
         // Registrar Policies
         \Illuminate\Support\Facades\Gate::policy(\App\Modules\Processo\Models\Processo::class, \App\Modules\Processo\Policies\ProcessoPolicy::class);
         \Illuminate\Support\Facades\Gate::policy(OrgaoModel::class, \App\Modules\Orgao\Policies\OrgaoPolicy::class);
-        \Illuminate\Support\Facades\Gate::policy(\App\Models\Contrato::class, \App\Policies\ContratoPolicy::class);
+        \Illuminate\Support\Facades\Gate::policy(\App\Modules\Contrato\Models\Contrato::class, \App\Policies\ContratoPolicy::class);
         \Illuminate\Support\Facades\Gate::policy(\App\Models\Orcamento::class, \App\Policies\OrcamentoPolicy::class);
 
         // DDD: Bindings de Interfaces para Implementações

@@ -201,8 +201,8 @@ Route::prefix('v1')->group(function () {
             ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy'])
             ->group(function () {
                 // Debug/Correção de roles
-                Route::get('/roles', [\App\Http\Controllers\Api\FixUserRolesController::class, 'getCurrentUserRoles']);
-                Route::post('/fix-role', [\App\Http\Controllers\Api\FixUserRolesController::class, 'fixCurrentUserRole']);
+                Route::get('/roles', [\App\Modules\Auth\Controllers\FixUserRolesController::class, 'getCurrentUserRoles']);
+                Route::post('/fix-role', [\App\Modules\Auth\Controllers\FixUserRolesController::class, 'fixCurrentUserRole']);
                 // Trocar empresa ativa
                 Route::put('/empresa-ativa', [ApiUserController::class, 'switchEmpresaAtiva']);
             });
