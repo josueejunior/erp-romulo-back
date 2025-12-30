@@ -167,10 +167,18 @@ class UserController extends BaseApiController
             // Executar use case (dispara Domain Event que limpa cache via Listener)
             $usuarioDomain = $this->switchEmpresaAtivaUseCase->executar($user->id, $novaEmpresaId, $context);
 
+            // Buscar tenant atualizado (pode ter mudado se a empresa pertence a outro tenant)
+            $tenant = tenancy()->tenant;
+            
+            // Buscar empresa para obter tenant_id correto
+            $empresaModel = \App\Modules\Empresa\Models\Empresa::find($novaEmpresaId);
+            $tenantId = $tenant?->id ?? $empresaModel?->tenant_id ?? null;
+
             return response()->json([
                 'message' => 'Empresa ativa alterada com sucesso.',
                 'data' => [
-                    'empresa_ativa_id' => $usuarioDomain->empresaAtivaId
+                    'empresa_ativa_id' => $usuarioDomain->empresaAtivaId,
+                    'tenant_id' => $tenantId, // Retornar tenant_id para o frontend atualizar
                 ],
             ]);
         } catch (\Exception $e) {

@@ -32,13 +32,45 @@ class AssinaturaController extends BaseApiController
     ) {}
 
     /**
+     * Obter tenant correto do request
+     * Prioriza tenant_id do header para garantir que está usando o tenant correto ao trocar de empresa
+     */
+    private function getTenantFromRequest(Request $request): ?\App\Models\Tenant
+    {
+        // Priorizar tenant_id do header para garantir que está usando o tenant correto
+        // Isso é importante quando o usuário troca de empresa
+        $tenantIdFromHeader = $request->header('X-Tenant-ID');
+        $tenant = null;
+        
+        if ($tenantIdFromHeader) {
+            // Buscar tenant pelo ID do header (garante que está usando o tenant correto)
+            $tenant = \App\Models\Tenant::find($tenantIdFromHeader);
+            
+            if ($tenant) {
+                // Se o tenant do contexto é diferente ou não está inicializado, reinicializar
+                if (!tenancy()->initialized || tenancy()->tenant?->id !== $tenant->id) {
+                    if (tenancy()->initialized) {
+                        tenancy()->end();
+                    }
+                    tenancy()->initialize($tenant);
+                }
+            }
+        } else {
+            // Fallback para tenant do contexto (caso header não esteja presente)
+            $tenant = tenancy()->tenant;
+        }
+        
+        return $tenant;
+    }
+
+    /**
      * Retorna assinatura atual do tenant
      * Permite acesso mesmo sem assinatura (retorna null) para que o frontend possa tratar
      */
     public function atual(Request $request): JsonResponse
     {
         try {
-            $tenant = tenancy()->tenant;
+            $tenant = $this->getTenantFromRequest($request);
             
             if (!$tenant) {
                 return response()->json([
@@ -108,7 +140,7 @@ class AssinaturaController extends BaseApiController
     public function status(Request $request): JsonResponse
     {
         try {
-            $tenant = tenancy()->tenant;
+            $tenant = $this->getTenantFromRequest($request);
             
             if (!$tenant) {
                 return response()->json([
@@ -163,7 +195,7 @@ class AssinaturaController extends BaseApiController
     public function index(Request $request): JsonResponse
     {
         try {
-            $tenant = tenancy()->tenant;
+            $tenant = $this->getTenantFromRequest($request);
             
             if (!$tenant) {
                 return response()->json([
@@ -204,7 +236,7 @@ class AssinaturaController extends BaseApiController
             // Request já está validado via Form Request
             $validated = $request->validated();
 
-            $tenant = tenancy()->tenant;
+            $tenant = $this->getTenantFromRequest($request);
             if (!$tenant) {
                 return response()->json(['message' => 'Tenant não encontrado'], 404);
             }
@@ -263,7 +295,7 @@ class AssinaturaController extends BaseApiController
             // Request já está validado via Form Request
             $validated = $request->validated();
 
-            $tenant = tenancy()->tenant;
+            $tenant = $this->getTenantFromRequest($request);
             if (!$tenant) {
                 return response()->json(['message' => 'Tenant não encontrado'], 404);
             }
@@ -357,7 +389,7 @@ class AssinaturaController extends BaseApiController
     public function cancelar(Request $request, $assinatura): JsonResponse
     {
         try {
-            $tenant = tenancy()->tenant;
+            $tenant = $this->getTenantFromRequest($request);
             if (!$tenant) {
                 return response()->json(['message' => 'Tenant não encontrado'], 404);
             }
