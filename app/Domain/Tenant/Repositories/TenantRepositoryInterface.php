@@ -40,5 +40,13 @@ interface TenantRepositoryInterface
      * Deletar tenant
      */
     public function deletar(int $id): void;
+
+    /**
+     * Buscar modelo Eloquent por ID (para casos especiais onde precisa do modelo, não da entidade)
+     * Use apenas quando realmente necessário (ex: relacionamentos)
+     * 
+     * @return \App\Models\Tenant|null
+     */
+    public function buscarModeloPorId(int $id): ?\App\Models\Tenant;
 }
 

@@ -274,5 +274,13 @@ class TenantRepository implements TenantRepositoryInterface
     {
         TenantModel::findOrFail($id)->delete();
     }
+
+    /**
+     * Buscar modelo Eloquent por ID
+     */
+    public function buscarModeloPorId(int $id): ?TenantModel
+    {
+        return TenantModel::find($id);
+    }
 }
 

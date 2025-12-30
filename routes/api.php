@@ -298,6 +298,8 @@ Route::prefix('admin')->group(function () {
             Route::get('/tenants', [\App\Http\Controllers\Admin\AdminAssinaturaController::class, 'tenants']);
             Route::get('/{tenantId}/{assinaturaId}', [\App\Http\Controllers\Admin\AdminAssinaturaController::class, 'show'])
                 ->where(['tenantId' => '[0-9]+', 'assinaturaId' => '[0-9]+']);
+            Route::put('/{tenantId}/{assinaturaId}', [\App\Http\Controllers\Admin\AdminAssinaturaController::class, 'update'])
+                ->where(['tenantId' => '[0-9]+', 'assinaturaId' => '[0-9]+']);
         });
 
         // Upload de arquivos

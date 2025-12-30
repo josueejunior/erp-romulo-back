@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Responses\ApiResponse;
 use App\Application\Assinatura\UseCases\ListarAssinaturasAdminUseCase;
 use App\Application\Assinatura\UseCases\BuscarAssinaturaAdminUseCase;
+use App\Application\Assinatura\UseCases\AtualizarAssinaturaAdminUseCase;
 use App\Application\Tenant\UseCases\ListarTenantsParaFiltroUseCase;
+use App\Http\Requests\Assinatura\AtualizarAssinaturaAdminRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -20,6 +22,7 @@ class AdminAssinaturaController extends Controller
     public function __construct(
         private ListarAssinaturasAdminUseCase $listarAssinaturasAdminUseCase,
         private BuscarAssinaturaAdminUseCase $buscarAssinaturaAdminUseCase,
+        private AtualizarAssinaturaAdminUseCase $atualizarAssinaturaAdminUseCase,
         private ListarTenantsParaFiltroUseCase $listarTenantsParaFiltroUseCase,
     ) {}
 
@@ -80,6 +83,40 @@ class AdminAssinaturaController extends Controller
                 'assinatura_id' => $assinaturaId,
             ]);
             return response()->json(['message' => 'Erro ao buscar assinatura.'], 500);
+        }
+    }
+
+    /**
+     * Atualizar assinatura
+     */
+    public function update(AtualizarAssinaturaAdminRequest $request, int $tenantId, int $assinaturaId)
+    {
+        try {
+            // Request já está validado via Form Request
+            $validated = $request->validated();
+
+            // Executar Use Case
+            $assinaturaDomain = $this->atualizarAssinaturaAdminUseCase->executar($tenantId, $assinaturaId, $validated);
+
+            // Buscar modelo para resposta
+            $assinaturaModel = $this->buscarAssinaturaAdminUseCase->executar($tenantId, $assinaturaId);
+
+            return response()->json([
+                'message' => 'Assinatura atualizada com sucesso',
+                'data' => $assinaturaModel,
+            ]);
+        } catch (\App\Domain\Exceptions\NotFoundException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        } catch (\Exception $e) {
+            Log::error('Erro ao atualizar assinatura', [
+                'error' => $e->getMessage(),
+                'tenant_id' => $tenantId,
+                'assinatura_id' => $assinaturaId,
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json(['message' => 'Erro ao atualizar assinatura.'], 500);
         }
     }
 
