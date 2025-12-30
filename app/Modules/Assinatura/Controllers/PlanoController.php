@@ -40,7 +40,13 @@ class PlanoController extends BaseApiController
                 $filtros['ativo'] = $request->boolean('ativo');
             }
 
-            $planos = $this->listarPlanosUseCase->executar($filtros);
+            // Buscar planos usando o UseCase (retorna entidades de domínio)
+            $planosDomain = $this->listarPlanosUseCase->executar($filtros);
+
+            // Converter entidades de domínio para modelos Eloquent para manter compatibilidade com frontend
+            $planos = $planosDomain->map(function ($planoDomain) {
+                return $this->planoRepository->buscarModeloPorId($planoDomain->id);
+            })->filter(); // Remove nulls
 
             return response()->json([
                 'data' => $planos->values()->all(),
