@@ -9,11 +9,17 @@ use App\Domain\Exceptions\DomainException;
 use App\Domain\Exceptions\NotFoundException;
 use Illuminate\Support\Facades\Log;
 
-// Verificar se o pacote Mercado Pago está instalado
+// Verificar se o pacote Mercado Pago está instalado e carregar classes
 if (!class_exists('MercadoPago\SDK')) {
-    throw new \RuntimeException(
-        'Pacote Mercado Pago não instalado. Execute: composer require mercadopago/dx-php'
-    );
+    // Tentar carregar manualmente se o autoloader não funcionou
+    $sdkPath = base_path('vendor/mercadopago/dx-php/src/MercadoPago/SDK.php');
+    if (file_exists($sdkPath)) {
+        require_once $sdkPath;
+    } else {
+        throw new \RuntimeException(
+            'Pacote Mercado Pago não instalado corretamente. Execute: composer require mercadopago/dx-php && composer dump-autoload'
+        );
+    }
 }
 
 use MercadoPago\SDK;
