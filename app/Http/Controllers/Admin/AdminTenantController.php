@@ -113,15 +113,28 @@ class AdminTenantController extends Controller
                 return response()->json(['message' => 'Empresa não encontrada.'], 404);
             }
 
-            // Retornar como array padronizado (frontend pode usar .filter() sem problemas)
+            // Retornar como array padronizado com todos os campos
             $tenantData = [
                 'id' => $tenantDomain->id,
                 'razao_social' => $tenantDomain->razaoSocial,
                 'cnpj' => $tenantDomain->cnpj,
                 'email' => $tenantDomain->email,
                 'status' => $tenantDomain->status,
+                'endereco' => $tenantDomain->endereco,
                 'cidade' => $tenantDomain->cidade,
                 'estado' => $tenantDomain->estado,
+                'cep' => $tenantDomain->cep,
+                'telefones' => $tenantDomain->telefones,
+                'emails_adicionais' => $tenantDomain->emailsAdicionais,
+                'banco' => $tenantDomain->banco,
+                'agencia' => $tenantDomain->agencia,
+                'conta' => $tenantDomain->conta,
+                'tipo_conta' => $tenantDomain->tipoConta,
+                'pix' => $tenantDomain->pix,
+                'representante_legal_nome' => $tenantDomain->representanteLegalNome,
+                'representante_legal_cpf' => $tenantDomain->representanteLegalCpf,
+                'representante_legal_cargo' => $tenantDomain->representanteLegalCargo,
+                'logo' => $tenantDomain->logo,
             ];
 
             return ApiResponse::item($tenantData);
