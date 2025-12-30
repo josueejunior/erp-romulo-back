@@ -79,24 +79,93 @@ class MercadoPagoGateway implements PaymentProviderInterface
             // Criar pagamento usando a nova API
             $payment = $this->paymentClient->create($paymentData);
 
-            // Verificar erros
-            if (isset($payment['error'])) {
+            // Log para depuração
+            Log::debug('Resposta do Mercado Pago', [
+                'payment_type' => gettype($payment),
+                'payment_class' => is_object($payment) ? get_class($payment) : null,
+                'payment_preview' => is_array($payment) ? array_keys($payment) : (is_object($payment) ? get_object_vars($payment) : null),
+            ]);
+
+            // Verificar se o resultado é um array e se contém erro
+            if (is_array($payment) && isset($payment['error'])) {
                 $errorMessage = $payment['error']['message'] ?? 'Erro desconhecido no pagamento';
+                $errorCode = $payment['error']['code'] ?? null;
+                $errorCause = $payment['error']['cause'] ?? null;
+                
                 Log::error('Erro ao processar pagamento no Mercado Pago', [
                     'error' => $payment['error'],
+                    'error_code' => $errorCode,
+                    'error_cause' => $errorCause,
                     'idempotency_key' => $idempotencyKey,
-                    'request' => $request,
+                    'payment_data' => $paymentData,
                 ]);
 
-                throw new DomainException("Erro no pagamento: {$errorMessage}");
+                $detailedMessage = $errorMessage;
+                if ($errorCode) {
+                    $detailedMessage .= " (Código: {$errorCode})";
+                }
+                if ($errorCause && is_array($errorCause) && !empty($errorCause)) {
+                    $causeDetails = array_map(function($cause) {
+                        return $cause['description'] ?? $cause['code'] ?? 'Erro desconhecido';
+                    }, $errorCause);
+                    $detailedMessage .= " - " . implode(', ', $causeDetails);
+                }
+
+                throw new DomainException("Erro no pagamento: {$detailedMessage}");
+            }
+
+            // Verificar se o resultado é um objeto com propriedades de erro
+            if (is_object($payment)) {
+                // Verificar se tem propriedade error ou getError
+                if (method_exists($payment, 'getError') || property_exists($payment, 'error')) {
+                    $error = method_exists($payment, 'getError') ? $payment->getError() : $payment->error;
+                    if ($error) {
+                        $errorMessage = is_string($error) ? $error : ($error['message'] ?? 'Erro desconhecido no pagamento');
+                        Log::error('Erro ao processar pagamento no Mercado Pago (objeto)', [
+                            'error' => $error,
+                            'idempotency_key' => $idempotencyKey,
+                            'payment_data' => $paymentData,
+                        ]);
+                        throw new DomainException("Erro no pagamento: {$errorMessage}");
+                    }
+                }
             }
 
             // Retornar resultado
             return $this->mapPaymentToResult($payment);
 
+        } catch (\MercadoPago\Exceptions\MPApiException $e) {
+            // Capturar exceção específica do Mercado Pago
+            $apiResponse = $e->getApiResponse();
+            $content = $apiResponse ? $apiResponse->getContent() : null;
+            
+            $errorMessage = 'Erro na API do Mercado Pago';
+            if ($content) {
+                $errorMessage = $content['message'] ?? $errorMessage;
+                if (isset($content['error'])) {
+                    $errorMessage = $content['error']['message'] ?? $errorMessage;
+                    if (isset($content['error']['cause']) && is_array($content['error']['cause'])) {
+                        $causes = array_map(function($cause) {
+                            return $cause['description'] ?? $cause['code'] ?? '';
+                        }, $content['error']['cause']);
+                        $errorMessage .= ' - ' . implode(', ', array_filter($causes));
+                    }
+                }
+            }
+            
+            Log::error('Exceção MPApiException ao processar pagamento no Mercado Pago', [
+                'exception' => $e->getMessage(),
+                'api_response' => $content,
+                'status_code' => $apiResponse ? $apiResponse->getStatusCode() : null,
+                'idempotency_key' => $idempotencyKey,
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            throw new DomainException("Erro ao processar pagamento: {$errorMessage}");
         } catch (\Exception $e) {
             Log::error('Exceção ao processar pagamento no Mercado Pago', [
                 'exception' => $e->getMessage(),
+                'exception_class' => get_class($e),
                 'trace' => $e->getTraceAsString(),
                 'idempotency_key' => $idempotencyKey,
             ]);
@@ -171,11 +240,33 @@ class MercadoPagoGateway implements PaymentProviderInterface
     /**
      * Mapeia Payment do Mercado Pago para PaymentResult
      * Adaptado para a nova estrutura da API 3.8.0+
+     * Suporta tanto array quanto objeto
      */
-    private function mapPaymentToResult(array $payment): PaymentResult
+    private function mapPaymentToResult($payment): PaymentResult
     {
+        // Converter objeto para array se necessário
+        if (is_object($payment)) {
+            // Se tiver método toArray, usar
+            if (method_exists($payment, 'toArray')) {
+                $payment = $payment->toArray();
+            } 
+            // Se tiver método getContent, usar
+            elseif (method_exists($payment, 'getContent')) {
+                $payment = $payment->getContent();
+            }
+            // Caso contrário, converter para array
+            else {
+                $payment = (array) $payment;
+            }
+        }
+
+        // Garantir que é array
+        if (!is_array($payment)) {
+            throw new DomainException('Resposta do Mercado Pago em formato inválido.');
+        }
+
         $payer = $payment['payer'] ?? [];
-        $payerIdentification = $payer['identification'] ?? [];
+        $payerIdentification = is_array($payer) ? ($payer['identification'] ?? []) : [];
 
         return new PaymentResult(
             externalId: (string) ($payment['id'] ?? ''),
@@ -183,8 +274,8 @@ class MercadoPagoGateway implements PaymentProviderInterface
             amount: \App\Domain\Shared\ValueObjects\Money::fromReais($payment['transaction_amount'] ?? 0),
             paymentMethod: $payment['payment_method_id'] ?? 'unknown',
             description: $payment['description'] ?? null,
-            payerEmail: $payer['email'] ?? null,
-            payerCpf: $payerIdentification['number'] ?? null,
+            payerEmail: is_array($payer) ? ($payer['email'] ?? null) : null,
+            payerCpf: is_array($payerIdentification) ? ($payerIdentification['number'] ?? null) : null,
             transactionId: $payment['id'] ?? null,
             errorMessage: $payment['status_detail'] ?? null,
             metadata: $payment['metadata'] ?? null,
