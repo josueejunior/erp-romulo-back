@@ -27,6 +27,7 @@ class User extends Authenticatable
         'email',
         'password',
         'empresa_ativa_id', // Para atualização automática quando obtém empresa do relacionamento
+        'foto_perfil', // URL da foto de perfil do usuário
     ];
 
     protected $hidden = [
