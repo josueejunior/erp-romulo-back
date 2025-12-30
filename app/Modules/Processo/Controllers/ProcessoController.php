@@ -69,20 +69,134 @@ class ProcessoController extends Controller
 
     /**
      * GET /processos/exportar
-     * Exporta processos para CSV/Excel
+     * Exporta processos para CSV
+     * 
+     * Suporta parâmetros de query:
+     * - formato: csv (padrão) ou json
+     * - Todos os filtros de listagem normais
      */
-    public function exportar(Request $request): JsonResponse
+    public function exportar(Request $request)
     {
         $empresa = $this->getEmpresaOrFail();
         
         $params = $this->processoService->createListParamBag($request->all());
+        
+        // Remover paginação para exportar todos
+        $params['per_page'] = 10000; // Limite alto para exportar todos
+        
         $processos = $this->processoService->list($params);
-
-        // TODO: Implementar exportação real
-        return response()->json([
-            'message' => 'Exportação em desenvolvimento',
-            'data' => ProcessoListResource::collection($processos->items()),
+        
+        // Carregar relacionamentos necessários
+        $processos->getCollection()->load([
+            'orgao',
+            'setor',
+            'itens',
         ]);
+
+        $formato = $request->get('formato', 'csv');
+
+        if ($formato === 'json') {
+            // Retornar JSON
+            return response()->json([
+                'data' => ProcessoListResource::collection($processos->items()),
+                'meta' => [
+                    'total' => $processos->total(),
+                ],
+            ]);
+        }
+
+        // Exportar CSV
+        return $this->exportarCSV($processos->items());
+    }
+
+    /**
+     * Exporta processos para CSV
+     */
+    private function exportarCSV($processos)
+    {
+        $filename = 'processos_' . date('Y-m-d_His') . '.csv';
+        
+        $headers = [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ];
+
+        // Adicionar BOM para UTF-8 (ajuda Excel a reconhecer corretamente)
+        $callback = function() use ($processos) {
+            $file = fopen('php://output', 'w');
+            
+            // Adicionar BOM UTF-8
+            fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
+            
+            // Cabeçalhos
+            fputcsv($file, [
+                'ID',
+                'Identificador',
+                'Número Modalidade',
+                'Modalidade',
+                'Número Processo Administrativo',
+                'Órgão',
+                'UASG',
+                'Setor',
+                'Objeto Resumido',
+                'Status',
+                'Status Label',
+                'Fase Atual',
+                'Data Sessão Pública',
+                'Próxima Data',
+                'Valor Estimado',
+                'Valor Mínimo',
+                'Valor Vencido',
+                'Resultado',
+                'Tem Alerta',
+                'Data Criação',
+                'Data Atualização',
+            ], ';');
+
+            // Dados
+            foreach ($processos as $processo) {
+                $resource = new ProcessoListResource($processo);
+                $data = $resource->toArray(request());
+                
+                $proximaData = $data['proxima_data'] 
+                    ? ($data['proxima_data']['data'] ?? '') . ' - ' . ($data['proxima_data']['tipo'] ?? '')
+                    : '';
+                
+                $alertas = $data['alertas'] ?? [];
+                $temAlerta = !empty($alertas);
+                $alertasTexto = $temAlerta 
+                    ? implode('; ', array_map(fn($a) => $a['mensagem'] ?? '', $alertas))
+                    : '';
+
+                fputcsv($file, [
+                    $data['id'] ?? '',
+                    $data['identificador'] ?? '',
+                    $data['numero_modalidade'] ?? '',
+                    $data['modalidade'] ?? '',
+                    $data['numero_processo_administrativo'] ?? '',
+                    $data['orgao']['razao_social'] ?? '',
+                    $data['orgao']['uasg'] ?? '',
+                    $data['setor']['nome'] ?? '',
+                    $data['objeto_resumido'] ?? '',
+                    $data['status'] ?? '',
+                    $data['status_label'] ?? '',
+                    $data['fase_atual'] ?? '',
+                    $data['data_sessao_publica_formatted'] ?? '',
+                    $proximaData,
+                    number_format($data['valores']['estimado'] ?? 0, 2, ',', '.'),
+                    $data['valores']['minimo'] ? number_format($data['valores']['minimo'], 2, ',', '.') : '',
+                    $data['valores']['vencido'] ? number_format($data['valores']['vencido'], 2, ',', '.') : '',
+                    $data['resultado'] ?? '',
+                    $temAlerta ? 'Sim' : 'Não',
+                    $data['created_at'] ?? '',
+                    $data['updated_at'] ?? '',
+                ], ';');
+            }
+
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
     }
 
     /**
