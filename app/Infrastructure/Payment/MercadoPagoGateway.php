@@ -349,8 +349,53 @@ class MercadoPagoGateway implements PaymentProviderInterface
             throw new DomainException('Resposta do Mercado Pago em formato inválido.');
         }
 
+        // Converter payer de objeto para array se necessário
         $payer = $payment['payer'] ?? [];
+        if (is_object($payer)) {
+            if (method_exists($payer, 'toArray')) {
+                $payer = $payer->toArray();
+            } elseif (method_exists($payer, 'getContent')) {
+                $payer = $payer->getContent();
+            } else {
+                $payer = (array) $payer;
+            }
+        }
+        if (!is_array($payer)) {
+            $payer = [];
+        }
+
         $payerIdentification = is_array($payer) ? ($payer['identification'] ?? []) : [];
+        // Converter identification de objeto para array se necessário
+        if (is_object($payerIdentification)) {
+            if (method_exists($payerIdentification, 'toArray')) {
+                $payerIdentification = $payerIdentification->toArray();
+            } elseif (method_exists($payerIdentification, 'getContent')) {
+                $payerIdentification = $payerIdentification->getContent();
+            } else {
+                $payerIdentification = (array) $payerIdentification;
+            }
+        }
+        if (!is_array($payerIdentification)) {
+            $payerIdentification = [];
+        }
+
+        // Converter metadata de objeto para array se necessário
+        $metadata = $payment['metadata'] ?? null;
+        if ($metadata !== null && is_object($metadata)) {
+            // Se for objeto do SDK do Mercado Pago, converter para array
+            if (method_exists($metadata, 'toArray')) {
+                $metadata = $metadata->toArray();
+            } elseif (method_exists($metadata, 'getContent')) {
+                $metadata = $metadata->getContent();
+            } else {
+                // Converter objeto genérico para array
+                $metadata = (array) $metadata;
+            }
+        }
+        // Garantir que metadata é array ou null
+        if ($metadata !== null && !is_array($metadata)) {
+            $metadata = null;
+        }
 
         return new PaymentResult(
             externalId: (string) ($payment['id'] ?? ''),
@@ -362,7 +407,7 @@ class MercadoPagoGateway implements PaymentProviderInterface
             payerCpf: is_array($payerIdentification) ? ($payerIdentification['number'] ?? null) : null,
             transactionId: $payment['id'] ?? null,
             errorMessage: $payment['status_detail'] ?? null,
-            metadata: $payment['metadata'] ?? null,
+            metadata: $metadata,
             createdAt: isset($payment['date_created']) ? new \DateTime($payment['date_created']) : null,
             approvedAt: isset($payment['date_approved']) ? new \DateTime($payment['date_approved']) : null,
         );
