@@ -8,32 +8,21 @@ use App\Domain\Payment\ValueObjects\PaymentRequest;
 use App\Domain\Exceptions\DomainException;
 use App\Domain\Exceptions\NotFoundException;
 use Illuminate\Support\Facades\Log;
-
-// Verificar se o pacote Mercado Pago está instalado e carregar classes
-if (!class_exists('MercadoPago\SDK')) {
-    // Tentar carregar manualmente se o autoloader não funcionou
-    $sdkPath = base_path('vendor/mercadopago/dx-php/src/MercadoPago/SDK.php');
-    if (file_exists($sdkPath)) {
-        require_once $sdkPath;
-    } else {
-        throw new \RuntimeException(
-            'Pacote Mercado Pago não instalado corretamente. Execute: composer require mercadopago/dx-php && composer dump-autoload'
-        );
-    }
-}
-
-use MercadoPago\SDK;
-use MercadoPago\Payment;
+use MercadoPago\MercadoPagoConfig;
+use MercadoPago\Client\Payment\PaymentClient;
+use MercadoPago\MercadoPagoClient;
 
 /**
  * Implementação do gateway Mercado Pago
  * 
  * Infrastructure Layer - Responsável pela comunicação com o Mercado Pago
+ * Compatível com SDK versão 3.8.0+
  */
 class MercadoPagoGateway implements PaymentProviderInterface
 {
     private string $accessToken;
     private bool $isSandbox;
+    private PaymentClient $paymentClient;
 
     public function __construct()
     {
@@ -44,8 +33,11 @@ class MercadoPagoGateway implements PaymentProviderInterface
             throw new DomainException('Mercado Pago access token não configurado.');
         }
 
-        // Inicializar SDK do Mercado Pago
-        SDK::setAccessToken($this->accessToken);
+        // Inicializar SDK do Mercado Pago (versão 3.8.0+)
+        MercadoPagoConfig::setAccessToken($this->accessToken);
+        
+        // Criar cliente de pagamento
+        $this->paymentClient = new PaymentClient();
     }
 
     /**
@@ -54,52 +46,44 @@ class MercadoPagoGateway implements PaymentProviderInterface
     public function processPayment(PaymentRequest $request, string $idempotencyKey): PaymentResult
     {
         try {
-            $payment = new Payment();
-            
-            // Dados básicos
-            $payment->transaction_amount = $request->amount->toReais();
-            $payment->description = $request->description;
-            $payment->installments = $request->installments;
-            $payment->payment_method_id = $request->paymentMethodId ?? 'credit_card';
-            
-            // Token do cartão (obtido via MercadoPago.js no frontend)
-            if ($request->cardToken) {
-                $payment->token = $request->cardToken;
-            }
-
-            // Dados do pagador
-            $payment->payer = [
-                'email' => $request->payerEmail,
+            // Preparar dados do pagamento para a nova API
+            $paymentData = [
+                'transaction_amount' => $request->amount->toReais(),
+                'description' => $request->description,
+                'installments' => $request->installments ?? 1,
+                'payment_method_id' => $request->paymentMethodId ?? 'credit_card',
+                'payer' => [
+                    'email' => $request->payerEmail,
+                ],
+                'external_reference' => $request->externalReference ?? $idempotencyKey,
             ];
 
+            // Token do cartão (obtido via MercadoPago.js no frontend)
+            if ($request->cardToken) {
+                $paymentData['token'] = $request->cardToken;
+            }
+
+            // CPF do pagador
             if ($request->payerCpf) {
-                $payment->payer['identification'] = [
+                $paymentData['payer']['identification'] = [
                     'type' => 'CPF',
                     'number' => preg_replace('/\D/', '', $request->payerCpf),
                 ];
             }
 
-            // Referência externa (para rastreamento)
-            $payment->external_reference = $request->externalReference ?? $idempotencyKey;
-
             // Metadados
             if ($request->metadata) {
-                $payment->metadata = $request->metadata;
+                $paymentData['metadata'] = $request->metadata;
             }
 
-            // IMPORTANTE: Idempotency Key para evitar cobranças duplicadas
-            $payment->setCustomHeaders([
-                'X-Idempotency-Key: ' . $idempotencyKey
-            ]);
-
-            // Salvar pagamento
-            $payment->save();
+            // Criar pagamento usando a nova API
+            $payment = $this->paymentClient->create($paymentData);
 
             // Verificar erros
-            if ($payment->error) {
-                $errorMessage = $payment->error->message ?? 'Erro desconhecido no pagamento';
+            if (isset($payment['error'])) {
+                $errorMessage = $payment['error']['message'] ?? 'Erro desconhecido no pagamento';
                 Log::error('Erro ao processar pagamento no Mercado Pago', [
-                    'error' => $payment->error,
+                    'error' => $payment['error'],
                     'idempotency_key' => $idempotencyKey,
                     'request' => $request,
                 ]);
@@ -127,9 +111,9 @@ class MercadoPagoGateway implements PaymentProviderInterface
     public function getPaymentStatus(string $externalId): PaymentResult
     {
         try {
-            $payment = Payment::find_by_id($externalId);
+            $payment = $this->paymentClient->get($externalId);
 
-            if (!$payment || $payment->error) {
+            if (!$payment || isset($payment['error'])) {
                 throw new NotFoundException("Pagamento não encontrado: {$externalId}");
             }
 
@@ -186,26 +170,27 @@ class MercadoPagoGateway implements PaymentProviderInterface
 
     /**
      * Mapeia Payment do Mercado Pago para PaymentResult
+     * Adaptado para a nova estrutura da API 3.8.0+
      */
-    private function mapPaymentToResult(Payment $payment): PaymentResult
+    private function mapPaymentToResult(array $payment): PaymentResult
     {
-        $payer = $payment->payer ?? [];
+        $payer = $payment['payer'] ?? [];
         $payerIdentification = $payer['identification'] ?? [];
 
-            return new PaymentResult(
-                externalId: (string) $payment->id,
-                status: $this->mapStatus($payment->status),
-                amount: \App\Domain\Shared\ValueObjects\Money::fromReais($payment->transaction_amount),
-                paymentMethod: $payment->payment_method_id ?? 'unknown',
-                description: $payment->description ?? null,
-                payerEmail: $payer['email'] ?? null,
-                payerCpf: $payerIdentification['number'] ?? null,
-                transactionId: $payment->id ?? null,
-                errorMessage: $payment->status_detail ?? null,
-                metadata: $payment->metadata ?? null,
-                createdAt: $payment->date_created ? new \DateTime($payment->date_created) : null,
-                approvedAt: $payment->date_approved ? new \DateTime($payment->date_approved) : null,
-            );
+        return new PaymentResult(
+            externalId: (string) ($payment['id'] ?? ''),
+            status: $this->mapStatus($payment['status'] ?? 'pending'),
+            amount: \App\Domain\Shared\ValueObjects\Money::fromReais($payment['transaction_amount'] ?? 0),
+            paymentMethod: $payment['payment_method_id'] ?? 'unknown',
+            description: $payment['description'] ?? null,
+            payerEmail: $payer['email'] ?? null,
+            payerCpf: $payerIdentification['number'] ?? null,
+            transactionId: $payment['id'] ?? null,
+            errorMessage: $payment['status_detail'] ?? null,
+            metadata: $payment['metadata'] ?? null,
+            createdAt: isset($payment['date_created']) ? new \DateTime($payment['date_created']) : null,
+            approvedAt: isset($payment['date_approved']) ? new \DateTime($payment['date_approved']) : null,
+        );
     }
 
     /**
@@ -222,4 +207,3 @@ class MercadoPagoGateway implements PaymentProviderInterface
         };
     }
 }
-
