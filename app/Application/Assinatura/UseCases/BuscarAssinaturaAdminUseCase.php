@@ -43,11 +43,12 @@ class BuscarAssinaturaAdminUseCase
             $planoDomain = $this->planoRepository->buscarPorId($assinaturaDomain->planoId);
         }
 
-        // Calcular dias restantes
+        // Calcular dias restantes (apenas dias completos, sem horas)
         $diasRestantes = 0;
         if ($assinaturaDomain->dataFim) {
-            $hoje = now();
-            $diasRestantes = $hoje->diffInDays($assinaturaDomain->dataFim, false);
+            $hoje = now()->startOfDay();
+            $dataFim = $assinaturaDomain->dataFim->copy()->startOfDay();
+            $diasRestantes = (int) $hoje->diffInDays($dataFim, false);
         }
 
         return [

@@ -50,7 +50,10 @@ class VerificarAssinaturaAtivaUseCase
                 ];
             }
 
-            $diasRestantes = $hoje->diffInDays($dataFim, false);
+            // Calcular dias restantes (apenas dias completos, sem horas)
+            $hoje = $hoje->startOfDay();
+            $dataFim = $dataFim->copy()->startOfDay();
+            $diasRestantes = (int) $hoje->diffInDays($dataFim, false);
             $diasExpirado = $diasRestantes < 0 ? abs($diasRestantes) : 0;
             
             // Verificar se está suspensa
