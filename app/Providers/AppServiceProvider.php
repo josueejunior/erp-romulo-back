@@ -211,6 +211,13 @@ class AppServiceProvider extends ServiceProvider
             ->hourly()
             ->withoutOverlapping();
 
+        // Agendar verificação de assinaturas expiradas
+        // Executa diariamente às 2h da manhã
+        Schedule::command('assinaturas:verificar-expiradas --bloquear')
+            ->dailyAt('02:00')
+            ->withoutOverlapping()
+            ->onOneServer();
+
         // Registrar Listeners para Domain Events
         \Illuminate\Support\Facades\Event::listen(
             \App\Domain\Auth\Events\UsuarioCriado::class,

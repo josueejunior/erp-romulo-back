@@ -182,6 +182,7 @@ Route::prefix('v1')->group(function () {
             ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
         
         Route::module('fornecedores', ApiFornecedorController::class, 'fornecedor')
+            ->middleware([\App\Http\Middleware\CheckSubscription::class])
             ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
         
         Route::module('custos-indiretos', ApiCustoIndiretoController::class, 'id')

@@ -195,7 +195,11 @@ class MercadoPagoGateway implements PaymentProviderInterface
                 }
 
                 // Tratamento específico para erros conhecidos
-                if (str_contains(strtolower($detailedMessage), 'unauthorized') || str_contains(strtolower($detailedMessage), 'policy')) {
+                if (str_contains(strtolower($detailedMessage), 'collector user without key enabled for qr render') || 
+                    str_contains(strtolower($detailedMessage), 'qr render') ||
+                    str_contains(strtolower($detailedMessage), 'pix not enabled')) {
+                    $detailedMessage = 'PIX não está habilitado na sua conta do Mercado Pago. Por favor, use cartão de crédito ou entre em contato com o suporte para habilitar PIX.';
+                } elseif (str_contains(strtolower($detailedMessage), 'unauthorized') || str_contains(strtolower($detailedMessage), 'policy')) {
                     $detailedMessage = 'Erro de autenticação no Mercado Pago. Verifique se o Access Token está correto e tem as permissões necessárias. ' . 
                                       'Certifique-se de estar usando o token correto (sandbox ou produção) e que ele tenha permissão para criar pagamentos.';
                 } elseif (str_contains(strtolower($detailedMessage), 'diff_param_bins') || str_contains(strtolower($errorCode ?? ''), 'diff_param_bins')) {
@@ -245,6 +249,13 @@ class MercadoPagoGateway implements PaymentProviderInterface
                         $errorMessage .= ' - ' . implode(', ', array_filter($causes));
                     }
                 }
+            }
+
+            // Tratamento específico para erro de PIX não habilitado
+            if (str_contains(strtolower($errorMessage), 'collector user without key enabled for qr render') || 
+                str_contains(strtolower($errorMessage), 'qr render') ||
+                str_contains(strtolower($errorMessage), 'pix not enabled')) {
+                $errorMessage = 'PIX não está habilitado na sua conta do Mercado Pago. Por favor, use cartão de crédito ou entre em contato com o suporte para habilitar PIX.';
             }
             
             // Tratamento específico para erro de autorização

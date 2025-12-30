@@ -94,6 +94,36 @@ class FornecedorController extends BaseApiController
      */
     public function store(FornecedorCreateRequest $request): JsonResponse
     {
+        // Verificar se tem assinatura ativa
+        $tenant = tenancy()->tenant;
+        if (!$tenant) {
+            return response()->json([
+                'message' => 'Tenant não encontrado',
+                'code' => 'TENANT_NOT_FOUND'
+            ], 404);
+        }
+
+        $assinatura = $tenant->assinaturaAtual;
+        if (!$assinatura) {
+            return response()->json([
+                'message' => 'Você precisa contratar um plano para cadastrar fornecedores.',
+                'code' => 'NO_SUBSCRIPTION',
+                'action' => 'subscribe'
+            ], 403);
+        }
+
+        // Verificar se está ativa ou no grace period
+        if (!$assinatura->isAtiva() && !$assinatura->estaNoGracePeriod()) {
+            $diasExpirado = abs($assinatura->diasRestantes());
+            return response()->json([
+                'message' => "Sua assinatura expirou há {$diasExpirado} dias. Renove sua assinatura para continuar cadastrando fornecedores.",
+                'code' => 'SUBSCRIPTION_EXPIRED',
+                'data_vencimento' => $assinatura->data_fim->format('Y-m-d'),
+                'dias_expirado' => $diasExpirado,
+                'action' => 'renew'
+            ], 403);
+        }
+
         if (!PermissionHelper::canManageMasterData()) {
             return response()->json(['message' => 'Você não tem permissão para cadastrar fornecedores.'], 403);
         }
