@@ -94,6 +94,8 @@ class PaymentController extends BaseApiController
             }
 
             // Para planos pagos, criar PaymentRequest e processar via gateway
+            // IMPORTANTE: NÃO enviar payment_method_id fixo - o token já contém essa informação
+            // Enviar payment_method_id fixo causa erro diff_param_bins
             $paymentRequest = PaymentRequest::fromArray([
                 'amount' => $valor,
                 'description' => "Plano {$plano->nome} - {$validated['periodo']} - Sistema Rômulo",
@@ -101,7 +103,7 @@ class PaymentController extends BaseApiController
                 'payer_cpf' => $validated['payer_cpf'] ?? null,
                 'card_token' => $validated['card_token'],
                 'installments' => $validated['installments'] ?? 1,
-                'payment_method_id' => 'credit_card',
+                // NÃO enviar payment_method_id - será detectado automaticamente do token
                 'external_reference' => "tenant_{$tenant->id}_plano_{$plano->id}",
                 'metadata' => [
                     'tenant_id' => $tenant->id,

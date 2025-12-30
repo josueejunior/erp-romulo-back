@@ -62,19 +62,21 @@ class MercadoPagoGateway implements PaymentProviderInterface
             }
 
             // Preparar dados do pagamento para a nova API
+            // IMPORTANTE: Não fixar payment_method_id - deixar o Mercado Pago detectar automaticamente do token
+            // O token já contém todas as informações do cartão (BIN, bandeira, etc)
             $paymentData = [
-                'transaction_amount' => round($request->amount->toReais(), 2), // Garantir 2 casas decimais
-                'description' => $request->description,
+                'transaction_amount' => (float) round($request->amount->toReais(), 2), // Garantir 2 casas decimais
+                'description' => substr($request->description, 0, 255), // Limitar tamanho
                 'installments' => (int) ($request->installments ?? 1),
-                'payment_method_id' => $request->paymentMethodId ?? 'credit_card',
-                'token' => $request->cardToken, // Token é obrigatório
+                // NÃO enviar payment_method_id fixo - o token já contém essa informação
+                // Se enviar errado, causa erro diff_param_bins
+                'token' => (string) $request->cardToken, // Token é obrigatório e deve ser string
                 'payer' => [
                     'email' => $request->payerEmail,
                 ],
-                'external_reference' => $request->externalReference ?? $idempotencyKey,
             ];
 
-            // CPF do pagador (obrigatório para alguns casos)
+            // CPF do pagador (obrigatório para cartão de crédito no Brasil)
             if ($request->payerCpf) {
                 $cpfLimpo = preg_replace('/\D/', '', $request->payerCpf);
                 if (strlen($cpfLimpo) === 11) {
@@ -83,26 +85,65 @@ class MercadoPagoGateway implements PaymentProviderInterface
                         'number' => $cpfLimpo,
                     ];
                 }
+            } else {
+                Log::warning('CPF do pagador não fornecido', [
+                    'payer_email' => $request->payerEmail,
+                ]);
             }
 
-            // Metadados
-            if ($request->metadata) {
+            // External reference (opcional, mas recomendado)
+            if ($request->externalReference) {
+                $paymentData['external_reference'] = substr($request->externalReference, 0, 256);
+            } else {
+                $paymentData['external_reference'] = substr($idempotencyKey, 0, 256);
+            }
+
+            // Metadados (opcional)
+            if ($request->metadata && is_array($request->metadata)) {
                 $paymentData['metadata'] = $request->metadata;
             }
 
+            // Statement descriptor (opcional, mas recomendado)
+            $paymentData['statement_descriptor'] = 'SISTEMA ROMULO';
+            
+            // NÃO enviar issuer_id - deixar o Mercado Pago detectar do token
+            // Enviar issuer_id errado causa erro diff_param_bins
+
             // Log dos dados antes de enviar (sem dados sensíveis)
-            Log::debug('Dados do pagamento sendo enviados ao Mercado Pago', [
+            // IMPORTANTE: Log completo para debug do erro diff_param_bins
+            Log::info('Payload Final MP (antes de enviar):', [
                 'transaction_amount' => $paymentData['transaction_amount'],
+                'description' => $paymentData['description'],
                 'installments' => $paymentData['installments'],
-                'payment_method_id' => $paymentData['payment_method_id'],
+                'has_payment_method_id' => isset($paymentData['payment_method_id']),
+                'payment_method_id' => $paymentData['payment_method_id'] ?? 'NÃO ENVIADO (correto - será detectado do token)',
                 'has_token' => !empty($paymentData['token']),
-                'token_length' => strlen($paymentData['token']),
+                'token_length' => strlen($paymentData['token'] ?? ''),
+                'token_preview' => !empty($paymentData['token']) ? substr($paymentData['token'], 0, 15) . '...' : 'vazio',
                 'payer_email' => $paymentData['payer']['email'],
                 'has_cpf' => isset($paymentData['payer']['identification']),
+                'cpf' => $paymentData['payer']['identification']['number'] ?? 'não fornecido',
+                'has_issuer_id' => isset($paymentData['issuer_id']),
+                'issuer_id' => $paymentData['issuer_id'] ?? 'NÃO ENVIADO (correto - será detectado do token)',
+                'external_reference' => $paymentData['external_reference'] ?? 'não fornecido',
+                'statement_descriptor' => $paymentData['statement_descriptor'] ?? 'não fornecido',
+                'payment_data_keys' => array_keys($paymentData),
+                'is_sandbox' => $this->isSandbox,
             ]);
 
             // Criar pagamento usando a nova API
-            $payment = $this->paymentClient->create($paymentData);
+            // IMPORTANTE: O SDK do Mercado Pago espera um array associativo
+            try {
+                $payment = $this->paymentClient->create($paymentData);
+            } catch (\Exception $e) {
+                Log::error('Erro ao chamar PaymentClient->create', [
+                    'exception' => $e->getMessage(),
+                    'exception_class' => get_class($e),
+                    'payment_data_keys' => array_keys($paymentData),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+                throw $e;
+            }
 
             // Log para depuração
             Log::debug('Resposta do Mercado Pago', [
