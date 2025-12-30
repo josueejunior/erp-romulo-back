@@ -282,6 +282,14 @@ Route::prefix('admin')->group(function () {
             Route::get('/{tenant}/empresas-disponiveis', [AdminUserController::class, 'empresas'])
                 ->middleware([\App\Http\Middleware\InitializeTenant::class]);
         });
+
+        // Gerenciamento de assinaturas
+        Route::prefix('assinaturas')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\AdminAssinaturaController::class, 'index']);
+            Route::get('/tenants', [\App\Http\Controllers\Admin\AdminAssinaturaController::class, 'tenants']);
+            Route::get('/{tenantId}/{assinaturaId}', [\App\Http\Controllers\Admin\AdminAssinaturaController::class, 'show'])
+                ->where(['tenantId' => '[0-9]+', 'assinaturaId' => '[0-9]+']);
+        });
     });
 });
 
