@@ -27,7 +27,7 @@ readonly class PaymentRequest
 
     private function validate(): void
     {
-        if ($this->amount->getAmount() <= 0) {
+        if ($this->amount->cents <= 0) {
             throw new \App\Domain\Exceptions\DomainException('O valor do pagamento deve ser maior que zero.');
         }
 
