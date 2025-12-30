@@ -18,3 +18,4 @@ interface CalculoPrecoStrategy
     public function calcular(ProcessoItem $item): float;
 }
 
+

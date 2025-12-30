@@ -210,3 +210,4 @@ Este padrão mantém o código limpo, aproveita a inferência de tipos do PHP 8.
 
 
 
+

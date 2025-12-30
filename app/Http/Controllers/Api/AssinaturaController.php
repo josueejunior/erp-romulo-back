@@ -17,34 +17,112 @@ class AssinaturaController extends BaseApiController
      */
     public function atual(Request $request): JsonResponse
     {
-        $empresa = $this->getEmpresaAtivaOrFail();
         $tenant = tenancy()->tenant;
         
-        // TODO: Implementar lógica de assinatura
+        if (!$tenant) {
+            return response()->json([
+                'message' => 'Tenant não encontrado'
+            ], 404);
+        }
+
+        // Buscar assinatura atual do tenant
+        $assinatura = null;
+        
+        // Se o tenant tem assinatura_atual_id, buscar por ele
+        if ($tenant->assinatura_atual_id) {
+            $assinatura = \App\Modules\Assinatura\Models\Assinatura::with('plano')
+                ->where('tenant_id', $tenant->id)
+                ->where('id', $tenant->assinatura_atual_id)
+                ->first();
+        }
+        
+        // Se não encontrou, buscar a assinatura mais recente do tenant
+        if (!$assinatura) {
+            $assinatura = \App\Modules\Assinatura\Models\Assinatura::with('plano')
+                ->where('tenant_id', $tenant->id)
+                ->orderBy('data_fim', 'desc')
+                ->orderBy('criado_em', 'desc')
+                ->first();
+        }
+
+        if (!$assinatura) {
+            return response()->json([
+                'message' => 'Nenhuma assinatura encontrada',
+                'code' => 'NO_SUBSCRIPTION'
+            ], 403);
+        }
+
+        // Calcular dias restantes
+        $diasRestantes = $assinatura->diasRestantes();
+
         return response()->json([
             'data' => [
-                'tenant_id' => $tenant?->id,
-                'empresa_id' => $empresa->id,
-                'status' => 'ativa',
-                'plano' => null,
-                'vencimento' => null,
+                'id' => $assinatura->id,
+                'tenant_id' => $assinatura->tenant_id,
+                'plano_id' => $assinatura->plano_id,
+                'status' => $assinatura->status,
+                'data_inicio' => $assinatura->data_inicio ? $assinatura->data_inicio->format('Y-m-d') : null,
+                'data_fim' => $assinatura->data_fim ? $assinatura->data_fim->format('Y-m-d') : null,
+                'valor_pago' => $assinatura->valor_pago,
+                'metodo_pagamento' => $assinatura->metodo_pagamento,
+                'transacao_id' => $assinatura->transacao_id,
+                'dias_restantes' => $diasRestantes,
+                'plano' => $assinatura->plano ? [
+                    'id' => $assinatura->plano->id,
+                    'nome' => $assinatura->plano->nome,
+                    'descricao' => $assinatura->plano->descricao,
+                    'preco_mensal' => $assinatura->plano->preco_mensal,
+                    'preco_anual' => $assinatura->plano->preco_anual,
+                    'limite_processos' => $assinatura->plano->limite_processos,
+                    'limite_usuarios' => $assinatura->plano->limite_usuarios,
+                    'limite_armazenamento_mb' => $assinatura->plano->limite_armazenamento_mb,
+                ] : null,
             ]
         ]);
     }
 
     /**
-     * Retorna status da assinatura
+     * Retorna status da assinatura com limites utilizados
      */
     public function status(Request $request): JsonResponse
     {
         $tenant = tenancy()->tenant;
         
-        // TODO: Implementar lógica de status
+        if (!$tenant) {
+            return response()->json([
+                'message' => 'Tenant não encontrado'
+            ], 404);
+        }
+
+        // Buscar assinatura atual
+        $assinatura = \App\Modules\Assinatura\Models\Assinatura::with('plano')
+            ->where('tenant_id', $tenant->id)
+            ->where('id', $tenant->assinatura_atual_id)
+            ->first();
+
+        if (!$assinatura || !$assinatura->plano) {
+            return response()->json([
+                'message' => 'Nenhuma assinatura encontrada',
+                'code' => 'NO_SUBSCRIPTION'
+            ], 403);
+        }
+
+        // Contar processos e usuários utilizados
+        $processosUtilizados = \App\Modules\Processo\Models\Processo::count();
+        $usuariosUtilizados = \App\Modules\Auth\Models\User::whereHas('empresas', function($query) {
+            $query->where('empresas.id', $this->getEmpresaAtivaOrFail()->id);
+        })->count();
+
         return response()->json([
             'data' => [
-                'tenant_id' => $tenant?->id,
-                'status' => 'ativa',
-                'mensagem' => 'Assinatura ativa',
+                'tenant_id' => $tenant->id,
+                'status' => $assinatura->status,
+                'limite_processos' => $assinatura->plano->limite_processos,
+                'limite_usuarios' => $assinatura->plano->limite_usuarios,
+                'limite_armazenamento_mb' => $assinatura->plano->limite_armazenamento_mb,
+                'processos_utilizados' => $processosUtilizados,
+                'usuarios_utilizados' => $usuariosUtilizados,
+                'mensagem' => $assinatura->isAtiva() ? 'Assinatura ativa' : 'Assinatura inativa',
             ]
         ]);
     }
