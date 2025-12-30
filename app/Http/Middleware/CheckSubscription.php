@@ -6,13 +6,12 @@ use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 use App\Models\Tenant;
-use App\Modules\Assinatura\Models\Assinatura;
-use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
+use App\Application\Assinatura\UseCases\VerificarAssinaturaAtivaUseCase;
 
 class CheckSubscription
 {
     public function __construct(
-        private AssinaturaRepositoryInterface $assinaturaRepository,
+        private VerificarAssinaturaAtivaUseCase $verificarAssinaturaAtivaUseCase,
     ) {}
 
     /**
@@ -43,112 +42,29 @@ class CheckSubscription
             ], 404);
         }
 
-        // Verificar assinatura usando repository DDD
-        // O repository já cuida do contexto do tenant
-        try {
-            $assinaturaDomain = $this->assinaturaRepository->buscarAssinaturaAtual($tenant->id);
-            
-            if (!$assinaturaDomain) {
-                return response()->json([
-                    'message' => 'Nenhuma assinatura encontrada. Contrate um plano para continuar usando o sistema.',
-                    'code' => 'NO_SUBSCRIPTION',
-                    'action' => 'subscribe'
-                ], 403);
-            }
-            
-            // Converter para modelo para usar métodos como isAtiva()
-            $assinatura = Assinatura::find($assinaturaDomain->id);
-            
-            if (!$assinatura) {
-                return response()->json([
-                    'message' => 'Nenhuma assinatura encontrada. Contrate um plano para continuar usando o sistema.',
-                    'code' => 'NO_SUBSCRIPTION',
-                    'action' => 'subscribe'
-                ], 403);
-            }
-        } catch (\Exception $e) {
-            \Log::error('Erro ao buscar assinatura no middleware', [
-                'tenant_id' => $tenant->id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
+        // Verificar assinatura usando Use Case DDD
+        $resultado = $this->verificarAssinaturaAtivaUseCase->executar($tenant->id);
+
+        // Se não pode acessar, retornar erro
+        if (!$resultado['pode_acessar']) {
+            return response()->json([
+                'message' => $resultado['message'],
+                'code' => $resultado['code'],
+                'action' => $resultado['action'] ?? null,
+                'data_vencimento' => $resultado['data_vencimento'] ?? null,
+                'dias_expirado' => $resultado['dias_expirado'] ?? null,
+            ], 403);
+        }
+
+        // Se pode acessar mas tem warning (grace period), adicionar headers
+        if (isset($resultado['warning']) && $resultado['warning']) {
+            return $next($request)->withHeaders([
+                'X-Subscription-Warning' => 'true',
+                'X-Subscription-Expired-Days' => $resultado['warning']['dias_expirado'] ?? 0,
             ]);
-            
-            // Em caso de erro, tentar buscar diretamente
-            try {
-                $jaInicializado = tenancy()->initialized;
-                if (!$jaInicializado) {
-                    tenancy()->initialize($tenant);
-                }
-                
-                $assinatura = Assinatura::where('tenant_id', $tenant->id)
-                    ->where('status', '!=', 'cancelada')
-                    ->orderBy('data_fim', 'desc')
-                    ->first();
-                
-                if (!$jaInicializado) {
-                    tenancy()->end();
-                }
-                
-                if (!$assinatura) {
-                    return response()->json([
-                        'message' => 'Nenhuma assinatura encontrada. Contrate um plano para continuar usando o sistema.',
-                        'code' => 'NO_SUBSCRIPTION',
-                        'action' => 'subscribe'
-                    ], 403);
-                }
-            } catch (\Exception $e2) {
-                \Log::error('Erro ao buscar assinatura diretamente', [
-                    'tenant_id' => $tenant->id,
-                    'error' => $e2->getMessage(),
-                ]);
-                
-                return response()->json([
-                    'message' => 'Nenhuma assinatura encontrada. Contrate um plano para continuar usando o sistema.',
-                    'code' => 'NO_SUBSCRIPTION',
-                    'action' => 'subscribe'
-                ], 403);
-            }
         }
 
-        if (!$assinatura) {
-            return response()->json([
-                'message' => 'Nenhuma assinatura encontrada. Contrate um plano para continuar usando o sistema.',
-                'code' => 'NO_SUBSCRIPTION',
-                'action' => 'subscribe'
-            ], 403);
-        }
-
-        // Verificar se está ativa
-        if (!$assinatura->isAtiva()) {
-            $diasExpirado = $assinatura->diasRestantes() * -1;
-            
-            if ($assinatura->estaNoGracePeriod()) {
-                // Ainda no período de tolerância - permitir acesso mas avisar
-                return $next($request)->withHeaders([
-                    'X-Subscription-Warning' => 'true',
-                    'X-Subscription-Expired-Days' => $diasExpirado
-                ]);
-            }
-
-            // Expirada - bloquear acesso
-            return response()->json([
-                'message' => 'Sua assinatura expirou em ' . $assinatura->data_fim->format('d/m/Y') . '. Renove sua assinatura para continuar usando o sistema.',
-                'code' => 'SUBSCRIPTION_EXPIRED',
-                'data_vencimento' => $assinatura->data_fim->format('Y-m-d'),
-                'dias_expirado' => $diasExpirado,
-                'action' => 'renew'
-            ], 403);
-        }
-
-        // Verificar se está suspensa
-        if ($assinatura->status === 'suspensa') {
-            return response()->json([
-                'message' => 'Sua assinatura está suspensa. Entre em contato com o suporte.',
-                'code' => 'SUBSCRIPTION_SUSPENDED',
-                'action' => 'contact_support'
-            ], 403);
-        }
-
+        // Tudo OK, permitir acesso
         return $next($request);
     }
 }

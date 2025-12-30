@@ -90,17 +90,24 @@ class VerificarAssinaturasExpiradas extends Command
                     if ($cobrar && $foraGracePeriod && $assinatura->metodo_pagamento && $assinatura->metodo_pagamento !== 'gratuito') {
                         $this->line("     💳 Tentando cobrança automática...");
                         
-                        // Aqui você pode implementar lógica de cobrança automática
-                        // Por exemplo, tentar renovar usando o último método de pagamento
-                        // Por enquanto, apenas logamos
-                        Log::info('Tentativa de cobrança automática', [
-                            'tenant_id' => $tenant->id,
-                            'assinatura_id' => $assinatura->id,
-                            'dias_expirado' => $diasExpirado,
-                        ]);
-                        
-                        $this->warn("     ⚠️  Cobrança automática não implementada ainda");
-                        // TODO: Implementar cobrança automática
+                        try {
+                            $cobrancaUseCase = app(\App\Application\Assinatura\UseCases\CobrarAssinaturaExpiradaUseCase::class);
+                            $resultado = $cobrancaUseCase->executar($tenant->id, $assinatura->id);
+                            
+                            if ($resultado['sucesso']) {
+                                $this->info("     ✅ Cobrança automática realizada com sucesso!");
+                                $totalCobradas++;
+                            } else {
+                                $this->warn("     ⚠️  {$resultado['mensagem']}");
+                            }
+                        } catch (\Exception $e) {
+                            $this->error("     ❌ Erro ao tentar cobrança automática: {$e->getMessage()}");
+                            Log::error('Erro ao tentar cobrança automática', [
+                                'tenant_id' => $tenant->id,
+                                'assinatura_id' => $assinatura->id,
+                                'error' => $e->getMessage(),
+                            ]);
+                        }
                     }
 
                     // Verificar se é Trial e expirou

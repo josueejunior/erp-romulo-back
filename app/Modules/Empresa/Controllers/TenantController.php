@@ -4,8 +4,11 @@ namespace App\Modules\Empresa\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Application\Tenant\UseCases\CriarTenantUseCase;
+use App\Application\Tenant\UseCases\ListarTenantsUseCase;
+use App\Application\Tenant\UseCases\BuscarTenantUseCase;
 use App\Application\Tenant\DTOs\CriarTenantDTO;
 use App\Http\Requests\Tenant\TenantCreateRequest;
+use App\Domain\Exceptions\NotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
@@ -19,7 +22,9 @@ use Illuminate\Support\Facades\Log;
 class TenantController extends Controller
 {
     public function __construct(
-        private CriarTenantUseCase $criarTenantUseCase
+        private CriarTenantUseCase $criarTenantUseCase,
+        private ListarTenantsUseCase $listarTenantsUseCase,
+        private BuscarTenantUseCase $buscarTenantUseCase,
     ) {}
 
     /**
@@ -87,8 +92,55 @@ class TenantController extends Controller
      */
     public function list(Request $request)
     {
-        // TODO: Implementar Use Case de listagem
-        return response()->json(['message' => 'Em implementação']);
+        try {
+            // Preparar filtros
+            $filtros = [
+                'per_page' => $request->get('per_page', 15),
+            ];
+
+            if ($request->has('status')) {
+                $filtros['status'] = $request->status;
+            }
+
+            if ($request->has('search')) {
+                $filtros['search'] = $request->search;
+            }
+
+            // Executar Use Case
+            $tenantsPaginator = $this->listarTenantsUseCase->executar($filtros);
+
+            // Formatar resposta
+            $tenants = collect($tenantsPaginator->items())->map(function ($tenant) {
+                return [
+                    'id' => $tenant->id,
+                    'razao_social' => $tenant->razaoSocial,
+                    'cnpj' => $tenant->cnpj,
+                    'email' => $tenant->email,
+                    'status' => $tenant->status,
+                    'plano_atual_id' => $tenant->planoAtualId,
+                    'assinatura_atual_id' => $tenant->assinaturaAtualId,
+                ];
+            });
+
+            return response()->json([
+                'data' => $tenants,
+                'meta' => [
+                    'current_page' => $tenantsPaginator->currentPage(),
+                    'per_page' => $tenantsPaginator->perPage(),
+                    'total' => $tenantsPaginator->total(),
+                    'last_page' => $tenantsPaginator->lastPage(),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Erro ao listar tenants', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'message' => 'Erro ao listar tenants: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**
@@ -96,8 +148,28 @@ class TenantController extends Controller
      */
     public function get(Request $request, $id)
     {
-        // TODO: Implementar Use Case de busca
-        return response()->json(['message' => 'Em implementação']);
+        try {
+            // Executar Use Case
+            $tenant = $this->buscarTenantUseCase->executar($id);
+
+            return response()->json([
+                'data' => $tenant,
+            ]);
+        } catch (NotFoundException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 404);
+        } catch (\Exception $e) {
+            Log::error('Erro ao buscar tenant', [
+                'tenant_id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'message' => 'Erro ao buscar tenant: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 }
 

@@ -5,6 +5,8 @@ namespace App\Modules\Assinatura\Controllers;
 use App\Http\Controllers\Api\BaseApiController;
 use App\Application\Assinatura\UseCases\BuscarAssinaturaAtualUseCase;
 use App\Application\Assinatura\UseCases\ObterStatusAssinaturaUseCase;
+use App\Application\Assinatura\UseCases\ListarAssinaturasUseCase;
+use App\Application\Assinatura\UseCases\CancelarAssinaturaUseCase;
 use App\Application\Payment\UseCases\RenovarAssinaturaUseCase;
 use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
 use App\Http\Requests\Assinatura\RenovarAssinaturaRequest;
@@ -22,6 +24,8 @@ class AssinaturaController extends BaseApiController
     public function __construct(
         private BuscarAssinaturaAtualUseCase $buscarAssinaturaAtualUseCase,
         private ObterStatusAssinaturaUseCase $obterStatusAssinaturaUseCase,
+        private ListarAssinaturasUseCase $listarAssinaturasUseCase,
+        private CancelarAssinaturaUseCase $cancelarAssinaturaUseCase,
         private RenovarAssinaturaUseCase $renovarAssinaturaUseCase,
         private AssinaturaRepositoryInterface $assinaturaRepository,
     ) {}
@@ -153,26 +157,104 @@ class AssinaturaController extends BaseApiController
     }
 
     /**
-     * Lista assinaturas
+     * Lista assinaturas do tenant
      */
     public function index(Request $request): JsonResponse
     {
-        // TODO: Implementar listagem
-        return response()->json([
-            'data' => [],
-            'message' => 'Funcionalidade em desenvolvimento'
-        ]);
+        try {
+            $tenant = tenancy()->tenant;
+            
+            if (!$tenant) {
+                return response()->json([
+                    'message' => 'Tenant não encontrado'
+                ], 404);
+            }
+
+            // Preparar filtros
+            $filtros = [];
+            if ($request->has('status')) {
+                $filtros['status'] = $request->status;
+            }
+
+            // Executar Use Case
+            $assinaturas = $this->listarAssinaturasUseCase->executar($tenant->id, $filtros);
+
+            return response()->json([
+                'data' => $assinaturas->values()->all(),
+                'meta' => [
+                    'total' => $assinaturas->count(),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao listar assinaturas');
+        }
     }
 
     /**
-     * Cria nova assinatura
+     * Cria nova assinatura manualmente (admin ou sistema)
+     * 
+     * Nota: Assinaturas normalmente são criadas via PaymentController::processarAssinatura()
+     * Este método é para casos especiais (ex: admin criar assinatura gratuita)
      */
     public function store(Request $request): JsonResponse
     {
-        // TODO: Implementar criação
-        return response()->json([
-            'message' => 'Funcionalidade em desenvolvimento'
-        ], 501);
+        try {
+            $validated = $request->validate([
+                'plano_id' => 'required|exists:planos,id',
+                'data_inicio' => 'nullable|date',
+                'data_fim' => 'required|date|after:data_inicio',
+                'valor_pago' => 'nullable|numeric|min:0',
+                'metodo_pagamento' => 'nullable|string|in:gratuito,credit_card,pix',
+                'status' => 'nullable|string|in:ativa,suspensa,expirada',
+            ]);
+
+            $tenant = tenancy()->tenant;
+            if (!$tenant) {
+                return response()->json(['message' => 'Tenant não encontrado'], 404);
+            }
+
+            // Buscar plano
+            $plano = \App\Modules\Assinatura\Models\Plano::find($validated['plano_id']);
+            if (!$plano) {
+                return response()->json(['message' => 'Plano não encontrado'], 404);
+            }
+
+            // Criar assinatura
+            $assinatura = \App\Modules\Assinatura\Models\Assinatura::create([
+                'tenant_id' => $tenant->id,
+                'plano_id' => $validated['plano_id'],
+                'status' => $validated['status'] ?? 'ativa',
+                'data_inicio' => $validated['data_inicio'] ?? now(),
+                'data_fim' => $validated['data_fim'],
+                'valor_pago' => $validated['valor_pago'] ?? 0,
+                'metodo_pagamento' => $validated['metodo_pagamento'] ?? 'gratuito',
+                'dias_grace_period' => 7,
+            ]);
+
+            // Atualizar tenant se for a primeira assinatura ou se não tiver assinatura atual
+            if (!$tenant->assinatura_atual_id || $validated['status'] === 'ativa') {
+                $tenant->update([
+                    'plano_atual_id' => $plano->id,
+                    'assinatura_atual_id' => $assinatura->id,
+                ]);
+            }
+
+            return response()->json([
+                'message' => 'Assinatura criada com sucesso',
+                'data' => [
+                    'id' => $assinatura->id,
+                    'status' => $assinatura->status,
+                    'data_fim' => $assinatura->data_fim->format('Y-m-d'),
+                ],
+            ], 201);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'message' => 'Erro de validação',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao criar assinatura');
+        }
     }
 
     /**
@@ -278,10 +360,34 @@ class AssinaturaController extends BaseApiController
      */
     public function cancelar(Request $request, $assinatura): JsonResponse
     {
-        // TODO: Implementar cancelamento
-        return response()->json([
-            'message' => 'Funcionalidade em desenvolvimento'
-        ], 501);
+        try {
+            $tenant = tenancy()->tenant;
+            if (!$tenant) {
+                return response()->json(['message' => 'Tenant não encontrado'], 404);
+            }
+
+            // Executar Use Case
+            $assinaturaCancelada = $this->cancelarAssinaturaUseCase->executar($tenant->id, $assinatura);
+
+            return response()->json([
+                'message' => 'Assinatura cancelada com sucesso',
+                'data' => [
+                    'id' => $assinaturaCancelada->id,
+                    'status' => $assinaturaCancelada->status,
+                    'data_cancelamento' => $assinaturaCancelada->data_cancelamento?->format('Y-m-d H:i:s'),
+                ],
+            ], 200);
+        } catch (\App\Domain\Exceptions\NotFoundException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 404);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 400);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao cancelar assinatura');
+        }
     }
 }
 

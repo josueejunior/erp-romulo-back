@@ -341,12 +341,73 @@ class MercadoPagoGateway implements PaymentProviderInterface
 
     /**
      * Valida a assinatura do webhook
+     * 
+     * O Mercado Pago envia a assinatura no header X-Signature no formato:
+     * sha256=hash,ts=timestamp
+     * 
+     * O hash é calculado como: sha256(data_id + ts + secret)
+     * onde data_id é o ID do pagamento e secret é a chave secreta do webhook
      */
     public function validateWebhookSignature(array $payload, string $signature): bool
     {
-        // TODO: Implementar validação de assinatura HMAC se necessário
-        // Por enquanto, validar apenas se o payload tem estrutura esperada
-        return isset($payload['type']) && isset($payload['data']['id']);
+        // Validar estrutura básica do payload
+        if (!isset($payload['type']) || !isset($payload['data']['id'])) {
+            return false;
+        }
+
+        // Se não há assinatura, aceitar (modo desenvolvimento)
+        if (empty($signature)) {
+            Log::warning('Webhook sem assinatura - aceito apenas em desenvolvimento', [
+                'payload_type' => $payload['type'] ?? null,
+            ]);
+            return config('app.debug', false);
+        }
+
+        // Obter chave secreta do webhook (configurar em .env)
+        $webhookSecret = config('services.mercadopago.webhook_secret');
+        
+        if (empty($webhookSecret)) {
+            // Se não configurado, apenas validar estrutura
+            Log::warning('Webhook secret não configurado - validando apenas estrutura');
+            return true;
+        }
+
+        // Parsear assinatura (formato: sha256=hash,ts=timestamp)
+        $signatureParts = [];
+        foreach (explode(',', $signature) as $part) {
+            $parts = explode('=', trim($part), 2);
+            if (count($parts) === 2) {
+                $signatureParts[$parts[0]] = $parts[1];
+            }
+        }
+
+        if (!isset($signatureParts['sha256']) || !isset($signatureParts['ts'])) {
+            Log::warning('Formato de assinatura inválido', [
+                'signature' => $signature,
+            ]);
+            return false;
+        }
+
+        $receivedHash = $signatureParts['sha256'];
+        $timestamp = $signatureParts['ts'];
+        $dataId = $payload['data']['id'];
+
+        // Calcular hash esperado
+        $expectedHash = hash('sha256', $dataId . $timestamp . $webhookSecret);
+
+        // Comparar hashes (timing-safe)
+        $isValid = hash_equals($expectedHash, $receivedHash);
+
+        if (!$isValid) {
+            Log::warning('Assinatura de webhook inválida', [
+                'data_id' => $dataId,
+                'timestamp' => $timestamp,
+                'received_hash' => substr($receivedHash, 0, 10) . '...',
+                'expected_hash' => substr($expectedHash, 0, 10) . '...',
+            ]);
+        }
+
+        return $isValid;
     }
 
     /**
