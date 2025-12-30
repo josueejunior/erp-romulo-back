@@ -290,6 +290,12 @@ Route::prefix('admin')->group(function () {
             Route::get('/{tenantId}/{assinaturaId}', [\App\Http\Controllers\Admin\AdminAssinaturaController::class, 'show'])
                 ->where(['tenantId' => '[0-9]+', 'assinaturaId' => '[0-9]+']);
         });
+
+        // Upload de arquivos
+        Route::prefix('upload')->group(function () {
+            Route::post('/image', [\App\Http\Controllers\UploadController::class, 'uploadImage']);
+            Route::delete('/image', [\App\Http\Controllers\UploadController::class, 'deleteImage']);
+        });
     });
 });
 
