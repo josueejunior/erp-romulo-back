@@ -4,18 +4,25 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Responses\ApiResponse;
-use App\Models\Tenant;
-use App\Modules\Assinatura\Models\Assinatura;
-use App\Modules\Assinatura\Models\Plano;
+use App\Application\Assinatura\UseCases\ListarAssinaturasAdminUseCase;
+use App\Application\Assinatura\UseCases\BuscarAssinaturaAdminUseCase;
+use App\Application\Tenant\UseCases\ListarTenantsParaFiltroUseCase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Controller Admin para gerenciar assinaturas de todos os tenants
+ * 
+ * 100% DDD - Apenas recebe request e delega para Use Cases
  */
 class AdminAssinaturaController extends Controller
 {
+    public function __construct(
+        private ListarAssinaturasAdminUseCase $listarAssinaturasAdminUseCase,
+        private BuscarAssinaturaAdminUseCase $buscarAssinaturaAdminUseCase,
+        private ListarTenantsParaFiltroUseCase $listarTenantsParaFiltroUseCase,
+    ) {}
+
     /**
      * Listar todas as assinaturas de todos os tenants
      */
@@ -26,109 +33,17 @@ class AdminAssinaturaController extends Controller
                 'tenant_id' => $request->tenant_id,
                 'status' => $request->status,
                 'search' => $request->search,
-                'per_page' => $request->per_page ?? 15,
             ];
 
-            // Buscar todos os tenants
-            $tenants = Tenant::where('status', '!=', 'inativa')
-                ->orWhereNull('status')
-                ->get();
-
-            $todasAssinaturas = [];
-
-            foreach ($tenants as $tenant) {
-                try {
-                    // Inicializar contexto do tenant
-                    $jaInicializado = tenancy()->initialized;
-                    if (!$jaInicializado) {
-                        tenancy()->initialize($tenant);
-                    }
-
-                    // Buscar assinatura atual do tenant
-                    $assinatura = null;
-                    
-                    // Se o tenant tem assinatura_atual_id, buscar por ele
-                    if ($tenant->assinatura_atual_id) {
-                        $assinatura = Assinatura::with('plano')
-                            ->where('id', $tenant->assinatura_atual_id)
-                            ->first();
-                    }
-
-                    // Se não encontrou, buscar a mais recente
-                    if (!$assinatura) {
-                        $assinatura = Assinatura::with('plano')
-                            ->where('tenant_id', $tenant->id)
-                            ->where('status', '!=', 'cancelada')
-                            ->orderBy('data_fim', 'desc')
-                            ->orderBy('criado_em', 'desc')
-                            ->first();
-                    }
-
-                    if ($assinatura) {
-                        $todasAssinaturas[] = [
-                            'id' => $assinatura->id,
-                            'tenant_id' => $tenant->id,
-                            'tenant_nome' => $tenant->razao_social,
-                            'tenant_cnpj' => $tenant->cnpj,
-                            'plano_id' => $assinatura->plano_id,
-                            'plano_nome' => $assinatura->plano?->nome ?? 'N/A',
-                            'status' => $assinatura->status,
-                            'valor_pago' => $assinatura->valor_pago ?? 0,
-                            'data_inicio' => $assinatura->data_inicio?->format('Y-m-d'),
-                            'data_fim' => $assinatura->data_fim?->format('Y-m-d'),
-                            'metodo_pagamento' => $assinatura->metodo_pagamento ?? 'N/A',
-                            'transacao_id' => $assinatura->transacao_id,
-                            'dias_restantes' => $assinatura->diasRestantes(),
-                        ];
-                    }
-
-                    // Finalizar contexto do tenant
-                    if (!$jaInicializado && tenancy()->initialized) {
-                        tenancy()->end();
-                    }
-                } catch (\Exception $e) {
-                    Log::warning('Erro ao buscar assinatura do tenant', [
-                        'tenant_id' => $tenant->id,
-                        'error' => $e->getMessage(),
-                    ]);
-                    
-                    // Finalizar contexto se ainda estiver inicializado
-                    if (tenancy()->initialized) {
-                        tenancy()->end();
-                    }
-                }
-            }
-
-            // Aplicar filtros
-            if ($filtros['tenant_id']) {
-                $todasAssinaturas = array_filter($todasAssinaturas, function ($a) use ($filtros) {
-                    return $a['tenant_id'] == $filtros['tenant_id'];
-                });
-            }
-
-            if ($filtros['status']) {
-                $todasAssinaturas = array_filter($todasAssinaturas, function ($a) use ($filtros) {
-                    return $a['status'] === $filtros['status'];
-                });
-            }
-
-            if ($filtros['search']) {
-                $search = strtolower($filtros['search']);
-                $todasAssinaturas = array_filter($todasAssinaturas, function ($a) use ($search) {
-                    return str_contains(strtolower($a['tenant_nome']), $search) ||
-                           str_contains(strtolower($a['plano_nome']), $search);
-                });
-            }
-
-            // Reindexar array
-            $todasAssinaturas = array_values($todasAssinaturas);
+            // Executar Use Case
+            $todasAssinaturas = $this->listarAssinaturasAdminUseCase->executar($filtros);
 
             // Paginação manual
-            $total = count($todasAssinaturas);
-            $perPage = $filtros['per_page'];
+            $perPage = $request->per_page ?? 15;
             $currentPage = $request->page ?? 1;
+            $total = $todasAssinaturas->count();
             $offset = ($currentPage - 1) * $perPage;
-            $paginated = array_slice($todasAssinaturas, $offset, $perPage);
+            $paginated = $todasAssinaturas->slice($offset, $perPage)->values();
 
             return response()->json([
                 'data' => $paginated,
@@ -152,50 +67,12 @@ class AdminAssinaturaController extends Controller
     public function show(int $tenantId, int $assinaturaId)
     {
         try {
-            $tenant = Tenant::find($tenantId);
-            
-            if (!$tenant) {
-                return response()->json(['message' => 'Tenant não encontrado.'], 404);
-            }
+            // Executar Use Case
+            $data = $this->buscarAssinaturaAdminUseCase->executar($tenantId, $assinaturaId);
 
-            // Inicializar contexto do tenant
-            $jaInicializado = tenancy()->initialized;
-            if (!$jaInicializado) {
-                tenancy()->initialize($tenant);
-            }
-
-            try {
-                $assinatura = Assinatura::with('plano')
-                    ->where('id', $assinaturaId)
-                    ->where('tenant_id', $tenantId)
-                    ->first();
-
-                if (!$assinatura) {
-                    return response()->json(['message' => 'Assinatura não encontrada.'], 404);
-                }
-
-                $data = [
-                    'id' => $assinatura->id,
-                    'tenant_id' => $tenant->id,
-                    'tenant_nome' => $tenant->razao_social,
-                    'plano_id' => $assinatura->plano_id,
-                    'plano_nome' => $assinatura->plano?->nome ?? 'N/A',
-                    'status' => $assinatura->status,
-                    'valor_pago' => $assinatura->valor_pago ?? 0,
-                    'data_inicio' => $assinatura->data_inicio?->format('Y-m-d'),
-                    'data_fim' => $assinatura->data_fim?->format('Y-m-d'),
-                    'metodo_pagamento' => $assinatura->metodo_pagamento ?? 'N/A',
-                    'transacao_id' => $assinatura->transacao_id,
-                    'dias_restantes' => $assinatura->diasRestantes(),
-                    'observacoes' => $assinatura->observacoes,
-                ];
-
-                return ApiResponse::item($data);
-            } finally {
-                if (!$jaInicializado && tenancy()->initialized) {
-                    tenancy()->end();
-                }
-            }
+            return ApiResponse::item($data);
+        } catch (\App\Domain\Exceptions\NotFoundException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
         } catch (\Exception $e) {
             Log::error('Erro ao buscar assinatura', [
                 'error' => $e->getMessage(),
@@ -212,20 +89,11 @@ class AdminAssinaturaController extends Controller
     public function tenants()
     {
         try {
-            $tenants = Tenant::select('id', 'razao_social', 'cnpj')
-                ->where('status', '!=', 'inativa')
-                ->orWhereNull('status')
-                ->orderBy('razao_social')
-                ->get();
+            // Executar Use Case
+            $tenants = $this->listarTenantsParaFiltroUseCase->executar();
 
             return response()->json([
-                'data' => $tenants->map(function ($tenant) {
-                    return [
-                        'id' => $tenant->id,
-                        'razao_social' => $tenant->razao_social,
-                        'cnpj' => $tenant->cnpj,
-                    ];
-                }),
+                'data' => $tenants->values(),
             ]);
         } catch (\Exception $e) {
             Log::error('Erro ao listar tenants', ['error' => $e->getMessage()]);
