@@ -30,7 +30,17 @@ class MercadoPagoGateway implements PaymentProviderInterface
         $this->isSandbox = config('services.mercadopago.sandbox', true);
 
         if (empty($this->accessToken)) {
-            throw new DomainException('Mercado Pago access token não configurado.');
+            throw new DomainException('Mercado Pago access token não configurado. Configure MP_ACCESS_TOKEN no arquivo .env');
+        }
+
+        // Validar formato do token
+        $tokenPrefix = $this->isSandbox ? 'TEST-' : 'APP_USR-';
+        if (!str_starts_with($this->accessToken, $tokenPrefix)) {
+            Log::warning('Formato de token do Mercado Pago pode estar incorreto', [
+                'token_prefix' => substr($this->accessToken, 0, 10) . '...',
+                'expected_prefix' => $tokenPrefix,
+                'is_sandbox' => $this->isSandbox,
+            ]);
         }
 
         // Inicializar SDK do Mercado Pago (versão 3.8.0+)
@@ -111,6 +121,12 @@ class MercadoPagoGateway implements PaymentProviderInterface
                     $detailedMessage .= " - " . implode(', ', $causeDetails);
                 }
 
+                // Tratamento específico para erro de autorização
+                if (str_contains(strtolower($detailedMessage), 'unauthorized') || str_contains(strtolower($detailedMessage), 'policy')) {
+                    $detailedMessage = 'Erro de autenticação no Mercado Pago. Verifique se o Access Token está correto e tem as permissões necessárias. ' . 
+                                      'Certifique-se de estar usando o token correto (sandbox ou produção) e que ele tenha permissão para criar pagamentos.';
+                }
+
                 throw new DomainException("Erro no pagamento: {$detailedMessage}");
             }
 
@@ -140,6 +156,8 @@ class MercadoPagoGateway implements PaymentProviderInterface
             $content = $apiResponse ? $apiResponse->getContent() : null;
             
             $errorMessage = 'Erro na API do Mercado Pago';
+            $statusCode = $apiResponse ? $apiResponse->getStatusCode() : null;
+            
             if ($content) {
                 $errorMessage = $content['message'] ?? $errorMessage;
                 if (isset($content['error'])) {
@@ -153,11 +171,18 @@ class MercadoPagoGateway implements PaymentProviderInterface
                 }
             }
             
+            // Tratamento específico para erro de autorização
+            if ($statusCode === 401 || str_contains(strtolower($errorMessage), 'unauthorized') || str_contains(strtolower($errorMessage), 'policy')) {
+                $errorMessage = 'Erro de autenticação no Mercado Pago. Verifique se o Access Token está correto e tem as permissões necessárias. ' . 
+                               'Certifique-se de estar usando o token correto (sandbox ou produção) e que ele tenha permissão para criar pagamentos.';
+            }
+            
             Log::error('Exceção MPApiException ao processar pagamento no Mercado Pago', [
                 'exception' => $e->getMessage(),
                 'api_response' => $content,
-                'status_code' => $apiResponse ? $apiResponse->getStatusCode() : null,
+                'status_code' => $statusCode,
                 'idempotency_key' => $idempotencyKey,
+                'is_sandbox' => $this->isSandbox,
                 'trace' => $e->getTraceAsString(),
             ]);
 
