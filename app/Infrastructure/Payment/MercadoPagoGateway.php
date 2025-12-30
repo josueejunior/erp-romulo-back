@@ -8,6 +8,14 @@ use App\Domain\Payment\ValueObjects\PaymentRequest;
 use App\Domain\Exceptions\DomainException;
 use App\Domain\Exceptions\NotFoundException;
 use Illuminate\Support\Facades\Log;
+
+// Verificar se o pacote Mercado Pago está instalado
+if (!class_exists('MercadoPago\SDK')) {
+    throw new \RuntimeException(
+        'Pacote Mercado Pago não instalado. Execute: composer require mercadopago/dx-php'
+    );
+}
+
 use MercadoPago\SDK;
 use MercadoPago\Payment;
 
