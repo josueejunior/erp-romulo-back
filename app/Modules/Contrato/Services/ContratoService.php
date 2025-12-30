@@ -289,13 +289,13 @@ class ContratoService
         $margens = [];
         
         foreach ($contratos as $contrato) {
-            $notasEntrada = \App\Models\NotaFiscal::whereHas('empenho', function($q) use ($contrato) {
+            $notasEntrada = \App\Modules\NotaFiscal\Models\NotaFiscal::whereHas('empenho', function($q) use ($contrato) {
                 $q->where('contrato_id', $contrato->id);
             })->orWhereHas('contrato', function($q) use ($contrato) {
                 $q->where('id', $contrato->id);
             })->where('tipo', 'entrada')->get();
             
-            $notasSaida = \App\Models\NotaFiscal::whereHas('empenho', function($q) use ($contrato) {
+            $notasSaida = \App\Modules\NotaFiscal\Models\NotaFiscal::whereHas('empenho', function($q) use ($contrato) {
                 $q->where('contrato_id', $contrato->id);
             })->orWhereHas('contrato', function($q) use ($contrato) {
                 $q->where('id', $contrato->id);
