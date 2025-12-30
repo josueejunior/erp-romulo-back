@@ -68,36 +68,52 @@ Route::prefix('v1')->group(function () {
     // Rate limiting: 120 requisições por minuto, 1000 por hora
     // Rotas de criação/edição têm rate limiting adicional
     Route::middleware(['auth:sanctum', \App\Http\Middleware\SetAuthContext::class, 'tenancy', 'throttle:120,1'])->group(function () {
-        // Autenticação
+        // Rotas que NÃO precisam de assinatura (exceções)
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::get('/auth/user', [AuthController::class, 'user']);
         
         // Rota de compatibilidade para /user/roles (redireciona para /users/roles)
         Route::get('/user/roles', [\App\Modules\Auth\Controllers\FixUserRolesController::class, 'getCurrentUserRoles']);
         
-        // Dashboard
-        Route::get('/dashboard', [ApiDashboardController::class, 'index']);
+        // Assinaturas e Pagamentos (não precisam de verificação de assinatura)
+        Route::prefix('assinaturas')->group(function () {
+            Route::get('/atual', [ApiAssinaturaController::class, 'atual']);
+            Route::get('/status', [ApiAssinaturaController::class, 'status']);
+            Route::get('/', [ApiAssinaturaController::class, 'index']);
+            Route::post('/', [ApiAssinaturaController::class, 'store']);
+            Route::post('/{assinatura}/renovar', [ApiAssinaturaController::class, 'renovar']);
+            Route::post('/{assinatura}/cancelar', [ApiAssinaturaController::class, 'cancelar']);
+        });
+
+        Route::prefix('payments')->group(function () {
+            Route::post('/processar-assinatura', [ApiPaymentController::class, 'processarAssinatura']);
+        });
         
-        // Calendário
-        Route::prefix('calendario')->group(function () {
+        // Rotas que PRECISAM de assinatura ativa
+        Route::middleware([\App\Http\Middleware\CheckSubscription::class])->group(function () {
+            // Dashboard
+            Route::get('/dashboard', [ApiDashboardController::class, 'index']);
+            
+            // Calendário
+            Route::prefix('calendario')->group(function () {
             // Calendário de Disputas (legado)
             Route::get('/disputas', [ApiCalendarioDisputasController::class, 'index']);
             Route::get('/eventos', [ApiCalendarioDisputasController::class, 'eventos']);
             
-            // Calendário (novo)
-            Route::get('/disputas-novo', [ApiCalendarioController::class, 'disputas']);
-            Route::get('/julgamento', [ApiCalendarioController::class, 'julgamento']);
-            Route::get('/avisos-urgentes', [ApiCalendarioController::class, 'avisosUrgentes']);
-        });
-        
-        // Processos
-        Route::prefix('processos')->group(function () {
-            // Rotas customizadas (fora do Route::module)
-            Route::get('/resumo', [ApiProcessoController::class, 'resumo']);
-            Route::get('/exportar', [ApiProcessoController::class, 'exportar']);
-        });
-        
-        Route::module('processos', ApiProcessoController::class, 'processo')
+                // Calendário (novo)
+                Route::get('/disputas-novo', [ApiCalendarioController::class, 'disputas']);
+                Route::get('/julgamento', [ApiCalendarioController::class, 'julgamento']);
+                Route::get('/avisos-urgentes', [ApiCalendarioController::class, 'avisosUrgentes']);
+            });
+            
+            // Processos
+            Route::prefix('processos')->group(function () {
+                // Rotas customizadas (fora do Route::module)
+                Route::get('/resumo', [ApiProcessoController::class, 'resumo']);
+                Route::get('/exportar', [ApiProcessoController::class, 'exportar']);
+            });
+            
+            Route::module('processos', ApiProcessoController::class, 'processo')
             ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy'])
             ->children(function () {
                 // Rotas customizadas de processo
@@ -168,68 +184,52 @@ Route::prefix('v1')->group(function () {
                 Route::module('notas-fiscais', ApiNotaFiscalController::class, 'notaFiscal')
                     ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
             });
-        
-        // Contratos
-        Route::prefix('contratos')->group(function () {
-            Route::get('/', [ApiContratoController::class, 'listarTodos']); // Lista todos os contratos
-        });
-        
-        // Cadastros
-        Route::module('orgaos', ApiOrgaoController::class, 'orgao')
-            ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
-        
-        Route::module('setors', ApiSetorController::class, 'setor')
-            ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
-        
-        Route::module('fornecedores', ApiFornecedorController::class, 'fornecedor')
-            ->middleware([\App\Http\Middleware\CheckSubscription::class])
-            ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
-        
-        Route::module('custos-indiretos', ApiCustoIndiretoController::class, 'id')
-            ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy'])
-            ->group(function () {
-                Route::get('/resumo', [ApiCustoIndiretoController::class, 'resumo']);
+            
+            // Contratos
+            Route::prefix('contratos')->group(function () {
+                Route::get('/', [ApiContratoController::class, 'listarTodos']); // Lista todos os contratos
             });
+            
+            // Cadastros
+            Route::module('orgaos', ApiOrgaoController::class, 'orgao')
+                ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
+            
+            Route::module('setors', ApiSetorController::class, 'setor')
+                ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
         
-        // Rota de compatibilidade para /custos-indiretos-resumo
-        Route::get('/custos-indiretos-resumo', [ApiCustoIndiretoController::class, 'resumo']);
-        
-        Route::module('documentos-habilitacao', ApiDocumentoHabilitacaoController::class, 'documentoHabilitacao')
-            ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
-        
-        // Usuários
-        Route::module('users', ApiUserController::class, 'user')
-            ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy'])
-            ->group(function () {
-                // Debug/Correção de roles
-                Route::get('/roles', [\App\Modules\Auth\Controllers\FixUserRolesController::class, 'getCurrentUserRoles']);
-                Route::post('/fix-role', [\App\Modules\Auth\Controllers\FixUserRolesController::class, 'fixCurrentUserRole']);
-                // Trocar empresa ativa
-                Route::put('/empresa-ativa', [ApiUserController::class, 'switchEmpresaAtiva']);
+            Route::module('fornecedores', ApiFornecedorController::class, 'fornecedor')
+                ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
+            
+            Route::module('custos-indiretos', ApiCustoIndiretoController::class, 'id')
+                ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy'])
+                ->group(function () {
+                    Route::get('/resumo', [ApiCustoIndiretoController::class, 'resumo']);
+                });
+            
+            // Rota de compatibilidade para /custos-indiretos-resumo
+            Route::get('/custos-indiretos-resumo', [ApiCustoIndiretoController::class, 'resumo']);
+            
+            Route::module('documentos-habilitacao', ApiDocumentoHabilitacaoController::class, 'documentoHabilitacao')
+                ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
+            
+            // Usuários
+            Route::module('users', ApiUserController::class, 'user')
+                ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy'])
+                ->group(function () {
+                    // Debug/Correção de roles
+                    Route::get('/roles', [\App\Modules\Auth\Controllers\FixUserRolesController::class, 'getCurrentUserRoles']);
+                    Route::post('/fix-role', [\App\Modules\Auth\Controllers\FixUserRolesController::class, 'fixCurrentUserRole']);
+                    // Trocar empresa ativa
+                    Route::put('/empresa-ativa', [ApiUserController::class, 'switchEmpresaAtiva']);
+                });
+            
+            // Relatórios
+            Route::prefix('relatorios')->group(function () {
+                Route::get('/financeiro', [ApiRelatorioFinanceiroController::class, 'index']);
+                Route::get('/gestao-mensal', [ApiRelatorioFinanceiroController::class, 'gestaoMensal']);
+                Route::get('/financeiro/exportar', [ApiRelatorioFinanceiroController::class, 'exportar']);
             });
-        
-        // Relatórios
-        Route::prefix('relatorios')->group(function () {
-            Route::get('/financeiro', [ApiRelatorioFinanceiroController::class, 'index']);
-            Route::get('/gestao-mensal', [ApiRelatorioFinanceiroController::class, 'gestaoMensal']);
-            Route::get('/financeiro/exportar', [ApiRelatorioFinanceiroController::class, 'exportar']);
-        });
-
-        // Assinaturas (requer autenticação e tenancy)
-        Route::prefix('assinaturas')->group(function () {
-            // Rotas específicas ANTES de rotas com parâmetros
-            Route::get('/atual', [ApiAssinaturaController::class, 'atual']);
-            Route::get('/status', [ApiAssinaturaController::class, 'status']);
-            Route::get('/', [ApiAssinaturaController::class, 'index']);
-            Route::post('/', [ApiAssinaturaController::class, 'store']);
-            Route::post('/{assinatura}/renovar', [ApiAssinaturaController::class, 'renovar']);
-            Route::post('/{assinatura}/cancelar', [ApiAssinaturaController::class, 'cancelar']);
-        });
-
-        // Pagamentos (requer autenticação e tenancy)
-        Route::prefix('payments')->group(function () {
-            Route::post('/processar-assinatura', [ApiPaymentController::class, 'processarAssinatura']);
-        });
+        }); // Fim do grupo com CheckSubscription
     });
 
     // Webhooks (públicos, sem autenticação)
