@@ -74,5 +74,53 @@ class PlanoRepository implements PlanoRepositoryInterface
     {
         return PlanoModel::find($id);
     }
+
+    /**
+     * Salvar plano (criar ou atualizar)
+     */
+    public function salvar(Plano $plano): Plano
+    {
+        if ($plano->id) {
+            // Atualizar
+            $model = PlanoModel::findOrFail($plano->id);
+            $model->fill([
+                'nome' => $plano->nome,
+                'descricao' => $plano->descricao,
+                'preco_mensal' => $plano->precoMensal,
+                'preco_anual' => $plano->precoAnual,
+                'limite_processos' => $plano->limiteProcessos,
+                'limite_usuarios' => $plano->limiteUsuarios,
+                'limite_armazenamento_mb' => $plano->limiteArmazenamentoMb,
+                'recursos_disponiveis' => $plano->recursosDisponiveis,
+                'ativo' => $plano->ativo,
+                'ordem' => $plano->ordem,
+            ]);
+            $model->save();
+        } else {
+            // Criar
+            $model = PlanoModel::create([
+                'nome' => $plano->nome,
+                'descricao' => $plano->descricao,
+                'preco_mensal' => $plano->precoMensal,
+                'preco_anual' => $plano->precoAnual,
+                'limite_processos' => $plano->limiteProcessos,
+                'limite_usuarios' => $plano->limiteUsuarios,
+                'limite_armazenamento_mb' => $plano->limiteArmazenamentoMb,
+                'recursos_disponiveis' => $plano->recursosDisponiveis,
+                'ativo' => $plano->ativo,
+                'ordem' => $plano->ordem,
+            ]);
+        }
+
+        return $this->toDomain($model);
+    }
+
+    /**
+     * Deletar plano
+     */
+    public function deletar(int $id): void
+    {
+        PlanoModel::destroy($id);
+    }
 }
 

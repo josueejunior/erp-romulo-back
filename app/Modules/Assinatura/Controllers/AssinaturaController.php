@@ -10,6 +10,7 @@ use App\Application\Assinatura\UseCases\CancelarAssinaturaUseCase;
 use App\Application\Payment\UseCases\RenovarAssinaturaUseCase;
 use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
 use App\Http\Requests\Assinatura\RenovarAssinaturaRequest;
+use App\Http\Requests\Assinatura\CriarAssinaturaRequest;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
@@ -195,18 +196,13 @@ class AssinaturaController extends BaseApiController
      * 
      * Nota: Assinaturas normalmente são criadas via PaymentController::processarAssinatura()
      * Este método é para casos especiais (ex: admin criar assinatura gratuita)
+     * Usa Form Request para validação
      */
-    public function store(Request $request): JsonResponse
+    public function store(CriarAssinaturaRequest $request): JsonResponse
     {
         try {
-            $validated = $request->validate([
-                'plano_id' => 'required|exists:planos,id',
-                'data_inicio' => 'nullable|date',
-                'data_fim' => 'required|date|after:data_inicio',
-                'valor_pago' => 'nullable|numeric|min:0',
-                'metodo_pagamento' => 'nullable|string|in:gratuito,credit_card,pix',
-                'status' => 'nullable|string|in:ativa,suspensa,expirada',
-            ]);
+            // Request já está validado via Form Request
+            $validated = $request->validated();
 
             $tenant = tenancy()->tenant;
             if (!$tenant) {

@@ -30,5 +30,15 @@ interface PlanoRepositoryInterface
      * @return \App\Modules\Assinatura\Models\Plano|null
      */
     public function buscarModeloPorId(int $id): ?\App\Modules\Assinatura\Models\Plano;
+
+    /**
+     * Salvar plano (criar ou atualizar)
+     */
+    public function salvar(Plano $plano): Plano;
+
+    /**
+     * Deletar plano
+     */
+    public function deletar(int $id): void;
 }
 

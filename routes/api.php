@@ -283,6 +283,15 @@ Route::prefix('admin')->group(function () {
                 ->middleware([\App\Http\Middleware\InitializeTenant::class]);
         });
 
+        // Gerenciamento de planos
+        Route::prefix('planos')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\AdminPlanoController::class, 'index']);
+            Route::get('/{plano}', [\App\Http\Controllers\Admin\AdminPlanoController::class, 'show'])->where('plano', '[0-9]+');
+            Route::post('/', [\App\Http\Controllers\Admin\AdminPlanoController::class, 'store']);
+            Route::put('/{plano}', [\App\Http\Controllers\Admin\AdminPlanoController::class, 'update'])->where('plano', '[0-9]+');
+            Route::delete('/{plano}', [\App\Http\Controllers\Admin\AdminPlanoController::class, 'destroy'])->where('plano', '[0-9]+');
+        });
+
         // Gerenciamento de assinaturas
         Route::prefix('assinaturas')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\AdminAssinaturaController::class, 'index']);

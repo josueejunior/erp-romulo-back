@@ -75,5 +75,208 @@ class Plano
     {
         return $this->limiteUsuarios === null;
     }
+
+    /**
+     * Factory method para criar um novo plano
+     */
+    public static function criar(
+        string $nome,
+        ?string $descricao = null,
+        ?float $precoMensal = null,
+        ?float $precoAnual = null,
+        ?int $limiteProcessos = null,
+        ?int $limiteUsuarios = null,
+        ?int $limiteArmazenamentoMb = null,
+        ?array $recursosDisponiveis = null,
+        bool $ativo = true,
+        ?int $ordem = null,
+    ): self {
+        return new self(
+            id: null,
+            nome: $nome,
+            descricao: $descricao,
+            precoMensal: $precoMensal,
+            precoAnual: $precoAnual,
+            limiteProcessos: $limiteProcessos,
+            limiteUsuarios: $limiteUsuarios,
+            limiteArmazenamentoMb: $limiteArmazenamentoMb,
+            recursosDisponiveis: $recursosDisponiveis,
+            ativo: $ativo,
+            ordem: $ordem,
+        );
+    }
+
+    /**
+     * Métodos setters para atualização (retornam nova instância imutável)
+     */
+    public function setNome(string $nome): self
+    {
+        return new self(
+            id: $this->id,
+            nome: $nome,
+            descricao: $this->descricao,
+            precoMensal: $this->precoMensal,
+            precoAnual: $this->precoAnual,
+            limiteProcessos: $this->limiteProcessos,
+            limiteUsuarios: $this->limiteUsuarios,
+            limiteArmazenamentoMb: $this->limiteArmazenamentoMb,
+            recursosDisponiveis: $this->recursosDisponiveis,
+            ativo: $this->ativo,
+            ordem: $this->ordem,
+        );
+    }
+
+    public function setDescricao(?string $descricao): self
+    {
+        return new self(
+            id: $this->id,
+            nome: $this->nome,
+            descricao: $descricao,
+            precoMensal: $this->precoMensal,
+            precoAnual: $this->precoAnual,
+            limiteProcessos: $this->limiteProcessos,
+            limiteUsuarios: $this->limiteUsuarios,
+            limiteArmazenamentoMb: $this->limiteArmazenamentoMb,
+            recursosDisponiveis: $this->recursosDisponiveis,
+            ativo: $this->ativo,
+            ordem: $this->ordem,
+        );
+    }
+
+    public function setPrecoMensal(?float $precoMensal): self
+    {
+        return new self(
+            id: $this->id,
+            nome: $this->nome,
+            descricao: $this->descricao,
+            precoMensal: $precoMensal,
+            precoAnual: $this->precoAnual,
+            limiteProcessos: $this->limiteProcessos,
+            limiteUsuarios: $this->limiteUsuarios,
+            limiteArmazenamentoMb: $this->limiteArmazenamentoMb,
+            recursosDisponiveis: $this->recursosDisponiveis,
+            ativo: $this->ativo,
+            ordem: $this->ordem,
+        );
+    }
+
+    public function setPrecoAnual(?float $precoAnual): self
+    {
+        return new self(
+            id: $this->id,
+            nome: $this->nome,
+            descricao: $this->descricao,
+            precoMensal: $this->precoMensal,
+            precoAnual: $precoAnual,
+            limiteProcessos: $this->limiteProcessos,
+            limiteUsuarios: $this->limiteUsuarios,
+            limiteArmazenamentoMb: $this->limiteArmazenamentoMb,
+            recursosDisponiveis: $this->recursosDisponiveis,
+            ativo: $this->ativo,
+            ordem: $this->ordem,
+        );
+    }
+
+    public function setLimiteProcessos(?int $limiteProcessos): self
+    {
+        return new self(
+            id: $this->id,
+            nome: $this->nome,
+            descricao: $this->descricao,
+            precoMensal: $this->precoMensal,
+            precoAnual: $this->precoAnual,
+            limiteProcessos: $limiteProcessos,
+            limiteUsuarios: $this->limiteUsuarios,
+            limiteArmazenamentoMb: $this->limiteArmazenamentoMb,
+            recursosDisponiveis: $this->recursosDisponiveis,
+            ativo: $this->ativo,
+            ordem: $this->ordem,
+        );
+    }
+
+    public function setLimiteUsuarios(?int $limiteUsuarios): self
+    {
+        return new self(
+            id: $this->id,
+            nome: $this->nome,
+            descricao: $this->descricao,
+            precoMensal: $this->precoMensal,
+            precoAnual: $this->precoAnual,
+            limiteProcessos: $this->limiteProcessos,
+            limiteUsuarios: $limiteUsuarios,
+            limiteArmazenamentoMb: $this->limiteArmazenamentoMb,
+            recursosDisponiveis: $this->recursosDisponiveis,
+            ativo: $this->ativo,
+            ordem: $this->ordem,
+        );
+    }
+
+    public function setLimiteArmazenamentoMb(?int $limiteArmazenamentoMb): self
+    {
+        return new self(
+            id: $this->id,
+            nome: $this->nome,
+            descricao: $this->descricao,
+            precoMensal: $this->precoMensal,
+            precoAnual: $this->precoAnual,
+            limiteProcessos: $this->limiteProcessos,
+            limiteUsuarios: $this->limiteUsuarios,
+            limiteArmazenamentoMb: $limiteArmazenamentoMb,
+            recursosDisponiveis: $this->recursosDisponiveis,
+            ativo: $this->ativo,
+            ordem: $this->ordem,
+        );
+    }
+
+    public function setRecursosDisponiveis(?array $recursosDisponiveis): self
+    {
+        return new self(
+            id: $this->id,
+            nome: $this->nome,
+            descricao: $this->descricao,
+            precoMensal: $this->precoMensal,
+            precoAnual: $this->precoAnual,
+            limiteProcessos: $this->limiteProcessos,
+            limiteUsuarios: $this->limiteUsuarios,
+            limiteArmazenamentoMb: $this->limiteArmazenamentoMb,
+            recursosDisponiveis: $recursosDisponiveis,
+            ativo: $this->ativo,
+            ordem: $this->ordem,
+        );
+    }
+
+    public function setAtivo(bool $ativo): self
+    {
+        return new self(
+            id: $this->id,
+            nome: $this->nome,
+            descricao: $this->descricao,
+            precoMensal: $this->precoMensal,
+            precoAnual: $this->precoAnual,
+            limiteProcessos: $this->limiteProcessos,
+            limiteUsuarios: $this->limiteUsuarios,
+            limiteArmazenamentoMb: $this->limiteArmazenamentoMb,
+            recursosDisponiveis: $this->recursosDisponiveis,
+            ativo: $ativo,
+            ordem: $this->ordem,
+        );
+    }
+
+    public function setOrdem(?int $ordem): self
+    {
+        return new self(
+            id: $this->id,
+            nome: $this->nome,
+            descricao: $this->descricao,
+            precoMensal: $this->precoMensal,
+            precoAnual: $this->precoAnual,
+            limiteProcessos: $this->limiteProcessos,
+            limiteUsuarios: $this->limiteUsuarios,
+            limiteArmazenamentoMb: $this->limiteArmazenamentoMb,
+            recursosDisponiveis: $this->recursosDisponiveis,
+            ativo: $this->ativo,
+            ordem: $ordem,
+        );
+    }
 }
 
