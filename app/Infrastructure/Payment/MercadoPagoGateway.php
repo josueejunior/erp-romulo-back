@@ -56,35 +56,50 @@ class MercadoPagoGateway implements PaymentProviderInterface
     public function processPayment(PaymentRequest $request, string $idempotencyKey): PaymentResult
     {
         try {
+            // Validar token do cartão
+            if (empty($request->cardToken)) {
+                throw new DomainException('Token do cartão é obrigatório para processar o pagamento.');
+            }
+
             // Preparar dados do pagamento para a nova API
             $paymentData = [
-                'transaction_amount' => $request->amount->toReais(),
+                'transaction_amount' => round($request->amount->toReais(), 2), // Garantir 2 casas decimais
                 'description' => $request->description,
-                'installments' => $request->installments ?? 1,
+                'installments' => (int) ($request->installments ?? 1),
                 'payment_method_id' => $request->paymentMethodId ?? 'credit_card',
+                'token' => $request->cardToken, // Token é obrigatório
                 'payer' => [
                     'email' => $request->payerEmail,
                 ],
                 'external_reference' => $request->externalReference ?? $idempotencyKey,
             ];
 
-            // Token do cartão (obtido via MercadoPago.js no frontend)
-            if ($request->cardToken) {
-                $paymentData['token'] = $request->cardToken;
-            }
-
-            // CPF do pagador
+            // CPF do pagador (obrigatório para alguns casos)
             if ($request->payerCpf) {
-                $paymentData['payer']['identification'] = [
-                    'type' => 'CPF',
-                    'number' => preg_replace('/\D/', '', $request->payerCpf),
-                ];
+                $cpfLimpo = preg_replace('/\D/', '', $request->payerCpf);
+                if (strlen($cpfLimpo) === 11) {
+                    $paymentData['payer']['identification'] = [
+                        'type' => 'CPF',
+                        'number' => $cpfLimpo,
+                    ];
+                }
             }
 
             // Metadados
             if ($request->metadata) {
                 $paymentData['metadata'] = $request->metadata;
             }
+
+            // Log dos dados antes de enviar (sem dados sensíveis)
+            Log::debug('Dados do pagamento sendo enviados ao Mercado Pago', [
+                'transaction_amount' => $paymentData['transaction_amount'],
+                'installments' => $paymentData['installments'],
+                'payment_method_id' => $paymentData['payment_method_id'],
+                'has_token' => !empty($paymentData['token']),
+                'token_length' => strlen($paymentData['token']),
+                'payer_email' => $paymentData['payer']['email'],
+                'has_cpf' => isset($paymentData['payer']['identification']),
+            ]);
 
             // Criar pagamento usando a nova API
             $payment = $this->paymentClient->create($paymentData);
@@ -121,10 +136,13 @@ class MercadoPagoGateway implements PaymentProviderInterface
                     $detailedMessage .= " - " . implode(', ', $causeDetails);
                 }
 
-                // Tratamento específico para erro de autorização
+                // Tratamento específico para erros conhecidos
                 if (str_contains(strtolower($detailedMessage), 'unauthorized') || str_contains(strtolower($detailedMessage), 'policy')) {
                     $detailedMessage = 'Erro de autenticação no Mercado Pago. Verifique se o Access Token está correto e tem as permissões necessárias. ' . 
                                       'Certifique-se de estar usando o token correto (sandbox ou produção) e que ele tenha permissão para criar pagamentos.';
+                } elseif (str_contains(strtolower($detailedMessage), 'diff_param_bins') || str_contains(strtolower($errorCode ?? ''), 'diff_param_bins')) {
+                    $detailedMessage = 'Erro nos parâmetros do pagamento. Verifique se o token do cartão foi gerado corretamente e se todos os dados estão completos. ' .
+                                      'Certifique-se de que o cartão é válido e que os dados do pagador estão corretos.';
                 }
 
                 throw new DomainException("Erro no pagamento: {$detailedMessage}");
