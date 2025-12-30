@@ -69,8 +69,10 @@ class VerificarAssinaturasExpiradas extends Command
                     $diasGracePeriod = $assinatura->dias_grace_period ?? 7;
                     $foraGracePeriod = $diasExpirado > $diasGracePeriod;
 
+                    $planoNome = $assinatura->plano ? ($assinatura->plano->nome ?? 'N/A') : 'N/A';
+                    
                     $this->line("  📅 Tenant {$tenant->razao_social} (ID: {$tenant->id})");
-                    $this->line("     Plano: {$assinatura->plano->nome ?? 'N/A'}");
+                    $this->line("     Plano: {$planoNome}");
                     $this->line("     Vencimento: {$dataFim->format('d/m/Y')}");
                     $this->line("     Expirado há: {$diasExpirado} dias");
 
