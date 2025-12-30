@@ -97,6 +97,11 @@ class DatabaseSeeder extends Seeder
         // Limpar cache novamente após criar roles
         app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
+        // Criar planos de assinatura (tabela central, não do tenant)
+        tenancy()->end();
+        $this->call(PlanosSeeder::class);
+        tenancy()->initialize($tenant);
+
         // Criar empresa dentro do tenant
         $empresa = Empresa::firstOrCreate(
             ['cnpj' => '12.345.678/0001-90'],
