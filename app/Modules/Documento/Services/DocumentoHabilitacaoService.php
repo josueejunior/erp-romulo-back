@@ -3,7 +3,7 @@
 namespace App\Modules\Documento\Services;
 
 use App\Services\BaseService;
-use App\Models\DocumentoHabilitacao;
+use App\Modules\Documento\Models\DocumentoHabilitacao;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;

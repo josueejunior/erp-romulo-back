@@ -2,7 +2,7 @@
 
 namespace App\Observers;
 
-use App\Models\NotaFiscal;
+use App\Modules\NotaFiscal\Models\NotaFiscal;
 use App\Modules\Processo\Services\SaldoService;
 
 class NotaFiscalObserver

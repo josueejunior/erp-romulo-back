@@ -4,7 +4,7 @@ namespace App\Infrastructure\Persistence\Eloquent;
 
 use App\Domain\CustoIndireto\Entities\CustoIndireto;
 use App\Domain\CustoIndireto\Repositories\CustoIndiretoRepositoryInterface;
-use App\Models\CustoIndireto as CustoIndiretoModel;
+use App\Modules\Custo\Models\CustoIndireto as CustoIndiretoModel;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Carbon\Carbon;
 use App\Infrastructure\Persistence\Eloquent\Traits\IsolamentoEmpresaTrait;

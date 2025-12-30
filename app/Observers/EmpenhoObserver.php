@@ -2,7 +2,7 @@
 
 namespace App\Observers;
 
-use App\Models\Empenho;
+use App\Modules\Empenho\Models\Empenho;
 use App\Modules\Processo\Services\SaldoService;
 
 class EmpenhoObserver

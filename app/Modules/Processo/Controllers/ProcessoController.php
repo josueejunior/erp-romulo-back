@@ -10,6 +10,7 @@ use App\Modules\Processo\Services\ProcessoStatusService;
 use App\Modules\Processo\Services\ProcessoValidationService;
 use App\Modules\Processo\Resources\ProcessoResource;
 use App\Modules\Processo\Resources\ProcessoListResource;
+use App\Http\Requests\Processo\ConfirmarPagamentoRequest;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
@@ -164,13 +165,13 @@ class ProcessoController extends Controller
     /**
      * POST /processos/{processo}/confirmar-pagamento
      * Confirma pagamento do processo e atualiza saldos
+     * Usa Form Request para validação
      */
-    public function confirmarPagamento(Request $request, Processo $processo): JsonResponse
+    public function confirmarPagamento(ConfirmarPagamentoRequest $request, Processo $processo): JsonResponse
     {
         try {
-            $validated = $request->validate([
-                'data_recebimento' => 'nullable|date',
-            ]);
+            // Request já está validado via Form Request
+            $validated = $request->validated();
 
             $processo = $this->processoService->confirmarPagamento(
                 $processo,

@@ -4,7 +4,7 @@ namespace App\Infrastructure\Persistence\Eloquent;
 
 use App\Domain\Empenho\Entities\Empenho;
 use App\Domain\Empenho\Repositories\EmpenhoRepositoryInterface;
-use App\Models\Empenho as EmpenhoModel;
+use App\Modules\Empenho\Models\Empenho as EmpenhoModel;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Carbon\Carbon;
 

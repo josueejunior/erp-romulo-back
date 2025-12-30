@@ -4,12 +4,13 @@ namespace App\Modules\NotaFiscal\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
 use App\Modules\Processo\Models\Processo;
-use App\Models\NotaFiscal;
+use App\Modules\NotaFiscal\Models\NotaFiscal;
 use App\Modules\NotaFiscal\Services\NotaFiscalService;
 use App\Application\NotaFiscal\UseCases\CriarNotaFiscalUseCase;
 use App\Application\NotaFiscal\DTOs\CriarNotaFiscalDTO;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\NotaFiscal\Repositories\NotaFiscalRepositoryInterface;
+use App\Http\Requests\NotaFiscal\NotaFiscalCreateRequest;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
@@ -24,7 +25,7 @@ class NotaFiscalController extends BaseApiController
         private ProcessoRepositoryInterface $processoRepository,
         private NotaFiscalRepositoryInterface $notaFiscalRepository,
     ) {
-        parent::__construct(app(\App\Domain\Empresa\Repositories\EmpresaRepositoryInterface::class), app(\App\Domain\Auth\Repositories\UserRepositoryInterface::class));
+        // BaseApiController não tem construtor, não precisa chamar parent::__construct()
         $this->notaFiscalService = $notaFiscalService;
         $this->service = $notaFiscalService; // Para HasDefaultActions
     }
@@ -93,14 +94,16 @@ class NotaFiscalController extends BaseApiController
 
     /**
      * Web: Criar nota fiscal
+     * Usa Form Request para validação
      */
-    public function storeWeb(Request $request, Processo $processo)
+    public function storeWeb(NotaFiscalCreateRequest $request, Processo $processo)
     {
         $empresa = $this->getEmpresaAtivaOrFail();
         
         try {
+            // Request já está validado via Form Request
             // Preparar dados para DTO
-            $data = $request->all();
+            $data = $request->validated();
             $data['processo_id'] = $processo->id;
             $data['empresa_id'] = $empresa->id;
             
@@ -119,11 +122,6 @@ class NotaFiscalController extends BaseApiController
             }
             
             return response()->json($notaFiscal, 201);
-        } catch (ValidationException $e) {
-            return response()->json([
-                'message' => 'Dados inválidos',
-                'errors' => $e->errors()
-            ], 422);
         } catch (\Exception $e) {
             return response()->json([
                 'message' => $e->getMessage()

@@ -6,8 +6,8 @@ use App\Http\Controllers\Api\BaseApiController;
 use App\Http\Resources\FormacaoPrecoResource;
 use App\Modules\Processo\Models\Processo;
 use App\Modules\Processo\Models\ProcessoItem;
-use App\Models\Orcamento;
-use App\Models\FormacaoPreco;
+use App\Modules\Orcamento\Models\Orcamento;
+use App\Modules\Orcamento\Models\FormacaoPreco;
 use App\Modules\Orcamento\Services\FormacaoPrecoService;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\ProcessoItem\Repositories\ProcessoItemRepositoryInterface;
@@ -27,7 +27,7 @@ class FormacaoPrecoController extends BaseApiController
         private OrcamentoRepositoryInterface $orcamentoRepository,
         private FormacaoPrecoRepositoryInterface $formacaoPrecoRepository,
     ) {
-        parent::__construct(app(\App\Domain\Empresa\Repositories\EmpresaRepositoryInterface::class), app(\App\Domain\Auth\Repositories\UserRepositoryInterface::class));
+        // BaseApiController não tem construtor, não precisa chamar parent::__construct()
         $this->formacaoPrecoService = $formacaoPrecoService;
         $this->service = $formacaoPrecoService; // Para HasDefaultActions
     }

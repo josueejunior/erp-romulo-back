@@ -4,7 +4,7 @@ namespace App\Infrastructure\Persistence\Eloquent;
 
 use App\Domain\NotaFiscal\Entities\NotaFiscal;
 use App\Domain\NotaFiscal\Repositories\NotaFiscalRepositoryInterface;
-use App\Models\NotaFiscal as NotaFiscalModel;
+use App\Modules\NotaFiscal\Models\NotaFiscal as NotaFiscalModel;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Carbon\Carbon;
 use App\Infrastructure\Persistence\Eloquent\Traits\HasModelRetrieval;

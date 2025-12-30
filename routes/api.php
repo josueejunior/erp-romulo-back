@@ -2,7 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\AuthController;
+use App\Modules\Auth\Controllers\AuthController;
 use App\Modules\Processo\Controllers\ProcessoController as ApiProcessoController;
 use App\Modules\Processo\Controllers\ProcessoItemController as ApiProcessoItemController;
 use App\Modules\Orcamento\Controllers\OrcamentoController as ApiOrcamentoController;
@@ -20,14 +20,14 @@ use App\Modules\Custo\Controllers\CustoIndiretoController as ApiCustoIndiretoCon
 use App\Modules\Documento\Controllers\DocumentoHabilitacaoController as ApiDocumentoHabilitacaoController;
 use App\Modules\Dashboard\Controllers\DashboardController as ApiDashboardController;
 use App\Modules\Relatorio\Controllers\RelatorioFinanceiroController as ApiRelatorioFinanceiroController;
-use App\Http\Controllers\Api\TenantController;
+use App\Modules\Empresa\Controllers\TenantController;
 use App\Modules\Calendario\Controllers\CalendarioDisputasController as ApiCalendarioDisputasController;
 use App\Modules\Calendario\Controllers\CalendarioController as ApiCalendarioController;
 use App\Modules\Processo\Controllers\ExportacaoController as ApiExportacaoController;
 use App\Modules\Processo\Controllers\SaldoController as ApiSaldoController;
-use App\Http\Controllers\Api\UserController as ApiUserController;
-use App\Http\Controllers\Api\PlanoController as ApiPlanoController;
-use App\Http\Controllers\Api\AssinaturaController as ApiAssinaturaController;
+use App\Modules\Auth\Controllers\UserController as ApiUserController;
+use App\Modules\Assinatura\Controllers\PlanoController as ApiPlanoController;
+use App\Modules\Assinatura\Controllers\AssinaturaController as ApiAssinaturaController;
 use App\Modules\Payment\Controllers\PaymentController as ApiPaymentController;
 use App\Modules\Payment\Controllers\WebhookController as ApiWebhookController;
 use App\Http\Controllers\Admin\AdminAuthController;
@@ -73,7 +73,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/auth/user', [AuthController::class, 'user']);
         
         // Rota de compatibilidade para /user/roles (redireciona para /users/roles)
-        Route::get('/user/roles', [\App\Http\Controllers\Api\FixUserRolesController::class, 'getCurrentUserRoles']);
+        Route::get('/user/roles', [\App\Modules\Auth\Controllers\FixUserRolesController::class, 'getCurrentUserRoles']);
         
         // Dashboard
         Route::get('/dashboard', [ApiDashboardController::class, 'index']);

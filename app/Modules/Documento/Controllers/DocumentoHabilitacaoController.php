@@ -3,7 +3,7 @@
 namespace App\Modules\Documento\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
-use App\Models\DocumentoHabilitacao;
+use App\Modules\Documento\Models\DocumentoHabilitacao;
 use App\Modules\Documento\Services\DocumentoHabilitacaoService;
 use Illuminate\Http\Request;
 use App\Helpers\PermissionHelper;

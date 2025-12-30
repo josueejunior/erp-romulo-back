@@ -9,11 +9,11 @@ use Illuminate\Support\Facades\Route;
 use App\Database\Schema\Blueprint;
 use App\Http\Routing\ModuleRegistrar;
 use App\Modules\Processo\Models\Processo;
-use App\Models\Contrato;
-use App\Models\Empenho;
-use App\Models\NotaFiscal;
-use App\Models\Orcamento;
-use App\Models\AutorizacaoFornecimento;
+use App\Modules\Contrato\Models\Contrato;
+use App\Modules\Empenho\Models\Empenho;
+use App\Modules\NotaFiscal\Models\NotaFiscal;
+use App\Modules\Orcamento\Models\Orcamento;
+use App\Modules\AutorizacaoFornecimento\Models\AutorizacaoFornecimento;
 use App\Modules\Processo\Observers\ProcessoObserver;
 use App\Modules\Orgao\Observers\OrgaoObserver;
 use App\Modules\Orgao\Models\Orgao as OrgaoModel;
@@ -71,6 +71,16 @@ class AppServiceProvider extends ServiceProvider
         );
 
         $this->app->bind(
+            \App\Domain\Auth\Repositories\AdminUserRepositoryInterface::class,
+            \App\Infrastructure\Persistence\Eloquent\AdminUserRepository::class
+        );
+
+        $this->app->bind(
+            \App\Domain\Payment\Repositories\PaymentLogRepositoryInterface::class,
+            \App\Infrastructure\Persistence\Eloquent\PaymentLogRepository::class
+        );
+
+        $this->app->bind(
             \App\Domain\Processo\Repositories\ProcessoRepositoryInterface::class,
             \App\Infrastructure\Persistence\Eloquent\ProcessoRepository::class
         );
@@ -113,6 +123,16 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(
             \App\Domain\AutorizacaoFornecimento\Repositories\AutorizacaoFornecimentoRepositoryInterface::class,
             \App\Infrastructure\Persistence\Eloquent\AutorizacaoFornecimentoRepository::class
+        );
+
+        $this->app->bind(
+            \App\Domain\Plano\Repositories\PlanoRepositoryInterface::class,
+            \App\Infrastructure\Persistence\Eloquent\PlanoRepository::class
+        );
+
+        $this->app->bind(
+            \App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface::class,
+            \App\Infrastructure\Persistence\Eloquent\AssinaturaRepository::class
         );
 
         $this->app->bind(
@@ -200,6 +220,11 @@ class AppServiceProvider extends ServiceProvider
         \Illuminate\Support\Facades\Event::listen(
             \App\Domain\Auth\Events\SenhaAlterada::class,
             \App\Listeners\SenhaAlteradaListener::class
+        );
+
+        \Illuminate\Support\Facades\Event::listen(
+            \App\Domain\Auth\Events\EmpresaAtivaAlterada::class,
+            \App\Listeners\EmpresaAtivaAlteradaListener::class
         );
 
         \Illuminate\Support\Facades\Event::listen(

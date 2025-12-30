@@ -2,7 +2,7 @@
 
 namespace App\Policies;
 
-use App\Models\Contrato;
+use App\Modules\Contrato\Models\Contrato;
 use App\Helpers\PermissionHelper;
 use Illuminate\Auth\Access\HandlesAuthorization;
 

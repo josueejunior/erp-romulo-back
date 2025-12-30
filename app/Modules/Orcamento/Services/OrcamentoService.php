@@ -4,8 +4,8 @@ namespace App\Modules\Orcamento\Services;
 
 use App\Modules\Processo\Models\Processo;
 use App\Modules\Processo\Models\ProcessoItem;
-use App\Models\Orcamento;
-use App\Models\OrcamentoItem;
+use App\Modules\Orcamento\Models\Orcamento;
+use App\Modules\Orcamento\Models\OrcamentoItem;
 use App\Domain\ProcessoItem\Repositories\ProcessoItemRepositoryInterface;
 use App\Domain\OrcamentoItem\Repositories\OrcamentoItemRepositoryInterface;
 use Illuminate\Support\Facades\Validator;

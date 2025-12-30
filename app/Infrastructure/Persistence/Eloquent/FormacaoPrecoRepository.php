@@ -4,7 +4,7 @@ namespace App\Infrastructure\Persistence\Eloquent;
 
 use App\Domain\FormacaoPreco\Entities\FormacaoPreco;
 use App\Domain\FormacaoPreco\Repositories\FormacaoPrecoRepositoryInterface;
-use App\Models\FormacaoPreco as FormacaoPrecoModel;
+use App\Modules\Orcamento\Models\FormacaoPreco as FormacaoPrecoModel;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use App\Infrastructure\Persistence\Eloquent\Traits\HasModelRetrieval;
 

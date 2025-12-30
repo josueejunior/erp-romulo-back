@@ -10,7 +10,8 @@ use App\Application\Fornecedor\UseCases\AtualizarFornecedorUseCase;
 use App\Application\Fornecedor\DTOs\CriarFornecedorDTO;
 use App\Application\Fornecedor\DTOs\AtualizarFornecedorDTO;
 use App\Domain\Fornecedor\Repositories\FornecedorRepositoryInterface;
-use Illuminate\Http\Request;
+use App\Http\Requests\Fornecedor\FornecedorCreateRequest;
+use App\Http\Requests\Fornecedor\FornecedorUpdateRequest;
 use App\Helpers\PermissionHelper;
 use App\Services\RedisService;
 use Illuminate\Validation\ValidationException;
@@ -188,8 +189,9 @@ class FornecedorController extends BaseApiController
 
     /**
      * Criar fornecedor usando Use Case DDD
+     * Usa Form Request para validação
      */
-    public function store(Request $request): \Illuminate\Http\JsonResponse
+    public function store(FornecedorCreateRequest $request): \Illuminate\Http\JsonResponse
     {
         if (!PermissionHelper::canManageMasterData()) {
             return response()->json(['message' => 'Você não tem permissão para cadastrar fornecedores.'], 403);
@@ -204,28 +206,8 @@ class FornecedorController extends BaseApiController
                 'user_id' => auth()->id(),
             ]);
             
-            $validated = $request->validate([
-                'razao_social' => 'required|string|max:255',
-                'cnpj' => 'nullable|string|max:18',
-                'nome_fantasia' => 'nullable|string|max:255',
-                'cep' => 'nullable|string|max:10',
-                'logradouro' => 'nullable|string|max:255',
-                'numero' => 'nullable|string|max:20',
-                'bairro' => 'nullable|string|max:255',
-                'complemento' => 'nullable|string|max:255',
-                'cidade' => 'nullable|string|max:255',
-                'estado' => 'nullable|string|max:2',
-                'email' => 'nullable|email|max:255',
-                'telefone' => 'nullable|string|max:20',
-                'emails' => 'nullable|array',
-                'telefones' => 'nullable|array',
-                'contato' => 'nullable|string|max:255',
-                'observacoes' => 'nullable|string',
-                'is_transportadora' => 'nullable|boolean',
-            ], [
-                'razao_social.required' => 'A razão social é obrigatória.',
-            ]);
-
+            // Request já está validado via Form Request
+            $validated = $request->validated();
             $validated['empresa_id'] = $empresa->id;
             
             Log::debug('FornecedorController::store() - Criando fornecedor', [
@@ -251,8 +233,6 @@ class FornecedorController extends BaseApiController
             $this->clearFornecedorCache();
 
             return response()->json(['data' => new FornecedorResource($fornecedor)], 201);
-        } catch (ValidationException $e) {
-            return response()->json(['message' => 'Erro de validação', 'errors' => $e->errors()], 422);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         }
@@ -260,8 +240,9 @@ class FornecedorController extends BaseApiController
 
     /**
      * Atualizar fornecedor usando Use Case DDD
+     * Usa Form Request para validação
      */
-    public function update(Request $request, Fornecedor $fornecedor): \Illuminate\Http\JsonResponse
+    public function update(FornecedorUpdateRequest $request, Fornecedor $fornecedor): \Illuminate\Http\JsonResponse
     {
         if (!PermissionHelper::canManageMasterData()) {
             return response()->json(['message' => 'Você não tem permissão para editar fornecedores.'], 403);
@@ -270,26 +251,7 @@ class FornecedorController extends BaseApiController
         try {
             $empresa = $this->getEmpresaAtivaOrFail();
             
-            $validated = $request->validate([
-                'razao_social' => 'sometimes|required|string|max:255',
-                'cnpj' => 'nullable|string|max:18',
-                'nome_fantasia' => 'nullable|string|max:255',
-                'cep' => 'nullable|string|max:10',
-                'logradouro' => 'nullable|string|max:255',
-                'numero' => 'nullable|string|max:20',
-                'bairro' => 'nullable|string|max:255',
-                'complemento' => 'nullable|string|max:255',
-                'cidade' => 'nullable|string|max:255',
-                'estado' => 'nullable|string|max:2',
-                'email' => 'nullable|email|max:255',
-                'telefone' => 'nullable|string|max:20',
-                'emails' => 'nullable|array',
-                'telefones' => 'nullable|array',
-                'contato' => 'nullable|string|max:255',
-                'observacoes' => 'nullable|string',
-                'is_transportadora' => 'nullable|boolean',
-            ]);
-
+            // Request já está validado via Form Request
             // Criar DTO
             $dto = AtualizarFornecedorDTO::fromRequest($request, $fornecedor->id);
 
@@ -305,8 +267,6 @@ class FornecedorController extends BaseApiController
             $this->clearFornecedorCache();
 
             return response()->json(['data' => new FornecedorResource($fornecedor)]);
-        } catch (ValidationException $e) {
-            return response()->json(['message' => 'Erro de validação', 'errors' => $e->errors()], 422);
         } catch (\DomainException $e) {
             return response()->json(['message' => $e->getMessage()], 404);
         } catch (\Exception $e) {

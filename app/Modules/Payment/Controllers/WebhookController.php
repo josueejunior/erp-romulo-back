@@ -4,8 +4,8 @@ namespace App\Modules\Payment\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Domain\Payment\Repositories\PaymentProviderInterface;
-use App\Modules\Assinatura\Models\Assinatura;
-use App\Models\PaymentLog;
+use App\Domain\Payment\Repositories\PaymentLogRepositoryInterface;
+use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
@@ -20,6 +20,8 @@ class WebhookController extends Controller
 {
     public function __construct(
         private PaymentProviderInterface $paymentProvider,
+        private AssinaturaRepositoryInterface $assinaturaRepository,
+        private PaymentLogRepositoryInterface $paymentLogRepository,
     ) {}
 
     /**
@@ -49,8 +51,8 @@ class WebhookController extends Controller
             // Processar webhook
             $paymentResult = $this->paymentProvider->processWebhook($payload);
 
-            // Buscar assinatura pelo external_id
-            $assinatura = Assinatura::where('transacao_id', $paymentResult->externalId)->first();
+            // Buscar assinatura pelo external_id usando repository DDD
+            $assinatura = $this->assinaturaRepository->buscarModeloPorTransacaoId($paymentResult->externalId);
 
             if (!$assinatura) {
                 Log::warning('Assinatura não encontrada para webhook', [
@@ -92,10 +94,11 @@ class WebhookController extends Controller
                     ]);
                 }
 
-                // Atualizar log de pagamento
-                $paymentLog = PaymentLog::where('external_id', $paymentResult->externalId)->first();
+                // Atualizar log de pagamento usando repository DDD
+                $paymentLog = $this->paymentLogRepository->buscarPorExternalId($paymentResult->externalId);
                 if ($paymentLog) {
-                    $paymentLog->update([
+                    $this->paymentLogRepository->criarOuAtualizar([
+                        'external_id' => $paymentResult->externalId,
                         'status' => $paymentResult->status,
                         'dados_resposta' => array_merge($paymentLog->dados_resposta ?? [], [
                             'webhook_status' => $paymentResult->status,

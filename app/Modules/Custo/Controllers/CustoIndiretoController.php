@@ -3,7 +3,7 @@
 namespace App\Modules\Custo\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Models\CustoIndireto;
+use App\Modules\Custo\Models\CustoIndireto;
 use App\Modules\Custo\Services\CustoIndiretoService;
 use Illuminate\Http\Request;
 

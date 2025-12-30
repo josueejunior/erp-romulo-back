@@ -4,7 +4,7 @@ namespace App\Modules\Relatorio\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
 use App\Modules\Processo\Models\Processo;
-use App\Models\CustoIndireto;
+use App\Modules\Custo\Models\CustoIndireto;
 use App\Modules\Relatorio\Services\FinanceiroService;
 use App\Services\RedisService;
 use App\Database\Schema\Blueprint;

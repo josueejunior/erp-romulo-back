@@ -4,12 +4,13 @@ namespace App\Modules\Empenho\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
 use App\Modules\Processo\Models\Processo;
-use App\Models\Empenho;
+use App\Modules\Empenho\Models\Empenho;
 use App\Modules\Empenho\Services\EmpenhoService;
 use App\Application\Empenho\UseCases\CriarEmpenhoUseCase;
 use App\Application\Empenho\DTOs\CriarEmpenhoDTO;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\Empenho\Repositories\EmpenhoRepositoryInterface;
+use App\Http\Requests\Empenho\EmpenhoCreateRequest;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
@@ -141,14 +142,16 @@ class EmpenhoController extends BaseApiController
 
     /**
      * Web: Criar empenho
+     * Usa Form Request para validação
      */
-    public function storeWeb(Request $request, Processo $processo)
+    public function storeWeb(EmpenhoCreateRequest $request, Processo $processo)
     {
         $empresa = $this->getEmpresaAtivaOrFail();
         
         try {
+            // Request já está validado via Form Request
             // Preparar dados para DTO
-            $data = $request->all();
+            $data = $request->validated();
             $data['processo_id'] = $processo->id;
             $data['empresa_id'] = $empresa->id;
             
@@ -168,11 +171,6 @@ class EmpenhoController extends BaseApiController
             }
             
             return response()->json($empenho, 201);
-        } catch (ValidationException $e) {
-            return response()->json([
-                'message' => 'Dados inválidos',
-                'errors' => $e->errors()
-            ], 422);
         } catch (\Exception $e) {
             return response()->json([
                 'message' => $e->getMessage()

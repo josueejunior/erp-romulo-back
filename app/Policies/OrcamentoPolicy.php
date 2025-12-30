@@ -2,7 +2,7 @@
 
 namespace App\Policies;
 
-use App\Models\Orcamento;
+use App\Modules\Orcamento\Models\Orcamento;
 use App\Models\Processo;
 use App\Helpers\PermissionHelper;
 use Illuminate\Auth\Access\HandlesAuthorization;

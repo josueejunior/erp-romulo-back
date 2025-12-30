@@ -4,12 +4,13 @@ namespace App\Modules\Contrato\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
 use App\Modules\Processo\Models\Processo;
-use App\Models\Contrato;
+use App\Modules\Contrato\Models\Contrato;
 use App\Modules\Contrato\Services\ContratoService;
 use App\Application\Contrato\UseCases\CriarContratoUseCase;
 use App\Application\Contrato\DTOs\CriarContratoDTO;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\Contrato\Repositories\ContratoRepositoryInterface;
+use App\Http\Requests\Contrato\ContratoCreateRequest;
 use App\Services\RedisService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -153,17 +154,19 @@ class ContratoController extends BaseApiController
 
     /**
      * Web: Criar contrato
+     * Usa Form Request para validação
      */
-    public function storeWeb(Request $request, Processo $processo)
+    public function storeWeb(ContratoCreateRequest $request, Processo $processo)
     {
         $empresa = $this->getEmpresaAtivaOrFail();
         
         // Verificar permissão usando Policy
-        $this->authorize('create', [\App\Models\Contrato::class, $processo]);
+        $this->authorize('create', [\App\Modules\Contrato\Models\Contrato::class, $processo]);
 
         try {
+            // Request já está validado via Form Request
             // Preparar dados para DTO
-            $data = $request->all();
+            $data = $request->validated();
             $data['processo_id'] = $processo->id;
             $data['empresa_id'] = $empresa->id;
             
@@ -182,11 +185,6 @@ class ContratoController extends BaseApiController
             }
             
             return response()->json($contrato, 201);
-        } catch (ValidationException $e) {
-            return response()->json([
-                'message' => 'Dados inválidos',
-                'errors' => $e->errors()
-            ], 422);
         } catch (\Exception $e) {
             return response()->json([
                 'message' => $e->getMessage()

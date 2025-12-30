@@ -5,9 +5,9 @@ namespace App\Modules\Payment\Controllers;
 use App\Http\Controllers\Api\BaseApiController;
 use App\Application\Payment\UseCases\ProcessarAssinaturaPlanoUseCase;
 use App\Domain\Payment\ValueObjects\PaymentRequest;
-use App\Modules\Assinatura\Models\Plano;
+use App\Domain\Plano\Repositories\PlanoRepositoryInterface;
+use App\Http\Requests\Payment\ProcessarAssinaturaRequest;
 use App\Models\Tenant;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
@@ -18,24 +18,20 @@ class PaymentController extends BaseApiController
 {
     public function __construct(
         private ProcessarAssinaturaPlanoUseCase $processarAssinaturaUseCase,
+        private PlanoRepositoryInterface $planoRepository,
     ) {}
 
     /**
      * Processa assinatura de plano
+     * Usa Form Request para validação
      * 
      * POST /api/payments/processar-assinatura
      */
-    public function processarAssinatura(Request $request)
+    public function processarAssinatura(ProcessarAssinaturaRequest $request)
     {
         try {
-            $validated = $request->validate([
-                'plano_id' => 'required|integer|exists:planos,id',
-                'periodo' => 'required|string|in:mensal,anual',
-                'card_token' => 'required|string', // Token do MercadoPago.js
-                'payer_email' => 'required|email',
-                'payer_cpf' => 'nullable|string',
-                'installments' => 'nullable|integer|min:1|max:12',
-            ]);
+            // Request já está validado via Form Request
+            $validated = $request->validated();
 
             // Buscar tenant atual
             $tenant = tenancy()->tenant;
@@ -43,8 +39,11 @@ class PaymentController extends BaseApiController
                 return response()->json(['message' => 'Tenant não encontrado'], 404);
             }
 
-            // Buscar plano
-            $plano = Plano::findOrFail($validated['plano_id']);
+            // Buscar plano usando repository DDD
+            $plano = $this->planoRepository->buscarModeloPorId($validated['plano_id']);
+            if (!$plano) {
+                return response()->json(['message' => 'Plano não encontrado'], 404);
+            }
             if (!$plano->isAtivo()) {
                 return response()->json(['message' => 'Plano não está ativo'], 400);
             }

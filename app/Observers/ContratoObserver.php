@@ -2,7 +2,7 @@
 
 namespace App\Observers;
 
-use App\Models\Contrato;
+use App\Modules\Contrato\Models\Contrato;
 
 class ContratoObserver
 {

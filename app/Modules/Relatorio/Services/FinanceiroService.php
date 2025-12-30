@@ -3,7 +3,7 @@
 namespace App\Modules\Relatorio\Services;
 
 use App\Modules\Processo\Models\Processo;
-use App\Models\CustoIndireto;
+use App\Modules\Custo\Models\CustoIndireto;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use App\Domain\NotaFiscal\Repositories\NotaFiscalRepositoryInterface;

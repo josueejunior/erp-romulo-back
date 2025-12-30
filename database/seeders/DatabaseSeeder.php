@@ -6,7 +6,7 @@ use Illuminate\Database\Seeder;
 use App\Modules\Auth\Models\User;
 use App\Models\Empresa;
 use App\Models\Orgao;
-use App\Models\Setor;
+use App\Modules\Orgao\Models\Setor;
 use Illuminate\Support\Facades\Hash;
 use Stancl\Tenancy\Facades\Tenancy;
 use Stancl\Tenancy\Jobs\CreateDatabase;

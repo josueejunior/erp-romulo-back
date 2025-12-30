@@ -4,7 +4,7 @@ namespace App\Modules\AutorizacaoFornecimento\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
 use App\Modules\Processo\Models\Processo;
-use App\Models\AutorizacaoFornecimento;
+use App\Modules\AutorizacaoFornecimento\Models\AutorizacaoFornecimento;
 use App\Modules\AutorizacaoFornecimento\Services\AutorizacaoFornecimentoService;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\AutorizacaoFornecimento\Repositories\AutorizacaoFornecimentoRepositoryInterface;
@@ -20,7 +20,7 @@ class AutorizacaoFornecimentoController extends BaseApiController
         private ProcessoRepositoryInterface $processoRepository,
         private AutorizacaoFornecimentoRepositoryInterface $autorizacaoFornecimentoRepository,
     ) {
-        parent::__construct(app(\App\Domain\Empresa\Repositories\EmpresaRepositoryInterface::class), app(\App\Domain\Auth\Repositories\UserRepositoryInterface::class));
+        // BaseApiController não tem construtor, não precisa chamar parent::__construct()
         $this->afService = $afService;
         $this->service = $afService; // Para HasDefaultActions
     }

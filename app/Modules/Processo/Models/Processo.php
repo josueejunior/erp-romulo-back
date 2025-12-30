@@ -9,12 +9,12 @@ use App\Models\Traits\HasSoftDeletesWithEmpresa;
 use App\Models\Concerns\BelongsToEmpresa;
 use App\Models\Empresa;
 use App\Modules\Orgao\Models\Orgao;
-use App\Models\Setor;
-use App\Models\Contrato;
-use App\Models\AutorizacaoFornecimento;
-use App\Models\Empenho;
-use App\Models\NotaFiscal;
-use App\Models\Orcamento;
+use App\Modules\Orgao\Models\Setor;
+use App\Modules\Contrato\Models\Contrato;
+use App\Modules\AutorizacaoFornecimento\Models\AutorizacaoFornecimento;
+use App\Modules\Empenho\Models\Empenho;
+use App\Modules\NotaFiscal\Models\NotaFiscal;
+use App\Modules\Orcamento\Models\Orcamento;
 
 class Processo extends BaseModel
 {

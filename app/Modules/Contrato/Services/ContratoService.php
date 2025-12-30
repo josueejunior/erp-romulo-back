@@ -3,7 +3,7 @@
 namespace App\Modules\Contrato\Services;
 
 use App\Modules\Processo\Models\Processo;
-use App\Models\Contrato;
+use App\Modules\Contrato\Models\Contrato;
 use App\Services\RedisService;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;

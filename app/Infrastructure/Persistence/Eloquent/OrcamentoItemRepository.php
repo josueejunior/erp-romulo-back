@@ -4,7 +4,7 @@ namespace App\Infrastructure\Persistence\Eloquent;
 
 use App\Domain\OrcamentoItem\Entities\OrcamentoItem;
 use App\Domain\OrcamentoItem\Repositories\OrcamentoItemRepositoryInterface;
-use App\Models\OrcamentoItem as OrcamentoItemModel;
+use App\Modules\Orcamento\Models\OrcamentoItem as OrcamentoItemModel;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use App\Infrastructure\Persistence\Eloquent\Traits\HasModelRetrieval;
 

@@ -6,13 +6,15 @@ use App\Http\Controllers\Api\BaseApiController;
 use App\Http\Resources\OrcamentoResource;
 use App\Modules\Processo\Models\Processo;
 use App\Modules\Processo\Models\ProcessoItem;
-use App\Models\Orcamento;
+use App\Modules\Orcamento\Models\Orcamento;
 use App\Modules\Orcamento\Services\OrcamentoService;
 use App\Application\Orcamento\UseCases\CriarOrcamentoUseCase;
 use App\Application\Orcamento\DTOs\CriarOrcamentoDTO;
+use App\Http\Requests\Orcamento\OrcamentoCreateRequest;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\ProcessoItem\Repositories\ProcessoItemRepositoryInterface;
 use App\Domain\Orcamento\Repositories\OrcamentoRepositoryInterface;
+use App\Http\Requests\Orcamento\OrcamentoItemUpdateRequest;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
@@ -28,7 +30,7 @@ class OrcamentoController extends BaseApiController
         private ProcessoItemRepositoryInterface $processoItemRepository,
         private OrcamentoRepositoryInterface $orcamentoRepository,
     ) {
-        parent::__construct(app(\App\Domain\Empresa\Repositories\EmpresaRepositoryInterface::class), app(\App\Domain\Auth\Repositories\UserRepositoryInterface::class));
+        // BaseApiController não tem construtor, não precisa chamar parent::__construct()
         $this->orcamentoService = $orcamentoService;
         $this->service = $orcamentoService; // Para HasDefaultActions
     }
@@ -122,8 +124,9 @@ class OrcamentoController extends BaseApiController
 
     /**
      * Web: Criar orçamento
+     * Usa Form Request para validação
      */
-    public function storeWeb(Request $request, Processo $processo, ProcessoItem $item)
+    public function storeWeb(OrcamentoCreateRequest $request, Processo $processo, ProcessoItem $item)
     {
         $empresa = $this->getEmpresaAtivaOrFail();
         
@@ -131,8 +134,9 @@ class OrcamentoController extends BaseApiController
         $this->authorize('create', [$processo]);
 
         try {
+            // Request já está validado via Form Request
             // Preparar dados para DTO
-            $data = $request->all();
+            $data = $request->validated();
             $data['processo_id'] = $processo->id;
             $data['processo_item_id'] = $item->id;
             $data['empresa_id'] = $empresa->id;
@@ -152,11 +156,6 @@ class OrcamentoController extends BaseApiController
             }
             
             return new OrcamentoResource($orcamento);
-        } catch (ValidationException $e) {
-            return response()->json([
-                'message' => 'Dados inválidos',
-                'errors' => $e->errors()
-            ], 422);
         } catch (\Exception $e) {
             return response()->json([
                 'message' => $e->getMessage()
@@ -319,14 +318,14 @@ class OrcamentoController extends BaseApiController
 
     /**
      * Atualiza o fornecedor_escolhido de um orcamento_item específico
+     * Usa Form Request para validação
      */
-    public function updateOrcamentoItem(Request $request, Processo $processo, Orcamento $orcamento, $orcamentoItemId)
+    public function updateOrcamentoItem(OrcamentoItemUpdateRequest $request, Processo $processo, Orcamento $orcamento, $orcamentoItemId)
     {
         $empresa = $this->getEmpresaAtivaOrFail();
         
-        $validated = $request->validate([
-            'fornecedor_escolhido' => 'required|boolean',
-        ]);
+        // Request já está validado via Form Request
+        $validated = $request->validated();
 
         try {
             $orcamento = $this->orcamentoService->updateOrcamentoItem(

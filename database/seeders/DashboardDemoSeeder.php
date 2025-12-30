@@ -4,9 +4,9 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use App\Models\Processo;
-use App\Models\DocumentoHabilitacao;
+use App\Modules\Documento\Models\DocumentoHabilitacao;
 use App\Models\Orgao;
-use App\Models\Setor;
+use App\Modules\Orgao\Models\Setor;
 use Carbon\Carbon;
 
 class DashboardDemoSeeder extends Seeder

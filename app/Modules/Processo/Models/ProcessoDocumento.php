@@ -3,7 +3,7 @@
 namespace App\Modules\Processo\Models;
 
 use App\Models\BaseModel;
-use App\Models\DocumentoHabilitacao;
+use App\Modules\Documento\Models\DocumentoHabilitacao;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ProcessoDocumento extends BaseModel

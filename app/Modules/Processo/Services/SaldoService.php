@@ -4,10 +4,10 @@ namespace App\Modules\Processo\Services;
 
 use App\Modules\Processo\Models\Processo;
 use App\Modules\Processo\Models\ProcessoItem;
-use App\Models\Contrato;
-use App\Models\AutorizacaoFornecimento;
-use App\Models\Empenho;
-use App\Models\NotaFiscal;
+use App\Modules\Contrato\Models\Contrato;
+use App\Modules\AutorizacaoFornecimento\Models\AutorizacaoFornecimento;
+use App\Modules\Empenho\Models\Empenho;
+use App\Modules\NotaFiscal\Models\NotaFiscal;
 use Carbon\Carbon;
 
 class SaldoService

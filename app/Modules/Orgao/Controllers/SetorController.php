@@ -5,7 +5,7 @@ namespace App\Modules\Orgao\Controllers;
 use App\Http\Controllers\Api\BaseApiController;
 use App\Contracts\IService;
 use App\Http\Resources\SetorResource;
-use App\Models\Setor;
+use App\Modules\Orgao\Models\Setor;
 use App\Modules\Orgao\Services\SetorService;
 use Illuminate\Http\Request;
 use App\Helpers\PermissionHelper;

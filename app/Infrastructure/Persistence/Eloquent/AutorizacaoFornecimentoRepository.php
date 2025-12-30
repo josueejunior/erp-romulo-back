@@ -4,7 +4,7 @@ namespace App\Infrastructure\Persistence\Eloquent;
 
 use App\Domain\AutorizacaoFornecimento\Entities\AutorizacaoFornecimento;
 use App\Domain\AutorizacaoFornecimento\Repositories\AutorizacaoFornecimentoRepositoryInterface;
-use App\Models\AutorizacaoFornecimento as AutorizacaoFornecimentoModel;
+use App\Modules\AutorizacaoFornecimento\Models\AutorizacaoFornecimento as AutorizacaoFornecimentoModel;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Carbon\Carbon;
 use App\Infrastructure\Persistence\Eloquent\Traits\HasModelRetrieval;

@@ -4,7 +4,7 @@ namespace App\Infrastructure\Persistence\Eloquent;
 
 use App\Domain\Contrato\Entities\Contrato;
 use App\Domain\Contrato\Repositories\ContratoRepositoryInterface;
-use App\Models\Contrato as ContratoModel;
+use App\Modules\Contrato\Models\Contrato as ContratoModel;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Carbon\Carbon;
 use App\Infrastructure\Persistence\Eloquent\Traits\HasModelRetrieval;

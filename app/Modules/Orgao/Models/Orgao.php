@@ -8,7 +8,7 @@ use App\Models\Traits\HasSoftDeletesWithEmpresa;
 use App\Models\Traits\HasTimestampsCustomizados;
 use App\Models\Traits\BelongsToEmpresaTrait;
 use App\Modules\Processo\Models\Processo;
-use App\Models\Setor;
+use App\Modules\Orgao\Models\Setor;
 
 class Orgao extends BaseModel
 {

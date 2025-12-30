@@ -4,7 +4,7 @@ namespace App\Infrastructure\Persistence\Eloquent;
 
 use App\Domain\Setor\Entities\Setor;
 use App\Domain\Setor\Repositories\SetorRepositoryInterface;
-use App\Models\Setor as SetorModel;
+use App\Modules\Orgao\Models\Setor as SetorModel;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use App\Infrastructure\Persistence\Eloquent\Traits\IsolamentoEmpresaTrait;
 

@@ -3,7 +3,7 @@
 namespace App\Modules\Custo\Services;
 
 use App\Services\BaseService;
-use App\Models\CustoIndireto;
+use App\Modules\Custo\Models\CustoIndireto;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Validator;
 
