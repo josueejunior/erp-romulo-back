@@ -397,16 +397,26 @@ class MercadoPagoGateway implements PaymentProviderInterface
             $metadata = null;
         }
 
+        // Obter status_detail e mapear para mensagem amigável
+        $statusDetail = $payment['status_detail'] ?? null;
+        $userFriendlyMessage = null;
+        
+        // Se o pagamento foi rejeitado ou está pendente, criar mensagem amigável
+        $status = $this->mapStatus($payment['status'] ?? 'pending');
+        if ($status === 'rejected' || ($status === 'pending' && $statusDetail)) {
+            $userFriendlyMessage = $this->mapStatusDetailToUserMessage($statusDetail);
+        }
+
         return new PaymentResult(
             externalId: (string) ($payment['id'] ?? ''),
-            status: $this->mapStatus($payment['status'] ?? 'pending'),
+            status: $status,
             amount: \App\Domain\Shared\ValueObjects\Money::fromReais($payment['transaction_amount'] ?? 0),
             paymentMethod: $payment['payment_method_id'] ?? 'unknown',
             description: $payment['description'] ?? null,
             payerEmail: is_array($payer) ? ($payer['email'] ?? null) : null,
             payerCpf: is_array($payerIdentification) ? ($payerIdentification['number'] ?? null) : null,
             transactionId: $payment['id'] ?? null,
-            errorMessage: $payment['status_detail'] ?? null,
+            errorMessage: $userFriendlyMessage ?? $statusDetail, // Usar mensagem amigável se disponível
             metadata: $metadata,
             createdAt: isset($payment['date_created']) ? new \DateTime($payment['date_created']) : null,
             approvedAt: isset($payment['date_approved']) ? new \DateTime($payment['date_approved']) : null,
@@ -424,6 +434,54 @@ class MercadoPagoGateway implements PaymentProviderInterface
             'rejected', 'cancelled' => 'rejected',
             'refunded', 'charged_back' => 'refunded',
             default => 'pending',
+        };
+    }
+
+    /**
+     * Mapeia status_detail do Mercado Pago para mensagem amigável ao usuário
+     * 
+     * @param string|null $statusDetail Código do status_detail do Mercado Pago
+     * @return string Mensagem amigável em português
+     */
+    private function mapStatusDetailToUserMessage(?string $statusDetail): string
+    {
+        if (empty($statusDetail)) {
+            return 'Não foi possível processar o pagamento. Tente novamente ou entre em contato com o suporte.';
+        }
+
+        return match($statusDetail) {
+            // Rejeições por saldo/limite
+            'cc_rejected_insufficient_amount' => 'Pagamento recusado: Saldo ou limite insuficiente no cartão. Verifique o limite disponível ou tente outro cartão.',
+            'cc_rejected_call_for_authorize' => 'Pagamento recusado: É necessário autorizar o pagamento com o banco emissor. Entre em contato com seu banco.',
+            
+            // Rejeições por dados incorretos
+            'cc_rejected_bad_filled_card_number' => 'Pagamento recusado: Número do cartão inválido. Verifique os dados do cartão.',
+            'cc_rejected_bad_filled_date' => 'Pagamento recusado: Data de validade do cartão inválida. Verifique a data de expiração.',
+            'cc_rejected_bad_filled_other' => 'Pagamento recusado: Dados do cartão incorretos. Verifique todas as informações.',
+            'cc_rejected_bad_filled_security_code' => 'Pagamento recusado: Código de segurança (CVV) inválido. Verifique o código de segurança do cartão.',
+            
+            // Rejeições por cartão
+            'cc_rejected_card_error' => 'Pagamento recusado: Erro no cartão. Verifique se o cartão está ativo ou tente outro cartão.',
+            'cc_rejected_card_disabled' => 'Pagamento recusado: Cartão desabilitado. Entre em contato com o banco emissor.',
+            'cc_rejected_card_number_error' => 'Pagamento recusado: Número do cartão inválido. Verifique o número do cartão.',
+            'cc_rejected_duplicated_payment' => 'Pagamento recusado: Este pagamento já foi processado anteriormente.',
+            'cc_rejected_high_risk' => 'Pagamento recusado: Transação considerada de alto risco. Tente novamente ou use outro método de pagamento.',
+            'cc_rejected_insufficient_data' => 'Pagamento recusado: Dados insuficientes. Verifique todas as informações do cartão.',
+            'cc_rejected_invalid_installments' => 'Pagamento recusado: Número de parcelas inválido para este cartão.',
+            'cc_rejected_max_attempts' => 'Pagamento recusado: Muitas tentativas. Aguarde alguns minutos e tente novamente.',
+            
+            // Rejeições por conta/banco
+            'cc_rejected_other_reason' => 'Pagamento recusado pelo banco emissor. Entre em contato com seu banco para mais informações.',
+            'cc_rejected_blacklist' => 'Pagamento recusado: Cartão não autorizado. Entre em contato com o suporte.',
+            
+            // Pendências
+            'pending_contingency' => 'Pagamento pendente: Estamos analisando sua transação. Você será notificado em breve.',
+            'pending_review_manual' => 'Pagamento pendente: Sua transação está sendo revisada. Você será notificado em breve.',
+            
+            // Erros gerais
+            'cc_rejected' => 'Pagamento recusado pelo banco emissor. Verifique os dados do cartão ou tente outro método de pagamento.',
+            
+            default => "Pagamento recusado: {$statusDetail}. Entre em contato com o suporte se o problema persistir.",
         };
     }
 }
