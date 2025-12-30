@@ -82,6 +82,7 @@ class GetUserUseCase
                 'name' => method_exists($user, 'name') ? $user->name : null,
                 'email' => $user->getAuthIdentifierName() === 'email' ? $user->email : null,
                 'empresa_ativa_id' => method_exists($user, 'empresa_ativa_id') ? $user->empresa_ativa_id : null,
+                'foto_perfil' => method_exists($user, 'foto_perfil') ? $user->foto_perfil : null,
                 'empresas_list' => $empresasList, // Lista de empresas para o seletor
             ],
             'tenant' => $tenant ? [

@@ -32,6 +32,7 @@ class UserResource extends JsonResource
                     'name' => $this->resource->nome,
                     'email' => $this->resource->email,
                     'empresa_ativa_id' => $this->resource->empresaAtivaId,
+                    'foto_perfil' => null, // Não disponível na entidade de domínio
                 ];
             }
             
@@ -41,6 +42,7 @@ class UserResource extends JsonResource
                 'name' => $userModel->name,
                 'email' => $userModel->email,
                 'empresa_ativa_id' => $userModel->empresa_ativa_id,
+                'foto_perfil' => $userModel->foto_perfil,
                 'role' => $userModel->roles->first()?->name ?? null,
                 'empresas' => $userModel->empresas->pluck('id')->toArray(),
                 'created_at' => $userModel->created_at?->toISOString(),
@@ -54,6 +56,7 @@ class UserResource extends JsonResource
             'name' => $this->resource->name,
             'email' => $this->resource->email,
             'empresa_ativa_id' => $this->resource->empresa_ativa_id,
+            'foto_perfil' => $this->resource->foto_perfil,
             'role' => $this->resource->roles->first()?->name ?? null,
             'empresas' => $this->resource->empresas->pluck('id')->toArray(),
             'created_at' => $this->resource->created_at?->toISOString(),

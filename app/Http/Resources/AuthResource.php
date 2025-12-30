@@ -24,6 +24,7 @@ class AuthResource extends JsonResource
                 'name' => $this->resource['user']['name'] ?? null,
                 'email' => $this->resource['user']['email'] ?? null,
                 'empresa_ativa_id' => $this->resource['user']['empresa_ativa_id'] ?? null,
+                'foto_perfil' => $this->resource['user']['foto_perfil'] ?? null,
             ],
             'tenant' => $this->resource['tenant'] ?? null,
             'empresa' => $this->resource['empresa'] ?? null,

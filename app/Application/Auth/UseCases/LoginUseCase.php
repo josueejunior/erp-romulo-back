@@ -86,6 +86,7 @@ class LoginUseCase
                     'name' => $user->nome,
                     'email' => $user->email,
                     'empresa_ativa_id' => $user->empresaAtivaId,
+                    'foto_perfil' => $userModel->foto_perfil ?? null,
                 ],
                 'tenant' => [
                     'id' => $tenant->id,
