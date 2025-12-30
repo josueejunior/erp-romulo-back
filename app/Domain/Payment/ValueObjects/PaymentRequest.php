@@ -58,7 +58,8 @@ readonly class PaymentRequest
             throw new \App\Domain\Exceptions\DomainException('Parcelas não são permitidas para pagamento PIX.');
         }
 
-        if ($this->installments < 1 || $this->installments > 12) {
+        // Validar parcelas apenas para cartão
+        if (!$isPix && ($this->installments < 1 || $this->installments > 12)) {
             throw new \App\Domain\Exceptions\DomainException('O número de parcelas deve estar entre 1 e 12.');
         }
     }

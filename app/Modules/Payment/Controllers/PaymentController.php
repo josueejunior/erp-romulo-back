@@ -112,11 +112,13 @@ class PaymentController extends BaseApiController
 
             // Para cartão, adicionar token e parcelas
             if ($paymentMethod === 'credit_card') {
-                $paymentRequestData['card_token'] = $validated['card_token'];
-                $paymentRequestData['installments'] = $validated['installments'] ?? 1;
+                $paymentRequestData['card_token'] = $validated['card_token'] ?? null;
+                // Installments só é necessário para cartão, e pode não estar no validated se não foi enviado
+                $paymentRequestData['installments'] = isset($validated['installments']) ? (int) $validated['installments'] : 1;
                 // NÃO enviar payment_method_id - será detectado automaticamente do token
                 unset($paymentRequestData['payment_method_id']);
             }
+            // Para PIX, não adicionar installments - PaymentRequest::fromArray usa valor padrão 1
 
             $paymentRequest = PaymentRequest::fromArray($paymentRequestData);
 

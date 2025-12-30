@@ -131,7 +131,7 @@ class MercadoPagoGateway implements PaymentProviderInterface
             Log::info('Payload Final MP (antes de enviar):', [
                 'transaction_amount' => $paymentData['transaction_amount'],
                 'description' => $paymentData['description'],
-                'installments' => $paymentData['installments'],
+                'installments' => $paymentData['installments'] ?? 'N/A (PIX não tem parcelas)',
                 'has_payment_method_id' => isset($paymentData['payment_method_id']),
                 'payment_method_id' => $paymentData['payment_method_id'] ?? 'NÃO ENVIADO (correto - será detectado do token)',
                 'has_token' => !empty($paymentData['token']),
