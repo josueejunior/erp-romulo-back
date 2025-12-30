@@ -167,12 +167,10 @@ class UserController extends BaseApiController
             // Executar use case (dispara Domain Event que limpa cache via Listener)
             $usuarioDomain = $this->switchEmpresaAtivaUseCase->executar($user->id, $novaEmpresaId, $context);
 
-            // Buscar tenant atualizado (pode ter mudado se a empresa pertence a outro tenant)
+            // O tenant não muda ao trocar de empresa - o usuário sempre pertence ao mesmo tenant
+            // Mas vamos garantir que estamos usando o tenant correto do contexto
             $tenant = tenancy()->tenant;
-            
-            // Buscar empresa para obter tenant_id correto
-            $empresaModel = \App\Modules\Empresa\Models\Empresa::find($novaEmpresaId);
-            $tenantId = $tenant?->id ?? $empresaModel?->tenant_id ?? null;
+            $tenantId = $tenant?->id ?? $context->tenantId;
 
             return response()->json([
                 'message' => 'Empresa ativa alterada com sucesso.',
