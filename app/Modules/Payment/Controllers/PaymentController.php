@@ -8,6 +8,7 @@ use App\Domain\Payment\ValueObjects\PaymentRequest;
 use App\Domain\Plano\Repositories\PlanoRepositoryInterface;
 use App\Http\Requests\Payment\ProcessarAssinaturaRequest;
 use App\Models\Tenant;
+use App\Modules\Assinatura\Models\Assinatura;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
@@ -53,7 +54,46 @@ class PaymentController extends BaseApiController
                 ? $plano->preco_anual 
                 : $plano->preco_mensal;
 
-            // Criar PaymentRequest
+            $isGratis = ($valor === null || $valor == 0);
+
+            // Se for gratuito, criar assinatura diretamente sem passar pelo gateway
+            if ($isGratis) {
+                // Buscar ou criar assinatura gratuita
+                $assinaturaModel = Assinatura::where('tenant_id', $tenant->id)
+                    ->where('plano_id', $plano->id)
+                    ->where('status', 'ativa')
+                    ->first();
+
+                if (!$assinaturaModel) {
+                    // Criar nova assinatura gratuita
+                    $dataInicio = now();
+                    $dataFim = $dataInicio->copy()->addDays(14); // Trial de 14 dias
+
+                    $assinaturaModel = Assinatura::create([
+                        'tenant_id' => $tenant->id,
+                        'plano_id' => $plano->id,
+                        'status' => 'ativa',
+                        'data_inicio' => $dataInicio,
+                        'data_fim' => $dataFim,
+                        'valor_pago' => 0,
+                        'metodo_pagamento' => 'gratuito',
+                        'transacao_id' => null,
+                        'dias_grace_period' => 0,
+                        'observacoes' => 'Assinatura gratuita (Trial)',
+                    ]);
+                }
+
+                return response()->json([
+                    'message' => 'Assinatura gratuita ativada com sucesso',
+                    'data' => [
+                        'assinatura_id' => $assinaturaModel->id,
+                        'status' => $assinaturaModel->status,
+                        'data_fim' => $assinaturaModel->data_fim->format('Y-m-d'),
+                    ],
+                ], 201);
+            }
+
+            // Para planos pagos, criar PaymentRequest e processar via gateway
             $paymentRequest = PaymentRequest::fromArray([
                 'amount' => $valor,
                 'description' => "Plano {$plano->nome} - {$validated['periodo']} - Sistema Rômulo",
