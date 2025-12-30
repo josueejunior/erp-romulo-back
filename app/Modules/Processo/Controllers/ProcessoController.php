@@ -304,6 +304,57 @@ class ProcessoController extends Controller
     }
 
     /**
+     * GET /processos/{processo}/confirmacoes-pagamento
+     * Retorna histórico de confirmações de pagamento
+     */
+    public function historicoConfirmacoes(Request $request, Processo $processo): JsonResponse
+    {
+        try {
+            $historico = [];
+            
+            // Se o processo já tem data de recebimento, incluir no histórico
+            if ($processo->data_recebimento_pagamento) {
+                // Calcular valores no momento da confirmação
+                $receitaTotal = 0;
+                $custosDiretos = 0;
+                
+                foreach ($processo->itens as $item) {
+                    if (in_array($item->status_item, ['aceito', 'aceito_habilitado'])) {
+                        $receitaTotal += $item->valor_pago ?? $item->valor_faturado ?? 0;
+                    }
+                }
+                
+                // Buscar custos diretos (notas fiscais de entrada)
+                $notasEntrada = \App\Modules\NotaFiscal\Models\NotaFiscal::where('processo_id', $processo->id)
+                    ->where('tipo', 'entrada')
+                    ->get();
+                
+                $custosDiretos = $notasEntrada->sum(fn($nf) => $nf->custo_total ?? 0);
+                
+                $historico[] = [
+                    'id' => 1,
+                    'data_recebimento' => $processo->data_recebimento_pagamento->format('Y-m-d'),
+                    'data_confirmacao' => $processo->updated_at->format('Y-m-d H:i:s'),
+                    'confirmado_por' => $processo->updated_by ?? null,
+                    'receita_total' => round($receitaTotal, 2),
+                    'custos_diretos' => round($custosDiretos, 2),
+                    'lucro_bruto' => round($receitaTotal - $custosDiretos, 2),
+                    'status' => 'confirmado',
+                ];
+            }
+            
+            return response()->json([
+                'data' => $historico,
+                'total' => count($historico),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Erro ao buscar histórico: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * GET /processos - Listar processos
      * Método chamado pelo Route::module()
      */

@@ -4,6 +4,7 @@ namespace App\Modules\Dashboard\Services;
 
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\DocumentoHabilitacao\Repositories\DocumentoHabilitacaoRepositoryInterface;
+use App\Modules\Relatorio\Services\FinanceiroService;
 use Carbon\Carbon;
 
 class DashboardService
@@ -11,6 +12,7 @@ class DashboardService
     public function __construct(
         private ProcessoRepositoryInterface $processoRepository,
         private DocumentoHabilitacaoRepositoryInterface $documentoRepository,
+        private FinanceiroService $financeiroService,
     ) {}
 
     /**
@@ -119,6 +121,9 @@ class DashboardService
 
         $documentosUrgentes = $documentosUrgentesPaginator->total();
 
+        // Calcular dados financeiros
+        $dadosFinanceiros = $this->calcularDadosFinanceiros($empresaId);
+
         return [
             'processos' => [
                 'participacao' => $processosParticipacao,
@@ -134,7 +139,126 @@ class DashboardService
             'documentos_vencendo' => $documentosVencendo,
             'documentos_vencidos' => $documentosVencidos,
             'documentos_urgentes' => $documentosUrgentes,
+            'financeiro' => $dadosFinanceiros,
         ];
+    }
+
+    /**
+     * Calcular dados financeiros para o dashboard
+     */
+    private function calcularDadosFinanceiros(int $empresaId): array
+    {
+        try {
+            // Buscar processos em execução para calcular receita pendente
+            $processosExecucao = $this->processoRepository->buscarComFiltros([
+                'empresa_id' => $empresaId,
+                'status' => 'execucao',
+                'per_page' => 1000, // Buscar todos para calcular totais
+            ]);
+
+            $receitaPendente = 0;
+            $custosDiretosPendentes = 0;
+            $processosComDados = 0;
+
+            // Buscar modelos Eloquent para usar no FinanceiroService
+            // Nota: buscarModelosComFiltros não está na interface, mas está na implementação
+            // Fazer cast para a implementação concreta quando necessário
+            if (method_exists($this->processoRepository, 'buscarModelosComFiltros')) {
+                $processosModels = $this->processoRepository->buscarModelosComFiltros([
+                    'empresa_id' => $empresaId,
+                    'status' => 'execucao',
+                ]);
+            } else {
+                // Fallback: buscar via paginator e converter IDs para modelos
+                $processosIds = $processosExecucao->getCollection()->pluck('id')->toArray();
+                $processosModels = \App\Modules\Processo\Models\Processo::whereIn('id', $processosIds)
+                    ->where('empresa_id', $empresaId)
+                    ->get();
+            }
+
+            foreach ($processosModels as $processo) {
+                try {
+                    $receita = $this->financeiroService->calcularReceita($processo);
+                    $custos = $this->financeiroService->calcularCustosDiretos($processo);
+                    
+                    $receitaPendente += $receita['receita_total'] ?? 0;
+                    $custosDiretosPendentes += $custos['custo_total'] ?? 0;
+                    $processosComDados++;
+                } catch (\Exception $e) {
+                    // Ignorar erros em processos individuais
+                    continue;
+                }
+            }
+
+            // Calcular dados do mês atual
+            $mesAtual = Carbon::now();
+            $dadosMesAtual = $this->financeiroService->calcularGestaoFinanceiraMensal($mesAtual, $empresaId);
+
+            // Calcular dados dos últimos 6 meses para gráfico
+            $evolucaoMensal = [];
+            for ($i = 5; $i >= 0; $i--) {
+                $mes = Carbon::now()->subMonths($i);
+                $dadosMes = $this->financeiroService->calcularGestaoFinanceiraMensal($mes, $empresaId);
+                
+                $evolucaoMensal[] = [
+                    'mes' => $mes->format('Y-m'),
+                    'mes_label' => $mes->format('M/Y'),
+                    'receita' => $dadosMes['receita_total'] ?? 0,
+                    'lucro_bruto' => $dadosMes['lucro_bruto'] ?? 0,
+                    'lucro_liquido' => $dadosMes['lucro_liquido'] ?? 0,
+                    'margem_bruta' => $dadosMes['margem_bruta'] ?? 0,
+                    'margem_liquida' => $dadosMes['margem_liquida'] ?? 0,
+                ];
+            }
+
+            $lucroPendente = $receitaPendente - $custosDiretosPendentes;
+            $margemPendente = $receitaPendente > 0 
+                ? ($lucroPendente / $receitaPendente) * 100 
+                : 0;
+
+            return [
+                'pendente' => [
+                    'receita' => round($receitaPendente, 2),
+                    'custos_diretos' => round($custosDiretosPendentes, 2),
+                    'lucro_bruto' => round($lucroPendente, 2),
+                    'margem_bruta' => round($margemPendente, 2),
+                    'processos' => $processosComDados,
+                ],
+                'mes_atual' => [
+                    'receita' => $dadosMesAtual['receita_total'] ?? 0,
+                    'custos_diretos' => $dadosMesAtual['custos_diretos'] ?? 0,
+                    'custos_indiretos' => $dadosMesAtual['custos_indiretos'] ?? 0,
+                    'lucro_bruto' => $dadosMesAtual['lucro_bruto'] ?? 0,
+                    'lucro_liquido' => $dadosMesAtual['lucro_liquido'] ?? 0,
+                    'margem_bruta' => $dadosMesAtual['margem_bruta'] ?? 0,
+                    'margem_liquida' => $dadosMesAtual['margem_liquida'] ?? 0,
+                    'processos' => $dadosMesAtual['quantidade_processos'] ?? 0,
+                ],
+                'evolucao_mensal' => $evolucaoMensal,
+            ];
+        } catch (\Exception $e) {
+            // Em caso de erro, retornar estrutura vazia
+            return [
+                'pendente' => [
+                    'receita' => 0,
+                    'custos_diretos' => 0,
+                    'lucro_bruto' => 0,
+                    'margem_bruta' => 0,
+                    'processos' => 0,
+                ],
+                'mes_atual' => [
+                    'receita' => 0,
+                    'custos_diretos' => 0,
+                    'custos_indiretos' => 0,
+                    'lucro_bruto' => 0,
+                    'lucro_liquido' => 0,
+                    'margem_bruta' => 0,
+                    'margem_liquida' => 0,
+                    'processos' => 0,
+                ],
+                'evolucao_mensal' => [],
+            ];
+        }
     }
 }
 

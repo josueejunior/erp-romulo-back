@@ -89,6 +89,9 @@ Route::prefix('v1')->group(function () {
             Route::post('/processar-assinatura', [ApiPaymentController::class, 'processarAssinatura']);
         });
         
+        // Notificações (não precisa de assinatura ativa)
+        Route::get('/notifications', [\App\Modules\Notification\Controllers\NotificationController::class, 'index']);
+        
         // Rotas que PRECISAM de assinatura ativa
         Route::middleware([\App\Http\Middleware\CheckSubscription::class])->group(function () {
             // Dashboard
@@ -121,6 +124,7 @@ Route::prefix('v1')->group(function () {
                 Route::post('/marcar-vencido', [ApiProcessoController::class, 'marcarVencido']);
                 Route::post('/marcar-perdido', [ApiProcessoController::class, 'marcarPerdido']);
                 Route::post('/confirmar-pagamento', [ApiProcessoController::class, 'confirmarPagamento']);
+                Route::get('/confirmacoes-pagamento', [ApiProcessoController::class, 'historicoConfirmacoes']);
                 Route::get('/sugerir-status', [ApiProcessoController::class, 'sugerirStatus']);
                 
                 // Exportação
