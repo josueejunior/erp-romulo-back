@@ -77,15 +77,24 @@ class ProcessarAssinaturaPlanoUseCase
             // Processar pagamento
             $paymentResult = $this->paymentProvider->processPayment($paymentRequest, $idempotencyKey);
 
-            // Atualizar log
+            // Atualizar log com dados do pagamento
+            $dadosResposta = [
+                'status' => $paymentResult->status,
+                'payment_method' => $paymentResult->paymentMethod,
+                'error_message' => $paymentResult->errorMessage,
+            ];
+
+            // Se for PIX, incluir dados do QR Code
+            if ($paymentResult->paymentMethod === 'pix') {
+                $dadosResposta['pix_qr_code'] = $paymentResult->pixQrCode;
+                $dadosResposta['pix_qr_code_base64'] = $paymentResult->pixQrCodeBase64;
+                $dadosResposta['pix_ticket_url'] = $paymentResult->pixTicketUrl;
+            }
+
             $paymentLog->update([
                 'external_id' => $paymentResult->externalId,
                 'status' => $paymentResult->status,
-                'dados_resposta' => [
-                    'status' => $paymentResult->status,
-                    'payment_method' => $paymentResult->paymentMethod,
-                    'error_message' => $paymentResult->errorMessage,
-                ],
+                'dados_resposta' => $dadosResposta,
             ]);
 
             // Se aprovado, criar assinatura

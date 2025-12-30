@@ -56,27 +56,42 @@ class MercadoPagoGateway implements PaymentProviderInterface
     public function processPayment(PaymentRequest $request, string $idempotencyKey): PaymentResult
     {
         try {
-            // Validar token do cartão
-            if (empty($request->cardToken)) {
-                throw new DomainException('Token do cartão é obrigatório para processar o pagamento.');
+            // Detectar método de pagamento
+            $isPix = $request->paymentMethodId === 'pix';
+            $isCartao = !$isPix && !empty($request->cardToken);
+
+            // Validações específicas por método
+            if ($isCartao && empty($request->cardToken)) {
+                throw new DomainException('Token do cartão é obrigatório para pagamento com cartão.');
+            }
+
+            if ($isPix && !empty($request->cardToken)) {
+                throw new DomainException('Token do cartão não deve ser enviado para pagamento PIX.');
             }
 
             // Preparar dados do pagamento para a nova API
-            // IMPORTANTE: Não fixar payment_method_id - deixar o Mercado Pago detectar automaticamente do token
-            // O token já contém todas as informações do cartão (BIN, bandeira, etc)
             $paymentData = [
                 'transaction_amount' => (float) round($request->amount->toReais(), 2), // Garantir 2 casas decimais
                 'description' => substr($request->description, 0, 255), // Limitar tamanho
-                'installments' => (int) ($request->installments ?? 1),
-                // NÃO enviar payment_method_id fixo - o token já contém essa informação
-                // Se enviar errado, causa erro diff_param_bins
-                'token' => (string) $request->cardToken, // Token é obrigatório e deve ser string
                 'payer' => [
                     'email' => $request->payerEmail,
                 ],
             ];
 
-            // CPF do pagador (obrigatório para cartão de crédito no Brasil)
+            // Configurações específicas por método de pagamento
+            if ($isPix) {
+                // PIX: não precisa de token, precisa de payment_method_id
+                $paymentData['payment_method_id'] = 'pix';
+                // PIX não tem parcelas
+            } else {
+                // Cartão: precisa de token, parcelas
+                $paymentData['installments'] = (int) ($request->installments ?? 1);
+                // NÃO enviar payment_method_id fixo - o token já contém essa informação
+                // Se enviar errado, causa erro diff_param_bins
+                $paymentData['token'] = (string) $request->cardToken;
+            }
+
+            // CPF do pagador (obrigatório para cartão, recomendado para PIX)
             if ($request->payerCpf) {
                 $cpfLimpo = preg_replace('/\D/', '', $request->payerCpf);
                 if (strlen($cpfLimpo) === 11) {
@@ -86,9 +101,11 @@ class MercadoPagoGateway implements PaymentProviderInterface
                     ];
                 }
             } else {
-                Log::warning('CPF do pagador não fornecido', [
-                    'payer_email' => $request->payerEmail,
-                ]);
+                if ($isCartao) {
+                    Log::warning('CPF do pagador não fornecido para pagamento com cartão', [
+                        'payer_email' => $request->payerEmail,
+                    ]);
+                }
             }
 
             // External reference (opcional, mas recomendado)
@@ -407,6 +424,44 @@ class MercadoPagoGateway implements PaymentProviderInterface
             $userFriendlyMessage = $this->mapStatusDetailToUserMessage($statusDetail);
         }
 
+        // Extrair dados do PIX (QR Code) se disponível
+        $pixQrCode = null;
+        $pixQrCodeBase64 = null;
+        $pixTicketUrl = null;
+        
+        $pointOfInteraction = $payment['point_of_interaction'] ?? null;
+        if ($pointOfInteraction) {
+            // Converter objeto para array se necessário
+            if (is_object($pointOfInteraction)) {
+                if (method_exists($pointOfInteraction, 'toArray')) {
+                    $pointOfInteraction = $pointOfInteraction->toArray();
+                } elseif (method_exists($pointOfInteraction, 'getContent')) {
+                    $pointOfInteraction = $pointOfInteraction->getContent();
+                } else {
+                    $pointOfInteraction = (array) $pointOfInteraction;
+                }
+            }
+            
+            if (is_array($pointOfInteraction)) {
+                $transactionData = $pointOfInteraction['transaction_data'] ?? [];
+                if (is_object($transactionData)) {
+                    if (method_exists($transactionData, 'toArray')) {
+                        $transactionData = $transactionData->toArray();
+                    } elseif (method_exists($transactionData, 'getContent')) {
+                        $transactionData = $transactionData->getContent();
+                    } else {
+                        $transactionData = (array) $transactionData;
+                    }
+                }
+                
+                if (is_array($transactionData)) {
+                    $pixQrCode = $transactionData['qr_code'] ?? null;
+                    $pixQrCodeBase64 = $transactionData['qr_code_base64'] ?? null;
+                    $pixTicketUrl = $transactionData['ticket_url'] ?? null;
+                }
+            }
+        }
+
         return new PaymentResult(
             externalId: (string) ($payment['id'] ?? ''),
             status: $status,
@@ -420,6 +475,9 @@ class MercadoPagoGateway implements PaymentProviderInterface
             metadata: $metadata,
             createdAt: isset($payment['date_created']) ? new \DateTime($payment['date_created']) : null,
             approvedAt: isset($payment['date_approved']) ? new \DateTime($payment['date_approved']) : null,
+            pixQrCode: $pixQrCode,
+            pixQrCodeBase64: $pixQrCodeBase64,
+            pixTicketUrl: $pixTicketUrl,
         );
     }
 

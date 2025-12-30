@@ -39,6 +39,25 @@ readonly class PaymentRequest
             throw new \App\Domain\Exceptions\DomainException('O e-mail do pagador é inválido.');
         }
 
+        // Validações específicas por método de pagamento
+        $isPix = $this->paymentMethodId === 'pix';
+        $isCartao = !$isPix && $this->cardToken !== null;
+
+        // Para cartão de crédito, token é obrigatório
+        if ($isCartao && empty($this->cardToken)) {
+            throw new \App\Domain\Exceptions\DomainException('Token do cartão é obrigatório para pagamento com cartão.');
+        }
+
+        // Para PIX, não pode ter token
+        if ($isPix && !empty($this->cardToken)) {
+            throw new \App\Domain\Exceptions\DomainException('Token do cartão não deve ser enviado para pagamento PIX.');
+        }
+
+        // Parcelas só fazem sentido para cartão
+        if ($isPix && $this->installments > 1) {
+            throw new \App\Domain\Exceptions\DomainException('Parcelas não são permitidas para pagamento PIX.');
+        }
+
         if ($this->installments < 1 || $this->installments > 12) {
             throw new \App\Domain\Exceptions\DomainException('O número de parcelas deve estar entre 1 e 12.');
         }

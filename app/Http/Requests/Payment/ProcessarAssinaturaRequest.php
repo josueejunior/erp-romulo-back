@@ -31,12 +31,23 @@ class ProcessarAssinaturaRequest extends FormRequest
             'periodo' => 'required|string|in:mensal,anual',
             'payer_email' => 'required|email',
             'payer_cpf' => 'nullable|string',
+            'payment_method' => 'nullable|string|in:credit_card,pix', // Método de pagamento
         ];
 
-        // Card token só é obrigatório se o plano não for gratuito
+        // Validações para planos pagos
         if (!$isGratis) {
-            $rules['card_token'] = 'required|string';
-            $rules['installments'] = 'nullable|integer|min:1|max:12';
+            $paymentMethod = $this->input('payment_method', 'credit_card');
+            
+            // Se for cartão de crédito, token é obrigatório
+            if ($paymentMethod === 'credit_card') {
+                $rules['card_token'] = 'required|string';
+                $rules['installments'] = 'nullable|integer|min:1|max:12';
+            }
+            
+            // Se for PIX, não precisa de token
+            if ($paymentMethod === 'pix') {
+                // PIX não precisa de card_token
+            }
         }
 
         return $rules;

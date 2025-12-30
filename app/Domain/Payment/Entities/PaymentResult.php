@@ -24,6 +24,9 @@ readonly class PaymentResult
         public ?array $metadata = null,
         public ?\DateTimeInterface $createdAt = null,
         public ?\DateTimeInterface $approvedAt = null,
+        public ?string $pixQrCode = null, // QR Code PIX (base64 ou string)
+        public ?string $pixQrCodeBase64 = null, // QR Code PIX em base64 (para exibição)
+        public ?string $pixTicketUrl = null, // URL do ticket PIX (se disponível)
     ) {
         $this->validate();
     }

@@ -94,23 +94,31 @@ class PaymentController extends BaseApiController
             }
 
             // Para planos pagos, criar PaymentRequest e processar via gateway
-            // IMPORTANTE: NÃO enviar payment_method_id fixo - o token já contém essa informação
-            // Enviar payment_method_id fixo causa erro diff_param_bins
-            $paymentRequest = PaymentRequest::fromArray([
+            $paymentMethod = $validated['payment_method'] ?? 'credit_card';
+            
+            $paymentRequestData = [
                 'amount' => $valor,
                 'description' => "Plano {$plano->nome} - {$validated['periodo']} - Sistema Rômulo",
                 'payer_email' => $validated['payer_email'],
                 'payer_cpf' => $validated['payer_cpf'] ?? null,
-                'card_token' => $validated['card_token'],
-                'installments' => $validated['installments'] ?? 1,
-                // NÃO enviar payment_method_id - será detectado automaticamente do token
+                'payment_method_id' => $paymentMethod === 'pix' ? 'pix' : null, // Para PIX, enviar explicitamente
                 'external_reference' => "tenant_{$tenant->id}_plano_{$plano->id}",
                 'metadata' => [
                     'tenant_id' => $tenant->id,
                     'plano_id' => $plano->id,
                     'periodo' => $validated['periodo'],
                 ],
-            ]);
+            ];
+
+            // Para cartão, adicionar token e parcelas
+            if ($paymentMethod === 'credit_card') {
+                $paymentRequestData['card_token'] = $validated['card_token'];
+                $paymentRequestData['installments'] = $validated['installments'] ?? 1;
+                // NÃO enviar payment_method_id - será detectado automaticamente do token
+                unset($paymentRequestData['payment_method_id']);
+            }
+
+            $paymentRequest = PaymentRequest::fromArray($paymentRequestData);
 
             // Processar assinatura
             $assinatura = $this->processarAssinaturaUseCase->executar(
@@ -120,13 +128,28 @@ class PaymentController extends BaseApiController
                 $validated['periodo']
             );
 
+            // Buscar resultado do pagamento para incluir dados do PIX se disponível
+            $paymentLog = \App\Models\PaymentLog::where('external_id', $assinatura->transacao_id)->first();
+            $responseData = [
+                'assinatura_id' => $assinatura->id,
+                'status' => $assinatura->status,
+                'data_fim' => $assinatura->data_fim->format('Y-m-d'),
+            ];
+
+            // Se for PIX e estiver pendente, incluir dados do QR Code
+            if ($paymentMethod === 'pix' && $assinatura->status === 'pendente') {
+                $dadosResposta = $paymentLog->dados_resposta ?? [];
+                if (isset($dadosResposta['pix_qr_code_base64']) || isset($dadosResposta['pix_qr_code'])) {
+                    $responseData['pix_qr_code_base64'] = $dadosResposta['pix_qr_code_base64'] ?? null;
+                    $responseData['pix_qr_code'] = $dadosResposta['pix_qr_code'] ?? null;
+                    $responseData['pix_ticket_url'] = $dadosResposta['pix_ticket_url'] ?? null;
+                    $responseData['payment_id'] = $paymentLog->external_id ?? null;
+                }
+            }
+
             return response()->json([
                 'message' => 'Assinatura processada com sucesso',
-                'data' => [
-                    'assinatura_id' => $assinatura->id,
-                    'status' => $assinatura->status,
-                    'data_fim' => $assinatura->data_fim->format('Y-m-d'),
-                ],
+                'data' => $responseData,
             ], 201);
 
         } catch (ValidationException $e) {
