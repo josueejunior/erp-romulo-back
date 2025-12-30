@@ -28,6 +28,7 @@ class AssinaturaController extends BaseApiController
 
     /**
      * Retorna assinatura atual do tenant
+     * Permite acesso mesmo sem assinatura (retorna null) para que o frontend possa tratar
      */
     public function atual(Request $request): JsonResponse
     {
@@ -40,50 +41,56 @@ class AssinaturaController extends BaseApiController
                 ], 404);
             }
 
-            $assinatura = $this->buscarAssinaturaAtualUseCase->executar($tenant->id);
-            
-            // Buscar modelo para resposta (mantém compatibilidade com frontend)
-            $assinaturaModel = $this->assinaturaRepository->buscarModeloPorId($assinatura->id);
+            // Tentar buscar assinatura, mas não lançar erro se não encontrar
+            try {
+                $assinatura = $this->buscarAssinaturaAtualUseCase->executar($tenant->id);
+                
+                // Buscar modelo para resposta (mantém compatibilidade com frontend)
+                $assinaturaModel = $this->assinaturaRepository->buscarModeloPorId($assinatura->id);
 
-            if (!$assinaturaModel) {
+                if (!$assinaturaModel) {
+                    return response()->json([
+                        'data' => null,
+                        'message' => 'Assinatura não encontrada',
+                        'code' => 'NO_SUBSCRIPTION'
+                    ], 200);
+                }
+
+                // Calcular dias restantes usando o modelo (mantém compatibilidade)
+                $diasRestantes = $assinaturaModel->diasRestantes();
+
                 return response()->json([
-                    'message' => 'Assinatura não encontrada',
+                    'data' => [
+                        'id' => $assinaturaModel->id,
+                        'tenant_id' => $assinaturaModel->tenant_id,
+                        'plano_id' => $assinaturaModel->plano_id,
+                        'status' => $assinaturaModel->status,
+                        'data_inicio' => $assinaturaModel->data_inicio ? $assinaturaModel->data_inicio->format('Y-m-d') : null,
+                        'data_fim' => $assinaturaModel->data_fim ? $assinaturaModel->data_fim->format('Y-m-d') : null,
+                        'valor_pago' => $assinaturaModel->valor_pago,
+                        'metodo_pagamento' => $assinaturaModel->metodo_pagamento,
+                        'transacao_id' => $assinaturaModel->transacao_id,
+                        'dias_restantes' => $diasRestantes,
+                        'plano' => $assinaturaModel->plano ? [
+                            'id' => $assinaturaModel->plano->id,
+                            'nome' => $assinaturaModel->plano->nome,
+                            'descricao' => $assinaturaModel->plano->descricao,
+                            'preco_mensal' => $assinaturaModel->plano->preco_mensal,
+                            'preco_anual' => $assinaturaModel->plano->preco_anual,
+                            'limite_processos' => $assinaturaModel->plano->limite_processos,
+                            'limite_usuarios' => $assinaturaModel->plano->limite_usuarios,
+                            'limite_armazenamento_mb' => $assinaturaModel->plano->limite_armazenamento_mb,
+                        ] : null,
+                    ]
+                ]);
+            } catch (\App\Domain\Exceptions\NotFoundException $e) {
+                // Não há assinatura - retornar null para que o frontend possa tratar
+                return response()->json([
+                    'data' => null,
+                    'message' => 'Nenhuma assinatura encontrada',
                     'code' => 'NO_SUBSCRIPTION'
-                ], 404);
+                ], 200);
             }
-
-            // Calcular dias restantes usando o modelo (mantém compatibilidade)
-            $diasRestantes = $assinaturaModel->diasRestantes();
-
-            return response()->json([
-                'data' => [
-                    'id' => $assinaturaModel->id,
-                    'tenant_id' => $assinaturaModel->tenant_id,
-                    'plano_id' => $assinaturaModel->plano_id,
-                    'status' => $assinaturaModel->status,
-                    'data_inicio' => $assinaturaModel->data_inicio ? $assinaturaModel->data_inicio->format('Y-m-d') : null,
-                    'data_fim' => $assinaturaModel->data_fim ? $assinaturaModel->data_fim->format('Y-m-d') : null,
-                    'valor_pago' => $assinaturaModel->valor_pago,
-                    'metodo_pagamento' => $assinaturaModel->metodo_pagamento,
-                    'transacao_id' => $assinaturaModel->transacao_id,
-                    'dias_restantes' => $diasRestantes,
-                    'plano' => $assinaturaModel->plano ? [
-                        'id' => $assinaturaModel->plano->id,
-                        'nome' => $assinaturaModel->plano->nome,
-                        'descricao' => $assinaturaModel->plano->descricao,
-                        'preco_mensal' => $assinaturaModel->plano->preco_mensal,
-                        'preco_anual' => $assinaturaModel->plano->preco_anual,
-                        'limite_processos' => $assinaturaModel->plano->limite_processos,
-                        'limite_usuarios' => $assinaturaModel->plano->limite_usuarios,
-                        'limite_armazenamento_mb' => $assinaturaModel->plano->limite_armazenamento_mb,
-                    ] : null,
-                ]
-            ]);
-        } catch (\App\Domain\Exceptions\NotFoundException $e) {
-            return response()->json([
-                'message' => $e->getMessage(),
-                'code' => 'NO_SUBSCRIPTION'
-            ], 403);
         } catch (\Exception $e) {
             return $this->handleException($e, 'Erro ao buscar assinatura atual');
         }
@@ -91,6 +98,7 @@ class AssinaturaController extends BaseApiController
 
     /**
      * Retorna status da assinatura com limites utilizados
+     * Permite acesso mesmo sem assinatura (retorna null) para que o frontend possa tratar
      */
     public function status(Request $request): JsonResponse
     {
@@ -103,17 +111,42 @@ class AssinaturaController extends BaseApiController
                 ], 404);
             }
 
-            $empresa = $this->getEmpresaAtivaOrFail();
-            $statusData = $this->obterStatusAssinaturaUseCase->executar($tenant->id, $empresa->id);
+            // Tentar obter empresa, mas não falhar se não houver (para permitir consulta de status)
+            $empresaId = null;
+            try {
+                $empresa = $this->getEmpresaAtivaOrFail();
+                $empresaId = $empresa->id;
+            } catch (\Exception $e) {
+                // Se não conseguir obter empresa, continuar sem ela (para contagem de usuários)
+                \Log::debug('AssinaturaController::status() - Não foi possível obter empresa ativa', [
+                    'error' => $e->getMessage()
+                ]);
+            }
+            
+            // Tentar buscar status, mas não lançar erro se não encontrar assinatura
+            try {
+                // Se não tem empresa, usar 0 como fallback para contagem de usuários
+                $statusData = $this->obterStatusAssinaturaUseCase->executar($tenant->id, $empresaId ?? 0);
 
-            return response()->json([
-                'data' => $statusData
-            ]);
-        } catch (\App\Domain\Exceptions\NotFoundException $e) {
-            return response()->json([
-                'message' => $e->getMessage(),
-                'code' => 'NO_SUBSCRIPTION'
-            ], 403);
+                return response()->json([
+                    'data' => $statusData
+                ]);
+            } catch (\App\Domain\Exceptions\NotFoundException $e) {
+                // Não há assinatura - retornar dados vazios para que o frontend possa tratar
+                return response()->json([
+                    'data' => [
+                        'tenant_id' => $tenant->id,
+                        'status' => null,
+                        'limite_processos' => null,
+                        'limite_usuarios' => null,
+                        'limite_armazenamento_mb' => null,
+                        'processos_utilizados' => 0,
+                        'usuarios_utilizados' => 0,
+                        'mensagem' => 'Nenhuma assinatura encontrada',
+                        'code' => 'NO_SUBSCRIPTION'
+                    ]
+                ], 200);
+            }
         } catch (\Exception $e) {
             return $this->handleException($e, 'Erro ao obter status da assinatura');
         }
