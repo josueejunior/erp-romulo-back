@@ -50,27 +50,30 @@ abstract class BaseApiController extends Controller
             'tenant_id' => tenancy()->tenant?->id,
         ]);
         
-        // VALIDAÇÃO CRÍTICA: O banco de dados é a fonte de verdade
-        // Se o header diverge do banco, usar o banco e logar warning
-        if ($idDoHeader && $idDoHeader !== $idDoBanco) {
-            \Log::warning('BaseApiController::getEmpresaAtivaOrFail() - Header divergente do banco', [
-                'header' => $idDoHeader,
-                'banco' => $idDoBanco,
-                'user_id' => $user->id,
-            ]);
-            // Usar o banco como fonte de verdade (mais seguro)
-            $idDoHeader = null;
-        }
-        
-        // Prioridade 1: Se o header está alinhado com o banco, usar ele
-        if ($idDoHeader && $idDoHeader === $idDoBanco) {
-            $empresaModel = $empresaRepository->buscarModeloPorId($idDoHeader);
-            if ($empresaModel) {
-                \Log::debug('BaseApiController::getEmpresaAtivaOrFail() - Empresa encontrada via header (validado)', [
-                    'empresa_id' => $empresaModel->id,
-                    'empresa_razao_social' => $empresaModel->razao_social,
+        // 🔥 PRIORIDADE 1: Header X-Empresa-ID (fonte de verdade quando usuário troca empresa)
+        // O header é atualizado imediatamente quando o usuário troca de empresa,
+        // enquanto o banco pode estar desatualizado ou em cache
+        if ($idDoHeader) {
+            // Validar que o usuário tem acesso a essa empresa
+            $userRepository = app(UserRepositoryInterface::class);
+            $empresas = $userRepository->buscarEmpresas($user->id);
+            $temAcesso = collect($empresas)->contains(fn($e) => $e->id === $idDoHeader);
+            
+            if ($temAcesso) {
+                $empresaModel = $empresaRepository->buscarModeloPorId($idDoHeader);
+                if ($empresaModel) {
+                    \Log::debug('BaseApiController::getEmpresaAtivaOrFail() - Empresa encontrada via header X-Empresa-ID', [
+                        'empresa_id' => $empresaModel->id,
+                        'empresa_razao_social' => $empresaModel->razao_social,
+                        'header_priorizado' => true,
+                    ]);
+                    return $empresaModel;
+                }
+            } else {
+                \Log::warning('BaseApiController::getEmpresaAtivaOrFail() - Usuário não tem acesso à empresa do header', [
+                    'user_id' => $user->id,
+                    'empresa_id_header' => $idDoHeader,
                 ]);
-                return $empresaModel;
             }
         }
         

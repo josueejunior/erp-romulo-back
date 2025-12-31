@@ -3,7 +3,8 @@
 namespace App\Modules\Fornecedor\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
-use App\Http\Resources\FornecedorResource;
+use App\Http\Controllers\Traits\HasAuthContext;
+use App\Application\Fornecedor\Resources\FornecedorResource;
 use App\Application\Fornecedor\UseCases\ListarFornecedoresUseCase;
 use App\Application\Fornecedor\UseCases\BuscarFornecedorUseCase;
 use App\Application\Fornecedor\UseCases\CriarFornecedorUseCase;
@@ -15,6 +16,7 @@ use App\Http\Requests\Fornecedor\FornecedorCreateRequest;
 use App\Http\Requests\Fornecedor\FornecedorUpdateRequest;
 use App\Helpers\PermissionHelper;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use DomainException;
 
 /**
@@ -29,31 +31,57 @@ use DomainException;
  */
 class FornecedorController extends BaseApiController
 {
+    use HasAuthContext;
+
     public function __construct(
         private ListarFornecedoresUseCase $listarFornecedoresUseCase,
         private BuscarFornecedorUseCase $buscarFornecedorUseCase,
         private CriarFornecedorUseCase $criarFornecedorUseCase,
         private AtualizarFornecedorUseCase $atualizarFornecedorUseCase,
         private DeletarFornecedorUseCase $deletarFornecedorUseCase,
+        private FornecedorResource $fornecedorResource,
     ) {}
+
+    /**
+     * Obtém empresa_id do contexto (automático via BaseApiController)
+     * Retorna null se não conseguir obter (para permitir consulta sem empresa)
+     */
+    protected function getEmpresaIdOrNull(): ?int
+    {
+        try {
+            $empresa = $this->getEmpresaAtivaOrFail();
+            return $empresa->id;
+        } catch (\Exception $e) {
+            \Log::debug('FornecedorController::getEmpresaIdOrNull() - Não foi possível obter empresa ativa', [
+                'error' => $e->getMessage()
+            ]);
+            return null;
+        }
+    }
 
     /**
      * Listar fornecedores
      * Retorna entidades de domínio transformadas via Resource
+     * 
+     * O middleware já inicializou o tenant correto baseado no X-Tenant-ID do header.
+     * Apenas retorna os dados dos fornecedores da empresa ativa.
      */
-    public function list(): JsonResponse
+    public function list(Request $request): JsonResponse
     {
         try {
+            // Obter empresa automaticamente (middleware já inicializou baseado no X-Empresa-ID)
             $empresa = $this->getEmpresaAtivaOrFail();
-            $filtros = request()->all();
+            
+            // Preparar filtros
+            $filtros = $request->all();
             $filtros['empresa_id'] = $empresa->id;
             
+            // Executar Use Case
             $paginado = $this->listarFornecedoresUseCase->executar($filtros);
             
-            // Transformar entidades de domínio em JSON via Resource
-            // O Resource aceita entidades de domínio e faz a conversão internamente
+            // Transformar entidades de domínio em arrays via Resource
             $items = collect($paginado->items())->map(fn($fornecedor) => 
-                new FornecedorResource($fornecedor)
+                $this->fornecedorResource->toArray($fornecedor)
             );
             
             return response()->json([
@@ -77,10 +105,21 @@ class FornecedorController extends BaseApiController
     public function get(int $id): JsonResponse
     {
         try {
+            // Obter empresa automaticamente (middleware já inicializou)
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Executar Use Case
             $fornecedorDomain = $this->buscarFornecedorUseCase->executar($id);
             
-            return (new FornecedorResource($fornecedorDomain))
-                ->response();
+            // Validar que o fornecedor pertence à empresa ativa
+            if ($fornecedorDomain->empresaId !== $empresa->id) {
+                return response()->json(['message' => 'Fornecedor não encontrado'], 404);
+            }
+            
+            // Transformar entidade em array via Resource
+            $data = $this->fornecedorResource->toArray($fornecedorDomain);
+            
+            return response()->json(['data' => $data]);
         } catch (DomainException $e) {
             return response()->json(['message' => $e->getMessage()], 404);
         } catch (\Exception $e) {
@@ -90,58 +129,43 @@ class FornecedorController extends BaseApiController
 
     /**
      * Criar fornecedor
-     * Usa Form Request para validação e Resource para transformação
+     * Usa Form Request para validação e Use Case para lógica de negócio
      */
     public function store(FornecedorCreateRequest $request): JsonResponse
     {
-        // Verificar se tem assinatura ativa
-        $tenant = tenancy()->tenant;
-        if (!$tenant) {
-            return response()->json([
-                'message' => 'Tenant não encontrado',
-                'code' => 'TENANT_NOT_FOUND'
-            ], 404);
-        }
-
-        $assinatura = $tenant->assinaturaAtual;
-        if (!$assinatura) {
-            return response()->json([
-                'message' => 'Você precisa contratar um plano para cadastrar fornecedores.',
-                'code' => 'NO_SUBSCRIPTION',
-                'action' => 'subscribe'
-            ], 403);
-        }
-
-        // Verificar se está ativa ou no grace period
-        if (!$assinatura->isAtiva() && !$assinatura->estaNoGracePeriod()) {
-            $diasExpirado = abs($assinatura->diasRestantes());
-            return response()->json([
-                'message' => "Sua assinatura expirou há {$diasExpirado} dias. Renove sua assinatura para continuar cadastrando fornecedores.",
-                'code' => 'SUBSCRIPTION_EXPIRED',
-                'data_vencimento' => $assinatura->data_fim->format('Y-m-d'),
-                'dias_expirado' => $diasExpirado,
-                'action' => 'renew'
-            ], 403);
-        }
-
         if (!PermissionHelper::canManageMasterData()) {
             return response()->json(['message' => 'Você não tem permissão para cadastrar fornecedores.'], 403);
         }
 
         try {
+            // Obter empresa automaticamente (middleware já inicializou)
             $empresa = $this->getEmpresaAtivaOrFail();
             
-            // Request já está validado via Form Request
+            // Criar DTO a partir do request validado
             $validated = $request->validated();
             $validated['empresa_id'] = $empresa->id;
             
             $dto = CriarFornecedorDTO::fromArray($validated);
+            
+            // Executar Use Case (contém toda a lógica de negócio)
             $fornecedorDomain = $this->criarFornecedorUseCase->executar($dto);
             
-            // Transformar via Resource (aceita entidade de domínio)
-            return (new FornecedorResource($fornecedorDomain))
-                ->response()
-                ->setStatusCode(201);
+            // Transformar entidade em array via Resource
+            $data = $this->fornecedorResource->toArray($fornecedorDomain);
+            
+            return response()->json([
+                'message' => 'Fornecedor criado com sucesso',
+                'data' => $data,
+            ], 201);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 400);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'message' => 'Erro de validação',
+                'errors' => $e->errors(),
+            ], 422);
         } catch (\Exception $e) {
             return $this->handleException($e, 'Erro ao criar fornecedor');
         }
@@ -149,7 +173,7 @@ class FornecedorController extends BaseApiController
 
     /**
      * Atualizar fornecedor
-     * Usa Form Request para validação e Resource para transformação
+     * Usa Form Request para validação e Use Case para lógica de negócio
      */
     public function update(FornecedorUpdateRequest $request, int $id): JsonResponse
     {
@@ -158,6 +182,7 @@ class FornecedorController extends BaseApiController
         }
 
         try {
+            // Obter empresa automaticamente (middleware já inicializou)
             $empresa = $this->getEmpresaAtivaOrFail();
             
             // Request já está validado via Form Request
@@ -166,10 +191,14 @@ class FornecedorController extends BaseApiController
             // Executar Use Case
             $fornecedorDomain = $this->atualizarFornecedorUseCase->executar($dto, $empresa->id);
             
-            // Transformar via Resource (aceita entidade de domínio)
-            return (new FornecedorResource($fornecedorDomain))
-                ->response();
-        } catch (DomainException $e) {
+            // Transformar entidade em array via Resource
+            $data = $this->fornecedorResource->toArray($fornecedorDomain);
+            
+            return response()->json([
+                'message' => 'Fornecedor atualizado com sucesso',
+                'data' => $data,
+            ]);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
             return response()->json(['message' => $e->getMessage()], 404);
         } catch (\Exception $e) {
             return $this->handleException($e, 'Erro ao atualizar fornecedor');
