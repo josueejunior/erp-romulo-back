@@ -839,14 +839,21 @@ class ProcessoController extends Controller
             $tipo = $request->get('tipo', 'ficha-tecnica'); // ficha-tecnica ou proposta
             $formato = $request->get('formato', 'pdf'); // pdf ou docx
             
-            $processo->load(['orgao', 'setor', 'itens.fornecedor', 'itens.especificacoes']);
+            $processo->load(['orgao', 'setor', 'itens']);
             
-            // Preparar dados da ficha/proposta
+            // Preparar dados da ficha/proposta (simplificado)
             $data = [
-                'processo' => new ProcessoResource($processo),
-                'itens' => $processo->itens,
-                'data_emissao' => now()->format('d/m/Y'),
+                'id' => $processo->id,
+                'numero_modalidade' => $processo->numero_modalidade,
+                'numero_processo_administrativo' => $processo->numero_processo_administrativo,
+                'modalidade' => $processo->modalidade,
+                'objeto_resumido' => $processo->objeto_resumido,
+                'orgao' => $processo->orgao?->toArray(),
+                'setor' => $processo->setor?->toArray(),
+                'data_sessao_publica' => $processo->data_sessao_publica,
                 'validade_proposta' => $processo->validade_proposta,
+                'itens' => $processo->itens?->toArray() ?? [],
+                'data_emissao' => now()->format('d/m/Y'),
             ];
             
             // Retornar dados ou arquivo (implementar conforme necessidade)
@@ -856,6 +863,7 @@ class ProcessoController extends Controller
                 'data' => $data,
             ]);
         } catch (\Exception $e) {
+            \Log::error('Erro ao exportar ficha: ' . $e->getMessage(), ['exception' => $e]);
             return response()->json([
                 'message' => 'Erro ao exportar ficha: ' . $e->getMessage()
             ], 500);
