@@ -140,13 +140,30 @@ class AssinaturaController extends BaseApiController
     public function status(Request $request): JsonResponse
     {
         try {
+            // 🔥 Log para debug: verificar qual tenant_id está sendo usado
+            $tenantIdFromHeader = $request->header('X-Tenant-ID');
+            \Log::info('AssinaturaController::status() - Headers recebidos', [
+                'X-Tenant-ID' => $tenantIdFromHeader,
+                'X-Empresa-ID' => $request->header('X-Empresa-ID'),
+                'tenancy_initialized' => tenancy()->initialized,
+                'tenancy_tenant_id' => tenancy()->tenant?->id,
+            ]);
+            
             $tenant = $this->getTenantFromRequest($request);
             
             if (!$tenant) {
+                \Log::warning('AssinaturaController::status() - Tenant não encontrado', [
+                    'X-Tenant-ID' => $tenantIdFromHeader,
+                ]);
                 return response()->json([
                     'message' => 'Tenant não encontrado'
                 ], 404);
             }
+            
+            \Log::info('AssinaturaController::status() - Tenant encontrado', [
+                'tenant_id' => $tenant->id,
+                'tenant_razao_social' => $tenant->razao_social,
+            ]);
 
             // Tentar obter empresa, mas não falhar se não houver (para permitir consulta de status)
             $empresaId = null;
