@@ -21,3 +21,4 @@ interface DomainEvent
     public function agregadoId(): string;
 }
 
+

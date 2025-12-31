@@ -162,3 +162,4 @@ $this->app->bind(
 3. Adicionar testes unitários para cada camada
 4. Documentar Value Objects quando necessário
 
+

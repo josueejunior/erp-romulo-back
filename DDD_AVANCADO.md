@@ -241,3 +241,4 @@ public function executar(CriarUsuarioDTO $dto): User
 - ✅ Tudo testável e reutilizável
 - ✅ Fácil escalar e manter
 
+

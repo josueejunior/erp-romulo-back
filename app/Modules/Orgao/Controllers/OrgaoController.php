@@ -121,7 +121,17 @@ class OrgaoController extends BaseApiController
 
     /**
      * Criar órgão
-     * Usa Form Request para validação e Use Case para lógica de negócio
+     * 
+     * ✅ O QUE O CONTROLLER FAZ:
+     * - Recebe request
+     * - Valida dados (via Form Request)
+     * - Chama um Application Service
+     * 
+     * ❌ O QUE O CONTROLLER NÃO FAZ:
+     * - Não lê tenant_id
+     * - Não acessa Tenant
+     * - Não sabe se existe multi-tenant
+     * - Não filtra nada por tenant_id
      */
     public function store(OrgaoCreateRequest $request): JsonResponse
     {
@@ -130,16 +140,10 @@ class OrgaoController extends BaseApiController
         }
 
         try {
-            // Obter empresa automaticamente (middleware já inicializou)
-            $empresa = $this->getEmpresaAtivaOrFail();
-            
             // Criar DTO a partir do request validado
-            $validated = $request->validated();
-            $validated['empresa_id'] = $empresa->id;
+            $dto = CriarOrgaoDTO::fromArray($request->validated());
             
-            $dto = CriarOrgaoDTO::fromArray($validated);
-            
-            // Executar Use Case (contém toda a lógica de negócio)
+            // Executar Use Case (contém toda a lógica de negócio, incluindo tenant)
             $orgaoDomain = $this->criarOrgaoUseCase->executar($dto);
             
             // Transformar entidade em array via Resource

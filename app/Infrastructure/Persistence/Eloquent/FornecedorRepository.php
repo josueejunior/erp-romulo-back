@@ -150,3 +150,4 @@ class FornecedorRepository implements FornecedorRepositoryInterface
     }
 }
 
+

@@ -41,6 +41,10 @@ class InitializeTenancyByRequestData extends IdentificationMiddleware
                 $newTenant = \App\Models\Tenant::find($tenantId);
                 if ($newTenant) {
                     tenancy()->initialize($newTenant);
+                    
+                    // Setar no TenantContext (invisível para o controller)
+                    \App\Domain\Shared\ValueObjects\TenantContext::set($newTenant->id);
+                    
                     \Log::debug('Tenancy reinicializado com sucesso', [
                         'tenant_id' => $newTenant->id,
                         'tenant_razao_social' => $newTenant->razao_social,
@@ -114,6 +118,10 @@ class InitializeTenancyByRequestData extends IdentificationMiddleware
         // Inicializar tenancy
         try {
             tenancy()->initialize($tenant);
+            
+            // Setar no TenantContext (invisível para o controller)
+            \App\Domain\Shared\ValueObjects\TenantContext::set($tenant->id);
+            
             \Log::debug('Tenancy inicializado com sucesso', [
                 'tenant_id' => $tenant->id,
                 'tenant_razao_social' => $tenant->razao_social,

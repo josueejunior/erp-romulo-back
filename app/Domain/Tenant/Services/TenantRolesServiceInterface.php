@@ -15,3 +15,4 @@ interface TenantRolesServiceInterface
     public function inicializarRoles(Tenant $tenant): void;
 }
 
+

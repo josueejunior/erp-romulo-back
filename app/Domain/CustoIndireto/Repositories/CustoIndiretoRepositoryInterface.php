@@ -14,3 +14,4 @@ interface CustoIndiretoRepositoryInterface
     public function deletar(int $id): void;
 }
 
+

@@ -34,3 +34,4 @@ interface EmpresaRepositoryInterface
     public function buscarModeloPorId(int $id): ?\App\Models\Empresa;
 }
 
+

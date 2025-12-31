@@ -234,3 +234,4 @@ A lógica agora é:
 - ✅ **Mais flexível (suporta múltiplos cenários)**
 - ✅ **Melhor documentada**
 
+

@@ -19,3 +19,4 @@ interface EventDispatcherInterface
     public function dispatchAll(array $events): void;
 }
 
+

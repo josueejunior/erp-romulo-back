@@ -31,3 +31,4 @@ interface UserRoleServiceInterface
     public function temRole(User $user, string $role): bool;
 }
 
+

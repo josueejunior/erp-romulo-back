@@ -17,3 +17,4 @@ interface NotaFiscalRepositoryInterface
     public function deletar(int $id): void;
 }
 
+

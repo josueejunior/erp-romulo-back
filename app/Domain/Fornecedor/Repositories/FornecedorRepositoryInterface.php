@@ -15,3 +15,4 @@ interface FornecedorRepositoryInterface
     public function deletar(int $id): void;
 }
 
+

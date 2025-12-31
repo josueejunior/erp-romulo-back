@@ -183,3 +183,4 @@ Todos os domínios principais e secundários possuem:
 
 O sistema pode funcionar normalmente enquanto você completa as melhorias incrementais conforme a necessidade do negócio.
 
+

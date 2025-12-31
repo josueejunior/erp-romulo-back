@@ -42,3 +42,4 @@ interface ProcessoRepositoryInterface
     public function obterResumo(array $filtros = []): array;
 }
 
+

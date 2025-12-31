@@ -50,3 +50,4 @@ interface TenantRepositoryInterface
     public function buscarModeloPorId(int $id): ?\App\Models\Tenant;
 }
 
+

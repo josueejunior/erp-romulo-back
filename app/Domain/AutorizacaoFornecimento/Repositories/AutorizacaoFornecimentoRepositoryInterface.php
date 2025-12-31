@@ -15,3 +15,4 @@ interface AutorizacaoFornecimentoRepositoryInterface
     public function deletar(int $id): void;
 }
 
+
