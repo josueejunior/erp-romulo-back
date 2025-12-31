@@ -165,7 +165,7 @@ class ProcessoListResource extends JsonResource
                     $itens = $this->relationLoaded('itens') ? ($this->itens ?? collect()) : collect();
                     $itensComLembrete = $itens->whereNotNull('lembretes')->sortByDesc('updated_at')->first();
                     
-                    if ($itensComLembrete) {
+                    if ($itensComLembrete && $itensComLembrete->updated_at) {
                         return [
                             'data' => $itensComLembrete->updated_at->format('d/m/Y'),
                             'hora' => null,
