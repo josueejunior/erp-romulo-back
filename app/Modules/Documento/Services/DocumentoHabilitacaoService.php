@@ -4,6 +4,7 @@ namespace App\Modules\Documento\Services;
 
 use App\Services\BaseService;
 use App\Modules\Documento\Models\DocumentoHabilitacao;
+use App\Modules\Documento\Models\DocumentoHabilitacaoLog;
 use App\Modules\Documento\Models\DocumentoHabilitacaoVersao;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Validator;
@@ -128,6 +129,7 @@ class DocumentoHabilitacaoService extends BaseService
 
         if (!empty($data['versao_meta'])) {
             $this->criarVersao($model, 1, $data['versao_meta']);
+            $this->logAction($model, 'create', ['versao' => 1]);
         }
 
         return $model;
@@ -167,6 +169,7 @@ class DocumentoHabilitacaoService extends BaseService
         if (!empty($data['versao_meta'])) {
             $nextVersion = ($documento->versoes()->max('versao') ?? 0) + 1;
             $this->criarVersao($updated, $nextVersion, $data['versao_meta']);
+            $this->logAction($updated, 'update', ['versao' => $nextVersion]);
         }
 
         return $updated;
@@ -190,6 +193,19 @@ class DocumentoHabilitacaoService extends BaseService
         }
 
         return $documento->forceDelete();
+    }
+
+    public function logAction(DocumentoHabilitacao $documento, string $acao, array $meta = []): void
+    {
+        DocumentoHabilitacaoLog::create([
+            'empresa_id' => $documento->empresa_id,
+            'documento_habilitacao_id' => $documento->id,
+            'user_id' => Auth::id(),
+            'acao' => $acao,
+            'ip' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+            'meta' => $meta,
+        ]);
     }
 
     protected function criarVersao($documento, int $versao, array $meta): void

@@ -142,6 +142,7 @@ class DocumentoHabilitacaoController extends BaseApiController
             $documento = $this->service->findById($id, $paramBag);
             if ($documento) {
                 $documento->loadMissing('versoes');
+                $this->service->logAction($documento, 'view');
             }
             
             if (!$documento) {
