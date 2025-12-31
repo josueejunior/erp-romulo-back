@@ -8,7 +8,7 @@ use Carbon\Carbon;
 
 class NotificacaoAggregate
 {
-    private int $id;
+    private ?int $id;
     private int $usuarioId;
     private int $empresaId;
     private TipoNotificacao $tipo;
@@ -29,8 +29,13 @@ class NotificacaoAggregate
         MensagemNotificacao $mensagem,
         ?int $orcamentoId = null,
         ?int $processoId = null,
-        array $dadosAdicionais = []
+        array $dadosAdicionais = [],
+        ?int $id = null,
+        bool $lido = false,
+        ?Carbon $lidoEm = null,
+        ?Carbon $criadoEm = null
     ) {
+        $this->id = $id;
         $this->usuarioId = $usuarioId;
         $this->empresaId = $empresaId;
         $this->tipo = $tipo;
@@ -38,10 +43,10 @@ class NotificacaoAggregate
         $this->mensagem = $mensagem;
         $this->orcamentoId = $orcamentoId;
         $this->processoId = $processoId;
-        $this->lido = false;
-        $this->lidoEm = null;
+        $this->lido = $lido;
+        $this->lidoEm = $lidoEm;
         $this->dadosAdicionais = $dadosAdicionais;
-        $this->criadoEm = Carbon::now();
+        $this->criadoEm = $criadoEm ?? Carbon::now();
     }
 
     public static function criar(
@@ -55,6 +60,36 @@ class NotificacaoAggregate
         array $dadosAdicionais = []
     ): self {
         return new self($usuarioId, $empresaId, $tipo, $titulo, $mensagem, $orcamentoId, $processoId, $dadosAdicionais);
+    }
+
+    public static function reconstituir(
+        int $id,
+        int $usuarioId,
+        int $empresaId,
+        TipoNotificacao $tipo,
+        string $titulo,
+        MensagemNotificacao $mensagem,
+        ?int $orcamentoId,
+        ?int $processoId,
+        array $dadosAdicionais,
+        bool $lido,
+        ?Carbon $lidoEm,
+        ?Carbon $criadoEm
+    ): self {
+        return new self(
+            $usuarioId,
+            $empresaId,
+            $tipo,
+            $titulo,
+            $mensagem,
+            $orcamentoId,
+            $processoId,
+            $dadosAdicionais,
+            $id,
+            $lido,
+            $lidoEm,
+            $criadoEm
+        );
     }
 
     public function marcarComoLida(): void
@@ -71,7 +106,7 @@ class NotificacaoAggregate
 
     // ====== GETTERS ======
 
-    public function getId(): int
+    public function getId(): ?int
     {
         return $this->id;
     }

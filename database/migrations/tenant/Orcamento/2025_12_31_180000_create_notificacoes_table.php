@@ -24,7 +24,7 @@ return new class extends Migration
 
             $table->index(['usuario_id', 'empresa_id']);
             $table->index(['empresa_id', 'tipo']);
-            $table->index(['criado_em']);
+            $table->index(['created_at']);
         });
     }
 

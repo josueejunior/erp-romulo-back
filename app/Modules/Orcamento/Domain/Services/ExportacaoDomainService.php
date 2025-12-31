@@ -6,6 +6,7 @@ use App\Modules\Orcamento\Domain\ValueObjects\ConfiguracaoExportacao;
 use App\Modules\Orcamento\Models\Orcamento;
 use App\Modules\Orcamento\Models\OrcamentoItem;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Maatwebsite\Excel\Facades\Excel;
 use PDF;
 
@@ -109,28 +110,33 @@ class ExportacaoDomainService
     private function exportarExcel(array $dados, ConfiguracaoExportacao $config): string
     {
         $arquivo = 'orcamentos-' . now()->format('YmdHis') . '.' . $config->getExtensao();
+        if (class_exists('App\\Exports\\OrcamentosExport')) {
+            Excel::store(
+                new \App\Exports\OrcamentosExport($dados, $config->getCampos()),
+                $arquivo,
+                'local'
+            );
+            return $arquivo;
+        }
 
-        Excel::store(
-            new \App\Exports\OrcamentosExport($dados, $config->getCampos()),
-            $arquivo,
-            'local'
-        );
-
-        return $arquivo;
+        // Fallback simples para CSV se a classe de export não existir
+        return $this->exportarCsv($dados, $config);
     }
 
     private function exportarPdf(array $dados, ConfiguracaoExportacao $config): string
     {
         $arquivo = 'orcamentos-' . now()->format('YmdHis') . '.pdf';
+        if (class_exists('PDF')) {
+            $pdf = PDF::loadView('exports.orcamentos', [
+                'orcamentos' => $dados,
+                'campos' => $config->getCampos()
+            ]);
+            Storage::put($arquivo, $pdf->output());
+            return $arquivo;
+        }
 
-        $pdf = PDF::loadView('exports.orcamentos', [
-            'orcamentos' => $dados,
-            'campos' => $config->getCampos()
-        ]);
-
-        Storage::put($arquivo, $pdf->output());
-
-        return $arquivo;
+        // Fallback para CSV quando PDF não disponível
+        return $this->exportarCsv($dados, $config);
     }
 
     private function exportarCsv(array $dados, ConfiguracaoExportacao $config): string
@@ -158,29 +164,34 @@ class ExportacaoDomainService
     private function gerarArquivoExcel(array $dados, string $nome, ConfiguracaoExportacao $config): string
     {
         $arquivo = $nome . '-' . now()->format('YmdHis') . '.' . $config->getExtensao();
+        if (class_exists('App\\Exports\\GenericoExport')) {
+            Excel::store(
+                new \App\Exports\GenericoExport($dados, $config->getCampos()),
+                $arquivo,
+                'local'
+            );
+            return $arquivo;
+        }
 
-        Excel::store(
-            new \App\Exports\GenericoExport($dados, $config->getCampos()),
-            $arquivo,
-            'local'
-        );
-
-        return $arquivo;
+        // Fallback para CSV se não houver exportador configurado
+        return $this->gerarArquivoCsv($dados, $nome);
     }
 
     private function gerarArquivoPdf(array $dados, string $titulo, ConfiguracaoExportacao $config): string
     {
-        $arquivo = slugify($titulo) . '-' . now()->format('YmdHis') . '.pdf';
+        $arquivo = Str::slug($titulo) . '-' . now()->format('YmdHis') . '.pdf';
+        if (class_exists('PDF')) {
+            $pdf = PDF::loadView('exports.generico', [
+                'titulo' => $titulo,
+                'dados' => $dados,
+                'campos' => $config->getCampos()
+            ]);
 
-        $pdf = PDF::loadView('exports.generico', [
-            'titulo' => $titulo,
-            'dados' => $dados,
-            'campos' => $config->getCampos()
-        ]);
+            Storage::put($arquivo, $pdf->output());
+            return $arquivo;
+        }
 
-        Storage::put($arquivo, $pdf->output());
-
-        return $arquivo;
+        return $this->gerarArquivoCsv($dados, $titulo);
     }
 
     private function gerarArquivoCsv(array $dados, string $nome): string

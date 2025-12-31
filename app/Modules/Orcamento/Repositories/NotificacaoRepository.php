@@ -83,7 +83,8 @@ class NotificacaoRepository implements NotificacaoRepositoryInterface
 
     private function converterParaAggregate(Notificacao $model): NotificacaoAggregate
     {
-        $aggregate = NotificacaoAggregate::criar(
+        return NotificacaoAggregate::reconstituir(
+            $model->id,
             $model->usuario_id,
             $model->empresa_id,
             new TipoNotificacao($model->tipo),
@@ -91,9 +92,10 @@ class NotificacaoRepository implements NotificacaoRepositoryInterface
             new MensagemNotificacao($model->mensagem),
             $model->orcamento_id,
             $model->processo_id,
-            $model->dados_adicionais ?? []
+            $model->dados_adicionais ?? [],
+            (bool) $model->lido,
+            $model->lido_em,
+            $model->created_at
         );
-
-        return $aggregate;
     }
 }
