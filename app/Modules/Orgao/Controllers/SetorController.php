@@ -3,20 +3,28 @@
 namespace App\Modules\Orgao\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
-use App\Contracts\IService;
 use App\Http\Resources\SetorResource;
-use App\Modules\Orgao\Models\Setor;
-use App\Modules\Orgao\Services\SetorService;
+use App\Application\Setor\UseCases\CriarSetorUseCase;
+use App\Application\Setor\UseCases\AtualizarSetorUseCase;
+use App\Application\Setor\UseCases\ListarSetoresUseCase;
+use App\Application\Setor\UseCases\BuscarSetorUseCase;
+use App\Application\Setor\UseCases\DeletarSetorUseCase;
+use App\Application\Setor\DTOs\CriarSetorDTO;
+use App\Application\Setor\DTOs\AtualizarSetorDTO;
 use Illuminate\Http\Request;
 use App\Helpers\PermissionHelper;
 use App\Services\RedisService;
+use App\Modules\Orgao\Models\Setor as SetorModel;
 
 class SetorController extends BaseApiController
 {
-    public function __construct(SetorService $service)
-    {
-        $this->service = $service;
-    }
+    public function __construct(
+        private CriarSetorUseCase $criarSetorUseCase,
+        private AtualizarSetorUseCase $atualizarSetorUseCase,
+        private ListarSetoresUseCase $listarSetoresUseCase,
+        private BuscarSetorUseCase $buscarSetorUseCase,
+        private DeletarSetorUseCase $deletarSetorUseCase,
+    ) {}
 
     /**
      * Sobrescrever handleList para usar SetorResource e cache
@@ -29,12 +37,11 @@ class SetorController extends BaseApiController
             ], 401);
         }
 
-        $empresa = $this->getEmpresaAtivaOrFail();
         $tenantId = tenancy()->tenant?->id;
         
         // Criar chave de cache baseada nos filtros
         $filters = array_merge($request->all(), $mergeParams);
-        $cacheKey = "setores:{$tenantId}:{$empresa->id}:" . md5(json_encode($filters));
+        $cacheKey = "setores:{$tenantId}:" . md5(json_encode($filters));
         
         // Tentar obter do cache
         if ($tenantId && RedisService::isAvailable()) {
@@ -45,8 +52,13 @@ class SetorController extends BaseApiController
         }
 
         try {
-            $params = $this->service->createListParamBag($filters);
-            $setors = $this->service->list($params);
+            $setors = $this->listarSetoresUseCase->executar($filters);
+            
+            // Converter entidades para modelos para o Resource
+            $setors->getCollection()->transform(function ($setor) {
+                return SetorModel::find($setor->id);
+            });
+            
             $response = SetorResource::collection($setors);
 
             // Salvar no cache (5 minutos)
@@ -55,11 +67,24 @@ class SetorController extends BaseApiController
             }
 
             return response()->json($response);
-        } catch (\Exception $e) {
+        } catch (\DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage()
             ], 400);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao listar setores');
         }
+    }
+
+    /**
+     * Extrair ID da rota
+     */
+    protected function getRouteId($route): ?int
+    {
+        $parameters = $route->parameters();
+        // Tentar 'setor' primeiro (conforme Route::module), depois 'id'
+        $id = $parameters['setor'] ?? $parameters['id'] ?? null;
+        return $id ? (int) $id : null;
     }
 
     /**
@@ -75,21 +100,23 @@ class SetorController extends BaseApiController
         }
 
         try {
-            $params = array_merge($request->all(), $mergeParams);
-            $paramBag = $this->service->createFindByIdParamBag($params);
-            $setor = $this->service->findById($id, $paramBag);
+            $setor = $this->buscarSetorUseCase->executar($id);
             
-            if (!$setor) {
+            // Converter entidade para modelo para o Resource
+            $setorModel = SetorModel::find($setor->id);
+            if (!$setorModel) {
                 return response()->json([
-                    'message' => 'Setor não encontrado ou não pertence à empresa ativa.'
+                    'message' => 'Setor não encontrado.'
                 ], 404);
             }
             
-            return response()->json(['data' => new SetorResource($setor)]);
-        } catch (\Exception $e) {
+            return response()->json(['data' => new SetorResource($setorModel)]);
+        } catch (\DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage()
-            ], 400);
+            ], 404);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao buscar setor');
         }
     }
 
@@ -105,27 +132,39 @@ class SetorController extends BaseApiController
         }
 
         try {
-            $data = array_merge($request->all(), $mergeParams);
-            $validator = $this->service->validateStoreData($data);
-            
-            if ($validator->fails()) {
-                return response()->json([
-                    'message' => 'Erro de validação',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
+            $validated = $request->validate([
+                'orgao_id' => 'required|integer',
+                'nome' => 'required|string|max:255',
+                'email' => 'nullable|email|max:255',
+                'telefone' => 'nullable|string|max:20',
+                'observacoes' => 'nullable|string',
+            ]);
 
-            $setor = $this->service->store($validator->validated());
-            $setor->load('orgao');
+            $data = array_merge($validated, $mergeParams);
+            $dto = CriarSetorDTO::fromArray($data);
+            $setor = $this->criarSetorUseCase->executar($dto);
+
+            // Converter entidade para modelo para o Resource
+            $setorModel = SetorModel::find($setor->id);
+            if ($setorModel) {
+                $setorModel->load('orgao');
+            }
 
             // Limpar cache
             $this->clearSetorCache();
 
-            return response()->json(['data' => new SetorResource($setor)], 201);
-        } catch (\Exception $e) {
+            return response()->json(['data' => new SetorResource($setorModel)], 201);
+        } catch (\DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage()
             ], 400);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'message' => 'Erro de validação',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao criar setor');
         }
     }
 
@@ -141,27 +180,38 @@ class SetorController extends BaseApiController
         }
 
         try {
-            $data = array_merge($request->all(), $mergeParams);
-            $validator = $this->service->validateUpdateData($data, $id);
-            
-            if ($validator->fails()) {
-                return response()->json([
-                    'message' => 'Erro de validação',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
+            $validated = $request->validate([
+                'nome' => 'required|string|max:255',
+                'email' => 'nullable|email|max:255',
+                'telefone' => 'nullable|string|max:20',
+                'observacoes' => 'nullable|string',
+            ]);
 
-            $setor = $this->service->update($id, $validator->validated());
-            $setor->load('orgao');
+            $data = array_merge($validated, $mergeParams);
+            $dto = AtualizarSetorDTO::fromArray($data);
+            $setor = $this->atualizarSetorUseCase->executar((int) $id, $dto);
+
+            // Converter entidade para modelo para o Resource
+            $setorModel = SetorModel::find($setor->id);
+            if ($setorModel) {
+                $setorModel->load('orgao');
+            }
 
             // Limpar cache
             $this->clearSetorCache();
 
-            return response()->json(['data' => new SetorResource($setor)]);
-        } catch (\Exception $e) {
+            return response()->json(['data' => new SetorResource($setorModel)]);
+        } catch (\DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage()
             ], 400);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'message' => 'Erro de validação',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao atualizar setor');
         }
     }
 
@@ -177,16 +227,18 @@ class SetorController extends BaseApiController
         }
 
         try {
-            $this->service->deleteById($id);
+            $this->deletarSetorUseCase->executar((int) $id);
             
             // Limpar cache
             $this->clearSetorCache();
 
             return response()->json(null, 204);
-        } catch (\Exception $e) {
+        } catch (\DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage()
             ], 400);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao deletar setor');
         }
     }
 
@@ -208,21 +260,24 @@ class SetorController extends BaseApiController
         return $this->handleStore($request);
     }
 
-    public function show(Setor $setor)
+    public function get(Request $request, int|string $id)
     {
-        $request = request();
-        $request->route()->setParameter('setor', $setor->id);
         return $this->handleGet($request);
     }
 
-    public function update(Request $request, Setor $setor)
+    public function show(Request $request, int|string $id)
     {
-        return $this->handleUpdate($request, $setor->id);
+        return $this->handleGet($request);
     }
 
-    public function destroy(Setor $setor)
+    public function update(Request $request, int|string $id)
     {
-        return $this->handleDestroy(request(), $setor->id);
+        return $this->handleUpdate($request, $id);
+    }
+
+    public function destroy(Request $request, int|string $id)
+    {
+        return $this->handleDestroy($request, $id);
     }
 
     /**
@@ -230,11 +285,10 @@ class SetorController extends BaseApiController
      */
     protected function clearSetorCache(): void
     {
-        $empresa = $this->getEmpresaAtivaOrFail();
         $tenantId = tenancy()->tenant?->id;
         
         if ($tenantId && RedisService::isAvailable()) {
-            $pattern = "setores:{$tenantId}:{$empresa->id}:*";
+            $pattern = "setores:{$tenantId}:*";
             try {
                 $cursor = 0;
                 do {

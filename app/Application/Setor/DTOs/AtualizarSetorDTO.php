@@ -3,10 +3,10 @@
 namespace App\Application\Setor\DTOs;
 
 /**
- * DTO para criação de setor
+ * DTO para atualização de setor
  * O empresaId é obtido do TenantContext pelo Use Case, não vem do controller
  */
-class CriarSetorDTO
+class AtualizarSetorDTO
 {
     public function __construct(
         public readonly ?int $orgaoId = null,
@@ -27,5 +27,4 @@ class CriarSetorDTO
         );
     }
 }
-
 

@@ -120,6 +120,12 @@ class EnsureEmpresaAtivaContext
             
             // Também disponibilizar via app() para Global Scopes
             app()->instance('current_empresa_id', $empresaId);
+            
+            // Setar empresaId no TenantContext (para Use Cases)
+            $tenantId = tenancy()->tenant?->id;
+            if ($tenantId) {
+                \App\Domain\Shared\ValueObjects\TenantContext::set($tenantId, $empresaId);
+            }
         }
 
         return $next($request);
