@@ -43,17 +43,28 @@ class AtualizarAssinaturaViaWebhookUseCase
                     'data_inicio' => $paymentResult->approvedAt ?? now(),
                 ]);
 
-                // Atualizar tenant
+                // CRÍTICO: Atualizar tenant com plano e assinatura atuais
                 $tenant = $assinatura->tenant;
                 if ($tenant) {
                     $tenant->update([
                         'plano_atual_id' => $assinatura->plano_id,
                         'assinatura_atual_id' => $assinatura->id,
                     ]);
+                    
+                    // Forçar reload para garantir atualização
+                    $tenant->refresh();
+                    
+                    Log::info('Tenant atualizado via webhook', [
+                        'tenant_id' => $tenant->id,
+                        'plano_atual_id' => $tenant->plano_atual_id,
+                        'assinatura_atual_id' => $tenant->assinatura_atual_id,
+                    ]);
                 }
 
                 Log::info('Assinatura ativada via webhook', [
                     'assinatura_id' => $assinatura->id,
+                    'tenant_id' => $assinatura->tenant_id,
+                    'plano_id' => $assinatura->plano_id,
                     'external_id' => $transacaoId,
                 ]);
             } elseif ($paymentResult->isRejected()) {

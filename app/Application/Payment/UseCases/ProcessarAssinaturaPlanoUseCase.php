@@ -159,16 +159,21 @@ class ProcessarAssinaturaPlanoUseCase
                 'dias_grace_period' => 7,
             ]);
 
-            // Atualizar tenant com plano e assinatura atuais
+            // CRÍTICO: Atualizar tenant com plano e assinatura atuais
             $tenant->update([
                 'plano_atual_id' => $plano->id,
                 'assinatura_atual_id' => $assinatura->id,
             ]);
+            
+            // Forçar reload do tenant para garantir que os dados foram atualizados
+            $tenant->refresh();
 
-            Log::info('Assinatura criada com sucesso', [
+            Log::info('Assinatura criada e tenant atualizado com sucesso', [
                 'tenant_id' => $tenant->id,
                 'assinatura_id' => $assinatura->id,
                 'plano_id' => $plano->id,
+                'plano_atual_id_tenant' => $tenant->plano_atual_id,
+                'assinatura_atual_id_tenant' => $tenant->assinatura_atual_id,
                 'external_id' => $paymentResult->externalId,
             ]);
 
