@@ -258,6 +258,12 @@ Route::prefix('v1')->group(function () {
                 Route::get('/financeiro', [ApiRelatorioFinanceiroController::class, 'index']);
                 Route::get('/gestao-mensal', [ApiRelatorioFinanceiroController::class, 'gestaoMensal']);
                 Route::get('/financeiro/exportar', [ApiRelatorioFinanceiroController::class, 'exportar']);
+                
+                // Relatórios de Orçamentos
+                Route::get('/orcamentos', [\App\Modules\Orcamento\Controllers\RelatorioController::class, 'index']);
+                Route::get('/orcamentos/export', [\App\Modules\Orcamento\Controllers\RelatorioController::class, 'export']);
+                Route::get('/orcamentos/por-fornecedor', [\App\Modules\Orcamento\Controllers\RelatorioController::class, 'porFornecedor']);
+                Route::get('/orcamentos/por-status', [\App\Modules\Orcamento\Controllers\RelatorioController::class, 'porStatus']);
             });
         }); // Fim do grupo com CheckSubscription
     });
