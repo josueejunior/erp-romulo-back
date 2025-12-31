@@ -5,6 +5,7 @@ namespace App\Application\Empenho\UseCases;
 use App\Application\Empenho\DTOs\CriarEmpenhoDTO;
 use App\Domain\Empenho\Entities\Empenho;
 use App\Domain\Empenho\Repositories\EmpenhoRepositoryInterface;
+use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\Shared\ValueObjects\TenantContext;
 use DomainException;
 
@@ -20,6 +21,7 @@ class CriarEmpenhoUseCase
 {
     public function __construct(
         private EmpenhoRepositoryInterface $empenhoRepository,
+        private ProcessoRepositoryInterface $processoRepository,
     ) {}
 
     public function executar(CriarEmpenhoDTO $dto): Empenho
@@ -27,11 +29,25 @@ class CriarEmpenhoUseCase
         // Obter tenant_id do contexto (invisível para o controller)
         $context = TenantContext::get();
         
-        // Por enquanto, mantemos empresaId no DTO para compatibilidade
-        // Mas o tenant_id já está disponível no contexto se necessário
+        // Buscar processo para obter empresa_id e validar regras de negócio
+        if (!$dto->processoId) {
+            throw new DomainException('Processo é obrigatório para criar empenho.');
+        }
+        
+        $processo = $this->processoRepository->buscarPorId($dto->processoId);
+        if (!$processo) {
+            throw new DomainException('Processo não encontrado.');
+        }
+        
+        // Validar que o processo está em execução (regra de negócio)
+        if (!$processo->estaEmExecucao()) {
+            throw new DomainException('Empenhos só podem ser criados para processos em execução.');
+        }
+        
+        // Usar empresaId do processo (não do DTO)
         $empenho = new Empenho(
             id: null,
-            empresaId: $dto->empresaId,
+            empresaId: $processo->empresaId,
             processoId: $dto->processoId,
             contratoId: $dto->contratoId,
             autorizacaoFornecimentoId: $dto->autorizacaoFornecimentoId,

@@ -5,6 +5,7 @@ namespace App\Application\NotaFiscal\UseCases;
 use App\Application\NotaFiscal\DTOs\CriarNotaFiscalDTO;
 use App\Domain\NotaFiscal\Entities\NotaFiscal;
 use App\Domain\NotaFiscal\Repositories\NotaFiscalRepositoryInterface;
+use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\Shared\ValueObjects\TenantContext;
 use DomainException;
 
@@ -20,6 +21,7 @@ class CriarNotaFiscalUseCase
 {
     public function __construct(
         private NotaFiscalRepositoryInterface $notaFiscalRepository,
+        private ProcessoRepositoryInterface $processoRepository,
     ) {}
 
     public function executar(CriarNotaFiscalDTO $dto): NotaFiscal
@@ -27,14 +29,33 @@ class CriarNotaFiscalUseCase
         // Obter tenant_id do contexto (invisível para o controller)
         $context = TenantContext::get();
         
+        // Buscar processo para obter empresa_id e validar regras de negócio
+        if (!$dto->processoId) {
+            throw new DomainException('Processo é obrigatório para criar nota fiscal.');
+        }
+        
+        $processo = $this->processoRepository->buscarPorId($dto->processoId);
+        if (!$processo) {
+            throw new DomainException('Processo não encontrado.');
+        }
+        
+        // Validar que o processo está em execução (regra de negócio)
+        if (!$processo->estaEmExecucao()) {
+            throw new DomainException('Notas fiscais só podem ser criadas para processos em execução.');
+        }
+        
+        // Validar que há pelo menos um vínculo (empenho, contrato ou autorização)
+        if (!$dto->empenhoId && !$dto->contratoId && !$dto->autorizacaoFornecimentoId) {
+            throw new DomainException('Nota fiscal deve estar vinculada a um Empenho, Contrato ou Autorização de Fornecimento.');
+        }
+        
         // Calcular custo total antes de criar a entidade
         $custoTotal = round($dto->custoProduto + $dto->custoFrete, 2);
 
-        // Por enquanto, mantemos empresaId no DTO para compatibilidade
-        // Mas o tenant_id já está disponível no contexto se necessário
+        // Usar empresaId do processo (não do DTO)
         $notaFiscal = new NotaFiscal(
             id: null,
-            empresaId: $dto->empresaId,
+            empresaId: $processo->empresaId,
             processoId: $dto->processoId,
             empenhoId: $dto->empenhoId,
             contratoId: $dto->contratoId,
