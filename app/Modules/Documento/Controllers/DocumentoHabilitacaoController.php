@@ -9,6 +9,7 @@ use App\Application\DocumentoHabilitacao\UseCases\CriarDocumentoHabilitacaoUseCa
 use App\Application\DocumentoHabilitacao\UseCases\AtualizarDocumentoHabilitacaoUseCase;
 use App\Application\DocumentoHabilitacao\DTOs\CriarDocumentoHabilitacaoDTO;
 use App\Domain\Shared\ValueObjects\TenantContext;
+use App\Http\Middleware\EnsureEmpresaAtivaContext;
 use Illuminate\Http\Request;
 use App\Helpers\PermissionHelper;
 use Illuminate\Support\Facades\Storage;
@@ -22,6 +23,22 @@ class DocumentoHabilitacaoController extends BaseApiController
         private AtualizarDocumentoHabilitacaoUseCase $atualizarDocumentoUseCase,
     ) {
         $this->service = $service;
+        // Garante empresa ativa no contexto para todas as rotas
+        $this->middleware(EnsureEmpresaAtivaContext::class);
+    }
+
+    /**
+     * Garante que TenantContext tenha empresa_id usando a empresa ativa
+     */
+    protected function ensureEmpresaContext(): void
+    {
+        $tenantId = tenancy()->tenant?->id;
+        if (!TenantContext::has() || TenantContext::get()->empresaId === null) {
+            $empresa = $this->getEmpresaAtivaOrFail();
+            if ($tenantId) {
+                TenantContext::set($tenantId, $empresa->id);
+            }
+        }
     }
 
     /**
@@ -30,6 +47,7 @@ class DocumentoHabilitacaoController extends BaseApiController
     protected function handleList(Request $request, array $mergeParams = []): \Illuminate\Http\JsonResponse
     {
         try {
+            $this->ensureEmpresaContext();
             $params = $this->service->createListParamBag(array_merge($request->all(), $mergeParams));
             $documentos = $this->service->list($params);
             
@@ -53,6 +71,7 @@ class DocumentoHabilitacaoController extends BaseApiController
     public function vencendo(Request $request): \Illuminate\Http\JsonResponse
     {
         try {
+            $this->ensureEmpresaContext();
             $context = \App\Domain\Shared\ValueObjects\TenantContext::get();
             $dias = (int) ($request->get('dias', 30));
             
@@ -76,6 +95,7 @@ class DocumentoHabilitacaoController extends BaseApiController
     public function vencidos(Request $request): \Illuminate\Http\JsonResponse
     {
         try {
+            $this->ensureEmpresaContext();
             $context = \App\Domain\Shared\ValueObjects\TenantContext::get();
             
             $repository = app(\App\Domain\DocumentoHabilitacao\Repositories\DocumentoHabilitacaoRepositoryInterface::class);
@@ -116,6 +136,7 @@ class DocumentoHabilitacaoController extends BaseApiController
         }
 
         try {
+            $this->ensureEmpresaContext();
             $params = array_merge($request->all(), $mergeParams);
             $paramBag = $this->service->createFindByIdParamBag($params);
             $documento = $this->service->findById($id, $paramBag);
@@ -146,6 +167,7 @@ class DocumentoHabilitacaoController extends BaseApiController
         }
 
         try {
+            $this->ensureEmpresaContext();
             $data = array_merge($request->all(), $mergeParams);
             
             // Validar dados
@@ -204,6 +226,7 @@ class DocumentoHabilitacaoController extends BaseApiController
         }
 
         try {
+            $this->ensureEmpresaContext();
             $data = array_merge($request->all(), $mergeParams);
             
             // Validar dados
