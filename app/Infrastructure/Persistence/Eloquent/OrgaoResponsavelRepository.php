@@ -62,6 +62,32 @@ class OrgaoResponsavelRepository implements OrgaoResponsavelRepositoryInterface
         return $models->map(fn($model) => $this->toDomain($model))->toArray();
     }
 
+    public function buscarPorOrgaoId(int $orgaoId, array $filtros = []): LengthAwarePaginator
+    {
+        $query = OrgaoResponsavelModel::where('orgao_id', $orgaoId);
+
+        if (isset($filtros['empresa_id'])) {
+            $query->where('empresa_id', $filtros['empresa_id']);
+        }
+
+        if (isset($filtros['search'])) {
+            $search = $filtros['search'];
+            $query->where(function ($q) use ($search) {
+                $q->where('nome', 'ilike', "%{$search}%")
+                  ->orWhere('cargo', 'ilike', "%{$search}%");
+            });
+        }
+
+        $perPage = $filtros['per_page'] ?? 15;
+        $paginator = $query->orderBy('nome', 'asc')->paginate($perPage);
+
+        $paginator->getCollection()->transform(function ($model) {
+            return $this->toDomain($model);
+        });
+
+        return $paginator;
+    }
+
     public function buscarComFiltros(array $filtros = []): LengthAwarePaginator
     {
         $query = OrgaoResponsavelModel::query();

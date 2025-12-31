@@ -37,13 +37,14 @@ class OrgaoResponsavelController extends BaseApiController
             }
 
             $context = TenantContext::get();
-            $responsaveis = $this->responsavelRepository->buscarPorOrgao($orgaoId);
-
-            // Filtrar apenas responsáveis da empresa ativa
-            $responsaveis = array_filter($responsaveis, fn($r) => $r->empresaId === $context->empresaId);
+            $responsaveis = $this->responsavelRepository->buscarComFiltros([
+                'orgao_id' => $orgaoId,
+                'empresa_id' => $context->empresaId,
+                'per_page' => 1000, // Buscar todos
+            ]);
 
             return response()->json([
-                'data' => array_map(function ($responsavel) {
+                'data' => $responsaveis->getCollection()->map(function ($responsavel) {
                     return [
                         'id' => $responsavel->id,
                         'orgao_id' => $responsavel->orgaoId,
@@ -53,7 +54,7 @@ class OrgaoResponsavelController extends BaseApiController
                         'telefones' => $responsavel->telefones,
                         'observacoes' => $responsavel->observacoes,
                     ];
-                }, $responsaveis),
+                })->values(),
             ]);
         } catch (\Exception $e) {
             return $this->handleException($e, 'Erro ao listar responsáveis');
@@ -74,15 +75,30 @@ class OrgaoResponsavelController extends BaseApiController
                 'nome' => 'required|string|max:255',
                 'cargo' => 'nullable|string|max:255',
                 'emails' => 'nullable|array',
-                'emails.*' => 'email',
+                'emails.*' => 'nullable|email',
                 'telefones' => 'nullable|array',
-                'telefones.*' => 'string|max:20',
+                'telefones.*' => 'nullable|string|max:20',
                 'observacoes' => 'nullable|string',
             ]);
+
+            // Filtrar valores nulos/vazios dos arrays
+            if (isset($validated['emails'])) {
+                $validated['emails'] = array_filter($validated['emails'], fn($e) => !empty($e));
+                $validated['emails'] = !empty($validated['emails']) ? array_values($validated['emails']) : null;
+            }
+            if (isset($validated['telefones'])) {
+                $validated['telefones'] = array_filter($validated['telefones'], fn($t) => !empty($t));
+                $validated['telefones'] = !empty($validated['telefones']) ? array_values($validated['telefones']) : null;
+            }
 
             $context = TenantContext::get();
             $validated['orgao_id'] = $orgaoId;
             $validated['empresa_id'] = $context->empresaId;
+
+            // Garantir que empresa_id está presente
+            if (empty($validated['empresa_id'])) {
+                return response()->json(['message' => 'Empresa não identificada no contexto.'], 400);
+            }
 
             $dto = CriarOrgaoResponsavelDTO::fromArray($validated);
             $responsavel = $this->criarResponsavelUseCase->executar($dto);
@@ -120,13 +136,31 @@ class OrgaoResponsavelController extends BaseApiController
                 'nome' => 'required|string|max:255',
                 'cargo' => 'nullable|string|max:255',
                 'emails' => 'nullable|array',
-                'emails.*' => 'email',
+                'emails.*' => 'nullable|email',
                 'telefones' => 'nullable|array',
-                'telefones.*' => 'string|max:20',
+                'telefones.*' => 'nullable|string|max:20',
                 'observacoes' => 'nullable|string',
             ]);
 
+            // Filtrar valores nulos/vazios dos arrays
+            if (isset($validated['emails'])) {
+                $validated['emails'] = array_filter($validated['emails'], fn($e) => !empty($e));
+                $validated['emails'] = !empty($validated['emails']) ? array_values($validated['emails']) : null;
+            }
+            if (isset($validated['telefones'])) {
+                $validated['telefones'] = array_filter($validated['telefones'], fn($t) => !empty($t));
+                $validated['telefones'] = !empty($validated['telefones']) ? array_values($validated['telefones']) : null;
+            }
+
             $validated['orgao_id'] = $orgaoId;
+            
+            $context = TenantContext::get();
+            $validated['empresa_id'] = $context->empresaId;
+
+            // Garantir que empresa_id está presente
+            if (empty($validated['empresa_id'])) {
+                return response()->json(['message' => 'Empresa não identificada no contexto.'], 400);
+            }
 
             $dto = CriarOrgaoResponsavelDTO::fromArray($validated);
             $responsavel = $this->atualizarResponsavelUseCase->executar($id, $dto);
