@@ -56,6 +56,14 @@ class VerificarEmpresasTenants extends Command
             ['Tenant ID', 'Tenant Nome', 'Database', 'Empresas Encontradas'],
             $tenants->map(function ($tenant) use ($empresasIds) {
                 try {
+                    // Obter nome do banco de dados ANTES de inicializar (para evitar problemas)
+                    $databaseName = 'N/A';
+                    try {
+                        $databaseName = $tenant->database()->getName();
+                    } catch (\Exception $e) {
+                        $databaseName = 'ERRO: ' . $e->getMessage();
+                    }
+                    
                     tenancy()->initialize($tenant);
                     
                     $empresasNoTenant = \App\Models\Empresa::whereIn('id', $empresasIds)
@@ -70,15 +78,15 @@ class VerificarEmpresasTenants extends Command
                     return [
                         $tenant->id,
                         $tenant->razao_social,
-                        $tenant->database,
+                        $databaseName,
                         $empresasInfo ?: 'Nenhuma',
                     ];
                 } catch (\Exception $e) {
                     tenancy()->end();
                     return [
                         $tenant->id,
-                        $tenant->razao_social,
-                        $tenant->database,
+                        $tenant->razao_social ?? 'N/A',
+                        'ERRO',
                         "ERRO: " . $e->getMessage(),
                     ];
                 }
@@ -100,6 +108,14 @@ class VerificarEmpresasTenants extends Command
         
         foreach ($tenants as $tenant) {
             try {
+                // Obter nome do banco de dados ANTES de inicializar (para evitar problemas)
+                $databaseName = 'N/A';
+                try {
+                    $databaseName = $tenant->database()->getName();
+                } catch (\Exception $e) {
+                    $databaseName = 'ERRO: ' . $e->getMessage();
+                }
+                
                 tenancy()->initialize($tenant);
                 
                 $empresas = \App\Models\Empresa::all(['id', 'razao_social', 'cnpj', 'status']);
@@ -107,8 +123,8 @@ class VerificarEmpresasTenants extends Command
                 foreach ($empresas as $empresa) {
                     $resultados[] = [
                         'tenant_id' => $tenant->id,
-                        'tenant_nome' => $tenant->razao_social,
-                        'tenant_database' => $tenant->database,
+                        'tenant_nome' => $tenant->razao_social ?? 'N/A',
+                        'tenant_database' => $databaseName,
                         'empresa_id' => $empresa->id,
                         'empresa_razao_social' => $empresa->razao_social,
                         'empresa_cnpj' => $empresa->cnpj,
