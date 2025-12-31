@@ -122,9 +122,15 @@ class EnsureEmpresaAtivaContext
             app()->instance('current_empresa_id', $empresaId);
             
             // Setar empresaId no TenantContext (para Use Cases)
+            // Atualizar o contexto mesmo que já tenha sido setado antes
             $tenantId = tenancy()->tenant?->id;
             if ($tenantId) {
                 \App\Domain\Shared\ValueObjects\TenantContext::set($tenantId, $empresaId);
+            } elseif (\App\Domain\Shared\ValueObjects\TenantContext::has()) {
+                // Se o contexto já existe mas não temos tenantId ainda, 
+                // vamos obter do contexto existente e atualizar
+                $context = \App\Domain\Shared\ValueObjects\TenantContext::get();
+                \App\Domain\Shared\ValueObjects\TenantContext::set($context->tenantId, $empresaId);
             }
         }
 

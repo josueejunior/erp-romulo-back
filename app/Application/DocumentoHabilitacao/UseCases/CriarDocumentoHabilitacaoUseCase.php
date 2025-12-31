@@ -21,9 +21,13 @@ class CriarDocumentoHabilitacaoUseCase
     {
         $context = TenantContext::get();
 
+        if (!$context->empresaId) {
+            throw new DomainException('Empresa não identificada no contexto. Verifique se o middleware está configurado corretamente.');
+        }
+
         $documento = new DocumentoHabilitacao(
             id: null,
-            empresaId: $context->empresaId,
+            empresaId: $context->empresaId, // Get empresaId from context
             tipo: $dto->tipo,
             numero: $dto->numero,
             identificacao: $dto->identificacao,

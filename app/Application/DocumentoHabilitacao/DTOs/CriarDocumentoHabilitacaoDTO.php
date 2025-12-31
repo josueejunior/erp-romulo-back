@@ -6,11 +6,11 @@ use Carbon\Carbon;
 
 /**
  * DTO para criação de documento de habilitação
+ * O empresaId é obtido do TenantContext pelo Use Case, não vem do controller
  */
 class CriarDocumentoHabilitacaoDTO
 {
     public function __construct(
-        public readonly int $empresaId,
         public readonly ?string $tipo = null,
         public readonly ?string $numero = null,
         public readonly ?string $identificacao = null,
@@ -24,7 +24,6 @@ class CriarDocumentoHabilitacaoDTO
     public static function fromArray(array $data): self
     {
         return new self(
-            empresaId: $data['empresa_id'] ?? $data['empresaId'] ?? 0,
             tipo: $data['tipo'] ?? null,
             numero: $data['numero'] ?? null,
             identificacao: $data['identificacao'] ?? null,
