@@ -128,6 +128,7 @@ class AssinaturaController extends BaseApiController
      */
     public function status(Request $request): JsonResponse
     {
+        return $request->all();
         try {
             // Obter tenant automaticamente (middleware já inicializou)
             $tenant = $this->getTenantOrFail();
