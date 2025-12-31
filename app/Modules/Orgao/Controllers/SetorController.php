@@ -55,8 +55,15 @@ class SetorController extends BaseApiController
             $setors = $this->listarSetoresUseCase->executar($filters);
             
             // Converter entidades para modelos para o Resource
-            $setors->getCollection()->transform(function ($setor) {
-                return SetorModel::find($setor->id);
+            $setorIds = $setors->getCollection()->pluck('id')->toArray();
+            $setorModels = SetorModel::whereIn('id', $setorIds)
+                ->with('orgao')
+                ->get()
+                ->keyBy('id');
+            
+            // Manter a ordem e substituir entidades por modelos
+            $setors->getCollection()->transform(function ($setor) use ($setorModels) {
+                return $setorModels->get($setor->id);
             });
             
             $response = SetorResource::collection($setors);

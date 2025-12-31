@@ -57,11 +57,17 @@ class SetorRepository implements SetorRepositoryInterface
             $query->where('orgao_id', $filtros['orgao_id']);
         }
 
-        $perPage = $filtros['per_page'] ?? 15;
-        $paginator = $query->orderBy('criado_em', 'desc')->paginate($perPage);
+        // Busca livre
+        if (isset($filtros['search']) && $filtros['search']) {
+            $search = $filtros['search'];
+            $query->where(function($q) use ($search) {
+                $q->where('nome', 'ilike', "%{$search}%")
+                  ->orWhere('email', 'ilike', "%{$search}%");
+            });
+        }
 
-        // Validar que todos os registros pertencem à empresa correta
-        $this->validarEmpresaIds($paginator, $filtros['empresa_id']);
+        $perPage = $filtros['per_page'] ?? 15;
+        $paginator = $query->orderBy('nome', 'asc')->paginate($perPage);
 
         $paginator->getCollection()->transform(function ($model) {
             return $this->toDomain($model);
