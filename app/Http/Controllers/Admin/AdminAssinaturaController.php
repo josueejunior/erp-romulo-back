@@ -9,6 +9,8 @@ use App\Application\Assinatura\UseCases\BuscarAssinaturaAdminUseCase;
 use App\Application\Assinatura\UseCases\AtualizarAssinaturaAdminUseCase;
 use App\Application\Tenant\UseCases\ListarTenantsParaFiltroUseCase;
 use App\Http\Requests\Assinatura\AtualizarAssinaturaAdminRequest;
+use App\Models\Tenant;
+use App\Modules\Assinatura\Models\Assinatura;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -16,6 +18,11 @@ use Illuminate\Support\Facades\Log;
  * Controller Admin para gerenciar assinaturas de todos os tenants
  * 
  * 100% DDD - Apenas recebe request e delega para Use Cases
+ * 
+ * Padrão similar ao OrgaoController:
+ * - Métodos auxiliares para extrair IDs da rota
+ * - Métodos handle* que recebem IDs diretamente
+ * - Métodos públicos que podem usar Route Model Binding ou extrair IDs
  */
 class AdminAssinaturaController extends Controller
 {
@@ -25,6 +32,30 @@ class AdminAssinaturaController extends Controller
         private AtualizarAssinaturaAdminUseCase $atualizarAssinaturaAdminUseCase,
         private ListarTenantsParaFiltroUseCase $listarTenantsParaFiltroUseCase,
     ) {}
+
+    /**
+     * Extrai o tenant_id da rota
+     * Padrão similar ao OrgaoController::getRouteId()
+     */
+    protected function getTenantIdFromRoute($route): ?int
+    {
+        $parameters = $route->parameters();
+        // Tentar 'tenantId' primeiro, depois 'tenant', depois 'id'
+        $id = $parameters['tenantId'] ?? $parameters['tenant'] ?? $parameters['id'] ?? null;
+        return $id ? (int) $id : null;
+    }
+
+    /**
+     * Extrai o assinatura_id da rota
+     * Padrão similar ao OrgaoController::getRouteId()
+     */
+    protected function getAssinaturaIdFromRoute($route): ?int
+    {
+        $parameters = $route->parameters();
+        // Tentar 'assinaturaId' primeiro, depois 'assinatura', depois 'id'
+        $id = $parameters['assinaturaId'] ?? $parameters['assinatura'] ?? $parameters['id'] ?? null;
+        return $id ? (int) $id : null;
+    }
 
     /**
      * Listar todas as assinaturas de todos os tenants
@@ -65,10 +96,21 @@ class AdminAssinaturaController extends Controller
     }
 
     /**
-     * Buscar assinatura específica
+     * Método handleGet - recebe IDs diretamente
+     * Padrão similar ao OrgaoController::handleGet()
      */
-    public function show(int $tenantId, int $assinaturaId)
+    protected function handleGet(Request $request, array $mergeParams = []): \Illuminate\Http\JsonResponse
     {
+        $route = $request->route();
+        $tenantId = $this->getTenantIdFromRoute($route);
+        $assinaturaId = $this->getAssinaturaIdFromRoute($route);
+        
+        if (!$tenantId || !$assinaturaId) {
+            return response()->json([
+                'message' => 'Tenant ID ou Assinatura ID não fornecido'
+            ], 400);
+        }
+
         try {
             // Executar Use Case
             $data = $this->buscarAssinaturaAdminUseCase->executar($tenantId, $assinaturaId);
@@ -87,13 +129,41 @@ class AdminAssinaturaController extends Controller
     }
 
     /**
-     * Atualizar assinatura
+     * Método público - pode usar Route Model Binding ou extrair IDs da rota
+     * Padrão similar ao OrgaoController::show()
+     * 
+     * Suporta duas formas:
+     * 1. Route Model Binding: show(Request $request, Tenant $tenant, Assinatura $assinatura)
+     * 2. IDs numéricos: show(Request $request, int $tenantId, int $assinaturaId)
      */
-    public function update(AtualizarAssinaturaAdminRequest $request, int $tenantId, int $assinaturaId)
+    public function show(Request $request, Tenant|int $tenantOrId, Assinatura|int $assinaturaOrId = null)
+    {
+        // Se os modelos foram injetados via Route Model Binding, usar os IDs deles
+        if ($tenantOrId instanceof Tenant && $assinaturaOrId instanceof Assinatura) {
+            $request->route()->setParameter('tenantId', $tenantOrId->id);
+            $request->route()->setParameter('assinaturaId', $assinaturaOrId->id);
+        } elseif (is_int($tenantOrId) && is_int($assinaturaOrId)) {
+            // Se são IDs numéricos, definir nos parâmetros da rota
+            $request->route()->setParameter('tenantId', $tenantOrId);
+            $request->route()->setParameter('assinaturaId', $assinaturaOrId);
+        }
+        
+        return $this->handleGet($request);
+    }
+
+    /**
+     * Método handleUpdate - recebe IDs diretamente
+     * Padrão similar ao OrgaoController::handleUpdate()
+     */
+    protected function handleUpdate(AtualizarAssinaturaAdminRequest $request, int|string $tenantId, int|string $assinaturaId, array $mergeParams = []): \Illuminate\Http\JsonResponse
     {
         try {
             // Request já está validado via Form Request
             $validated = $request->validated();
+
+            // Garantir que são inteiros
+            $tenantId = (int) $tenantId;
+            $assinaturaId = (int) $assinaturaId;
 
             // Executar Use Case
             $assinaturaDomain = $this->atualizarAssinaturaAdminUseCase->executar($tenantId, $assinaturaId, $validated);
@@ -118,6 +188,38 @@ class AdminAssinaturaController extends Controller
             ]);
             return response()->json(['message' => 'Erro ao atualizar assinatura.'], 500);
         }
+    }
+
+    /**
+     * Método público - pode usar Route Model Binding ou extrair IDs da rota
+     * Padrão similar ao OrgaoController::update()
+     * 
+     * Suporta duas formas:
+     * 1. Route Model Binding: update(Request $request, Tenant $tenant, Assinatura $assinatura)
+     * 2. IDs numéricos: update(Request $request, int $tenantId, int $assinaturaId)
+     */
+    public function update(AtualizarAssinaturaAdminRequest $request, Tenant|int $tenantOrId, Assinatura|int $assinaturaOrId = null)
+    {
+        // Se os modelos foram injetados via Route Model Binding, usar os IDs deles
+        if ($tenantOrId instanceof Tenant && $assinaturaOrId instanceof Assinatura) {
+            return $this->handleUpdate($request, $tenantOrId->id, $assinaturaOrId->id);
+        } elseif (is_int($tenantOrId) && is_int($assinaturaOrId)) {
+            // Se são IDs numéricos, usar diretamente
+            return $this->handleUpdate($request, $tenantOrId, $assinaturaOrId);
+        }
+        
+        // Caso contrário, extrair IDs da rota
+        $route = $request->route();
+        $tenantId = $this->getTenantIdFromRoute($route);
+        $assinaturaId = $this->getAssinaturaIdFromRoute($route);
+        
+        if (!$tenantId || !$assinaturaId) {
+            return response()->json([
+                'message' => 'Tenant ID ou Assinatura ID não fornecido'
+            ], 400);
+        }
+        
+        return $this->handleUpdate($request, $tenantId, $assinaturaId);
     }
 
     /**
