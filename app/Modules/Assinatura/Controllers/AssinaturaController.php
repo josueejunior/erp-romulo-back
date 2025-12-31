@@ -60,16 +60,60 @@ class AssinaturaController extends BaseApiController
     /**
      * Retorna assinatura atual do tenant
      * Permite acesso mesmo sem assinatura (retorna null) para que o frontend possa tratar
+     * 
+     * NOTA: Este método usa tenant_id do header diretamente (não do contexto)
+     * porque quando o usuário troca de empresa, o frontend atualiza o X-Tenant-ID,
+     * mas o middleware pode não reinicializar se o tenant já estava inicializado.
+     * Usar o header garante que sempre usamos o tenant correto da empresa selecionada.
      */
     public function atual(Request $request): JsonResponse
     {
         try {
-            // Obter tenant automaticamente (middleware já inicializou)
-            $tenant = $this->getTenantOrFail();
+            // 🔥 IMPORTANTE: Usar tenant_id do header diretamente (fonte de verdade)
+            // O middleware pode não ter reinicializado se o tenant_id não mudou
+            $tenantIdFromHeader = $request->header('X-Tenant-ID');
+            
+            if (!$tenantIdFromHeader) {
+                \Log::warning('AssinaturaController::atual() - X-Tenant-ID não fornecido', [
+                    'tenancy_initialized' => tenancy()->initialized,
+                    'tenancy_tenant_id' => tenancy()->tenant?->id,
+                ]);
+                return response()->json([
+                    'message' => 'Tenant ID não fornecido. Use o header X-Tenant-ID.'
+                ], 400);
+            }
+            
+            // Buscar tenant pelo ID do header (garante que estamos usando o tenant correto)
+            $tenant = \App\Models\Tenant::find($tenantIdFromHeader);
+            
+            if (!$tenant) {
+                \Log::warning('AssinaturaController::atual() - Tenant não encontrado', [
+                    'tenant_id_header' => $tenantIdFromHeader,
+                ]);
+                return response()->json([
+                    'message' => 'Tenant não encontrado'
+                ], 404);
+            }
+            
+            // Se o tenant do contexto é diferente, reinicializar
+            if (!tenancy()->initialized || tenancy()->tenant?->id !== $tenant->id) {
+                if (tenancy()->initialized) {
+                    tenancy()->end();
+                }
+                tenancy()->initialize($tenant);
+            }
+            
+            \Log::debug('AssinaturaController::atual() - Usando tenant do header', [
+                'tenant_id_header' => $tenantIdFromHeader,
+                'tenant_id_contexto' => tenancy()->tenant?->id,
+                'tenant_razao_social' => $tenant->razao_social,
+                'X-Empresa-ID' => $request->header('X-Empresa-ID'),
+            ]);
 
             // Tentar buscar assinatura, mas não lançar erro se não encontrar
             try {
-                $assinatura = $this->buscarAssinaturaAtualUseCase->executar($tenant->id);
+                // Usar tenant_id do header (garante que está correto)
+                $assinatura = $this->buscarAssinaturaAtualUseCase->executar((int)$tenantIdFromHeader);
                 
                 // Buscar modelo para resposta (mantém compatibilidade com frontend)
                 $assinaturaModel = $this->assinaturaRepository->buscarModeloPorId($assinatura->id);
@@ -128,7 +172,6 @@ class AssinaturaController extends BaseApiController
      */
     public function status(Request $request): JsonResponse
     {
-        return $request->all();
         try {
             // Obter tenant automaticamente (middleware já inicializou)
             $tenant = $this->getTenantOrFail();

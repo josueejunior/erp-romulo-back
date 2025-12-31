@@ -54,6 +54,9 @@ public function buscarAssinaturaAtual(int $tenantId): ?Assinatura
         $tenant = Tenant::find($tenantId);
         
         if (!$tenant) {
+            \Log::warning('AssinaturaRepository::buscarAssinaturaAtual() - Tenant não encontrado', [
+                'tenant_id' => $tenantId,
+            ]);
             return null;
         }
 
@@ -65,12 +68,22 @@ public function buscarAssinaturaAtual(int $tenantId): ?Assinatura
         $tenantAtual = tenancy()->tenant;
         $precisaReinicializar = !$jaInicializado || ($tenantAtual && $tenantAtual->id !== $tenantId);
         
+        \Log::debug('AssinaturaRepository::buscarAssinaturaAtual() - Verificando tenant', [
+            'tenant_id_solicitado' => $tenantId,
+            'tenant_id_atual' => $tenantAtual?->id,
+            'ja_inicializado' => $jaInicializado,
+            'precisa_reinicializar' => $precisaReinicializar,
+        ]);
+        
         try {
             if ($precisaReinicializar) {
                 if ($jaInicializado) {
                     tenancy()->end();
                 }
                 tenancy()->initialize($tenant);
+                \Log::debug('AssinaturaRepository::buscarAssinaturaAtual() - Tenant reinicializado', [
+                    'tenant_id' => $tenant->id,
+                ]);
             }
 
             // Se o tenant tem assinatura_atual_id, buscar por ele
