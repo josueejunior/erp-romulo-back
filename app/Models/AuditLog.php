@@ -7,7 +7,7 @@ class AuditLog extends BaseModel
     protected $table = 'audit_logs';
 
     protected $fillable = [
-        'user_id',
+        'usuario_id', // Coluna criada por foreignUsuario() na migration
         'action', // 'created', 'updated', 'deleted', 'status_changed'
         'model_type', // 'App\Models\Processo', etc.
         'model_id',
@@ -30,7 +30,7 @@ class AuditLog extends BaseModel
 
     public function user()
     {
-        return $this->belongsTo(\App\Models\User::class);
+        return $this->belongsTo(\App\Models\User::class, 'usuario_id');
     }
 
     /**
@@ -51,7 +51,7 @@ class AuditLog extends BaseModel
         }
 
         return self::create([
-            'user_id' => auth()->id(),
+            'usuario_id' => auth()->id(), // Coluna é usuario_id, não user_id
             'action' => $action,
             'model_type' => get_class($model),
             'model_id' => $model->id,
