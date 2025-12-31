@@ -40,7 +40,20 @@ class DocumentoHabilitacaoService extends BaseService
         if (isset($params['vencendo']) && $params['vencendo']) {
             $builder->whereNotNull('data_validade')
                   ->where('data_validade', '>=', now())
-                  ->where('data_validade', '<=', now()->addDays(30));
+                  ->where('data_validade', '<=', now()->addDays(30))
+                  ->where('ativo', true);
+        }
+
+        // Filtro por documentos vencidos
+        if (isset($params['vencidos']) && $params['vencidos']) {
+            $builder->whereNotNull('data_validade')
+                  ->where('data_validade', '<', now())
+                  ->where('ativo', true);
+        }
+
+        // Filtro por ativo
+        if (isset($params['ativo'])) {
+            $builder->where('ativo', $params['ativo']);
         }
 
         // Ordenação
