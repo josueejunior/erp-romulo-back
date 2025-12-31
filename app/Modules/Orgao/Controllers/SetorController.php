@@ -12,6 +12,7 @@ use App\Application\Setor\UseCases\DeletarSetorUseCase;
 use App\Application\Setor\DTOs\CriarSetorDTO;
 use App\Application\Setor\DTOs\AtualizarSetorDTO;
 use App\Domain\Shared\ValueObjects\TenantContext;
+use App\Http\Middleware\EnsureEmpresaAtivaContext;
 use Illuminate\Http\Request;
 use App\Helpers\PermissionHelper;
 use App\Services\RedisService;
@@ -25,7 +26,10 @@ class SetorController extends BaseApiController
         private ListarSetoresUseCase $listarSetoresUseCase,
         private BuscarSetorUseCase $buscarSetorUseCase,
         private DeletarSetorUseCase $deletarSetorUseCase,
-    ) {}
+    ) {
+        // Garante empresa ativa em todas as rotas do controlador
+        $this->middleware(EnsureEmpresaAtivaContext::class);
+    }
 
     /**
      * Sobrescrever handleList para usar SetorResource e cache
