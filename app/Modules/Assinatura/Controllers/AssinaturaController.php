@@ -163,7 +163,7 @@ class AssinaturaController extends BaseApiController
                 ]);
                 
                 // Se não tem empresa, usar 0 como fallback para contagem de usuários
-                $statusData = $this->obterStatusAssinaturaUseCase->executar($tenantIdToUse, $empresaId ?? 0);
+                $statusData = $this->obterStatusAssinaturaUseCase->executar(8, $empresaId ?? 0);
                 
                 // Garantir que o tenant_id no retorno seja o correto (do header)
                 $statusData['tenant_id'] = $tenantIdToUse;
