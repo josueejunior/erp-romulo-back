@@ -8,6 +8,9 @@ use App\Application\Assinatura\UseCases\BuscarAssinaturaAtualUseCase;
 use App\Application\Assinatura\UseCases\ObterStatusAssinaturaUseCase;
 use App\Application\Assinatura\UseCases\ListarAssinaturasUseCase;
 use App\Application\Assinatura\UseCases\CancelarAssinaturaUseCase;
+use App\Application\Assinatura\UseCases\CriarAssinaturaUseCase;
+use App\Application\Assinatura\DTOs\CriarAssinaturaDTO;
+use App\Application\Assinatura\Resources\AssinaturaResource;
 use App\Application\Payment\UseCases\RenovarAssinaturaUseCase;
 use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
 use App\Http\Requests\Assinatura\RenovarAssinaturaRequest;
@@ -34,7 +37,9 @@ class AssinaturaController extends BaseApiController
         private ObterStatusAssinaturaUseCase $obterStatusAssinaturaUseCase,
         private ListarAssinaturasUseCase $listarAssinaturasUseCase,
         private CancelarAssinaturaUseCase $cancelarAssinaturaUseCase,
+        private CriarAssinaturaUseCase $criarAssinaturaUseCase,
         private RenovarAssinaturaUseCase $renovarAssinaturaUseCase,
+        private AssinaturaResource $assinaturaResource,
         private AssinaturaRepositoryInterface $assinaturaRepository,
     ) {}
 
@@ -74,42 +79,11 @@ class AssinaturaController extends BaseApiController
             try {
                 $assinatura = $this->buscarAssinaturaAtualUseCase->executar($tenant->id);
                 
-                // Buscar modelo para resposta (mantém compatibilidade com frontend)
-                $assinaturaModel = $this->assinaturaRepository->buscarModeloPorId($assinatura->id);
-
-                if (!$assinaturaModel) {
-                    return response()->json([
-                        'data' => null,
-                        'message' => 'Assinatura não encontrada',
-                        'code' => 'NO_SUBSCRIPTION'
-                    ], 200);
-                }
-
-                // Calcular dias restantes usando o modelo
-                $diasRestantes = $assinaturaModel->diasRestantes();
+                // Transformar entidade do domínio em DTO de resposta
+                $responseDTO = $this->assinaturaResource->toResponse($assinatura);
 
                 return response()->json([
-                    'data' => [
-                        'id' => $assinaturaModel->id,
-                        'plano_id' => $assinaturaModel->plano_id,
-                        'status' => $assinaturaModel->status,
-                        'data_inicio' => $assinaturaModel->data_inicio ? $assinaturaModel->data_inicio->format('Y-m-d') : null,
-                        'data_fim' => $assinaturaModel->data_fim ? $assinaturaModel->data_fim->format('Y-m-d') : null,
-                        'valor_pago' => $assinaturaModel->valor_pago,
-                        'metodo_pagamento' => $assinaturaModel->metodo_pagamento,
-                        'transacao_id' => $assinaturaModel->transacao_id,
-                        'dias_restantes' => $diasRestantes,
-                        'plano' => $assinaturaModel->plano ? [
-                            'id' => $assinaturaModel->plano->id,
-                            'nome' => $assinaturaModel->plano->nome,
-                            'descricao' => $assinaturaModel->plano->descricao,
-                            'preco_mensal' => $assinaturaModel->plano->preco_mensal,
-                            'preco_anual' => $assinaturaModel->plano->preco_anual,
-                            'limite_processos' => $assinaturaModel->plano->limite_processos,
-                            'limite_usuarios' => $assinaturaModel->plano->limite_usuarios,
-                            'limite_armazenamento_mb' => $assinaturaModel->plano->limite_armazenamento_mb,
-                        ] : null,
-                    ]
+                    'data' => $responseDTO->toArray()
                 ]);
             } catch (\App\Domain\Exceptions\NotFoundException $e) {
                 // Não há assinatura - retornar null para que o frontend possa tratar
@@ -167,6 +141,7 @@ class AssinaturaController extends BaseApiController
 
     /**
      * Lista assinaturas do tenant
+     * Usa Use Case para lógica de negócio e Resource para transformação
      */
     public function index(Request $request): JsonResponse
     {
@@ -180,7 +155,7 @@ class AssinaturaController extends BaseApiController
                 $filtros['status'] = $request->status;
             }
 
-            // Executar Use Case
+            // Executar Use Case (retorna Collection de arrays)
             $assinaturas = $this->listarAssinaturasUseCase->executar($tenant->id, $filtros);
 
             return response()->json([
@@ -199,51 +174,34 @@ class AssinaturaController extends BaseApiController
      * 
      * Nota: Assinaturas normalmente são criadas via PaymentController::processarAssinatura()
      * Este método é para casos especiais (ex: admin criar assinatura gratuita)
-     * Usa Form Request para validação
+     * Usa Form Request para validação e Use Case para lógica de negócio
      */
     public function store(CriarAssinaturaRequest $request): JsonResponse
     {
         try {
-            // Request já está validado via Form Request
-            $validated = $request->validated();
-
             // Obter tenant automaticamente (middleware já inicializou)
             $tenant = $this->getTenantOrFail();
 
-            // Buscar plano
-            $plano = \App\Modules\Assinatura\Models\Plano::find($validated['plano_id']);
-            if (!$plano) {
-                return response()->json(['message' => 'Plano não encontrado'], 404);
-            }
-
-            // Criar assinatura
-            $assinatura = \App\Modules\Assinatura\Models\Assinatura::create([
+            // Criar DTO a partir do request validado
+            $dto = CriarAssinaturaDTO::fromArray([
+                ...$request->validated(),
                 'tenant_id' => $tenant->id,
-                'plano_id' => $validated['plano_id'],
-                'status' => $validated['status'] ?? 'ativa',
-                'data_inicio' => $validated['data_inicio'] ?? now(),
-                'data_fim' => $validated['data_fim'],
-                'valor_pago' => $validated['valor_pago'] ?? 0,
-                'metodo_pagamento' => $validated['metodo_pagamento'] ?? 'gratuito',
-                'dias_grace_period' => 7,
             ]);
 
-            // Atualizar tenant se for a primeira assinatura ou se não tiver assinatura atual
-            if (!$tenant->assinatura_atual_id || $validated['status'] === 'ativa') {
-                $tenant->update([
-                    'plano_atual_id' => $plano->id,
-                    'assinatura_atual_id' => $assinatura->id,
-                ]);
-            }
+            // Executar Use Case (contém toda a lógica de negócio)
+            $assinatura = $this->criarAssinaturaUseCase->executar($dto);
+
+            // Transformar entidade em DTO de resposta
+            $responseDTO = $this->assinaturaResource->toResponse($assinatura);
 
             return response()->json([
                 'message' => 'Assinatura criada com sucesso',
-                'data' => [
-                    'id' => $assinatura->id,
-                    'status' => $assinatura->status,
-                    'data_fim' => $assinatura->data_fim->format('Y-m-d'),
-                ],
+                'data' => $responseDTO->toArray(),
             ], 201);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 400);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'message' => 'Erro de validação',
@@ -256,36 +214,37 @@ class AssinaturaController extends BaseApiController
 
     /**
      * Renova assinatura
-     * Usa Form Request para validação
+     * Usa Form Request para validação e Use Case para lógica de negócio
      */
     public function renovar(RenovarAssinaturaRequest $request, $assinatura): JsonResponse
     {
         try {
-            // Request já está validado via Form Request
-            $validated = $request->validated();
-
             // Obter tenant automaticamente (middleware já inicializou)
             $tenant = $this->getTenantOrFail();
 
             // Buscar assinatura usando repository (DDD)
-            $assinaturaModel = $this->assinaturaRepository->buscarModeloPorId($assinatura);
-            if (!$assinaturaModel) {
+            $assinaturaDomain = $this->assinaturaRepository->buscarPorId($assinatura);
+            if (!$assinaturaDomain) {
                 return response()->json(['message' => 'Assinatura não encontrada'], 404);
             }
 
             // Validar que a assinatura pertence ao tenant
-            if ($assinaturaModel->tenant_id !== $tenant->id) {
+            if ($assinaturaDomain->tenantId !== $tenant->id) {
                 return response()->json(['message' => 'Assinatura não encontrada'], 404);
             }
 
-            // Carregar plano
-            $plano = $assinaturaModel->plano;
-            if (!$plano) {
+            // Buscar modelo para acessar relacionamento com plano (necessário para renovação)
+            $assinaturaModel = $this->assinaturaRepository->buscarModeloPorId($assinatura);
+            if (!$assinaturaModel || !$assinaturaModel->plano) {
                 return response()->json(['message' => 'Plano da assinatura não encontrado'], 404);
             }
 
+            // Request já está validado via Form Request
+            $validated = $request->validated();
+
             // Calcular valor
             $meses = $validated['meses'];
+            $plano = $assinaturaModel->plano;
             $valor = $meses === 12 && $plano->preco_anual 
                 ? $plano->preco_anual 
                 : $plano->preco_mensal * $meses;
@@ -315,10 +274,22 @@ class AssinaturaController extends BaseApiController
                 $meses
             );
 
+            // Buscar entidade renovada e transformar em DTO
+            $assinaturaRenovadaDomain = $this->assinaturaRepository->buscarPorId($assinaturaRenovada->id);
+            if ($assinaturaRenovadaDomain) {
+                $responseDTO = $this->assinaturaResource->toResponse($assinaturaRenovadaDomain);
+                
+                return response()->json([
+                    'message' => 'Assinatura renovada com sucesso',
+                    'data' => $responseDTO->toArray(),
+                ], 200);
+            }
+
+            // Fallback: retornar dados do modelo se não conseguir buscar entidade
             return response()->json([
                 'message' => 'Assinatura renovada com sucesso',
                 'data' => [
-                    'assinatura_id' => $assinaturaRenovada->id,
+                    'id' => $assinaturaRenovada->id,
                     'status' => $assinaturaRenovada->status,
                     'data_fim' => $assinaturaRenovada->data_fim->format('Y-m-d'),
                     'dias_restantes' => $assinaturaRenovada->diasRestantes(),
@@ -330,28 +301,22 @@ class AssinaturaController extends BaseApiController
                 'message' => 'Erro de validação',
                 'errors' => $e->errors(),
             ], 422);
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+        } catch (\App\Domain\Exceptions\NotFoundException $e) {
             return response()->json([
-                'message' => 'Assinatura não encontrada',
+                'message' => $e->getMessage(),
             ], 404);
         } catch (\App\Domain\Exceptions\DomainException | \App\Domain\Exceptions\BusinessRuleException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
             ], 400);
         } catch (\Exception $e) {
-            \Log::error('Erro ao renovar assinatura', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-
-            return response()->json([
-                'message' => 'Erro ao renovar assinatura: ' . $e->getMessage(),
-            ], 500);
+            return $this->handleException($e, 'Erro ao renovar assinatura');
         }
     }
 
     /**
      * Cancela assinatura
+     * Usa Use Case para lógica de negócio
      */
     public function cancelar(Request $request, $assinatura): JsonResponse
     {
@@ -359,15 +324,27 @@ class AssinaturaController extends BaseApiController
             // Obter tenant automaticamente (middleware já inicializou)
             $tenant = $this->getTenantOrFail();
 
-            // Executar Use Case
-            $assinaturaCancelada = $this->cancelarAssinaturaUseCase->executar($tenant->id, $assinatura);
+            // Executar Use Case (retorna modelo, mas vamos buscar entidade para transformar)
+            $assinaturaCanceladaModel = $this->cancelarAssinaturaUseCase->executar($tenant->id, $assinatura);
 
+            // Buscar entidade cancelada e transformar em DTO
+            $assinaturaCanceladaDomain = $this->assinaturaRepository->buscarPorId($assinaturaCanceladaModel->id);
+            if ($assinaturaCanceladaDomain) {
+                $responseDTO = $this->assinaturaResource->toResponse($assinaturaCanceladaDomain);
+                
+                return response()->json([
+                    'message' => 'Assinatura cancelada com sucesso',
+                    'data' => $responseDTO->toArray(),
+                ], 200);
+            }
+
+            // Fallback: retornar dados do modelo
             return response()->json([
                 'message' => 'Assinatura cancelada com sucesso',
                 'data' => [
-                    'id' => $assinaturaCancelada->id,
-                    'status' => $assinaturaCancelada->status,
-                    'data_cancelamento' => $assinaturaCancelada->data_cancelamento?->format('Y-m-d H:i:s'),
+                    'id' => $assinaturaCanceladaModel->id,
+                    'status' => $assinaturaCanceladaModel->status,
+                    'data_cancelamento' => $assinaturaCanceladaModel->data_cancelamento?->format('Y-m-d H:i:s'),
                 ],
             ], 200);
         } catch (\App\Domain\Exceptions\NotFoundException $e) {

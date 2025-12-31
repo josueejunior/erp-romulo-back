@@ -47,5 +47,13 @@ interface AssinaturaRepositoryInterface
      * @return \App\Modules\Assinatura\Models\Assinatura|null
      */
     public function buscarModeloPorTransacaoId(string $transacaoId): ?\App\Modules\Assinatura\Models\Assinatura;
+
+    /**
+     * Salvar assinatura (criar ou atualizar)
+     * 
+     * @param Assinatura $assinatura Entidade do domínio
+     * @return Assinatura Entidade salva com ID
+     */
+    public function salvar(Assinatura $assinatura): Assinatura;
 }
 

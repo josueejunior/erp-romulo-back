@@ -163,5 +163,46 @@ public function buscarAssinaturaAtual(int $tenantId): ?Assinatura
             ->where('transacao_id', $transacaoId)
             ->first();
     }
+
+    /**
+     * Salvar assinatura (criar ou atualizar)
+     */
+    public function salvar(Assinatura $assinatura): Assinatura
+    {
+        if ($assinatura->id) {
+            // Atualizar
+            $model = AssinaturaModel::findOrFail($assinatura->id);
+            $model->update([
+                'tenant_id' => $assinatura->tenantId,
+                'plano_id' => $assinatura->planoId,
+                'status' => $assinatura->status,
+                'data_inicio' => $assinatura->dataInicio,
+                'data_fim' => $assinatura->dataFim,
+                'data_cancelamento' => $assinatura->dataCancelamento,
+                'valor_pago' => $assinatura->valorPago,
+                'metodo_pagamento' => $assinatura->metodoPagamento,
+                'transacao_id' => $assinatura->transacaoId,
+                'dias_grace_period' => $assinatura->diasGracePeriod,
+                'observacoes' => $assinatura->observacoes,
+            ]);
+        } else {
+            // Criar
+            $model = AssinaturaModel::create([
+                'tenant_id' => $assinatura->tenantId,
+                'plano_id' => $assinatura->planoId,
+                'status' => $assinatura->status,
+                'data_inicio' => $assinatura->dataInicio ?? now(),
+                'data_fim' => $assinatura->dataFim,
+                'data_cancelamento' => $assinatura->dataCancelamento,
+                'valor_pago' => $assinatura->valorPago ?? 0,
+                'metodo_pagamento' => $assinatura->metodoPagamento ?? 'gratuito',
+                'transacao_id' => $assinatura->transacaoId,
+                'dias_grace_period' => $assinatura->diasGracePeriod ?? 7,
+                'observacoes' => $assinatura->observacoes,
+            ]);
+        }
+
+        return $this->toDomain($model->fresh());
+    }
 }
 
