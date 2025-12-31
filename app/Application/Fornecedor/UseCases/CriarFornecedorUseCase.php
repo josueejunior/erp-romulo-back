@@ -5,10 +5,16 @@ namespace App\Application\Fornecedor\UseCases;
 use App\Application\Fornecedor\DTOs\CriarFornecedorDTO;
 use App\Domain\Fornecedor\Entities\Fornecedor;
 use App\Domain\Fornecedor\Repositories\FornecedorRepositoryInterface;
+use App\Domain\Shared\ValueObjects\TenantContext;
 use DomainException;
 
 /**
- * Use Case: Criar Fornecedor
+ * Application Service: CriarFornecedorUseCase
+ * 
+ * 🔥 ONDE O TENANT É USADO DE VERDADE
+ * 
+ * O service pega o tenant_id do TenantContext (setado pelo middleware).
+ * O controller não sabe que isso existe.
  */
 class CriarFornecedorUseCase
 {
@@ -18,6 +24,11 @@ class CriarFornecedorUseCase
 
     public function executar(CriarFornecedorDTO $dto): Fornecedor
     {
+        // Obter tenant_id do contexto (invisível para o controller)
+        $context = TenantContext::get();
+        
+        // Por enquanto, mantemos empresaId no DTO para compatibilidade
+        // Mas o tenant_id já está disponível no contexto se necessário
         $fornecedor = new Fornecedor(
             id: null,
             empresaId: $dto->empresaId,

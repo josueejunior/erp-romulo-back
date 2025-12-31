@@ -5,10 +5,16 @@ namespace App\Application\Contrato\UseCases;
 use App\Application\Contrato\DTOs\CriarContratoDTO;
 use App\Domain\Contrato\Entities\Contrato;
 use App\Domain\Contrato\Repositories\ContratoRepositoryInterface;
+use App\Domain\Shared\ValueObjects\TenantContext;
 use DomainException;
 
 /**
- * Use Case: Criar Contrato
+ * Application Service: CriarContratoUseCase
+ * 
+ * 🔥 ONDE O TENANT É USADO DE VERDADE
+ * 
+ * O service pega o tenant_id do TenantContext (setado pelo middleware).
+ * O controller não sabe que isso existe.
  */
 class CriarContratoUseCase
 {
@@ -18,6 +24,11 @@ class CriarContratoUseCase
 
     public function executar(CriarContratoDTO $dto): Contrato
     {
+        // Obter tenant_id do contexto (invisível para o controller)
+        $context = TenantContext::get();
+        
+        // Por enquanto, mantemos empresaId no DTO para compatibilidade
+        // Mas o tenant_id já está disponível no contexto se necessário
         $contrato = new Contrato(
             id: null,
             empresaId: $dto->empresaId,

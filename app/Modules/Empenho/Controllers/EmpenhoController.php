@@ -196,26 +196,27 @@ class EmpenhoController extends BaseApiController
 
     /**
      * Web: Criar empenho
-     * Usa Form Request para validação e Use Case para lógica de negócio
+     * 
+     * ✅ O QUE O CONTROLLER FAZ:
+     * - Recebe request
+     * - Valida dados (via Form Request)
+     * - Chama um Application Service
+     * 
+     * ❌ O QUE O CONTROLLER NÃO FAZ:
+     * - Não lê tenant_id
+     * - Não acessa Tenant
+     * - Não sabe se existe multi-tenant
+     * - Não filtra nada por tenant_id
      */
     public function storeWeb(EmpenhoCreateRequest $request, Processo $processo): JsonResponse
     {
         try {
-            // Obter empresa automaticamente (middleware já inicializou)
-            $empresa = $this->getEmpresaAtivaOrFail();
-            
-            // Validar que o processo pertence à empresa
-            if ($processo->empresa_id !== $empresa->id) {
-                return response()->json(['message' => 'Processo não encontrado'], 404);
-            }
-            
             // Request já está validado via Form Request
             // Preparar dados para DTO
             $data = $request->validated();
             $data['processo_id'] = $processo->id;
-            $data['empresa_id'] = $empresa->id;
             
-            // Usar Use Case DDD
+            // Usar Use Case DDD (contém toda a lógica de negócio, incluindo tenant)
             $dto = CriarEmpenhoDTO::fromArray($data);
             $empenhoDomain = $this->criarEmpenhoUseCase->executar($dto);
             

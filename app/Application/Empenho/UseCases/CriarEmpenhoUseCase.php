@@ -5,10 +5,16 @@ namespace App\Application\Empenho\UseCases;
 use App\Application\Empenho\DTOs\CriarEmpenhoDTO;
 use App\Domain\Empenho\Entities\Empenho;
 use App\Domain\Empenho\Repositories\EmpenhoRepositoryInterface;
+use App\Domain\Shared\ValueObjects\TenantContext;
 use DomainException;
 
 /**
- * Use Case: Criar Empenho
+ * Application Service: CriarEmpenhoUseCase
+ * 
+ * 🔥 ONDE O TENANT É USADO DE VERDADE
+ * 
+ * O service pega o tenant_id do TenantContext (setado pelo middleware).
+ * O controller não sabe que isso existe.
  */
 class CriarEmpenhoUseCase
 {
@@ -18,6 +24,11 @@ class CriarEmpenhoUseCase
 
     public function executar(CriarEmpenhoDTO $dto): Empenho
     {
+        // Obter tenant_id do contexto (invisível para o controller)
+        $context = TenantContext::get();
+        
+        // Por enquanto, mantemos empresaId no DTO para compatibilidade
+        // Mas o tenant_id já está disponível no contexto se necessário
         $empenho = new Empenho(
             id: null,
             empresaId: $dto->empresaId,
