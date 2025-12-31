@@ -175,6 +175,60 @@ class UserController extends BaseApiController
             // Se encontrou um tenant diferente, usar esse; senão, usar o atual
             $tenantId = $tenantIdCorreto ?? $context->tenantId;
             
+            // 🔥 DEBUG: Buscar informações do tenant para retornar
+            $tenantInfo = null;
+            if ($tenantId) {
+                $tenantModel = \App\Models\Tenant::find($tenantId);
+                if ($tenantModel) {
+                    $tenantInfo = [
+                        'id' => $tenantModel->id,
+                        'razao_social' => $tenantModel->razao_social,
+                        'cnpj' => $tenantModel->cnpj,
+                        'database' => $tenantModel->database()->getName(),
+                    ];
+                }
+            }
+            
+            // 🔥 DEBUG: Buscar informações da empresa para retornar
+            $empresaInfo = null;
+            if ($tenantId && $novaEmpresaId) {
+                try {
+                    $tenantModel = \App\Models\Tenant::find($tenantId);
+                    if ($tenantModel) {
+                        $jaInicializado = tenancy()->initialized;
+                        $tenantAtual = tenancy()->tenant;
+                        $precisaReinicializar = !$jaInicializado || ($tenantAtual && $tenantAtual->id !== $tenantId);
+                        
+                        if ($precisaReinicializar) {
+                            if ($jaInicializado) {
+                                tenancy()->end();
+                            }
+                            tenancy()->initialize($tenantModel);
+                        }
+                        
+                        $empresaModel = \App\Models\Empresa::find($novaEmpresaId);
+                        if ($empresaModel) {
+                            $empresaInfo = [
+                                'id' => $empresaModel->id,
+                                'razao_social' => $empresaModel->razao_social,
+                                'cnpj' => $empresaModel->cnpj,
+                                'status' => $empresaModel->status,
+                            ];
+                        }
+                        
+                        if ($precisaReinicializar && tenancy()->initialized) {
+                            tenancy()->end();
+                        }
+                    }
+                } catch (\Exception $e) {
+                    \Log::error('UserController::switchEmpresaAtiva() - Erro ao buscar empresa', [
+                        'error' => $e->getMessage(),
+                        'tenant_id' => $tenantId,
+                        'empresa_id' => $novaEmpresaId,
+                    ]);
+                }
+            }
+            
             \Log::info('UserController::switchEmpresaAtiva() - Retornando tenant_id', [
                 'tenant_id_retornado' => $tenantId,
                 'tenant_id_contexto' => $context->tenantId,
@@ -182,6 +236,8 @@ class UserController extends BaseApiController
                 'empresa_ativa_id' => $usuarioDomain->empresaAtivaId,
                 'tenancy_initialized' => tenancy()->initialized,
                 'tenant_mudou' => $tenantIdCorreto !== null && $tenantIdCorreto !== $context->tenantId,
+                'tenant_info' => $tenantInfo,
+                'empresa_info' => $empresaInfo,
             ]);
 
             return response()->json([
@@ -189,6 +245,15 @@ class UserController extends BaseApiController
                 'data' => [
                     'empresa_ativa_id' => $usuarioDomain->empresaAtivaId,
                     'tenant_id' => $tenantId, // Retornar tenant_id correto da empresa ativa
+                    // 🔥 DEBUG: Informações adicionais para debug
+                    'tenant' => $tenantInfo,
+                    'empresa' => $empresaInfo,
+                    'debug' => [
+                        'tenant_id_contexto' => $context->tenantId,
+                        'tenant_id_empresa_encontrado' => $tenantIdCorreto,
+                        'tenant_id_final' => $tenantId,
+                        'tenant_mudou' => $tenantIdCorreto !== null && $tenantIdCorreto !== $context->tenantId,
+                    ],
                 ],
             ]);
         } catch (\Exception $e) {
