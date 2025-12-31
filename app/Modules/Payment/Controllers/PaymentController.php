@@ -54,6 +54,33 @@ class PaymentController extends BaseApiController
                 ? $plano->preco_anual 
                 : $plano->preco_mensal;
 
+            // Aplicar cupom se fornecido
+            $cupomAplicado = null;
+            $valorDesconto = 0;
+            if (isset($validated['cupom_codigo'])) {
+                $cupom = \App\Modules\Assinatura\Models\Cupom::where('codigo', strtoupper($validated['cupom_codigo']))->first();
+                
+                if ($cupom) {
+                    $validacao = $cupom->podeSerUsadoPor($tenant->id, $plano->id, $valor);
+                    
+                    if ($validacao['valido']) {
+                        $valorDesconto = $cupom->calcularDesconto($valor);
+                        $valor = max(0, $valor - $valorDesconto);
+                        $cupomAplicado = $cupom;
+                        
+                        Log::info('Cupom aplicado com sucesso', [
+                            'cupom' => $cupom->codigo,
+                            'desconto' => $valorDesconto,
+                            'valor_final' => $valor,
+                        ]);
+                    } else {
+                        return response()->json([
+                            'message' => $validacao['motivo']
+                        ], 400);
+                    }
+                }
+            }
+
             $isGratis = ($valor === null || $valor == 0);
 
             // Se for gratuito, criar assinatura diretamente sem passar pelo gateway
@@ -141,6 +168,22 @@ class PaymentController extends BaseApiController
                 $paymentRequest,
                 $validated['periodo']
             );
+
+            // Registrar uso do cupom se aplicado
+            if ($cupomAplicado && $valorDesconto > 0) {
+                \App\Modules\Assinatura\Models\CupomUso::create([
+                    'cupom_id' => $cupomAplicado->id,
+                    'tenant_id' => $tenant->id,
+                    'assinatura_id' => $assinatura->id,
+                    'valor_desconto_aplicado' => $valorDesconto,
+                    'valor_original' => $valor + $valorDesconto,
+                    'valor_final' => $valor,
+                    'usado_em' => now(),
+                ]);
+
+                // Incrementar contador de uso
+                $cupomAplicado->increment('total_usado');
+            }
 
             // Buscar resultado do pagamento para incluir dados do PIX se disponível
             $paymentLog = \App\Models\PaymentLog::where('external_id', $assinatura->transacao_id)->first();

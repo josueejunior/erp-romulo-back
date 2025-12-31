@@ -88,6 +88,9 @@ Route::prefix('v1')->group(function () {
             Route::post('/{assinatura}/cancelar', [ApiAssinaturaController::class, 'cancelar']);
         });
 
+        // Cupons
+        Route::get('/cupons/{codigo}/validar', [\App\Modules\Assinatura\Controllers\CupomController::class, 'validar']);
+
         Route::prefix('payments')->group(function () {
             Route::post('/processar-assinatura', [ApiPaymentController::class, 'processarAssinatura']);
         });
@@ -337,6 +340,14 @@ Route::prefix('admin')->group(function () {
                 ->where(['tenantId' => '[0-9]+', 'assinaturaId' => '[0-9]+']);
             Route::put('/{tenantId}/{assinaturaId}', [\App\Http\Controllers\Admin\AdminAssinaturaController::class, 'update'])
                 ->where(['tenantId' => '[0-9]+', 'assinaturaId' => '[0-9]+']);
+        });
+
+        // Gerenciamento de cupons
+        Route::prefix('cupons')->group(function () {
+            Route::get('/', [\App\Modules\Assinatura\Controllers\CupomController::class, 'index']);
+            Route::post('/', [\App\Modules\Assinatura\Controllers\CupomController::class, 'store']);
+            Route::put('/{cupom}', [\App\Modules\Assinatura\Controllers\CupomController::class, 'update']);
+            Route::delete('/{cupom}', [\App\Modules\Assinatura\Controllers\CupomController::class, 'destroy']);
         });
 
         // Upload de arquivos

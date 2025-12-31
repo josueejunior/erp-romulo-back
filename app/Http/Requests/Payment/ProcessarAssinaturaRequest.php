@@ -31,7 +31,8 @@ class ProcessarAssinaturaRequest extends FormRequest
             'periodo' => 'required|string|in:mensal,anual',
             'payer_email' => 'required|email',
             'payer_cpf' => 'nullable|string',
-            'payment_method' => 'nullable|string|in:credit_card,pix', // Método de pagamento
+            'payment_method' => 'nullable|string|in:credit_card,pix,boleto', // Método de pagamento
+            'cupom_codigo' => 'nullable|string|max:50', // Código do cupom de desconto
         ];
 
         // Validações para planos pagos
