@@ -11,6 +11,7 @@ use App\Application\Setor\UseCases\BuscarSetorUseCase;
 use App\Application\Setor\UseCases\DeletarSetorUseCase;
 use App\Application\Setor\DTOs\CriarSetorDTO;
 use App\Application\Setor\DTOs\AtualizarSetorDTO;
+use App\Domain\Shared\ValueObjects\TenantContext;
 use Illuminate\Http\Request;
 use App\Helpers\PermissionHelper;
 use App\Services\RedisService;
@@ -38,6 +39,18 @@ class SetorController extends BaseApiController
         }
 
         $tenantId = tenancy()->tenant?->id;
+
+        // Garantir que o TenantContext tenha empresa_id antes de chamar o use case
+        try {
+            if (!TenantContext::has() || TenantContext::get()->empresaId === null) {
+                $empresa = $this->getEmpresaAtivaOrFail();
+                if ($tenantId) {
+                    TenantContext::set($tenantId, $empresa->id);
+                }
+            }
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao determinar empresa ativa');
+        }
         
         // Criar chave de cache baseada nos filtros
         $filters = array_merge($request->all(), $mergeParams);
