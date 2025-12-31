@@ -41,6 +41,9 @@ class UserReadRepository implements UserReadRepositoryInterface
             }
         }
 
+        // Calcular total de empresas para tag de multi-vínculo
+        $totalEmpresas = count($empresas);
+
         return [
             'id' => $user->id,
             'name' => $user->name,
@@ -51,6 +54,56 @@ class UserReadRepository implements UserReadRepositoryInterface
             'roles_list' => $roles, // Frontend espera isso também
             'empresas' => $empresas, // Garantir que seja array
             'empresas_list' => $empresas, // Frontend espera isso também
+            'total_empresas' => $totalEmpresas, // 🔥 Tag de multi-vínculo: +2 empresas
+            'is_multi_empresa' => $totalEmpresas > 1, // Flag para facilitar no frontend
+        ];
+    }
+
+    /**
+     * Buscar usuário por email
+     * Usado para vincular usuário existente a uma nova empresa
+     */
+    public function buscarPorEmail(string $email): ?array
+    {
+        $user = UserModel::with(['empresas', 'roles'])->where('email', $email)->first();
+        
+        if (!$user) {
+            return null;
+        }
+
+        // Reutilizar lógica do buscarComRelacionamentos
+        $empresas = $user->empresas->map(fn($e) => [
+            'id' => $e->id,
+            'razao_social' => $e->razao_social,
+        ])->toArray();
+
+        $roles = $user->roles->pluck('name')->toArray();
+
+        $empresaAtiva = null;
+        if ($user->empresa_ativa_id) {
+            $empresaAtivaModel = $user->empresas->firstWhere('id', $user->empresa_ativa_id);
+            if ($empresaAtivaModel) {
+                $empresaAtiva = [
+                    'id' => $empresaAtivaModel->id,
+                    'razao_social' => $empresaAtivaModel->razao_social,
+                ];
+            }
+        }
+
+        $totalEmpresas = count($empresas);
+
+        return [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'empresa_ativa_id' => $user->empresa_ativa_id,
+            'empresa_ativa' => $empresaAtiva,
+            'roles' => $roles,
+            'roles_list' => $roles,
+            'empresas' => $empresas,
+            'empresas_list' => $empresas,
+            'total_empresas' => $totalEmpresas,
+            'is_multi_empresa' => $totalEmpresas > 1,
         ];
     }
 
@@ -66,6 +119,14 @@ class UserReadRepository implements UserReadRepositoryInterface
             'tenant_razao_social' => tenancy()->tenant?->razao_social ?? 'N/A',
             'tenancy_initialized' => tenancy()->initialized,
         ]);
+
+        // 🔥 UX: Filtrar por empresa específica quando solicitado
+        // Mostra APENAS usuários vinculados àquela empresa
+        if (isset($filtros['empresa_id']) && $filtros['empresa_id']) {
+            $query->whereHas('empresas', function($q) use ($filtros) {
+                $q->where('empresas.id', $filtros['empresa_id']);
+            });
+        }
 
         if (isset($filtros['search']) && !empty($filtros['search'])) {
             $search = $filtros['search'];
@@ -103,6 +164,9 @@ class UserReadRepository implements UserReadRepositoryInterface
                 $user->load('empresas');
             }
             
+            // Calcular total de empresas para tag de multi-vínculo
+            $totalEmpresas = $user->empresas->count();
+            
             return [
                 'id' => $user->id,
                 'name' => $user->name,
@@ -112,6 +176,8 @@ class UserReadRepository implements UserReadRepositoryInterface
                 'roles_list' => $user->roles->pluck('name')->toArray(), // Frontend espera isso
                 'empresas' => $user->empresas->map(fn($e) => ['id' => $e->id, 'razao_social' => $e->razao_social])->toArray(),
                 'empresas_list' => $user->empresas->map(fn($e) => ['id' => $e->id, 'razao_social' => $e->razao_social])->toArray(), // Frontend espera isso
+                'total_empresas' => $totalEmpresas, // 🔥 Tag de multi-vínculo: +2 empresas
+                'is_multi_empresa' => $totalEmpresas > 1, // Flag para facilitar no frontend
                 'deleted_at' => $user->deleted_at?->toISOString() ?? null,
             ];
         })->values()->toArray();

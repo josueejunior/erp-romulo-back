@@ -20,5 +20,11 @@ interface UserReadRepositoryInterface
      * Listar usuários com relacionamentos
      */
     public function listarComRelacionamentos(array $filtros = []): LengthAwarePaginator;
+
+    /**
+     * Buscar usuário por email
+     * Usado para vincular usuário existente a uma nova empresa
+     */
+    public function buscarPorEmail(string $email): ?array;
 }
 

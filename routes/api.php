@@ -275,6 +275,7 @@ Route::prefix('admin')->group(function () {
                 ->middleware([\App\Http\Middleware\InitializeTenant::class])
                 ->group(function () {
                     Route::get('/', [AdminUserController::class, 'index']);
+                    Route::get('/buscar-por-email', [AdminUserController::class, 'buscarPorEmail']); // 🔥 Buscar usuário existente para vincular
                     Route::get('/{userId}', [AdminUserController::class, 'show'])->where('userId', '[0-9]+');
                     Route::post('/', [AdminUserController::class, 'store']);
                     Route::put('/{userId}', [AdminUserController::class, 'update'])->where('userId', '[0-9]+');

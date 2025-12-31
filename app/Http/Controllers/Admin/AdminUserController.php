@@ -288,13 +288,20 @@ class AdminUserController extends Controller
                 'current_tenant_id' => tenancy()->tenant?->id,
             ]);
 
+            // 🔥 UX: Filtrar por empresa específica quando solicitado
+            // Comportamento:
+            // - Se empresa_id for passado via query param: mostrar APENAS usuários vinculados àquela empresa
+            // - Se não for passado: mostrar TODOS os usuários do tenant (todas as empresas)
+            // Frontend deve passar empresa_id quando estiver na tela de uma empresa específica
             $filtros = [
                 'search' => $request->search,
                 'per_page' => $request->per_page ?? 15,
+                'empresa_id' => $request->empresa_id ? (int) $request->empresa_id : null, // Filtro opcional por empresa específica
             ];
 
             \Log::info('AdminUserController::index - Filtros preparados', [
                 'filtros' => $filtros,
+                'contexto_empresa' => $filtros['empresa_id'] ? 'filtrado_por_empresa' : 'todos_usuarios',
             ]);
 
             // Usar ReadRepository (não conhece Eloquent)
@@ -633,6 +640,47 @@ class AdminUserController extends Controller
         } catch (\Exception $e) {
             Log::error('Erro ao reativar usuário', ['error' => $e->getMessage()]);
             return response()->json(['message' => 'Erro ao reativar usuário.'], 500);
+        }
+    }
+
+    /**
+     * Buscar usuário por email (para vincular a empresa existente)
+     * 
+     * 🔥 UX: Permite buscar usuário já existente no sistema para apenas vinculá-lo
+     * a uma nova empresa, em vez de criar um duplicado.
+     * 
+     * Usado quando: "Novo Usuário" dentro de uma empresa específica
+     */
+    public function buscarPorEmail(Request $request, Tenant $tenant)
+    {
+        try {
+            $request->validate([
+                'email' => 'required|email',
+            ]);
+
+            $email = $request->input('email');
+            
+            // Buscar usuário por email no tenant atual
+            $user = $this->userReadRepository->buscarPorEmail($email);
+            
+            if (!$user) {
+                return response()->json([
+                    'message' => 'Usuário não encontrado com este e-mail.',
+                    'data' => null,
+                ], 404);
+            }
+
+            // Retornar dados do usuário (sem senha)
+            return ApiResponse::item($user);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'message' => 'Dados inválidos.',
+                'errors' => $e->errors(),
+                'success' => false,
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('Erro ao buscar usuário por email', ['error' => $e->getMessage()]);
+            return response()->json(['message' => 'Erro ao buscar usuário.'], 500);
         }
     }
 
