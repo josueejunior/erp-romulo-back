@@ -160,6 +160,11 @@ class AppServiceProvider extends ServiceProvider
             \App\Infrastructure\Persistence\Eloquent\OrcamentoItemRepository::class
         );
 
+        $this->app->bind(
+            \App\Domain\OrgaoResponsavel\Repositories\OrgaoResponsavelRepositoryInterface::class,
+            \App\Infrastructure\Persistence\Eloquent\OrgaoResponsavelRepository::class
+        );
+
         // Domain Services
         $this->app->bind(
             \App\Domain\Auth\Services\UserRoleServiceInterface::class,

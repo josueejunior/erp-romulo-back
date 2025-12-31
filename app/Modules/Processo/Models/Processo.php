@@ -9,6 +9,7 @@ use App\Models\Traits\HasSoftDeletesWithEmpresa;
 use App\Models\Concerns\BelongsToEmpresa;
 use App\Models\Empresa;
 use App\Modules\Orgao\Models\Orgao;
+use App\Modules\Orgao\Models\OrgaoResponsavel;
 use App\Modules\Orgao\Models\Setor;
 use App\Modules\Contrato\Models\Contrato;
 use App\Modules\AutorizacaoFornecimento\Models\AutorizacaoFornecimento;
@@ -23,6 +24,7 @@ class Processo extends BaseModel
     protected $fillable = [
         'empresa_id',
         'orgao_id',
+        'orgao_responsavel_id',
         'setor_id',
         'modalidade',
         'numero_modalidade',
@@ -85,6 +87,11 @@ class Processo extends BaseModel
     public function setor(): BelongsTo
     {
         return $this->belongsTo(Setor::class);
+    }
+
+    public function orgaoResponsavel(): BelongsTo
+    {
+        return $this->belongsTo(OrgaoResponsavel::class);
     }
 
     public function itens(): HasMany

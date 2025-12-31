@@ -198,8 +198,15 @@ Route::prefix('v1')->group(function () {
             });
             
             // Cadastros
-            Route::module('orgaos', ApiOrgaoController::class, 'orgao')
-                ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
+            Route::module('orgaos', ApiOrgaoController::class, 'orgao');
+            
+            // Rotas para responsáveis de órgãos
+            Route::prefix('orgaos/{orgao}')->group(function () {
+                Route::get('responsaveis', [\App\Modules\Orgao\Controllers\OrgaoResponsavelController::class, 'index']);
+                Route::post('responsaveis', [\App\Modules\Orgao\Controllers\OrgaoResponsavelController::class, 'store']);
+                Route::put('responsaveis/{responsavel}', [\App\Modules\Orgao\Controllers\OrgaoResponsavelController::class, 'update']);
+                Route::delete('responsaveis/{responsavel}', [\App\Modules\Orgao\Controllers\OrgaoResponsavelController::class, 'destroy']);
+            });
             
             Route::module('setors', ApiSetorController::class, 'setor')
                 ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);

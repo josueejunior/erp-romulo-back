@@ -3,52 +3,38 @@
 namespace App\Modules\Orgao\Models;
 
 use App\Models\BaseModel;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Models\Traits\HasSoftDeletesWithEmpresa;
 use App\Models\Traits\HasTimestampsCustomizados;
 use App\Models\Traits\BelongsToEmpresaTrait;
 use App\Modules\Processo\Models\Processo;
-use App\Modules\Orgao\Models\Setor;
-use App\Modules\Orgao\Models\OrgaoResponsavel;
 
-class Orgao extends BaseModel
+class OrgaoResponsavel extends BaseModel
 {
     use HasSoftDeletesWithEmpresa, HasTimestampsCustomizados, BelongsToEmpresaTrait;
     
     public $timestamps = true;
 
+    protected $table = 'orgao_responsaveis';
+
     protected $fillable = [
         'empresa_id',
-        'uasg',
-        'razao_social',
-        'cnpj',
-        'cep',
-        'logradouro',
-        'numero',
-        'bairro',
-        'complemento',
-        'cidade',
-        'estado',
-        'email',
-        'telefone',
+        'orgao_id',
+        'nome',
+        'cargo',
         'emails',
         'telefones',
         'observacoes',
     ];
 
-    public function setors(): HasMany
+    public function orgao(): BelongsTo
     {
-        return $this->hasMany(Setor::class);
+        return $this->belongsTo(Orgao::class);
     }
 
-    public function processos(): HasMany
+    public function processos(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
-        return $this->hasMany(Processo::class);
-    }
-
-    public function responsaveis(): HasMany
-    {
-        return $this->hasMany(OrgaoResponsavel::class);
+        return $this->hasMany(Processo::class, 'orgao_responsavel_id');
     }
 
     protected function casts(): array
@@ -59,5 +45,4 @@ class Orgao extends BaseModel
         ]);
     }
 }
-
 
