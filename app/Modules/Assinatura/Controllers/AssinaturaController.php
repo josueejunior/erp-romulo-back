@@ -3,6 +3,7 @@
 namespace App\Modules\Assinatura\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
+use App\Http\Controllers\Traits\HasAuthContext;
 use App\Application\Assinatura\UseCases\BuscarAssinaturaAtualUseCase;
 use App\Application\Assinatura\UseCases\ObterStatusAssinaturaUseCase;
 use App\Application\Assinatura\UseCases\ListarAssinaturasUseCase;
@@ -19,9 +20,15 @@ use Illuminate\Http\JsonResponse;
  * 
  * Refatorado para usar DDD (Domain-Driven Design)
  * Organizado por módulo seguindo Arquitetura Hexagonal
+ * 
+ * Segue o mesmo padrão do OrgaoController:
+ * - Tenant ID: Obtido automaticamente via tenancy()->tenant (middleware já inicializou)
+ * - Empresa ID: Obtido automaticamente via getEmpresaAtivaOrFail() ou getEmpresaId()
  */
 class AssinaturaController extends BaseApiController
 {
+    use HasAuthContext;
+
     public function __construct(
         private BuscarAssinaturaAtualUseCase $buscarAssinaturaAtualUseCase,
         private ObterStatusAssinaturaUseCase $obterStatusAssinaturaUseCase,
@@ -31,6 +38,24 @@ class AssinaturaController extends BaseApiController
         private AssinaturaRepositoryInterface $assinaturaRepository,
     ) {}
 
+    /**
+     * Obtém empresa_id do contexto (automático via BaseApiController)
+     * Retorna null se não conseguir obter (para permitir consulta de status sem empresa)
+     */
+    protected function getEmpresaIdOrNull(): ?int
+    {
+        try {
+            $empresa = $this->getEmpresaAtivaOrFail();
+            return $empresa->id;
+        } catch (\Exception $e) {
+            // Se não conseguir obter empresa, retornar null (para permitir consulta de status)
+            \Log::debug('AssinaturaController::getEmpresaIdOrNull() - Não foi possível obter empresa ativa', [
+                'error' => $e->getMessage()
+            ]);
+            return null;
+        }
+    }
+
 
     /**
      * Retorna assinatura atual do tenant
@@ -39,19 +64,8 @@ class AssinaturaController extends BaseApiController
     public function atual(Request $request): JsonResponse
     {
         try {
-            // Usar o tenant já inicializado pelo middleware (como OrgaoController faz)
-            // O middleware InitializeTenancyByRequestData já inicializou o tenant baseado no header X-Tenant-ID
-            $tenant = tenancy()->tenant;
-            
-            if (!$tenant) {
-                \Log::warning('AssinaturaController::atual() - Tenant não inicializado', [
-                    'X-Tenant-ID' => $request->header('X-Tenant-ID'),
-                    'tenancy_initialized' => tenancy()->initialized,
-                ]);
-                return response()->json([
-                    'message' => 'Tenant não encontrado ou não inicializado'
-                ], 404);
-            }
+            // Obter tenant automaticamente (middleware já inicializou)
+            $tenant = $this->getTenantOrFail();
 
             // Tentar buscar assinatura, mas não lançar erro se não encontrar
             try {
@@ -115,39 +129,11 @@ class AssinaturaController extends BaseApiController
     public function status(Request $request): JsonResponse
     {
         try {
-            // Usar o tenant já inicializado pelo middleware (como OrgaoController faz)
-            // O middleware InitializeTenancyByRequestData já inicializou o tenant baseado no header X-Tenant-ID
-            // E agora também reinicializa se o tenant mudar
-            $tenant = tenancy()->tenant;
+            // Obter tenant automaticamente (middleware já inicializou)
+            $tenant = $this->getTenantOrFail();
             
-            if (!$tenant) {
-                \Log::warning('AssinaturaController::status() - Tenant não inicializado', [
-                    'X-Tenant-ID' => $request->header('X-Tenant-ID'),
-                    'tenancy_initialized' => tenancy()->initialized,
-                ]);
-                return response()->json([
-                    'message' => 'Tenant não encontrado ou não inicializado'
-                ], 404);
-            }
-            
-            \Log::debug('AssinaturaController::status() - Usando tenant do contexto', [
-                'tenant_id' => $tenant->id,
-                'tenant_razao_social' => $tenant->razao_social,
-                'X-Tenant-ID' => $request->header('X-Tenant-ID'),
-                'X-Empresa-ID' => $request->header('X-Empresa-ID'),
-            ]);
-
-            // Tentar obter empresa, mas não falhar se não houver (para permitir consulta de status)
-            $empresaId = null;
-            try {
-                $empresa = $this->getEmpresaAtivaOrFail();
-                $empresaId = $empresa->id;
-            } catch (\Exception $e) {
-                // Se não conseguir obter empresa, continuar sem ela (para contagem de usuários)
-                \Log::debug('AssinaturaController::status() - Não foi possível obter empresa ativa', [
-                    'error' => $e->getMessage()
-                ]);
-            }
+            // Obter empresa_id automaticamente (pode ser null para permitir consulta de status)
+            $empresaId = $this->getEmpresaIdOrNull();
             
             // Tentar buscar status, mas não lançar erro se não encontrar assinatura
             try {
@@ -184,14 +170,8 @@ class AssinaturaController extends BaseApiController
     public function index(Request $request): JsonResponse
     {
         try {
-            // Usar o tenant já inicializado pelo middleware (como OrgaoController faz)
-            $tenant = tenancy()->tenant;
-            
-            if (!$tenant) {
-                return response()->json([
-                    'message' => 'Tenant não encontrado ou não inicializado'
-                ], 404);
-            }
+            // Obter tenant automaticamente (middleware já inicializou)
+            $tenant = $this->getTenantOrFail();
 
             // Preparar filtros
             $filtros = [];
@@ -226,11 +206,8 @@ class AssinaturaController extends BaseApiController
             // Request já está validado via Form Request
             $validated = $request->validated();
 
-            // Usar o tenant já inicializado pelo middleware (como OrgaoController faz)
-            $tenant = tenancy()->tenant;
-            if (!$tenant) {
-                return response()->json(['message' => 'Tenant não encontrado ou não inicializado'], 404);
-            }
+            // Obter tenant automaticamente (middleware já inicializou)
+            $tenant = $this->getTenantOrFail();
 
             // Buscar plano
             $plano = \App\Modules\Assinatura\Models\Plano::find($validated['plano_id']);
@@ -286,11 +263,8 @@ class AssinaturaController extends BaseApiController
             // Request já está validado via Form Request
             $validated = $request->validated();
 
-            // Usar o tenant já inicializado pelo middleware (como OrgaoController faz)
-            $tenant = tenancy()->tenant;
-            if (!$tenant) {
-                return response()->json(['message' => 'Tenant não encontrado ou não inicializado'], 404);
-            }
+            // Obter tenant automaticamente (middleware já inicializou)
+            $tenant = $this->getTenantOrFail();
 
             // Buscar assinatura usando repository (DDD)
             $assinaturaModel = $this->assinaturaRepository->buscarModeloPorId($assinatura);
@@ -381,11 +355,8 @@ class AssinaturaController extends BaseApiController
     public function cancelar(Request $request, $assinatura): JsonResponse
     {
         try {
-            // Usar o tenant já inicializado pelo middleware (como OrgaoController faz)
-            $tenant = tenancy()->tenant;
-            if (!$tenant) {
-                return response()->json(['message' => 'Tenant não encontrado ou não inicializado'], 404);
-            }
+            // Obter tenant automaticamente (middleware já inicializou)
+            $tenant = $this->getTenantOrFail();
 
             // Executar Use Case
             $assinaturaCancelada = $this->cancelarAssinaturaUseCase->executar($tenant->id, $assinatura);
