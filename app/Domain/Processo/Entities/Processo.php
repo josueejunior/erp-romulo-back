@@ -56,7 +56,21 @@ class Processo
             throw new DomainException('A empresa é obrigatória.');
         }
 
-        $statusValidos = ['rascunho', 'publicado', 'em_disputa', 'julgamento', 'execucao', 'vencido', 'arquivado'];
+        // Manter compatibilidade com nomenclaturas usadas nas camadas de aplicação/infra
+        $statusValidos = [
+            'rascunho',
+            'publicado',
+            'participacao',
+            'em_disputa',
+            'julgamento',
+            'julgamento_habilitacao',
+            'execucao',
+            'vencido',
+            'perdido',
+            'pagamento',
+            'encerramento',
+            'arquivado',
+        ];
         if (!in_array($this->status, $statusValidos)) {
             throw new DomainException('Status inválido. Status válidos: ' . implode(', ', $statusValidos));
         }
@@ -73,7 +87,7 @@ class Processo
      */
     public function estaEmExecucao(): bool
     {
-        return in_array($this->status, ['execucao', 'vencido']);
+        return in_array($this->status, ['execucao', 'vencido', 'pagamento', 'encerramento']);
     }
 
     /**
@@ -81,7 +95,7 @@ class Processo
      */
     public function podeEditar(): bool
     {
-        return !$this->estaEmExecucao();
+        return !$this->estaEmExecucao() && $this->status !== 'arquivado' && $this->status !== 'perdido';
     }
 
     /**
@@ -89,7 +103,7 @@ class Processo
      */
     public function podeMoverParaJulgamento(): bool
     {
-        return in_array($this->status, ['em_disputa', 'publicado']);
+        return in_array($this->status, ['participacao', 'em_disputa', 'publicado']);
     }
 
     /**
@@ -128,7 +142,7 @@ class Processo
             validadePropostaFim: $this->validadePropostaFim,
             tipoSelecaoFornecedor: $this->tipoSelecaoFornecedor,
             tipoDisputa: $this->tipoDisputa,
-            status: 'julgamento',
+            status: 'julgamento_habilitacao',
             statusParticipacao: $this->statusParticipacao,
             dataRecebimentoPagamento: $this->dataRecebimentoPagamento,
             observacoes: $this->observacoes,
