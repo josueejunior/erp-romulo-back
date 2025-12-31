@@ -140,6 +140,9 @@ class DocumentoHabilitacaoController extends BaseApiController
             $params = array_merge($request->all(), $mergeParams);
             $paramBag = $this->service->createFindByIdParamBag($params);
             $documento = $this->service->findById($id, $paramBag);
+            if ($documento) {
+                $documento->loadMissing('versoes');
+            }
             
             if (!$documento) {
                 return response()->json([
@@ -182,13 +185,9 @@ class DocumentoHabilitacaoController extends BaseApiController
 
             $validated = $validator->validated();
             
-            // Processar arquivo se presente
-            $nomeArquivo = null;
+            // Anexar arquivo para o service tratar versionamento
             if ($request->hasFile('arquivo')) {
-                $arquivo = $request->file('arquivo');
-                $nomeArquivo = time() . '_' . $arquivo->getClientOriginalName();
-                $arquivo->storeAs('documentos-habilitacao', $nomeArquivo, 'public');
-                $validated['arquivo'] = $nomeArquivo;
+                $validated['arquivo'] = $request->file('arquivo');
             }
 
             // Criar DTO e executar Use Case
@@ -197,6 +196,9 @@ class DocumentoHabilitacaoController extends BaseApiController
 
             // Buscar modelo para retornar com relacionamentos
             $model = $this->service->findById($documento->id);
+            if ($model) {
+                $model->loadMissing('versoes');
+            }
             
             return response()->json($model, 201);
         } catch (\DomainException $e) {
@@ -241,18 +243,9 @@ class DocumentoHabilitacaoController extends BaseApiController
 
             $validated = $validator->validated();
             
-            // Processar arquivo se presente
+            // Anexar arquivo para o service tratar versionamento (não deletar anterior)
             if ($request->hasFile('arquivo')) {
-                // Deletar arquivo antigo se existir
-                $documentoExistente = $this->service->findById($id);
-                if ($documentoExistente && $documentoExistente->arquivo) {
-                    Storage::disk('public')->delete('documentos-habilitacao/' . $documentoExistente->arquivo);
-                }
-                
-                $arquivo = $request->file('arquivo');
-                $nomeArquivo = time() . '_' . $arquivo->getClientOriginalName();
-                $arquivo->storeAs('documentos-habilitacao', $nomeArquivo, 'public');
-                $validated['arquivo'] = $nomeArquivo;
+                $validated['arquivo'] = $request->file('arquivo');
             }
 
             // Criar DTO e executar Use Case
@@ -261,6 +254,9 @@ class DocumentoHabilitacaoController extends BaseApiController
 
             // Buscar modelo para retornar com relacionamentos
             $model = $this->service->findById($documento->id);
+            if ($model) {
+                $model->loadMissing('versoes');
+            }
             
             return response()->json($model);
         } catch (\DomainException $e) {
