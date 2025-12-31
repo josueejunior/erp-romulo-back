@@ -11,8 +11,10 @@ use App\Modules\Processo\Services\ProcessoValidationService;
 use App\Modules\Processo\Resources\ProcessoResource;
 use App\Modules\Processo\Resources\ProcessoListResource;
 use App\Http\Requests\Processo\ConfirmarPagamentoRequest;
+use App\Helpers\PermissionHelper;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Controller para gerenciar processos licitatórios
@@ -56,6 +58,14 @@ class ProcessoController extends Controller
         $this->statusService = $statusService;
         $this->validationService = $validationService;
         $this->processoDocumentoService = $processoDocumentoService;
+    }
+
+    protected function assertProcessoEmpresa(Processo $processo): void
+    {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        if ($processo->empresa_id !== $empresa->id) {
+            abort(response()->json(['message' => 'Processo não pertence à empresa ativa'], 403));
+        }
     }
 
     /**
@@ -532,7 +542,12 @@ class ProcessoController extends Controller
      */
     public function importarDocumentos(Request $request, Processo $processo): JsonResponse
     {
+        if (!PermissionHelper::canManageDocuments()) {
+            return response()->json(['message' => 'Você não tem permissão para gerenciar documentos.'], 403);
+        }
+
         try {
+            $this->assertProcessoEmpresa($processo);
             if (!$this->processoDocumentoService) {
                 $this->processoDocumentoService = app(\App\Modules\Processo\Services\ProcessoDocumentoService::class);
             }
@@ -555,13 +570,20 @@ class ProcessoController extends Controller
      */
     public function sincronizarDocumentos(Request $request, Processo $processo): JsonResponse
     {
+        if (!PermissionHelper::canManageDocuments()) {
+            return response()->json(['message' => 'Você não tem permissão para gerenciar documentos.'], 403);
+        }
+
         try {
             $request->validate([
                 'documentos' => 'required|array',
                 'documentos.*.exigido' => 'boolean',
                 'documentos.*.disponivel_envio' => 'boolean',
+                'documentos.*.status' => 'nullable|string|in:pendente,possui,anexado',
                 'documentos.*.observacoes' => 'nullable|string',
             ]);
+
+            $this->assertProcessoEmpresa($processo);
 
             if (!$this->processoDocumentoService) {
                 $this->processoDocumentoService = app(\App\Modules\Processo\Services\ProcessoDocumentoService::class);
@@ -585,6 +607,7 @@ class ProcessoController extends Controller
     public function listarDocumentos(Request $request, Processo $processo): JsonResponse
     {
         try {
+            $this->assertProcessoEmpresa($processo);
             if (!$this->processoDocumentoService) {
                 $this->processoDocumentoService = app(\App\Modules\Processo\Services\ProcessoDocumentoService::class);
             }
@@ -597,6 +620,209 @@ class ProcessoController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Erro ao listar documentos: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * GET /processos/{id}/ficha-export
+     * Exporta ficha inicial (cabecalho + itens + documentos) em CSV
+     */
+    public function exportarFicha(Processo $processo)
+    {
+        $this->assertProcessoEmpresa($processo);
+
+        if (!$this->processoDocumentoService) {
+            $this->processoDocumentoService = app(\App\Modules\Processo\Services\ProcessoDocumentoService::class);
+        }
+
+        $itens = $processo->itens()->orderBy('numero')->get();
+        $documentos = $this->processoDocumentoService->obterDocumentosComStatus($processo);
+
+        $filename = 'ficha_processo_' . $processo->id . '_' . date('Y-m-d_His') . '.csv';
+
+        $headers = [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ];
+
+        $callback = function () use ($processo, $itens, $documentos) {
+            $file = fopen('php://output', 'w');
+            // BOM UTF-8
+            fprintf($file, chr(0xEF) . chr(0xBB) . chr(0xBF));
+
+            // Cabeçalho do processo
+            fputcsv($file, ['Ficha inicial do processo']);
+            fputcsv($file, ['ID', $processo->id]);
+            fputcsv($file, ['Empresa', $processo->empresa_id]);
+            fputcsv($file, ['Modalidade', $processo->modalidade]);
+            fputcsv($file, ['Número modalidade', $processo->numero_modalidade]);
+            fputcsv($file, ['Número processo adm', $processo->numero_processo_administrativo]);
+            fputcsv($file, ['SRP', $processo->srp ? 'Sim' : 'Não']);
+            fputcsv($file, ['Órgão', optional($processo->orgao)->razao_social]);
+            fputcsv($file, ['Setor', optional($processo->setor)->nome]);
+            fputcsv($file, ['Objeto resumido', $processo->objeto_resumido]);
+            fputcsv($file, ['Tipo seleção fornecedor', $processo->tipo_selecao_fornecedor]);
+            fputcsv($file, ['Tipo disputa', $processo->tipo_disputa]);
+            fputcsv($file, ['Data sessão pública', $processo->data_hora_sessao_publica]);
+            fputcsv($file, ['Endereço entrega', $processo->endereco_entrega]);
+            fputcsv($file, ['Forma entrega', $processo->forma_entrega]);
+            fputcsv($file, ['Prazo entrega', $processo->prazo_entrega]);
+            fputcsv($file, ['Prazo pagamento', $processo->prazo_pagamento]);
+            fputcsv($file, ['Validade proposta', $processo->validade_proposta]);
+            fputcsv($file, []);
+
+            // Itens
+            fputcsv($file, ['Itens']);
+            fputcsv($file, ['#', 'Quantidade', 'Unidade', 'Especificação', 'Marca/Modelo ref', 'Atestado cap. técnica', 'Qtd atestado', 'Valor estimado']);
+            foreach ($itens as $item) {
+                fputcsv($file, [
+                    $item->numero ?? '',
+                    $item->quantidade ?? '',
+                    $item->unidade_medida ?? '',
+                    $item->especificacao_tecnica ?? '',
+                    $item->marca_modelo_referencia ?? '',
+                    $item->pede_atestado_capacidade ? 'Sim' : 'Não',
+                    $item->quantidade_atestado ?? '',
+                    $item->valor_estimado ?? '',
+                ]);
+            }
+
+            fputcsv($file, []);
+
+            // Documentos
+            fputcsv($file, ['Documentos de habilitação']);
+            fputcsv($file, ['Tipo/Título', 'Número', 'Status vinculação', 'Status vencimento', 'Versão selecionada', 'Exigido', 'Disponível para envio', 'Observações']);
+            foreach ($documentos as $doc) {
+                $versaoLabel = $doc['versao_selecionada']['versao'] ?? $doc['versao_documento_habilitacao_id'] ?? '';
+                fputcsv($file, [
+                    $doc['documento_custom'] ? ($doc['titulo_custom'] ?? 'Custom') : ($doc['tipo'] ?? ''),
+                    $doc['numero'] ?? '',
+                    $doc['status'] ?? '',
+                    $doc['status_vencimento'] ?? '',
+                    $versaoLabel,
+                    !empty($doc['exigido']) ? 'Sim' : 'Não',
+                    !empty($doc['disponivel_envio']) ? 'Sim' : 'Não',
+                    $doc['observacoes'] ?? '',
+                ]);
+            }
+
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
+    /**
+     * PATCH /processos/{id}/documentos/{processoDocumento}
+     */
+    public function atualizarDocumento(Request $request, Processo $processo, int $processoDocumentoId): JsonResponse
+    {
+        if (!PermissionHelper::canManageDocuments()) {
+            return response()->json(['message' => 'Você não tem permissão para gerenciar documentos.'], 403);
+        }
+
+        try {
+            $this->assertProcessoEmpresa($processo);
+
+            $validated = $request->validate([
+                'exigido' => 'sometimes|boolean',
+                'disponivel_envio' => 'sometimes|boolean',
+                'status' => 'sometimes|string|in:pendente,possui,anexado',
+                'observacoes' => 'nullable|string',
+                'versao_documento_habilitacao_id' => 'nullable|integer',
+            ]);
+
+            if (!$this->processoDocumentoService) {
+                $this->processoDocumentoService = app(\App\Modules\Processo\Services\ProcessoDocumentoService::class);
+            }
+
+            $procDoc = $this->processoDocumentoService->atualizarDocumentoProcesso(
+                $processo,
+                $processoDocumentoId,
+                $validated,
+                $request->file('arquivo')
+            );
+
+            return response()->json(['data' => $procDoc]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'message' => 'Erro de validação',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Erro ao atualizar documento: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * POST /processos/{id}/documentos/custom
+     */
+    public function criarDocumentoCustom(Request $request, Processo $processo): JsonResponse
+    {
+        if (!PermissionHelper::canManageDocuments()) {
+            return response()->json(['message' => 'Você não tem permissão para gerenciar documentos.'], 403);
+        }
+
+        try {
+            $this->assertProcessoEmpresa($processo);
+
+            $validated = $request->validate([
+                'titulo_custom' => 'required|string|max:255',
+                'exigido' => 'sometimes|boolean',
+                'disponivel_envio' => 'sometimes|boolean',
+                'status' => 'sometimes|string|in:pendente,possui,anexado',
+                'observacoes' => 'nullable|string',
+            ]);
+
+            if (!$this->processoDocumentoService) {
+                $this->processoDocumentoService = app(\App\Modules\Processo\Services\ProcessoDocumentoService::class);
+            }
+
+            $procDoc = $this->processoDocumentoService->criarDocumentoCustom(
+                $processo,
+                $validated,
+                $request->file('arquivo')
+            );
+
+            return response()->json(['data' => $procDoc], 201);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'message' => 'Erro de validação',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Erro ao criar documento: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * GET /processos/{id}/documentos/{processoDocumento}/download
+     */
+    public function downloadDocumento(Processo $processo, int $processoDocumentoId)
+    {
+        try {
+            $this->assertProcessoEmpresa($processo);
+
+            if (!$this->processoDocumentoService) {
+                $this->processoDocumentoService = app(\App\Modules\Processo\Services\ProcessoDocumentoService::class);
+            }
+
+            $info = $this->processoDocumentoService->baixarArquivo($processo, $processoDocumentoId);
+            if (!$info) {
+                return response()->json(['message' => 'Arquivo não encontrado para este documento.'], 404);
+            }
+
+            return Storage::disk('public')->download($info['path'], $info['nome'], [
+                'Content-Type' => $info['mime'] ?? 'application/octet-stream'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Erro ao baixar documento: ' . $e->getMessage()
             ], 500);
         }
     }

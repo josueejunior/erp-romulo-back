@@ -14,8 +14,16 @@ class ProcessoDocumento extends BaseModel
         'empresa_id',
         'processo_id',
         'documento_habilitacao_id',
+        'versao_documento_habilitacao_id',
+        'documento_custom',
+        'titulo_custom',
         'exigido',
         'disponivel_envio',
+        'status',
+        'nome_arquivo',
+        'caminho_arquivo',
+        'mime',
+        'tamanho_bytes',
         'observacoes',
     ];
 
@@ -24,6 +32,7 @@ class ProcessoDocumento extends BaseModel
         return [
             'exigido' => 'boolean',
             'disponivel_envio' => 'boolean',
+            'documento_custom' => 'boolean',
         ];
     }
 
@@ -35,5 +44,10 @@ class ProcessoDocumento extends BaseModel
     public function documentoHabilitacao(): BelongsTo
     {
         return $this->belongsTo(DocumentoHabilitacao::class);
+    }
+
+    public function versaoDocumento(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\Documento\Models\DocumentoHabilitacaoVersao::class, 'versao_documento_habilitacao_id');
     }
 }
