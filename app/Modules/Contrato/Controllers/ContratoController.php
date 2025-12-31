@@ -3,30 +3,47 @@
 namespace App\Modules\Contrato\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
+use App\Http\Controllers\Traits\HasAuthContext;
 use App\Modules\Processo\Models\Processo;
 use App\Modules\Contrato\Models\Contrato;
 use App\Modules\Contrato\Services\ContratoService;
 use App\Application\Contrato\UseCases\CriarContratoUseCase;
+use App\Application\Contrato\UseCases\ListarContratosUseCase;
+use App\Application\Contrato\UseCases\BuscarContratoUseCase;
 use App\Application\Contrato\DTOs\CriarContratoDTO;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\Contrato\Repositories\ContratoRepositoryInterface;
 use App\Http\Requests\Contrato\ContratoCreateRequest;
 use App\Services\RedisService;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\ValidationException;
 
+/**
+ * Controller para gerenciamento de Contratos
+ * 
+ * Refatorado para seguir DDD rigorosamente:
+ * - Usa Form Requests para validação
+ * - Usa Use Cases para lógica de negócio
+ * - Não acessa modelos Eloquent diretamente (exceto para relacionamentos)
+ * 
+ * Segue o mesmo padrão do AssinaturaController e FornecedorController:
+ * - Tenant ID: Obtido automaticamente via tenancy()->tenant (middleware já inicializou)
+ * - Empresa ID: Obtido automaticamente via getEmpresaAtivaOrFail() que prioriza header X-Empresa-ID
+ */
 class ContratoController extends BaseApiController
 {
-    protected ContratoService $contratoService;
+    use HasAuthContext;
 
     public function __construct(
-        ContratoService $contratoService,
+        ContratoService $contratoService, // Mantido para métodos específicos que ainda usam Service
         private CriarContratoUseCase $criarContratoUseCase,
+        private ListarContratosUseCase $listarContratosUseCase,
+        private BuscarContratoUseCase $buscarContratoUseCase,
         private ProcessoRepositoryInterface $processoRepository,
         private ContratoRepositoryInterface $contratoRepository,
     ) {
-        // BaseApiController não tem construtor, não precisa chamar parent::__construct()
-        $this->contratoService = $contratoService;
+        $this->contratoService = $contratoService; // Para métodos que ainda precisam do Service
     }
 
     /**
@@ -66,12 +83,16 @@ class ContratoController extends BaseApiController
     /**
      * Lista todos os contratos (não apenas de um processo)
      * Com filtros, indicadores e paginação
+     * 
+     * O middleware já inicializou o tenant correto baseado no X-Tenant-ID do header.
+     * Apenas retorna os dados dos contratos da empresa ativa.
      */
-    public function listarTodos(Request $request)
+    public function listarTodos(Request $request): JsonResponse
     {
         try {
+            // Obter empresa automaticamente (middleware já inicializou baseado no X-Empresa-ID)
             $empresa = $this->getEmpresaAtivaOrFail();
-            $tenantId = tenancy()->tenant?->id;
+            $tenantId = $this->getTenantId();
             
             // Criar chave de cache baseada nos filtros
             $filters = [
@@ -124,17 +145,53 @@ class ContratoController extends BaseApiController
         }
     }
 
-    public function index(Processo $processo)
+    /**
+     * Listar contratos de um processo
+     * 
+     * O middleware já inicializou o tenant correto baseado no X-Tenant-ID do header.
+     * Apenas retorna os dados dos contratos da empresa ativa.
+     */
+    public function index(Processo $processo): JsonResponse
     {
-        $empresa = $this->getEmpresaAtivaOrFail();
-        
         try {
-            $contratos = $this->contratoService->listByProcesso($processo, $empresa->id);
-            return response()->json($contratos);
-        } catch (\Exception $e) {
+            // Obter empresa automaticamente (middleware já inicializou baseado no X-Empresa-ID)
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Validar que o processo pertence à empresa
+            if ($processo->empresa_id !== $empresa->id) {
+                return response()->json(['message' => 'Processo não encontrado'], 404);
+            }
+            
+            // Preparar filtros
+            $filtros = [
+                'empresa_id' => $empresa->id,
+                'processo_id' => $processo->id,
+            ];
+            
+            // Executar Use Case
+            $paginado = $this->listarContratosUseCase->executar($filtros);
+            
+            // Transformar para resposta
+            $items = collect($paginado->items())->map(function ($contratoDomain) {
+                // Buscar modelo Eloquent para incluir relacionamentos
+                $contratoModel = $this->contratoRepository->buscarModeloPorId(
+                    $contratoDomain->id,
+                    ['processo', 'empenhos']
+                );
+                return $contratoModel ? $contratoModel->toArray() : null;
+            })->filter();
+            
             return response()->json([
-                'message' => $e->getMessage()
-            ], 404);
+                'data' => $items->values()->all(),
+                'meta' => [
+                    'current_page' => $paginado->currentPage(),
+                    'last_page' => $paginado->lastPage(),
+                    'per_page' => $paginado->perPage(),
+                    'total' => $paginado->total(),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao listar contratos');
         }
     }
 
@@ -154,16 +211,22 @@ class ContratoController extends BaseApiController
 
     /**
      * Web: Criar contrato
-     * Usa Form Request para validação
+     * Usa Form Request para validação e Use Case para lógica de negócio
      */
-    public function storeWeb(ContratoCreateRequest $request, Processo $processo)
+    public function storeWeb(ContratoCreateRequest $request, Processo $processo): JsonResponse
     {
+        // Obter empresa automaticamente (middleware já inicializou)
         $empresa = $this->getEmpresaAtivaOrFail();
         
         // Verificar permissão usando Policy
         $this->authorize('create', [\App\Modules\Contrato\Models\Contrato::class, $processo]);
 
         try {
+            // Validar que o processo pertence à empresa
+            if ($processo->empresa_id !== $empresa->id) {
+                return response()->json(['message' => 'Processo não encontrado'], 404);
+            }
+            
             // Request já está validado via Form Request
             // Preparar dados para DTO
             $data = $request->validated();
@@ -184,25 +247,59 @@ class ContratoController extends BaseApiController
                 return response()->json(['message' => 'Contrato não encontrado após criação.'], 404);
             }
             
-            return response()->json($contrato, 201);
-        } catch (\Exception $e) {
             return response()->json([
-                'message' => $e->getMessage()
-            ], 404);
+                'message' => 'Contrato criado com sucesso',
+                'data' => $contrato->toArray(),
+            ], 201);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 400);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao criar contrato');
         }
     }
 
-    public function show(Processo $processo, Contrato $contrato)
+    /**
+     * Obter contrato específico
+     * 
+     * O middleware já inicializou o tenant correto baseado no X-Tenant-ID do header.
+     * Apenas retorna os dados do contrato da empresa ativa.
+     */
+    public function show(Processo $processo, Contrato $contrato): JsonResponse
     {
-        $empresa = $this->getEmpresaAtivaOrFail();
-        
         try {
-            $contrato = $this->contratoService->find($processo, $contrato, $empresa->id);
-            return response()->json($contrato);
+            // Obter empresa automaticamente (middleware já inicializou)
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Validar que o processo e contrato pertencem à empresa
+            if ($processo->empresa_id !== $empresa->id) {
+                return response()->json(['message' => 'Processo não encontrado'], 404);
+            }
+            
+            // Executar Use Case
+            $contratoDomain = $this->buscarContratoUseCase->executar($contrato->id);
+            
+            // Validar que o contrato pertence à empresa ativa
+            if ($contratoDomain->empresaId !== $empresa->id) {
+                return response()->json(['message' => 'Contrato não encontrado'], 404);
+            }
+            
+            // Buscar modelo Eloquent para incluir relacionamentos
+            $contratoModel = $this->contratoRepository->buscarModeloPorId(
+                $contratoDomain->id,
+                ['processo', 'empenhos']
+            );
+            
+            if (!$contratoModel) {
+                return response()->json(['message' => 'Contrato não encontrado'], 404);
+            }
+            
+            return response()->json(['data' => $contratoModel->toArray()]);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 404);
+            return $this->handleException($e, 'Erro ao buscar contrato');
         }
     }
 

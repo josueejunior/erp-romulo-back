@@ -74,10 +74,14 @@ class ProcessoController extends Controller
      * Suporta parâmetros de query:
      * - formato: csv (padrão) ou json
      * - Todos os filtros de listagem normais
+     * 
+     * O middleware já inicializou o tenant correto baseado no X-Tenant-ID do header.
+     * Apenas retorna os dados dos processos da empresa ativa.
      */
     public function exportar(Request $request)
     {
-        $empresa = $this->getEmpresaOrFail();
+        // Obter empresa automaticamente (middleware já inicializou baseado no X-Empresa-ID)
+        $empresa = $this->getEmpresaAtivaOrFail();
         
         $params = $this->processoService->createListParamBag($request->all());
         

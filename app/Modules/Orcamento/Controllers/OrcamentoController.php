@@ -3,6 +3,7 @@
 namespace App\Modules\Orcamento\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
+use App\Http\Controllers\Traits\HasAuthContext;
 use App\Http\Resources\OrcamentoResource;
 use App\Modules\Processo\Models\Processo;
 use App\Modules\Processo\Models\ProcessoItem;
@@ -16,23 +17,35 @@ use App\Domain\ProcessoItem\Repositories\ProcessoItemRepositoryInterface;
 use App\Domain\Orcamento\Repositories\OrcamentoRepositoryInterface;
 use App\Http\Requests\Orcamento\OrcamentoItemUpdateRequest;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\ValidationException;
 
+/**
+ * Controller para gerenciamento de Orçamentos
+ * 
+ * Refatorado para seguir DDD rigorosamente:
+ * - Usa Form Requests para validação
+ * - Usa Use Cases para lógica de negócio
+ * - Não acessa modelos Eloquent diretamente (exceto para relacionamentos)
+ * 
+ * Segue o mesmo padrão do AssinaturaController e FornecedorController:
+ * - Tenant ID: Obtido automaticamente via tenancy()->tenant (middleware já inicializou)
+ * - Empresa ID: Obtido automaticamente via getEmpresaAtivaOrFail() que prioriza header X-Empresa-ID
+ */
 class OrcamentoController extends BaseApiController
 {
+    use HasAuthContext;
 
     protected OrcamentoService $orcamentoService;
 
     public function __construct(
-        OrcamentoService $orcamentoService,
+        OrcamentoService $orcamentoService, // Mantido para métodos específicos que ainda usam Service
         private CriarOrcamentoUseCase $criarOrcamentoUseCase,
         private ProcessoRepositoryInterface $processoRepository,
         private ProcessoItemRepositoryInterface $processoItemRepository,
         private OrcamentoRepositoryInterface $orcamentoRepository,
     ) {
-        // BaseApiController não tem construtor, não precisa chamar parent::__construct()
-        $this->orcamentoService = $orcamentoService;
-        $this->service = $orcamentoService; // Para HasDefaultActions
+        $this->orcamentoService = $orcamentoService; // Para métodos que ainda precisam do Service
     }
 
     /**
@@ -83,22 +96,34 @@ class OrcamentoController extends BaseApiController
         return $this->show($processoModel, $itemModel, $orcamentoModel);
     }
 
-    public function index(Request $request, Processo $processo, ProcessoItem $item)
+    /**
+     * Listar orçamentos de um item
+     * 
+     * O middleware já inicializou o tenant correto baseado no X-Tenant-ID do header.
+     * Apenas retorna os dados dos orçamentos da empresa ativa.
+     */
+    public function index(Request $request, Processo $processo, ProcessoItem $item): JsonResponse
     {
-        $empresa = $this->getEmpresaAtivaOrFail();
-        
         try {
-            $this->orcamentoService->validarProcessoEmpresa($processo, $empresa->id);
-            $this->orcamentoService->validarItemPertenceProcesso($item, $processo);
+            // Obter empresa automaticamente (middleware já inicializou baseado no X-Empresa-ID)
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Validar que o processo pertence à empresa
+            if ($processo->empresa_id !== $empresa->id) {
+                return response()->json(['message' => 'Processo não encontrado'], 404);
+            }
+            
+            // Validar que o item pertence ao processo
+            if ($item->processo_id !== $processo->id) {
+                return response()->json(['message' => 'Item não pertence ao processo'], 404);
+            }
+
+            $orcamentos = $this->orcamentoService->listByItem($item);
+
+            return OrcamentoResource::collection($orcamentos);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 404);
+            return $this->handleException($e, 'Erro ao listar orçamentos');
         }
-
-        $orcamentos = $this->orcamentoService->listByItem($item);
-
-        return OrcamentoResource::collection($orcamentos);
     }
 
     /**
@@ -124,16 +149,27 @@ class OrcamentoController extends BaseApiController
 
     /**
      * Web: Criar orçamento
-     * Usa Form Request para validação
+     * Usa Form Request para validação e Use Case para lógica de negócio
      */
-    public function storeWeb(OrcamentoCreateRequest $request, Processo $processo, ProcessoItem $item)
+    public function storeWeb(OrcamentoCreateRequest $request, Processo $processo, ProcessoItem $item): JsonResponse
     {
-        $empresa = $this->getEmpresaAtivaOrFail();
-        
-        // Verificar permissão usando Policy
-        $this->authorize('create', [$processo]);
-
         try {
+            // Obter empresa automaticamente (middleware já inicializou)
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Validar que o processo pertence à empresa
+            if ($processo->empresa_id !== $empresa->id) {
+                return response()->json(['message' => 'Processo não encontrado'], 404);
+            }
+            
+            // Validar que o item pertence ao processo
+            if ($item->processo_id !== $processo->id) {
+                return response()->json(['message' => 'Item não pertence ao processo'], 404);
+            }
+            
+            // Verificar permissão usando Policy
+            $this->authorize('create', [$processo]);
+
             // Request já está validado via Form Request
             // Preparar dados para DTO
             $data = $request->validated();
@@ -155,11 +191,15 @@ class OrcamentoController extends BaseApiController
                 return response()->json(['message' => 'Orçamento não encontrado após criação.'], 404);
             }
             
-            return new OrcamentoResource($orcamento);
-        } catch (\Exception $e) {
+            return (new OrcamentoResource($orcamento))
+                ->response()
+                ->setStatusCode(201);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
             return response()->json([
-                'message' => $e->getMessage()
-            ], 404);
+                'message' => $e->getMessage(),
+            ], 400);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao criar orçamento');
         }
     }
 

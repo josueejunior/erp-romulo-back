@@ -3,31 +3,49 @@
 namespace App\Modules\Empenho\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
+use App\Http\Controllers\Traits\HasAuthContext;
 use App\Modules\Processo\Models\Processo;
 use App\Modules\Empenho\Models\Empenho;
 use App\Modules\Empenho\Services\EmpenhoService;
 use App\Application\Empenho\UseCases\CriarEmpenhoUseCase;
+use App\Application\Empenho\UseCases\ListarEmpenhosUseCase;
+use App\Application\Empenho\UseCases\BuscarEmpenhoUseCase;
 use App\Application\Empenho\DTOs\CriarEmpenhoDTO;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\Empenho\Repositories\EmpenhoRepositoryInterface;
 use App\Http\Requests\Empenho\EmpenhoCreateRequest;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * Controller para gerenciamento de Empenhos
+ * 
+ * Refatorado para seguir DDD rigorosamente:
+ * - Usa Form Requests para validação
+ * - Usa Use Cases para lógica de negócio
+ * - Não acessa modelos Eloquent diretamente (exceto para relacionamentos)
+ * 
+ * Segue o mesmo padrão do AssinaturaController e FornecedorController:
+ * - Tenant ID: Obtido automaticamente via tenancy()->tenant (middleware já inicializou)
+ * - Empresa ID: Obtido automaticamente via getEmpresaAtivaOrFail() que prioriza header X-Empresa-ID
+ */
 class EmpenhoController extends BaseApiController
 {
+    use HasAuthContext;
 
     protected EmpenhoService $empenhoService;
 
     public function __construct(
-        EmpenhoService $empenhoService,
+        EmpenhoService $empenhoService, // Mantido para métodos específicos que ainda usam Service
         private CriarEmpenhoUseCase $criarEmpenhoUseCase,
+        private ListarEmpenhosUseCase $listarEmpenhosUseCase,
+        private BuscarEmpenhoUseCase $buscarEmpenhoUseCase,
         private ProcessoRepositoryInterface $processoRepository,
         private EmpenhoRepositoryInterface $empenhoRepository,
     ) {
-        $this->empenhoService = $empenhoService;
-        $this->service = $empenhoService; // Para HasDefaultActions
+        $this->empenhoService = $empenhoService; // Para métodos que ainda precisam do Service
     }
 
     /**
@@ -97,17 +115,53 @@ class EmpenhoController extends BaseApiController
         }
     }
 
-    public function index(Processo $processo)
+    /**
+     * Listar empenhos de um processo
+     * 
+     * O middleware já inicializou o tenant correto baseado no X-Tenant-ID do header.
+     * Apenas retorna os dados dos empenhos da empresa ativa.
+     */
+    public function index(Processo $processo): JsonResponse
     {
-        $empresa = $this->getEmpresaAtivaOrFail();
-        
         try {
-            $empenhos = $this->empenhoService->listByProcesso($processo, $empresa->id);
-            return response()->json($empenhos);
-        } catch (\Exception $e) {
+            // Obter empresa automaticamente (middleware já inicializou baseado no X-Empresa-ID)
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Validar que o processo pertence à empresa
+            if ($processo->empresa_id !== $empresa->id) {
+                return response()->json(['message' => 'Processo não encontrado'], 404);
+            }
+            
+            // Preparar filtros
+            $filtros = [
+                'empresa_id' => $empresa->id,
+                'processo_id' => $processo->id,
+            ];
+            
+            // Executar Use Case
+            $paginado = $this->listarEmpenhosUseCase->executar($filtros);
+            
+            // Transformar para resposta
+            $items = collect($paginado->items())->map(function ($empenhoDomain) {
+                // Buscar modelo Eloquent para incluir relacionamentos
+                $empenhoModel = $this->empenhoRepository->buscarModeloPorId(
+                    $empenhoDomain->id,
+                    ['processo', 'contrato', 'autorizacaoFornecimento']
+                );
+                return $empenhoModel ? $empenhoModel->toArray() : null;
+            })->filter();
+            
             return response()->json([
-                'message' => $e->getMessage()
-            ], 404);
+                'data' => $items->values()->all(),
+                'meta' => [
+                    'current_page' => $paginado->currentPage(),
+                    'last_page' => $paginado->lastPage(),
+                    'per_page' => $paginado->perPage(),
+                    'total' => $paginado->total(),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao listar empenhos');
         }
     }
 
@@ -142,13 +196,19 @@ class EmpenhoController extends BaseApiController
 
     /**
      * Web: Criar empenho
-     * Usa Form Request para validação
+     * Usa Form Request para validação e Use Case para lógica de negócio
      */
-    public function storeWeb(EmpenhoCreateRequest $request, Processo $processo)
+    public function storeWeb(EmpenhoCreateRequest $request, Processo $processo): JsonResponse
     {
-        $empresa = $this->getEmpresaAtivaOrFail();
-        
         try {
+            // Obter empresa automaticamente (middleware já inicializou)
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Validar que o processo pertence à empresa
+            if ($processo->empresa_id !== $empresa->id) {
+                return response()->json(['message' => 'Processo não encontrado'], 404);
+            }
+            
             // Request já está validado via Form Request
             // Preparar dados para DTO
             $data = $request->validated();
@@ -170,25 +230,59 @@ class EmpenhoController extends BaseApiController
                 return response()->json(['message' => 'Empenho não encontrado após criação.'], 404);
             }
             
-            return response()->json($empenho, 201);
-        } catch (\Exception $e) {
             return response()->json([
-                'message' => $e->getMessage()
-            ], $e->getMessage() === 'Empenhos só podem ser criados para processos em execução.' ? 403 : 404);
+                'message' => 'Empenho criado com sucesso',
+                'data' => $empenho->toArray(),
+            ], 201);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], $e->getMessage() === 'Empenhos só podem ser criados para processos em execução.' ? 403 : 400);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao criar empenho');
         }
     }
 
-    public function show(Processo $processo, Empenho $empenho)
+    /**
+     * Obter empenho específico
+     * 
+     * O middleware já inicializou o tenant correto baseado no X-Tenant-ID do header.
+     * Apenas retorna os dados do empenho da empresa ativa.
+     */
+    public function show(Processo $processo, Empenho $empenho): JsonResponse
     {
-        $empresa = $this->getEmpresaAtivaOrFail();
-        
         try {
-            $empenho = $this->empenhoService->find($processo, $empenho, $empresa->id);
-            return response()->json($empenho);
+            // Obter empresa automaticamente (middleware já inicializou)
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Validar que o processo e empenho pertencem à empresa
+            if ($processo->empresa_id !== $empresa->id) {
+                return response()->json(['message' => 'Processo não encontrado'], 404);
+            }
+            
+            // Executar Use Case
+            $empenhoDomain = $this->buscarEmpenhoUseCase->executar($empenho->id);
+            
+            // Validar que o empenho pertence à empresa ativa
+            if ($empenhoDomain->empresaId !== $empresa->id) {
+                return response()->json(['message' => 'Empenho não encontrado'], 404);
+            }
+            
+            // Buscar modelo Eloquent para incluir relacionamentos
+            $empenhoModel = $this->empenhoRepository->buscarModeloPorId(
+                $empenhoDomain->id,
+                ['processo', 'contrato', 'autorizacaoFornecimento']
+            );
+            
+            if (!$empenhoModel) {
+                return response()->json(['message' => 'Empenho não encontrado'], 404);
+            }
+            
+            return response()->json(['data' => $empenhoModel->toArray()]);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 404);
+            return $this->handleException($e, 'Erro ao buscar empenho');
         }
     }
 
