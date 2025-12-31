@@ -12,6 +12,8 @@ interface DocumentoHabilitacaoRepositoryInterface
     public function buscarComFiltros(array $filtros = []): LengthAwarePaginator;
     public function atualizar(DocumentoHabilitacao $documento): DocumentoHabilitacao;
     public function deletar(int $id): void;
+    public function buscarVencendo(int $empresaId, int $dias = 30): array;
+    public function buscarVencidos(int $empresaId): array;
 }
 
 

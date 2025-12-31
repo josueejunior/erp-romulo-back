@@ -9,20 +9,29 @@ use App\Domain\Shared\ValueObjects\TenantContext;
 use DomainException;
 
 /**
- * Use Case: Criar Documento de Habilitação
+ * Use Case: Atualizar Documento de Habilitação
  */
-class CriarDocumentoHabilitacaoUseCase
+class AtualizarDocumentoHabilitacaoUseCase
 {
     public function __construct(
         private DocumentoHabilitacaoRepositoryInterface $documentoRepository,
     ) {}
 
-    public function executar(CriarDocumentoHabilitacaoDTO $dto): DocumentoHabilitacao
+    public function executar(int $id, CriarDocumentoHabilitacaoDTO $dto): DocumentoHabilitacao
     {
         $context = TenantContext::get();
 
+        $documentoExistente = $this->documentoRepository->buscarPorId($id);
+        if (!$documentoExistente) {
+            throw new DomainException('Documento não encontrado.');
+        }
+
+        if ($documentoExistente->empresaId !== $context->empresaId) {
+            throw new DomainException('Documento não pertence à empresa ativa.');
+        }
+
         $documento = new DocumentoHabilitacao(
-            id: null,
+            id: $id,
             empresaId: $context->empresaId,
             tipo: $dto->tipo,
             numero: $dto->numero,
@@ -34,8 +43,7 @@ class CriarDocumentoHabilitacaoUseCase
             observacoes: $dto->observacoes,
         );
 
-        return $this->documentoRepository->criar($documento);
+        return $this->documentoRepository->atualizar($documento);
     }
 }
-
 

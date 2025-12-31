@@ -5,14 +5,22 @@ namespace App\Modules\Documento\Controllers;
 use App\Http\Controllers\Api\BaseApiController;
 use App\Modules\Documento\Models\DocumentoHabilitacao;
 use App\Modules\Documento\Services\DocumentoHabilitacaoService;
+use App\Application\DocumentoHabilitacao\UseCases\CriarDocumentoHabilitacaoUseCase;
+use App\Application\DocumentoHabilitacao\UseCases\AtualizarDocumentoHabilitacaoUseCase;
+use App\Application\DocumentoHabilitacao\DTOs\CriarDocumentoHabilitacaoDTO;
+use App\Domain\Shared\ValueObjects\TenantContext;
 use Illuminate\Http\Request;
 use App\Helpers\PermissionHelper;
+use Illuminate\Support\Facades\Storage;
 
 class DocumentoHabilitacaoController extends BaseApiController
 {
 
-    public function __construct(DocumentoHabilitacaoService $service)
-    {
+    public function __construct(
+        DocumentoHabilitacaoService $service,
+        private CriarDocumentoHabilitacaoUseCase $criarDocumentoUseCase,
+        private AtualizarDocumentoHabilitacaoUseCase $atualizarDocumentoUseCase,
+    ) {
         $this->service = $service;
     }
 
@@ -33,6 +41,51 @@ class DocumentoHabilitacaoController extends BaseApiController
                 'trace' => $e->getTraceAsString(),
                 'params' => $request->all()
             ]);
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 400);
+        }
+    }
+
+    /**
+     * GET /documentos-habilitacao/vencendo - Listar documentos vencendo
+     */
+    public function vencendo(Request $request): \Illuminate\Http\JsonResponse
+    {
+        try {
+            $context = \App\Domain\Shared\ValueObjects\TenantContext::get();
+            $dias = (int) ($request->get('dias', 30));
+            
+            $repository = app(\App\Domain\DocumentoHabilitacao\Repositories\DocumentoHabilitacaoRepositoryInterface::class);
+            $documentos = $repository->buscarVencendo($context->empresaId, $dias);
+            
+            return response()->json([
+                'data' => $documentos,
+                'total' => count($documentos),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 400);
+        }
+    }
+
+    /**
+     * GET /documentos-habilitacao/vencidos - Listar documentos vencidos
+     */
+    public function vencidos(Request $request): \Illuminate\Http\JsonResponse
+    {
+        try {
+            $context = \App\Domain\Shared\ValueObjects\TenantContext::get();
+            
+            $repository = app(\App\Domain\DocumentoHabilitacao\Repositories\DocumentoHabilitacaoRepositoryInterface::class);
+            $documentos = $repository->buscarVencidos($context->empresaId);
+            
+            return response()->json([
+                'data' => $documentos,
+                'total' => count($documentos),
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'message' => $e->getMessage()
             ], 400);
@@ -82,7 +135,7 @@ class DocumentoHabilitacaoController extends BaseApiController
     }
 
     /**
-     * Sobrescrever handleStore para validação de permissão e usar service
+     * Sobrescrever handleStore para validação de permissão e usar Use Case
      */
     protected function handleStore(Request $request, array $mergeParams = []): \Illuminate\Http\JsonResponse
     {
@@ -95,11 +148,7 @@ class DocumentoHabilitacaoController extends BaseApiController
         try {
             $data = array_merge($request->all(), $mergeParams);
             
-            // Processar arquivo se presente
-            if ($request->hasFile('arquivo')) {
-                $data['arquivo'] = $request->file('arquivo');
-            }
-            
+            // Validar dados
             $validator = $this->service->validateStoreData($data);
             
             if ($validator->fails()) {
@@ -109,18 +158,42 @@ class DocumentoHabilitacaoController extends BaseApiController
                 ], 422);
             }
 
-            $documento = $this->service->store($validator->validated());
+            $validated = $validator->validated();
+            
+            // Processar arquivo se presente
+            $nomeArquivo = null;
+            if ($request->hasFile('arquivo')) {
+                $arquivo = $request->file('arquivo');
+                $nomeArquivo = time() . '_' . $arquivo->getClientOriginalName();
+                $arquivo->storeAs('documentos-habilitacao', $nomeArquivo, 'public');
+                $validated['arquivo'] = $nomeArquivo;
+            }
 
-            return response()->json($documento, 201);
-        } catch (\Exception $e) {
+            // Criar DTO e executar Use Case
+            $dto = CriarDocumentoHabilitacaoDTO::fromArray($validated);
+            $documento = $this->criarDocumentoUseCase->executar($dto);
+
+            // Buscar modelo para retornar com relacionamentos
+            $model = $this->service->findById($documento->id);
+            
+            return response()->json($model, 201);
+        } catch (\DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage()
             ], 400);
+        } catch (\Exception $e) {
+            \Log::error('Erro ao criar documento de habilitação', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'message' => 'Erro ao criar documento de habilitação.'
+            ], 500);
         }
     }
 
     /**
-     * Sobrescrever handleUpdate para validação de permissão e usar service
+     * Sobrescrever handleUpdate para validação de permissão e usar Use Case
      */
     protected function handleUpdate(Request $request, int|string $id, array $mergeParams = []): \Illuminate\Http\JsonResponse
     {
@@ -133,11 +206,7 @@ class DocumentoHabilitacaoController extends BaseApiController
         try {
             $data = array_merge($request->all(), $mergeParams);
             
-            // Processar arquivo se presente
-            if ($request->hasFile('arquivo')) {
-                $data['arquivo'] = $request->file('arquivo');
-            }
-            
+            // Validar dados
             $validator = $this->service->validateUpdateData($data, $id);
             
             if ($validator->fails()) {
@@ -147,13 +216,42 @@ class DocumentoHabilitacaoController extends BaseApiController
                 ], 422);
             }
 
-            $documento = $this->service->update($id, $validator->validated());
+            $validated = $validator->validated();
+            
+            // Processar arquivo se presente
+            if ($request->hasFile('arquivo')) {
+                // Deletar arquivo antigo se existir
+                $documentoExistente = $this->service->findById($id);
+                if ($documentoExistente && $documentoExistente->arquivo) {
+                    Storage::disk('public')->delete('documentos-habilitacao/' . $documentoExistente->arquivo);
+                }
+                
+                $arquivo = $request->file('arquivo');
+                $nomeArquivo = time() . '_' . $arquivo->getClientOriginalName();
+                $arquivo->storeAs('documentos-habilitacao', $nomeArquivo, 'public');
+                $validated['arquivo'] = $nomeArquivo;
+            }
 
-            return response()->json($documento);
-        } catch (\Exception $e) {
+            // Criar DTO e executar Use Case
+            $dto = CriarDocumentoHabilitacaoDTO::fromArray($validated);
+            $documento = $this->atualizarDocumentoUseCase->executar($id, $dto);
+
+            // Buscar modelo para retornar com relacionamentos
+            $model = $this->service->findById($documento->id);
+            
+            return response()->json($model);
+        } catch (\DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage()
             ], 400);
+        } catch (\Exception $e) {
+            \Log::error('Erro ao atualizar documento de habilitação', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'message' => 'Erro ao atualizar documento de habilitação.'
+            ], 500);
         }
     }
 

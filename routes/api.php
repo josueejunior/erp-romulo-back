@@ -226,6 +226,12 @@ Route::prefix('v1')->group(function () {
             Route::module('documentos-habilitacao', ApiDocumentoHabilitacaoController::class, 'documentoHabilitacao')
                 ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
             
+            // Rotas adicionais para documentos de habilitação
+            Route::prefix('documentos-habilitacao')->group(function () {
+                Route::get('vencendo', [ApiDocumentoHabilitacaoController::class, 'vencendo']);
+                Route::get('vencidos', [ApiDocumentoHabilitacaoController::class, 'vencidos']);
+            });
+            
             // Usuários
             Route::module('users', ApiUserController::class, 'user')
                 ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy'])
