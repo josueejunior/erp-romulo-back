@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Empresa;
 use App\Domain\Empresa\Repositories\EmpresaRepositoryInterface;
 use App\Domain\Auth\Repositories\UserRepositoryInterface;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
