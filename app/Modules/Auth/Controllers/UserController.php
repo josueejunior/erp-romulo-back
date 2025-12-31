@@ -265,9 +265,9 @@ class UserController extends BaseApiController
      * Busca o tenant_id correto da empresa
      * Como empresas podem estar em tenants diferentes, precisamos procurar em todos os tenants
      * 
-     * IMPORTANTE: Quando a empresa existe em múltiplos tenants, retorna o tenant atual se a empresa
-     * existir lá, pois o usuário está trabalhando nesse contexto. Isso garante que o usuário continue
-     * no mesmo tenant ao trocar de empresa, a menos que a empresa não exista no tenant atual.
+     * IMPORTANTE: Quando a empresa existe em múltiplos tenants, busca TODOS os tenants onde a empresa existe
+     * e retorna o primeiro que NÃO seja o tenant atual (se houver), para permitir mudança de tenant.
+     * Se não houver outro tenant, retorna o tenant atual.
      * 
      * @param int $empresaId ID da empresa
      * @param int $tenantIdAtual Tenant atual (para otimizar busca)
@@ -275,20 +275,21 @@ class UserController extends BaseApiController
      */
     private function buscarTenantIdDaEmpresa(int $empresaId, int $tenantIdAtual): ?int
     {
+        $tenantIdEncontradoNoAtual = null;
+        $tenantIdEncontradoEmOutro = null;
+        
         // 🔥 PRIORIDADE 1: Verificar se a empresa existe no tenant atual
-        // Se existir, retornar o tenant atual (usuário continua no mesmo contexto)
         try {
             if (tenancy()->initialized) {
                 $empresa = \App\Models\Empresa::find($empresaId);
                 if ($empresa) {
+                    $tenantIdEncontradoNoAtual = $tenantIdAtual;
                     \Log::info('UserController::buscarTenantIdDaEmpresa() - Empresa encontrada no tenant atual', [
                         'empresa_id' => $empresaId,
                         'tenant_id' => $tenantIdAtual,
                         'empresa_razao_social' => $empresa->razao_social ?? 'N/A',
                         'empresa_cnpj' => $empresa->cnpj ?? 'N/A',
                     ]);
-                    // Retornar imediatamente o tenant atual se a empresa existir lá
-                    return $tenantIdAtual;
                 }
             }
         } catch (\Exception $e) {
@@ -299,8 +300,8 @@ class UserController extends BaseApiController
             ]);
         }
 
-        // 🔥 PRIORIDADE 2: Se não encontrou no tenant atual, buscar em outros tenants
-        // Isso acontece quando o usuário troca para uma empresa que não existe no tenant atual
+        // 🔥 PRIORIDADE 2: Buscar em outros tenants para ver se a empresa existe em múltiplos tenants
+        // Se existir em outro tenant, retornar o outro tenant (permite mudança de tenant)
         $tenants = \App\Models\Tenant::all();
         
         foreach ($tenants as $tenant) {
@@ -315,6 +316,7 @@ class UserController extends BaseApiController
                 $empresa = \App\Models\Empresa::find($empresaId);
                 
                 if ($empresa) {
+                    $tenantIdEncontradoEmOutro = $tenant->id;
                     \Log::info('UserController::buscarTenantIdDaEmpresa() - Empresa encontrada em outro tenant', [
                         'empresa_id' => $empresaId,
                         'tenant_id_atual' => $tenantIdAtual,
@@ -324,8 +326,8 @@ class UserController extends BaseApiController
                     ]);
                     
                     tenancy()->end();
-                    // Retornar o primeiro encontrado (mudança de tenant necessária)
-                    return $tenant->id;
+                    // Retornar o primeiro encontrado em outro tenant (mudança de tenant)
+                    break;
                 }
                 
                 tenancy()->end();
@@ -337,6 +339,26 @@ class UserController extends BaseApiController
                     'error' => $e->getMessage(),
                 ]);
             }
+        }
+
+        // 🔥 DECISÃO: Se encontrou em outro tenant, retornar o outro (mudança de tenant)
+        // Se só encontrou no atual, retornar o atual
+        // Se não encontrou em nenhum, retornar null
+        if ($tenantIdEncontradoEmOutro !== null) {
+            \Log::info('UserController::buscarTenantIdDaEmpresa() - Retornando tenant diferente do atual', [
+                'empresa_id' => $empresaId,
+                'tenant_id_atual' => $tenantIdAtual,
+                'tenant_id_retornado' => $tenantIdEncontradoEmOutro,
+            ]);
+            return $tenantIdEncontradoEmOutro;
+        }
+        
+        if ($tenantIdEncontradoNoAtual !== null) {
+            \Log::info('UserController::buscarTenantIdDaEmpresa() - Retornando tenant atual (empresa só existe nele)', [
+                'empresa_id' => $empresaId,
+                'tenant_id_retornado' => $tenantIdEncontradoNoAtual,
+            ]);
+            return $tenantIdEncontradoNoAtual;
         }
 
         // Se não encontrou em nenhum tenant, retornar null (usar tenant atual como fallback)

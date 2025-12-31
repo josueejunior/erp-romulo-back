@@ -15,21 +15,53 @@ class InitializeTenancyByRequestData extends IdentificationMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // Verificar se já há tenancy inicializado
-        if (tenancy()->initialized) {
-            $currentTenant = tenancy()->tenant;
-            \Log::debug('Tenancy já inicializado', [
-                'tenant_id' => $currentTenant?->id,
-                'url' => $request->url()
-            ]);
-            return $next($request);
-        }
-
         // Verificar se há tenant_id no header ou no request
         $tenantId = $request->header('X-Tenant-ID') 
             ?? $request->input('tenant_id')
             ?? $this->getTenantIdFromToken($request)
             ?? $this->getTenantIdFromUser($request);
+
+        // Verificar se já há tenancy inicializado
+        if (tenancy()->initialized) {
+            $currentTenant = tenancy()->tenant;
+            $currentTenantId = $currentTenant?->id;
+            
+            // Se o tenant_id do header é diferente do tenant atual, reinicializar
+            if ($tenantId && (string)$currentTenantId !== (string)$tenantId) {
+                \Log::info('Tenant mudou, reinicializando tenancy', [
+                    'tenant_id_atual' => $currentTenantId,
+                    'tenant_id_header' => $tenantId,
+                    'url' => $request->url()
+                ]);
+                
+                // Finalizar tenant atual
+                tenancy()->end();
+                
+                // Buscar novo tenant e inicializar
+                $newTenant = \App\Models\Tenant::find($tenantId);
+                if ($newTenant) {
+                    tenancy()->initialize($newTenant);
+                    \Log::debug('Tenancy reinicializado com sucesso', [
+                        'tenant_id' => $newTenant->id,
+                        'tenant_razao_social' => $newTenant->razao_social,
+                        'url' => $request->url()
+                    ]);
+                } else {
+                    \Log::warning('Novo tenant não encontrado, mantendo tenant atual', [
+                        'tenant_id_procurado' => $tenantId,
+                        'tenant_id_atual' => $currentTenantId,
+                        'url' => $request->url()
+                    ]);
+                }
+            } else {
+                \Log::debug('Tenancy já inicializado com tenant correto', [
+                    'tenant_id' => $currentTenantId,
+                    'tenant_id_header' => $tenantId,
+                    'url' => $request->url()
+                ]);
+            }
+            return $next($request);
+        }
 
         \Log::debug('Tentando inicializar tenancy', [
             'tenant_id_header' => $request->header('X-Tenant-ID'),
