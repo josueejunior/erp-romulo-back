@@ -175,10 +175,26 @@ class UserController extends BaseApiController
             $tenant = tenancy()->tenant;
             $tenantId = $tenant?->id ?? $context->tenantId;
             
+            // 🔍 DEBUG: Verificar em qual tenant a empresa está armazenada
+            // Isso ajuda a entender se as empresas estão no mesmo tenant ou não
+            $databaseAtual = tenancy()->initialized ? \Illuminate\Support\Facades\DB::connection()->getDatabaseName() : null;
+            $empresaExisteNoTenant = false;
+            if (tenancy()->initialized) {
+                try {
+                    $empresaModel = \App\Models\Empresa::find($novaEmpresaId);
+                    $empresaExisteNoTenant = $empresaModel !== null;
+                } catch (\Exception $e) {
+                    // Ignorar erro
+                }
+            }
+            
             \Log::info('UserController::switchEmpresaAtiva() - Retornando tenant_id', [
                 'tenant_id' => $tenantId,
                 'empresa_ativa_id' => $usuarioDomain->empresaAtivaId,
                 'tenancy_initialized' => tenancy()->initialized,
+                'database_atual' => $databaseAtual,
+                'empresa_existe_no_tenant' => $empresaExisteNoTenant,
+                'tenant_database' => $tenant?->database,
             ]);
 
             return response()->json([
