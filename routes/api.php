@@ -75,6 +75,9 @@ Route::prefix('v1')->group(function () {
         // Rota de compatibilidade para /user/roles (redireciona para /users/roles)
         Route::get('/user/roles', [\App\Modules\Auth\Controllers\FixUserRolesController::class, 'getCurrentUserRoles']);
         
+        // Trocar empresa ativa (precisa estar fora do CheckSubscription para permitir troca mesmo sem assinatura)
+        Route::put('/users/empresa-ativa', [ApiUserController::class, 'switchEmpresaAtiva']);
+        
         // Assinaturas e Pagamentos (não precisam de verificação de assinatura)
         Route::prefix('assinaturas')->group(function () {
             Route::get('/atual', [ApiAssinaturaController::class, 'atual']);
@@ -223,8 +226,7 @@ Route::prefix('v1')->group(function () {
                     // Debug/Correção de roles
                     Route::get('/roles', [\App\Modules\Auth\Controllers\FixUserRolesController::class, 'getCurrentUserRoles']);
                     Route::post('/fix-role', [\App\Modules\Auth\Controllers\FixUserRolesController::class, 'fixCurrentUserRole']);
-                    // Trocar empresa ativa
-                    Route::put('/empresa-ativa', [ApiUserController::class, 'switchEmpresaAtiva']);
+                    // Nota: switchEmpresaAtiva foi movido para fora do CheckSubscription (linha ~75)
                 });
             
             // Relatórios
