@@ -90,6 +90,7 @@ class ExportacaoService
         $agenciaEmpresa = '';
         $contaEmpresa = '';
         $representanteLegal = '';
+        $cargoRepresentante = '';
         
         try {
             if (tenancy()->initialized) {
@@ -103,12 +104,13 @@ class ExportacaoService
                     $emailEmpresa = $tenant->email ?? '';
                     $telefones = $tenant->telefones ?? [];
                     $telefoneEmpresa = is_array($telefones) && !empty($telefones) ? $telefones[0] : '';
-                    // Nome fantasia não existe no Tenant, usar razão social
-                    $nomeFantasia = $nomeEmpresa;
+                    // Usar nome_fantasia se existir, senão usar razão social
+                    $nomeFantasia = $tenant->nome_fantasia ?? $nomeEmpresa;
                     $bancoEmpresa = $tenant->banco ?? '';
                     $agenciaEmpresa = $tenant->agencia ?? '';
                     $contaEmpresa = $tenant->conta ?? '';
                     $representanteLegal = $tenant->representante_legal_nome ?? '';
+                    $cargoRepresentante = $tenant->cargo_representante ?? '';
                 }
             }
         } catch (\Exception $e) {
@@ -252,6 +254,7 @@ class ExportacaoService
             'agencia_empresa' => $agenciaEmpresa,
             'conta_empresa' => $contaEmpresa,
             'representante_legal' => $representanteLegal,
+            'cargo_representante' => $cargoRepresentante,
             'tenant' => $tenant,
             'logo_url' => $logoUrl,
             'logo_base64' => $logoBase64,

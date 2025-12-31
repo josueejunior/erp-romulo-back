@@ -16,6 +16,7 @@ class Empresa extends BaseModel
 
     protected $fillable = [
         'razao_social',
+        'nome_fantasia',
         'cnpj',
         'cep',
         'logradouro',
@@ -36,6 +37,7 @@ class Empresa extends BaseModel
         // 'banco_pix', // Coluna não existe na migration
         'dados_bancarios_observacoes',
         'representante_legal',
+        'cargo_representante',
         'logo',
         'status',
     ];
