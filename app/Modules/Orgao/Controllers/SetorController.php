@@ -151,6 +151,19 @@ class SetorController extends BaseApiController
             ], 403);
         }
 
+        // Garantir TenantContext com empresa_id antes de validar/crear
+        try {
+            $tenantId = tenancy()->tenant?->id;
+            if (!TenantContext::has() || TenantContext::get()->empresaId === null) {
+                $empresa = $this->getEmpresaAtivaOrFail();
+                if ($tenantId) {
+                    TenantContext::set($tenantId, $empresa->id);
+                }
+            }
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao determinar empresa ativa');
+        }
+
         try {
             $validated = $request->validate([
                 'orgao_id' => 'required|integer',
