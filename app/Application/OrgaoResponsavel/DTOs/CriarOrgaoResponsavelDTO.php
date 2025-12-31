@@ -4,11 +4,11 @@ namespace App\Application\OrgaoResponsavel\DTOs;
 
 /**
  * DTO para criação de responsável de órgão
+ * O empresaId é obtido do TenantContext pelo Use Case, não vem do controller
  */
 class CriarOrgaoResponsavelDTO
 {
     public function __construct(
-        public readonly int $empresaId,
         public readonly int $orgaoId,
         public readonly string $nome,
         public readonly ?string $cargo = null,
@@ -20,7 +20,6 @@ class CriarOrgaoResponsavelDTO
     public static function fromArray(array $data): self
     {
         return new self(
-            empresaId: $data['empresa_id'] ?? $data['empresaId'] ?? 0,
             orgaoId: $data['orgao_id'] ?? $data['orgaoId'] ?? 0,
             nome: $data['nome'] ?? '',
             cargo: $data['cargo'] ?? null,
