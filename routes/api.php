@@ -134,6 +134,7 @@ Route::prefix('v1')->group(function () {
                 Route::post('/confirmar-pagamento', [ApiProcessoController::class, 'confirmarPagamento']);
                 Route::get('/confirmacoes-pagamento', [ApiProcessoController::class, 'historicoConfirmacoes']);
                 Route::get('/sugerir-status', [ApiProcessoController::class, 'sugerirStatus']);
+                Route::get('/ficha-export', [ApiProcessoController::class, 'fichaTecnicaExport']);
                 
                 // Exportação
                 Route::get('/exportar/proposta-comercial', [ApiExportacaoController::class, 'propostaComercial']);

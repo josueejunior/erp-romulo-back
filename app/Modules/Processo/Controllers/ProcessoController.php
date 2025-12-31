@@ -826,4 +826,39 @@ class ProcessoController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * GET /processos/{processo}/ficha-export
+     * Exporta ficha técnica/proposta comercial do processo
+     */
+    public function fichaTecnicaExport(Processo $processo, Request $request): JsonResponse
+    {
+        try {
+            $this->assertProcessoEmpresa($processo);
+            
+            $tipo = $request->get('tipo', 'ficha-tecnica'); // ficha-tecnica ou proposta
+            $formato = $request->get('formato', 'pdf'); // pdf ou docx
+            
+            $processo->load(['orgao', 'setor', 'itens.fornecedor', 'itens.especificacoes']);
+            
+            // Preparar dados da ficha/proposta
+            $data = [
+                'processo' => new ProcessoResource($processo),
+                'itens' => $processo->itens,
+                'data_emissao' => now()->format('d/m/Y'),
+                'validade_proposta' => $processo->validade_proposta,
+            ];
+            
+            // Retornar dados ou arquivo (implementar conforme necessidade)
+            return response()->json([
+                'success' => true,
+                'message' => "Exportação de {$tipo} ({$formato}) preparada",
+                'data' => $data,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Erro ao exportar ficha: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }

@@ -111,6 +111,14 @@ trait HasAuthContext
     }
 
     /**
+     * Alias para getEmpresaOrFail() (usado em vários controllers)
+     */
+    protected function getEmpresaAtivaOrFail(): Empresa
+    {
+        return $this->getEmpresaOrFail();
+    }
+
+    /**
      * Obtém usuário autenticado ou lança exceção
      */
     protected function getUserOrFail(): \Illuminate\Contracts\Auth\Authenticatable
