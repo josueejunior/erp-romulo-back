@@ -200,10 +200,9 @@ class UserController extends BaseApiController
      * Busca o tenant_id correto da empresa
      * Como empresas podem estar em tenants diferentes, precisamos procurar em todos os tenants
      * 
-     * IMPORTANTE: Se a empresa existe em múltiplos tenants, retorna o primeiro encontrado.
-     * Para determinar qual tenant usar, o sistema deve considerar:
-     * 1. Se a empresa existe no tenant atual, usar o tenant atual
-     * 2. Se não existe no tenant atual, buscar em todos os tenants e retornar o primeiro encontrado
+     * IMPORTANTE: Quando a empresa existe em múltiplos tenants, retorna o tenant atual se a empresa
+     * existir lá, pois o usuário está trabalhando nesse contexto. Isso garante que o usuário continue
+     * no mesmo tenant ao trocar de empresa, a menos que a empresa não exista no tenant atual.
      * 
      * @param int $empresaId ID da empresa
      * @param int $tenantIdAtual Tenant atual (para otimizar busca)
@@ -211,9 +210,8 @@ class UserController extends BaseApiController
      */
     private function buscarTenantIdDaEmpresa(int $empresaId, int $tenantIdAtual): ?int
     {
-        $tenantsEncontrados = [];
-        
-        // Primeiro, tentar no tenant atual (otimização)
+        // 🔥 PRIORIDADE 1: Verificar se a empresa existe no tenant atual
+        // Se existir, retornar o tenant atual (usuário continua no mesmo contexto)
         try {
             if (tenancy()->initialized) {
                 $empresa = \App\Models\Empresa::find($empresaId);
@@ -224,7 +222,8 @@ class UserController extends BaseApiController
                         'empresa_razao_social' => $empresa->razao_social ?? 'N/A',
                         'empresa_cnpj' => $empresa->cnpj ?? 'N/A',
                     ]);
-                    $tenantsEncontrados[] = $tenantIdAtual;
+                    // Retornar imediatamente o tenant atual se a empresa existir lá
+                    return $tenantIdAtual;
                 }
             }
         } catch (\Exception $e) {
@@ -235,7 +234,8 @@ class UserController extends BaseApiController
             ]);
         }
 
-        // Buscar em todos os tenants para verificar se existe em múltiplos
+        // 🔥 PRIORIDADE 2: Se não encontrou no tenant atual, buscar em outros tenants
+        // Isso acontece quando o usuário troca para uma empresa que não existe no tenant atual
         $tenants = \App\Models\Tenant::all();
         
         foreach ($tenants as $tenant) {
@@ -250,7 +250,6 @@ class UserController extends BaseApiController
                 $empresa = \App\Models\Empresa::find($empresaId);
                 
                 if ($empresa) {
-                    $tenantsEncontrados[] = $tenant->id;
                     \Log::info('UserController::buscarTenantIdDaEmpresa() - Empresa encontrada em outro tenant', [
                         'empresa_id' => $empresaId,
                         'tenant_id_atual' => $tenantIdAtual,
@@ -258,6 +257,10 @@ class UserController extends BaseApiController
                         'empresa_razao_social' => $empresa->razao_social ?? 'N/A',
                         'empresa_cnpj' => $empresa->cnpj ?? 'N/A',
                     ]);
+                    
+                    tenancy()->end();
+                    // Retornar o primeiro encontrado (mudança de tenant necessária)
+                    return $tenant->id;
                 }
                 
                 tenancy()->end();
@@ -269,20 +272,6 @@ class UserController extends BaseApiController
                     'error' => $e->getMessage(),
                 ]);
             }
-        }
-
-        // Se encontrou em múltiplos tenants, avisar no log
-        if (count($tenantsEncontrados) > 1) {
-            \Log::warning('UserController::buscarTenantIdDaEmpresa() - Empresa encontrada em múltiplos tenants', [
-                'empresa_id' => $empresaId,
-                'tenants_encontrados' => $tenantsEncontrados,
-                'tenant_id_retornado' => $tenantsEncontrados[0], // Retornar o primeiro (tenant atual se existir)
-            ]);
-        }
-
-        // Retornar o primeiro encontrado (prioridade: tenant atual)
-        if (!empty($tenantsEncontrados)) {
-            return $tenantsEncontrados[0];
         }
 
         // Se não encontrou em nenhum tenant, retornar null (usar tenant atual como fallback)
