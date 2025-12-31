@@ -68,6 +68,17 @@ class OrgaoRepository implements OrgaoRepositoryInterface
         return $model ? $this->toDomain($model) : null;
     }
 
+    public function buscarModeloPorId(int $id, array $with = []): ?OrgaoModel
+    {
+        $query = OrgaoModel::query();
+        
+        if (!empty($with)) {
+            $query->with($with);
+        }
+        
+        return $query->find($id);
+    }
+
     public function buscarComFiltros(array $filtros = []): LengthAwarePaginator
     {
         // Aplicar filtro de empresa_id com isolamento

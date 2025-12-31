@@ -2,268 +2,237 @@
 
 namespace App\Modules\Orgao\Controllers;
 
-use App\Http\Controllers\Controller;
-use App\Modules\Orgao\Resources\OrgaoResource;
-use App\Modules\Orgao\Models\Orgao;
-use App\Modules\Orgao\Services\OrgaoService;
-use Illuminate\Http\Request;
+use App\Http\Controllers\Api\BaseApiController;
+use App\Http\Controllers\Traits\HasAuthContext;
+use App\Application\Orgao\Resources\OrgaoResource;
+use App\Application\Orgao\UseCases\ListarOrgaosUseCase;
+use App\Application\Orgao\UseCases\BuscarOrgaoUseCase;
+use App\Application\Orgao\UseCases\CriarOrgaoUseCase;
+use App\Application\Orgao\UseCases\AtualizarOrgaoUseCase;
+use App\Application\Orgao\UseCases\DeletarOrgaoUseCase;
+use App\Application\Orgao\DTOs\CriarOrgaoDTO;
+use App\Application\Orgao\DTOs\AtualizarOrgaoDTO;
+use App\Http\Requests\Orgao\OrgaoCreateRequest;
+use App\Http\Requests\Orgao\OrgaoUpdateRequest;
 use App\Helpers\PermissionHelper;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use DomainException;
 
-class OrgaoController extends Controller
+/**
+ * Controller para gerenciamento de Órgãos
+ * 
+ * Refatorado para seguir DDD rigorosamente:
+ * - Usa Form Requests para validação
+ * - Usa Use Cases para lógica de negócio
+ * - Usa Resources para transformação
+ * - Não acessa modelos Eloquent diretamente
+ * - Não contém lógica de infraestrutura (cache, etc.)
+ * 
+ * Segue o mesmo padrão do AssinaturaController e FornecedorController:
+ * - Tenant ID: Obtido automaticamente via tenancy()->tenant (middleware já inicializou)
+ * - Empresa ID: Obtido automaticamente via getEmpresaAtivaOrFail() que prioriza header X-Empresa-ID
+ */
+class OrgaoController extends BaseApiController
 {
-    protected OrgaoService $service;
+    use HasAuthContext;
 
-    public function __construct(OrgaoService $service)
-    {
-        $this->service = $service;
-    }
+    public function __construct(
+        private ListarOrgaosUseCase $listarOrgaosUseCase,
+        private BuscarOrgaoUseCase $buscarOrgaoUseCase,
+        private CriarOrgaoUseCase $criarOrgaoUseCase,
+        private AtualizarOrgaoUseCase $atualizarOrgaoUseCase,
+        private DeletarOrgaoUseCase $deletarOrgaoUseCase,
+        private OrgaoResource $orgaoResource,
+    ) {}
 
     /**
-     * Extrai o ID da rota
+     * Listar órgãos
+     * Retorna entidades de domínio transformadas via Resource
+     * 
+     * O middleware já inicializou o tenant correto baseado no X-Tenant-ID do header.
+     * Apenas retorna os dados dos órgãos da empresa ativa.
      */
-    protected function getRouteId($route): ?int
-    {
-        $parameters = $route->parameters();
-        // Tentar 'orgao' primeiro, depois 'id'
-        $id = $parameters['orgao'] ?? $parameters['id'] ?? null;
-        return $id ? (int) $id : null;
-    }
-    /**
-     * Sobrescrever handleList para usar OrgaoResource
-     */
-    protected function handleList(Request $request, array $mergeParams = []): \Illuminate\Http\JsonResponse
+    public function list(Request $request): JsonResponse
     {
         try {
-            $params = $this->service->createListParamBag(array_merge($request->all(), $mergeParams));
-            $orgaos = $this->service->list($params);
+            // Obter empresa automaticamente (middleware já inicializou baseado no X-Empresa-ID)
+            $empresa = $this->getEmpresaAtivaOrFail();
             
-            // Verificar se é um paginator
-            if ($orgaos instanceof \Illuminate\Contracts\Pagination\LengthAwarePaginator) {
-                return response()->json([
-                    'data' => OrgaoResource::collection($orgaos->items()),
-                    'meta' => [
-                        'current_page' => $orgaos->currentPage(),
-                        'last_page' => $orgaos->lastPage(),
-                        'per_page' => $orgaos->perPage(),
-                        'total' => $orgaos->total(),
-                    ]
-                ]);
+            // Preparar filtros
+            $filtros = $request->all();
+            $filtros['empresa_id'] = $empresa->id;
+            
+            // Adicionar busca se houver
+            if ($request->has('search')) {
+                $filtros['search'] = $request->input('search');
             }
             
-            // Se for uma coleção simples
-            if (is_iterable($orgaos)) {
-                return response()->json([
-                    'data' => OrgaoResource::collection($orgaos)
-                ]);
-            }
+            // Executar Use Case
+            $paginado = $this->listarOrgaosUseCase->executar($filtros);
             
-            // Fallback: retornar vazio
+            // Transformar entidades de domínio em arrays via Resource
+            $items = collect($paginado->items())->map(fn($orgao) => 
+                $this->orgaoResource->toArray($orgao)
+            );
+            
             return response()->json([
-                'data' => [],
+                'data' => $items->values()->all(),
                 'meta' => [
-                    'current_page' => 1,
-                    'last_page' => 1,
-                    'per_page' => 15,
-                    'total' => 0,
-                ]
+                    'current_page' => $paginado->currentPage(),
+                    'last_page' => $paginado->lastPage(),
+                    'per_page' => $paginado->perPage(),
+                    'total' => $paginado->total(),
+                ],
             ]);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao listar órgãos');
+        }
+    }
+
+    /**
+     * Obter órgão específico
+     * Retorna entidade de domínio transformada via Resource
+     */
+    public function get(int $id): JsonResponse
+    {
+        try {
+            // Obter empresa automaticamente (middleware já inicializou)
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Executar Use Case
+            $orgaoDomain = $this->buscarOrgaoUseCase->executar($id);
+            
+            // Validar que o órgão pertence à empresa ativa
+            if ($orgaoDomain->empresaId !== $empresa->id) {
+                return response()->json(['message' => 'Órgão não encontrado'], 404);
+            }
+            
+            // Transformar entidade em array via Resource
+            $data = $this->orgaoResource->toArray($orgaoDomain);
+            
+            return response()->json(['data' => $data]);
+        } catch (DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao buscar órgão');
+        }
+    }
+
+    /**
+     * Criar órgão
+     * Usa Form Request para validação e Use Case para lógica de negócio
+     */
+    public function store(OrgaoCreateRequest $request): JsonResponse
+    {
+        if (!PermissionHelper::canManageMasterData()) {
+            return response()->json(['message' => 'Você não tem permissão para cadastrar órgãos.'], 403);
+        }
+
+        try {
+            // Obter empresa automaticamente (middleware já inicializou)
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Criar DTO a partir do request validado
+            $validated = $request->validated();
+            $validated['empresa_id'] = $empresa->id;
+            
+            $dto = CriarOrgaoDTO::fromArray($validated);
+            
+            // Executar Use Case (contém toda a lógica de negócio)
+            $orgaoDomain = $this->criarOrgaoUseCase->executar($dto);
+            
+            // Transformar entidade em array via Resource
+            $data = $this->orgaoResource->toArray($orgaoDomain);
+            
+            return response()->json([
+                'message' => 'Órgão criado com sucesso',
+                'data' => $data,
+            ], 201);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 400);
         } catch (\Illuminate\Validation\ValidationException $e) {
-            \Log::error('Erro de validação ao listar órgãos', [
-                'errors' => $e->errors()
-            ]);
             return response()->json([
                 'message' => 'Erro de validação',
-                'errors' => $e->errors()
+                'errors' => $e->errors(),
             ], 422);
-        } catch (\Illuminate\Database\QueryException $e) {
-            \Log::error('Erro de banco de dados ao listar órgãos', [
-                'error' => $e->getMessage(),
-                'sql' => $e->getSql() ?? 'N/A',
-                'bindings' => $e->getBindings() ?? [],
-                'trace' => $e->getTraceAsString()
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao criar órgão');
+        }
+    }
+
+    /**
+     * Atualizar órgão
+     * Usa Form Request para validação e Use Case para lógica de negócio
+     */
+    public function update(OrgaoUpdateRequest $request, int $id): JsonResponse
+    {
+        if (!PermissionHelper::canManageMasterData()) {
+            return response()->json(['message' => 'Você não tem permissão para editar órgãos.'], 403);
+        }
+
+        try {
+            // Obter empresa automaticamente (middleware já inicializou)
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Request já está validado via Form Request
+            $dto = AtualizarOrgaoDTO::fromRequest($request, $id);
+
+            // Executar Use Case
+            $orgaoDomain = $this->atualizarOrgaoUseCase->executar($dto, $empresa->id);
+            
+            // Transformar entidade em array via Resource
+            $data = $this->orgaoResource->toArray($orgaoDomain);
+            
+            return response()->json([
+                'message' => 'Órgão atualizado com sucesso',
+                'data' => $data,
             ]);
-            return response()->json([
-                'message' => 'Erro ao consultar banco de dados. Verifique os logs para mais detalhes.'
-            ], 500);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
         } catch (\Exception $e) {
-            \Log::error('Erro ao listar órgãos', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'class' => get_class($e)
-            ]);
-            return response()->json([
-                'message' => $e->getMessage() ?: 'Erro ao listar órgãos'
-            ], 500);
+            return $this->handleException($e, 'Erro ao atualizar órgão');
         }
     }
 
     /**
-     * Sobrescrever handleGet para usar OrgaoResource
+     * Deletar órgão
      */
-    protected function handleGet(Request $request, array $mergeParams = []): \Illuminate\Http\JsonResponse
-    {
-        $route = $request->route();
-        $id = $this->getRouteId($route);
-        
-        if (!$id) {
-            return response()->json(['message' => 'ID não fornecido'], 400);
-        }
-
-        try {
-            $params = array_merge($request->all(), $mergeParams);
-            $paramBag = $this->service->createFindByIdParamBag($params);
-            $orgao = $this->service->findById($id, $paramBag);
-            
-            if (!$orgao) {
-                return response()->json([
-                    'message' => 'Órgão não encontrado ou não pertence à empresa ativa.'
-                ], 404);
-            }
-            
-            return response()->json(['data' => new OrgaoResource($orgao)]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 400);
-        }
-    }
-
-    /**
-     * Método para Route::module - Listar órgãos
-     */
-    public function list(Request $request)
-    {
-        return $this->handleList($request);
-    }
-
-    /**
-     * Método padrão Laravel - Listar órgãos
-     */
-    public function index(Request $request)
-    {
-        return $this->handleList($request);
-    }
-
-    /**
-     * Método para Route::module - Buscar um órgão
-     */
-    public function get(Request $request)
-    {
-        return $this->handleGet($request);
-    }
-
-    /**
-     * Sobrescrever handleStore para validação de permissão e usar OrgaoResource
-     */
-    protected function handleStore(Request $request, array $mergeParams = []): \Illuminate\Http\JsonResponse
+    public function destroy(int $id): JsonResponse
     {
         if (!PermissionHelper::canManageMasterData()) {
-            return response()->json([
-                'message' => 'Você não tem permissão para cadastrar órgãos.',
-            ], 403);
+            return response()->json(['message' => 'Você não tem permissão para excluir órgãos.'], 403);
         }
 
         try {
-            $data = array_merge($request->all(), $mergeParams);
-            $validator = $this->service->validateStoreData($data);
+            // Obter empresa automaticamente (middleware já inicializou)
+            $empresa = $this->getEmpresaAtivaOrFail();
             
-            if ($validator->fails()) {
-                return response()->json([
-                    'message' => 'Erro de validação',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-
-            $orgao = $this->service->store($validator->validated());
-            $orgao->load('setors');
-
-            return response()->json(['data' => new OrgaoResource($orgao)], 201);
+            $this->deletarOrgaoUseCase->executar($id, $empresa->id);
+            
+            return response()->json(['message' => 'Órgão deletado com sucesso'], 204);
+        } catch (DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 400);
+            return $this->handleException($e, 'Erro ao deletar órgão');
         }
-    }
-
-    public function store(Request $request)
-    {
-        return $this->handleStore($request);
-    }
-
-    public function show(Orgao $orgao)
-    {
-        // Chamar handleGet diretamente com o ID
-        $request = request();
-        $request->route()->setParameter('orgao', $orgao->id);
-        return $this->handleGet($request);
     }
 
     /**
-     * Sobrescrever handleUpdate para validação de permissão e usar OrgaoResource
+     * Método index para compatibilidade com rotas Laravel padrão
      */
-    protected function handleUpdate(Request $request, int|string $id, array $mergeParams = []): \Illuminate\Http\JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        if (!PermissionHelper::canManageMasterData()) {
-            return response()->json([
-                'message' => 'Você não tem permissão para editar órgãos.',
-            ], 403);
-        }
-
-        try {
-            $data = array_merge($request->all(), $mergeParams);
-            $validator = $this->service->validateUpdateData($data, $id);
-            
-            if ($validator->fails()) {
-                return response()->json([
-                    'message' => 'Erro de validação',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-
-            $orgao = $this->service->update($id, $validator->validated());
-            $orgao->load('setors');
-
-            return response()->json(['data' => new OrgaoResource($orgao)]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 400);
-        }
-    }
-
-    public function update(Request $request, Orgao $orgao)
-    {
-        // Chamar handleUpdate diretamente com o ID do órgão
-        return $this->handleUpdate($request, $orgao->id);
+        return $this->list($request);
     }
 
     /**
-     * Sobrescrever handleDestroy para validação de permissão
+     * Método show para compatibilidade com rotas Laravel padrão
      */
-    protected function handleDestroy(Request $request, int|string $id, array $mergeParams = []): \Illuminate\Http\JsonResponse
+    public function show(int $id): JsonResponse
     {
-        if (!PermissionHelper::canManageMasterData()) {
-            return response()->json([
-                'message' => 'Você não tem permissão para excluir órgãos.',
-            ], 403);
-        }
-
-        try {
-            $this->service->deleteById($id);
-            return response()->json(null, 204);
-        } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 400);
-        }
-    }
-
-    public function destroy(Orgao $orgao)
-    {
-        // Chamar handleDestroy diretamente
-        return $this->handleDestroy(request(), $orgao->id);
+        return $this->get($id);
     }
 }
-
