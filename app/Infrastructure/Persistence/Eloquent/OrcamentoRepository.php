@@ -7,19 +7,26 @@ use App\Domain\Orcamento\Repositories\OrcamentoRepositoryInterface;
 use App\Modules\Orcamento\Models\Orcamento as OrcamentoModel;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use App\Infrastructure\Persistence\Eloquent\Traits\HasModelRetrieval;
+use Illuminate\Support\Facades\Schema;
 
 class OrcamentoRepository implements OrcamentoRepositoryInterface
 {
     use HasModelRetrieval;
     private function toDomain(OrcamentoModel $model): Orcamento
     {
+        // Verificar se a coluna transportadora_id existe antes de acessar
+        $transportadoraId = null;
+        if (Schema::hasColumn('orcamentos', 'transportadora_id')) {
+            $transportadoraId = $model->transportadora_id;
+        }
+        
         return new Orcamento(
             id: $model->id,
             empresaId: $model->empresa_id,
             processoId: $model->processo_id,
             processoItemId: $model->processo_item_id,
             fornecedorId: $model->fornecedor_id,
-            transportadoraId: $model->transportadora_id,
+            transportadoraId: $transportadoraId,
             custoProduto: (float) $model->custo_produto,
             marcaModelo: $model->marca_modelo,
             ajustesEspecificacao: $model->ajustes_especificacao,
@@ -32,12 +39,11 @@ class OrcamentoRepository implements OrcamentoRepositoryInterface
 
     private function toArray(Orcamento $orcamento): array
     {
-        return [
+        $data = [
             'empresa_id' => $orcamento->empresaId,
             'processo_id' => $orcamento->processoId,
             'processo_item_id' => $orcamento->processoItemId,
             'fornecedor_id' => $orcamento->fornecedorId,
-            'transportadora_id' => $orcamento->transportadoraId,
             'custo_produto' => $orcamento->custoProduto,
             'marca_modelo' => $orcamento->marcaModelo,
             'ajustes_especificacao' => $orcamento->ajustesEspecificacao,
@@ -46,6 +52,14 @@ class OrcamentoRepository implements OrcamentoRepositoryInterface
             'fornecedor_escolhido' => $orcamento->fornecedorEscolhido,
             'observacoes' => $orcamento->observacoes,
         ];
+        
+        // Verificar se a coluna transportadora_id existe antes de incluir
+        // Isso evita erro se a migration não foi executada
+        if (Schema::hasColumn('orcamentos', 'transportadora_id')) {
+            $data['transportadora_id'] = $orcamento->transportadoraId;
+        }
+        
+        return $data;
     }
 
     public function criar(Orcamento $orcamento): Orcamento
