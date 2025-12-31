@@ -115,24 +115,45 @@ class AssinaturaController extends BaseApiController
     public function status(Request $request): JsonResponse
     {
         try {
-            // Usar o tenant já inicializado pelo middleware (como OrgaoController faz)
-            // O middleware InitializeTenancyByRequestData já inicializou o tenant baseado no header X-Tenant-ID
-            $tenant = tenancy()->tenant;
+            // 🔥 IMPORTANTE: Pegar tenant_id diretamente do header (como o middleware faz)
+            // O middleware pode não reinicializar o tenant se já estiver inicializado,
+            // então precisamos usar o header diretamente para garantir o tenant correto
+            $tenantIdFromHeader = $request->header('X-Tenant-ID');
             
-            if (!$tenant) {
-                \Log::warning('AssinaturaController::status() - Tenant não inicializado', [
-                    'X-Tenant-ID' => $request->header('X-Tenant-ID'),
+            if (!$tenantIdFromHeader) {
+                \Log::warning('AssinaturaController::status() - X-Tenant-ID não fornecido', [
                     'tenancy_initialized' => tenancy()->initialized,
+                    'tenancy_tenant_id' => tenancy()->tenant?->id,
                 ]);
                 return response()->json([
-                    'message' => 'Tenant não encontrado ou não inicializado'
+                    'message' => 'Tenant ID não fornecido. Use o header X-Tenant-ID.'
+                ], 400);
+            }
+            
+            // Buscar tenant pelo ID do header (garante que estamos usando o tenant correto)
+            $tenant = \App\Models\Tenant::find($tenantIdFromHeader);
+            
+            if (!$tenant) {
+                \Log::warning('AssinaturaController::status() - Tenant não encontrado', [
+                    'tenant_id_header' => $tenantIdFromHeader,
+                ]);
+                return response()->json([
+                    'message' => 'Tenant não encontrado'
                 ], 404);
             }
             
-            \Log::debug('AssinaturaController::status() - Usando tenant do contexto', [
-                'tenant_id' => $tenant->id,
+            // Se o tenant do contexto é diferente, reinicializar
+            if (!tenancy()->initialized || tenancy()->tenant?->id !== $tenant->id) {
+                if (tenancy()->initialized) {
+                    tenancy()->end();
+                }
+                tenancy()->initialize($tenant);
+            }
+            
+            \Log::debug('AssinaturaController::status() - Usando tenant do header', [
+                'tenant_id_header' => $tenantIdFromHeader,
+                'tenant_id_contexto' => tenancy()->tenant?->id,
                 'tenant_razao_social' => $tenant->razao_social,
-                'X-Tenant-ID' => $request->header('X-Tenant-ID'),
                 'X-Empresa-ID' => $request->header('X-Empresa-ID'),
             ]);
 
@@ -150,22 +171,13 @@ class AssinaturaController extends BaseApiController
             
             // Tentar buscar status, mas não lançar erro se não encontrar assinatura
             try {
-                // 🔥 IMPORTANTE: Usar tenant_id do header para garantir que está usando o tenant correto
-                // O middleware pode ter inicializado um tenant diferente se o header não foi atualizado
-                $tenantIdFromHeader = $request->header('X-Tenant-ID');
-                $tenantIdToUse = $tenantIdFromHeader ? (int) $tenantIdFromHeader : $tenant->id;
-                
-                \Log::debug('AssinaturaController::status() - Usando tenant_id', [
-                    'tenant_id_header' => $tenantIdFromHeader,
-                    'tenant_id_contexto' => $tenant->id,
-                    'tenant_id_usado' => $tenantIdToUse,
-                    'empresa_id' => $empresaId,
-                ]);
+                // Usar tenant_id do header (garante que está correto mesmo se o contexto não atualizou)
+                $tenantIdToUse = (int) $tenantIdFromHeader;
                 
                 // Se não tem empresa, usar 0 como fallback para contagem de usuários
-                $statusData = $this->obterStatusAssinaturaUseCase->executar(8, $empresaId ?? 0);
+                $statusData = $this->obterStatusAssinaturaUseCase->executar($tenantIdToUse, $empresaId ?? 0);
                 
-                // Garantir que o tenant_id no retorno seja o correto (do header)
+                // Garantir que o tenant_id no retorno seja o do header
                 $statusData['tenant_id'] = $tenantIdToUse;
 
                 return response()->json([
@@ -173,9 +185,10 @@ class AssinaturaController extends BaseApiController
                 ]);
             } catch (\App\Domain\Exceptions\NotFoundException $e) {
                 // Não há assinatura - retornar dados vazios para que o frontend possa tratar
+                $tenantIdToUse = (int) $tenantIdFromHeader;
                 return response()->json([
                     'data' => [
-                        'tenant_id' => $tenant->id,
+                        'tenant_id' => $tenantIdToUse,
                         'status' => null,
                         'limite_processos' => null,
                         'limite_usuarios' => null,
