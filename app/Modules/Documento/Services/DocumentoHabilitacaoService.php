@@ -4,9 +4,11 @@ namespace App\Modules\Documento\Services;
 
 use App\Services\BaseService;
 use App\Modules\Documento\Models\DocumentoHabilitacao;
+use App\Modules\Documento\Models\DocumentoHabilitacaoVersao;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Auth;
 
 class DocumentoHabilitacaoService extends BaseService
 {
@@ -102,15 +104,33 @@ class DocumentoHabilitacaoService extends BaseService
 
     public function store(array $data): \Illuminate\Database\Eloquent\Model
     {
-        // Processar arquivo se presente
+        $empresaId = app('current_empresa_id');
+        $userId = Auth::id();
+
+        $this->assertNoDuplicate($data, null, $empresaId);
+
         if (isset($data['arquivo']) && $data['arquivo'] instanceof \Illuminate\Http\UploadedFile) {
             $arquivo = $data['arquivo'];
             $nomeArquivo = time() . '_' . $arquivo->getClientOriginalName();
-            $arquivo->storeAs('documentos-habilitacao', $nomeArquivo, 'public');
+            $caminho = $arquivo->storeAs('documentos-habilitacao', $nomeArquivo, 'public');
             $data['arquivo'] = $nomeArquivo;
+            $data['versao_meta'] = [
+                'caminho' => $caminho,
+                'mime' => $arquivo->getMimeType(),
+                'tamanho' => $arquivo->getSize(),
+                'user_id' => $userId,
+            ];
         }
 
-        return parent::store($data);
+        $data['empresa_id'] = $data['empresa_id'] ?? $empresaId;
+
+        $model = parent::store($data);
+
+        if (!empty($data['versao_meta'])) {
+            $this->criarVersao($model, 1, $data['versao_meta']);
+        }
+
+        return $model;
     }
 
     public function update(int|string $id, array $data): \Illuminate\Database\Eloquent\Model
@@ -121,20 +141,35 @@ class DocumentoHabilitacaoService extends BaseService
             throw new \Exception('Documento não encontrado');
         }
 
+        $empresaId = app('current_empresa_id');
+        $userId = Auth::id();
+
+        $this->assertNoDuplicate($data, $documento->id, $empresaId);
+
         // Processar arquivo se presente
         if (isset($data['arquivo']) && $data['arquivo'] instanceof \Illuminate\Http\UploadedFile) {
-            // Deletar arquivo antigo se existir
-            if ($documento->arquivo) {
-                Storage::disk('public')->delete('documentos-habilitacao/' . $documento->arquivo);
-            }
-            
             $arquivo = $data['arquivo'];
             $nomeArquivo = time() . '_' . $arquivo->getClientOriginalName();
-            $arquivo->storeAs('documentos-habilitacao', $nomeArquivo, 'public');
+            $caminho = $arquivo->storeAs('documentos-habilitacao', $nomeArquivo, 'public');
             $data['arquivo'] = $nomeArquivo;
+            $data['versao_meta'] = [
+                'caminho' => $caminho,
+                'mime' => $arquivo->getMimeType(),
+                'tamanho' => $arquivo->getSize(),
+                'user_id' => $userId,
+            ];
         }
 
-        return parent::update($id, $data);
+        $data['empresa_id'] = $data['empresa_id'] ?? $empresaId;
+
+        $updated = parent::update($id, $data);
+
+        if (!empty($data['versao_meta'])) {
+            $nextVersion = ($documento->versoes()->max('versao') ?? 0) + 1;
+            $this->criarVersao($updated, $nextVersion, $data['versao_meta']);
+        }
+
+        return $updated;
     }
 
     public function deleteById(int|string $id): bool
@@ -155,6 +190,42 @@ class DocumentoHabilitacaoService extends BaseService
         }
 
         return $documento->forceDelete();
+    }
+
+    protected function criarVersao($documento, int $versao, array $meta): void
+    {
+        DocumentoHabilitacaoVersao::create([
+            'empresa_id' => $documento->empresa_id,
+            'documento_habilitacao_id' => $documento->id,
+            'user_id' => $meta['user_id'] ?? null,
+            'versao' => $versao,
+            'nome_arquivo' => $documento->arquivo,
+            'caminho' => $meta['caminho'] ?? $documento->arquivo,
+            'mime' => $meta['mime'] ?? null,
+            'tamanho_bytes' => $meta['tamanho'] ?? null,
+        ]);
+    }
+
+    protected function assertNoDuplicate(array $data, ?int $ignoreId, ?int $empresaId): void
+    {
+        $tipo = $data['tipo'] ?? null;
+        $numero = $data['numero'] ?? null;
+        if (!$tipo || !$numero || !$empresaId) {
+            return;
+        }
+
+        $query = DocumentoHabilitacao::query()
+            ->where('empresa_id', $empresaId)
+            ->where('tipo', $tipo)
+            ->where('numero', $numero);
+
+        if ($ignoreId) {
+            $query->where('id', '!=', $ignoreId);
+        }
+
+        if ($query->exists()) {
+            throw new \DomainException('Já existe um documento com este tipo e número para esta empresa.');
+        }
     }
 }
 

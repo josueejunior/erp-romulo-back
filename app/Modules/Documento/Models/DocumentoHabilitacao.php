@@ -9,6 +9,7 @@ use App\Models\BaseModel;
 use App\Models\Traits\HasSoftDeletesWithEmpresa;
 use App\Models\Traits\BelongsToEmpresaTrait;
 use App\Modules\Processo\Models\ProcessoDocumento;
+use App\Modules\Documento\Models\DocumentoHabilitacaoVersao;
 
 class DocumentoHabilitacao extends BaseModel
 {
@@ -69,6 +70,11 @@ class DocumentoHabilitacao extends BaseModel
     public function processoDocumentos(): HasMany
     {
         return $this->hasMany(ProcessoDocumento::class);
+    }
+
+    public function versoes(): HasMany
+    {
+        return $this->hasMany(DocumentoHabilitacaoVersao::class, 'documento_habilitacao_id');
     }
 }
 
