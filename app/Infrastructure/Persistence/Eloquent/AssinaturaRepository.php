@@ -48,7 +48,7 @@ class AssinaturaRepository implements AssinaturaRepositoryInterface
     /**
      * Buscar assinatura atual do tenant
      */
-    public function buscarAssinaturaAtual(int $tenantId): ?Assinatura
+public function buscarAssinaturaAtual(int $tenantId): ?Assinatura
     {
         // Buscar tenant para verificar assinatura_atual_id
         $tenant = Tenant::find($tenantId);
@@ -59,10 +59,17 @@ class AssinaturaRepository implements AssinaturaRepositoryInterface
 
         $assinatura = null;
 
-        // Inicializar contexto do tenant para buscar no banco correto
+        // 🔥 IMPORTANTE: Sempre garantir que o tenant correto está inicializado
+        // Se já estiver inicializado com outro tenant, reinicializar
         $jaInicializado = tenancy()->initialized;
+        $tenantAtual = tenancy()->tenant;
+        $precisaReinicializar = !$jaInicializado || ($tenantAtual && $tenantAtual->id !== $tenantId);
+        
         try {
-            if (!$jaInicializado) {
+            if ($precisaReinicializar) {
+                if ($jaInicializado) {
+                    tenancy()->end();
+                }
                 tenancy()->initialize($tenant);
             }
 
