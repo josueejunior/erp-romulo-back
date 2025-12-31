@@ -17,6 +17,8 @@ class ProcessoItemRepository implements ProcessoItemRepositoryInterface
         return new ProcessoItem(
             id: $model->id,
             processoId: $model->processo_id,
+            fornecedorId: $model->fornecedor_id,
+            transportadoraId: $model->transportadora_id,
             numeroItem: $model->numero_item,
             codigoInterno: $model->codigo_interno,
             quantidade: (float) $model->quantidade,
@@ -57,6 +59,8 @@ class ProcessoItemRepository implements ProcessoItemRepositoryInterface
     {
         return [
             'processo_id' => $processoItem->processoId,
+            'fornecedor_id' => $processoItem->fornecedorId,
+            'transportadora_id' => $processoItem->transportadoraId,
             'numero_item' => $processoItem->numeroItem,
             'codigo_interno' => $processoItem->codigoInterno,
             'quantidade' => $processoItem->quantidade,

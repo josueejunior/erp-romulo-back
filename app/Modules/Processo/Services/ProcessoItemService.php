@@ -76,6 +76,8 @@ class ProcessoItemService extends BaseService
     {
         return Validator::make($data, [
             'processo_id' => 'required|exists:processos,id',
+            'fornecedor_id' => 'nullable|exists:fornecedores,id',
+            'transportadora_id' => 'nullable|exists:fornecedores,id',
             'numero_item' => [DbTypeRule::required(), ...DbTypeRule::integer(), 'min:1'],
             'quantidade' => [DbTypeRule::required(), 'numeric', 'min:0.01'],
             'unidade' => [DbTypeRule::required(), ...DbTypeRule::string(50)],
@@ -83,6 +85,7 @@ class ProcessoItemService extends BaseService
             'marca_modelo_referencia' => [DbTypeRule::nullable(), ...DbTypeRule::string(DbTypeRule::VARCHAR_DEFAULT)],
             'exige_atestado' => [...DbTypeRule::boolean()],
             'quantidade_minima_atestado' => [DbTypeRule::nullable(), ...DbTypeRule::integer(), 'min:1', 'required_if:exige_atestado,1'],
+            'quantidade_atestado_cap_tecnica' => [DbTypeRule::nullable(), ...DbTypeRule::integer(), 'min:1'],
             'valor_estimado' => [DbTypeRule::nullable(), 'numeric', 'min:0'],
             'observacoes' => [DbTypeRule::nullable(), ...DbTypeRule::observacao()],
         ]);
@@ -117,6 +120,8 @@ class ProcessoItemService extends BaseService
     public function validateUpdateData(array $data, int|string $id): \Illuminate\Contracts\Validation\Validator
     {
         return Validator::make($data, [
+            'fornecedor_id' => 'nullable|exists:fornecedores,id',
+            'transportadora_id' => 'nullable|exists:fornecedores,id',
             'numero_item' => ['sometimes', ...DbTypeRule::integer(), 'min:1'],
             'quantidade' => ['sometimes', 'numeric', 'min:0.01'],
             'unidade' => ['sometimes', ...DbTypeRule::string(50)],
@@ -124,6 +129,7 @@ class ProcessoItemService extends BaseService
             'marca_modelo_referencia' => [DbTypeRule::nullable(), ...DbTypeRule::string(DbTypeRule::VARCHAR_DEFAULT)],
             'exige_atestado' => [...DbTypeRule::boolean()],
             'quantidade_minima_atestado' => [DbTypeRule::nullable(), ...DbTypeRule::integer(), 'min:1', 'required_if:exige_atestado,1'],
+            'quantidade_atestado_cap_tecnica' => [DbTypeRule::nullable(), ...DbTypeRule::integer(), 'min:1'],
             'valor_estimado' => [DbTypeRule::nullable(), 'numeric', 'min:0'],
             'observacoes' => [DbTypeRule::nullable(), ...DbTypeRule::observacao()],
         ]);

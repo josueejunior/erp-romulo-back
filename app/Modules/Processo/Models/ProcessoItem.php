@@ -18,6 +18,8 @@ class ProcessoItem extends BaseModel
     protected $fillable = [
         'empresa_id',
         'processo_id',
+        'fornecedor_id',
+        'transportadora_id',
         'numero_item',
         'codigo_interno',
         'quantidade',
@@ -79,6 +81,16 @@ class ProcessoItem extends BaseModel
     public function processo(): BelongsTo
     {
         return $this->belongsTo(Processo::class);
+    }
+
+    public function fornecedor(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\Fornecedor\Models\Fornecedor::class, 'fornecedor_id');
+    }
+
+    public function transportadora(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\Fornecedor\Models\Fornecedor::class, 'transportadora_id');
     }
 
     public function orcamentos(): HasManyThrough

@@ -11,6 +11,7 @@ class ProcessoDocumento extends BaseModel
     protected $table = 'processo_documentos';
 
     protected $fillable = [
+        'empresa_id',
         'processo_id',
         'documento_habilitacao_id',
         'exigido',

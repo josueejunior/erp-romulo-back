@@ -43,16 +43,19 @@ class ProcessoController extends Controller
      */
     protected ProcessoStatusService $statusService;
     protected ProcessoValidationService $validationService;
+    protected ?\App\Modules\Processo\Services\ProcessoDocumentoService $processoDocumentoService;
 
     public function __construct(
         ProcessoService $processoService,
         ProcessoStatusService $statusService,
-        ProcessoValidationService $validationService
+        ProcessoValidationService $validationService,
+        \App\Modules\Processo\Services\ProcessoDocumentoService $processoDocumentoService = null
     ) {
         $this->service = $processoService; // Para RoutingController
         $this->processoService = $processoService;
         $this->statusService = $statusService;
         $this->validationService = $validationService;
+        $this->processoDocumentoService = $processoDocumentoService;
     }
 
     /**
@@ -520,6 +523,80 @@ class ProcessoController extends Controller
             
             return response()->json([
                 'message' => 'Erro ao excluir processo: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * POST /processos/{id}/documentos/importar - Importar todos os documentos ativos
+     */
+    public function importarDocumentos(Request $request, Processo $processo): JsonResponse
+    {
+        try {
+            if (!$this->processoDocumentoService) {
+                $this->processoDocumentoService = app(\App\Modules\Processo\Services\ProcessoDocumentoService::class);
+            }
+
+            $importados = $this->processoDocumentoService->importarTodosDocumentosAtivos($processo);
+
+            return response()->json([
+                'message' => "{$importados} documento(s) importado(s) com sucesso.",
+                'importados' => $importados,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Erro ao importar documentos: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * POST /processos/{id}/documentos/sincronizar - Sincronizar documentos selecionados
+     */
+    public function sincronizarDocumentos(Request $request, Processo $processo): JsonResponse
+    {
+        try {
+            $request->validate([
+                'documentos' => 'required|array',
+                'documentos.*.exigido' => 'boolean',
+                'documentos.*.disponivel_envio' => 'boolean',
+                'documentos.*.observacoes' => 'nullable|string',
+            ]);
+
+            if (!$this->processoDocumentoService) {
+                $this->processoDocumentoService = app(\App\Modules\Processo\Services\ProcessoDocumentoService::class);
+            }
+
+            $this->processoDocumentoService->sincronizarDocumentos($processo, $request->documentos);
+
+            return response()->json([
+                'message' => 'Documentos sincronizados com sucesso.',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Erro ao sincronizar documentos: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * GET /processos/{id}/documentos - Listar documentos do processo
+     */
+    public function listarDocumentos(Request $request, Processo $processo): JsonResponse
+    {
+        try {
+            if (!$this->processoDocumentoService) {
+                $this->processoDocumentoService = app(\App\Modules\Processo\Services\ProcessoDocumentoService::class);
+            }
+
+            $documentos = $this->processoDocumentoService->obterDocumentosComStatus($processo);
+
+            return response()->json([
+                'data' => $documentos,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Erro ao listar documentos: ' . $e->getMessage()
             ], 500);
         }
     }

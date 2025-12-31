@@ -13,6 +13,8 @@ class ProcessoItem
     public function __construct(
         public readonly ?int $id,
         public readonly int $processoId,
+        public readonly ?int $fornecedorId = null,
+        public readonly ?int $transportadoraId = null,
         public readonly ?string $numeroItem = null,
         public readonly ?string $codigoInterno = null,
         public readonly float $quantidade = 0.0,

@@ -125,6 +125,11 @@ Route::prefix('v1')->group(function () {
                 // Rotas customizadas de processo
                 Route::post('/mover-julgamento', [ApiProcessoController::class, 'moverParaJulgamento']);
                 Route::post('/marcar-vencido', [ApiProcessoController::class, 'marcarVencido']);
+                
+                // Documentos de habilitação
+                Route::get('/documentos', [ApiProcessoController::class, 'listarDocumentos']);
+                Route::post('/documentos/importar', [ApiProcessoController::class, 'importarDocumentos']);
+                Route::post('/documentos/sincronizar', [ApiProcessoController::class, 'sincronizarDocumentos']);
                 Route::post('/marcar-perdido', [ApiProcessoController::class, 'marcarPerdido']);
                 Route::post('/confirmar-pagamento', [ApiProcessoController::class, 'confirmarPagamento']);
                 Route::get('/confirmacoes-pagamento', [ApiProcessoController::class, 'historicoConfirmacoes']);

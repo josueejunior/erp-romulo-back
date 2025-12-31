@@ -14,6 +14,8 @@ class ProcessoItemResource extends JsonResource
         return [
             'id' => $this->id,
             'processo_id' => $this->processo_id,
+            'fornecedor_id' => $this->fornecedor_id,
+            'transportadora_id' => $this->transportadora_id,
             'numero_item' => $this->numero_item,
             'codigo_interno' => $this->codigo_interno,
             'quantidade' => (float) $this->quantidade,
@@ -61,6 +63,22 @@ class ProcessoItemResource extends JsonResource
             'quantidade_restante' => (float) $this->quantidade_restante,
             
             // Relacionamentos
+            'fornecedor' => $this->when(
+                $this->relationLoaded('fornecedor'),
+                fn() => [
+                    'id' => $this->fornecedor->id,
+                    'razao_social' => $this->fornecedor->razao_social,
+                    'cnpj' => $this->fornecedor->cnpj,
+                ]
+            ),
+            'transportadora' => $this->when(
+                $this->relationLoaded('transportadora'),
+                fn() => [
+                    'id' => $this->transportadora->id,
+                    'razao_social' => $this->transportadora->razao_social,
+                    'cnpj' => $this->transportadora->cnpj,
+                ]
+            ),
             'orcamentos' => OrcamentoResource::collection($this->whenLoaded('orcamentos')),
             'orcamento_escolhido' => $this->when(
                 $this->relationLoaded('orcamentos'),
