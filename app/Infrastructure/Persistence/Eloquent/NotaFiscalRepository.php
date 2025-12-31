@@ -93,8 +93,16 @@ class NotaFiscalRepository implements NotaFiscalRepositoryInterface
             $query->where('empresa_id', $filtros['empresa_id']);
         }
 
+        if (isset($filtros['processo_id'])) {
+            $query->where('processo_id', $filtros['processo_id']);
+        }
+
         if (isset($filtros['empenho_id'])) {
             $query->where('empenho_id', $filtros['empenho_id']);
+        }
+
+        if (isset($filtros['contrato_id'])) {
+            $query->where('contrato_id', $filtros['contrato_id']);
         }
 
         $perPage = $filtros['per_page'] ?? 15;

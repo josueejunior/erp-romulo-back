@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Policies;
+namespace App\Modules\Processo\Policies;
 
 use App\Modules\Processo\Models\Processo;
 use App\Helpers\PermissionHelper;
