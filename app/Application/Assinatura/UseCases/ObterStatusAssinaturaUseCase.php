@@ -48,7 +48,6 @@ class ObterStatusAssinaturaUseCase
         })->count();
 
         return [
-            'tenant_id' => $tenantId,
             'status' => $assinatura->status,
             'limite_processos' => $assinaturaModel->plano->limite_processos,
             'limite_usuarios' => $assinaturaModel->plano->limite_usuarios,
