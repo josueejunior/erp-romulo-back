@@ -56,17 +56,8 @@ class SetorController extends BaseApiController
             return $this->handleException($e, 'Erro ao determinar empresa ativa');
         }
         
-        // Criar chave de cache baseada nos filtros
+        // Evitar dados desatualizados: não usamos cache para garantir consistência após criar/editar/excluir
         $filters = array_merge($request->all(), $mergeParams);
-        $cacheKey = "setores:{$tenantId}:" . md5(json_encode($filters));
-        
-        // Tentar obter do cache
-        if ($tenantId && RedisService::isAvailable()) {
-            $cached = RedisService::get($cacheKey);
-            if ($cached !== null) {
-                return response()->json($cached);
-            }
-        }
 
         try {
             $setors = $this->listarSetoresUseCase->executar($filters);
@@ -84,12 +75,6 @@ class SetorController extends BaseApiController
             })->filter()->values();
             
             $response = SetorResource::collection($setors);
-
-            // Salvar no cache (5 minutos)
-            if ($tenantId && RedisService::isAvailable()) {
-                RedisService::set($cacheKey, $response->response()->getData(true), 300);
-            }
-
             return $response->response();
         } catch (\DomainException $e) {
             return response()->json([
