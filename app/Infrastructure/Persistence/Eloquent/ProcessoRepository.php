@@ -16,10 +16,67 @@ class ProcessoRepository implements ProcessoRepositoryInterface
 {
     use IsolamentoEmpresaTrait;
     /**
+     * Mapear status antigos do banco para status válidos do domínio
+     * 
+     * Status antigos (banco): participacao, julgamento_habilitacao, vencido, perdido, execucao, pagamento, encerramento, arquivado
+     * Status novos (domínio): rascunho, publicado, em_disputa, julgamento, execucao, vencido, arquivado
+     */
+    private function mapearStatus(string $statusAntigo): string
+    {
+        $mapeamento = [
+            'participacao' => 'em_disputa',
+            'julgamento_habilitacao' => 'julgamento',
+            'vencido' => 'vencido',
+            'perdido' => 'vencido', // Processo perdido = vencido
+            'execucao' => 'execucao',
+            'pagamento' => 'execucao', // Pagamento é parte da execução
+            'encerramento' => 'execucao', // Encerramento é parte da execução
+            'arquivado' => 'arquivado',
+            // Status novos (já válidos)
+            'rascunho' => 'rascunho',
+            'publicado' => 'publicado',
+            'em_disputa' => 'em_disputa',
+            'julgamento' => 'julgamento',
+        ];
+
+        return $mapeamento[$statusAntigo] ?? 'rascunho';
+    }
+
+    /**
+     * Mapear status do domínio de volta para status do banco
+     * 
+     * Quando salvamos, precisamos converter status novos para status antigos que o banco aceita
+     */
+    private function mapearStatusReverso(string $statusDominio): string
+    {
+        $mapeamento = [
+            // Status novos do domínio → status antigos do banco
+            'rascunho' => 'participacao', // Rascunho vira participacao (será publicado depois)
+            'publicado' => 'participacao', // Publicado vira participacao
+            'em_disputa' => 'participacao',
+            'julgamento' => 'julgamento_habilitacao',
+            'execucao' => 'execucao',
+            'vencido' => 'vencido',
+            'arquivado' => 'arquivado',
+            // Status antigos (mantém como estão)
+            'participacao' => 'participacao',
+            'julgamento_habilitacao' => 'julgamento_habilitacao',
+            'perdido' => 'perdido',
+            'pagamento' => 'pagamento',
+            'encerramento' => 'encerramento',
+        ];
+
+        return $mapeamento[$statusDominio] ?? 'participacao';
+    }
+
+    /**
      * Converter modelo Eloquent para entidade do domínio
      */
     private function toDomain(ProcessoModel $model): Processo
     {
+        // Mapear status antigo para status válido do domínio
+        $statusMapeado = $this->mapearStatus($model->status ?? 'rascunho');
+
         return new Processo(
             id: $model->id,
             empresaId: $model->empresa_id,
@@ -47,7 +104,7 @@ class ProcessoRepository implements ProcessoRepositoryInterface
             validadePropostaFim: $model->validade_proposta_fim ? Carbon::parse($model->validade_proposta_fim) : null,
             tipoSelecaoFornecedor: $model->tipo_selecao_fornecedor,
             tipoDisputa: $model->tipo_disputa,
-            status: $model->status ?? 'rascunho',
+            status: $statusMapeado,
             statusParticipacao: $model->status_participacao,
             dataRecebimentoPagamento: $model->data_recebimento_pagamento ? Carbon::parse($model->data_recebimento_pagamento) : null,
             observacoes: $model->observacoes,
@@ -86,7 +143,7 @@ class ProcessoRepository implements ProcessoRepositoryInterface
             'validade_proposta_fim' => $processo->validadePropostaFim?->toDateString(),
             'tipo_selecao_fornecedor' => $processo->tipoSelecaoFornecedor,
             'tipo_disputa' => $processo->tipoDisputa,
-            'status' => $processo->status,
+            'status' => $this->mapearStatusReverso($processo->status), // Mapear status do domínio para status do banco
             'status_participacao' => $processo->statusParticipacao,
             'data_recebimento_pagamento' => $processo->dataRecebimentoPagamento?->toDateString(),
             'observacoes' => $processo->observacoes,
