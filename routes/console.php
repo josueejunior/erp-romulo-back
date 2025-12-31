@@ -12,3 +12,5 @@ Artisan::command('inspire', function () {
 Schedule::command('documentos:vencimento')->dailyAt('06:00');
 // Cleanup diário de uploads de documentos de processos não referenciados
 Schedule::command('documentos:cleanup-processos')->dailyAt('03:30');
+// Atualizar status de processos automaticamente (a cada minuto)
+Schedule::command('processos:atualizar-status-automatico')->everyMinute();

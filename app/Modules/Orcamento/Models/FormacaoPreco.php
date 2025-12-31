@@ -53,5 +53,39 @@ class FormacaoPreco extends BaseModel
     {
         return $this->belongsTo(OrcamentoItem::class);
     }
+
+    /**
+     * Calcula o valor mínimo de venda baseado na fórmula:
+     * preco_minimo = (custo_produto + frete) * (1 + impostos%) / (1 - margem%)
+     */
+    public function calcularMinimoVenda(): float
+    {
+        $custo = ($this->custo_produto ?? 0) + ($this->frete ?? 0);
+        $imposto = ($this->percentual_impostos ?? 0) / 100;
+        $margem = ($this->percentual_margem ?? 0) / 100;
+        
+        $comImposto = $custo * (1 + $imposto);
+        
+        if ($margem >= 1) {
+            return 0; // Margem inválida (>= 100%)
+        }
+        
+        return round($comImposto / (1 - $margem), 2);
+    }
+
+    /**
+     * Atualiza automaticamente o valor mínimo quando salva
+     */
+    public static function boot()
+    {
+        parent::boot();
+        
+        static::saving(function ($model) {
+            $model->preco_minimo = $model->calcularMinimoVenda();
+            if (!$model->preco_recomendado) {
+                $model->preco_recomendado = $model->preco_minimo * 1.1; // 10% acima do mínimo
+            }
+        });
+    }
 }
 

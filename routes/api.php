@@ -175,6 +175,11 @@ Route::prefix('v1')->group(function () {
                     });
                 Route::post('/itens/importar', [ApiProcessoItemController::class, 'importar']);
                 
+                // Endpoints específicos para disputas e julgamentos
+                Route::patch('/itens/{item}/valor-final-disputa', [ApiProcessoItemController::class, 'atualizarValorFinalDisputa']);
+                Route::patch('/itens/{item}/valor-negociado', [ApiProcessoItemController::class, 'atualizarValorNegociado']);
+                Route::patch('/itens/{item}/status', [ApiProcessoItemController::class, 'atualizarStatus']);
+                
                 // Orçamentos (por processo - múltiplos itens)
                 Route::post('/orcamentos', [ApiOrcamentoController::class, 'storeByProcesso']);
                 Route::get('/orcamentos', [ApiOrcamentoController::class, 'indexByProcesso']);

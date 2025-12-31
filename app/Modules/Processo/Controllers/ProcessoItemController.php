@@ -308,4 +308,100 @@ class ProcessoItemController extends BaseApiController
                 ->with('error', $e->getMessage());
         }
     }
+
+    /**
+     * PATCH /processos/{processo}/itens/{item}/valor-final-disputa
+     * Atualizar valor final pós-disputa (após lances)
+     */
+    public function atualizarValorFinalDisputa(Request $request, Processo $processo, ProcessoItem $item)
+    {
+        $empresa = $this->getEmpresaAtivaOrFail();
+
+        try {
+            $this->itemService->validarProcessoEmpresa($processo, $empresa->id);
+            $this->itemService->validarItemEmpresa($item, $empresa->id);
+            $this->itemService->validarItemPertenceProcesso($item, $processo);
+
+            $request->validate([
+                'valor_final_pos_disputa' => 'required|numeric|min:0',
+            ]);
+
+            $item->update([
+                'valor_final_pos_disputa' => $request->valor_final_pos_disputa,
+            ]);
+
+            return response()->json([
+                'message' => 'Valor final atualizado com sucesso',
+                'data' => $item,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    /**
+     * PATCH /processos/{processo}/itens/{item}/valor-negociado
+     * Atualizar valor negociado pós-julgamento
+     */
+    public function atualizarValorNegociado(Request $request, Processo $processo, ProcessoItem $item)
+    {
+        $empresa = $this->getEmpresaAtivaOrFail();
+
+        try {
+            $this->itemService->validarProcessoEmpresa($processo, $empresa->id);
+            $this->itemService->validarItemEmpresa($item, $empresa->id);
+            $this->itemService->validarItemPertenceProcesso($item, $processo);
+
+            $request->validate([
+                'valor_negociado_pos_julgamento' => 'required|numeric|min:0',
+            ]);
+
+            $item->update([
+                'valor_negociado_pos_julgamento' => $request->valor_negociado_pos_julgamento,
+            ]);
+
+            return response()->json([
+                'message' => 'Valor negociado atualizado com sucesso',
+                'data' => $item,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    /**
+     * PATCH /processos/{processo}/itens/{item}/status
+     * Atualizar status de habilitação do item
+     */
+    public function atualizarStatus(Request $request, Processo $processo, ProcessoItem $item)
+    {
+        $empresa = $this->getEmpresaAtivaOrFail();
+
+        try {
+            $this->itemService->validarProcessoEmpresa($processo, $empresa->id);
+            $this->itemService->validarItemEmpresa($item, $empresa->id);
+            $this->itemService->validarItemPertenceProcesso($item, $processo);
+
+            $request->validate([
+                'status_item' => 'required|string|in:pendente,aceito,aceito_habilitado,desclassificado,inabilitado',
+            ]);
+
+            $item->update([
+                'status_item' => $request->status_item,
+            ]);
+
+            return response()->json([
+                'message' => 'Status atualizado com sucesso',
+                'data' => $item,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
 }
