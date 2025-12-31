@@ -24,6 +24,9 @@ class FornecedorResource
      */
     public function toArray(Fornecedor $fornecedor): array
     {
+        // Buscar modelo Eloquent para incluir timestamps
+        $fornecedorModel = $this->fornecedorRepository->buscarModeloPorId($fornecedor->id);
+        
         return [
             'id' => $fornecedor->id,
             'empresa_id' => $fornecedor->empresaId,
@@ -39,11 +42,15 @@ class FornecedorResource
             'estado' => $fornecedor->estado,
             'email' => $fornecedor->email,
             'telefone' => $fornecedor->telefone,
-            'emails' => $fornecedor->emails,
-            'telefones' => $fornecedor->telefones,
+            'emails' => $fornecedor->emails ?? [],
+            'telefones' => $fornecedor->telefones ?? [],
             'contato' => $fornecedor->contato,
             'observacoes' => $fornecedor->observacoes,
             'is_transportadora' => $fornecedor->isTransportadora,
+            // Incluir timestamps se disponíveis no modelo
+            'criado_em' => $fornecedorModel?->criado_em?->format('Y-m-d H:i:s'),
+            'atualizado_em' => $fornecedorModel?->atualizado_em?->format('Y-m-d H:i:s'),
+            'deletado_em' => $fornecedorModel?->deletado_em?->format('Y-m-d H:i:s'),
         ];
     }
 }

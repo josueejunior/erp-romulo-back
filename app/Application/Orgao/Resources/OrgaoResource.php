@@ -28,6 +28,7 @@ class OrgaoResource
         // Buscar modelo Eloquent para incluir relacionamentos (setors)
         $orgaoModel = $this->orgaoRepository->buscarModeloPorId($orgao->id, ['setors']);
         
+        // Retornar todos os dados do órgão, incluindo timestamps
         return [
             'id' => $orgao->id,
             'empresa_id' => $orgao->empresaId,
@@ -43,14 +44,18 @@ class OrgaoResource
             'estado' => $orgao->estado,
             'email' => $orgao->email,
             'telefone' => $orgao->telefone,
-            'emails' => $orgao->emails,
-            'telefones' => $orgao->telefones,
+            'emails' => $orgao->emails ?? [],
+            'telefones' => $orgao->telefones ?? [],
             'observacoes' => $orgao->observacoes,
             'setors' => $orgaoModel?->setors?->map(fn($setor) => [
                 'id' => $setor->id,
                 'nome' => $setor->nome,
                 'orgao_id' => $setor->orgao_id,
             ]) ?? [],
+            // Incluir timestamps se disponíveis no modelo
+            'criado_em' => $orgaoModel?->criado_em?->format('Y-m-d H:i:s'),
+            'atualizado_em' => $orgaoModel?->atualizado_em?->format('Y-m-d H:i:s'),
+            'deletado_em' => $orgaoModel?->deletado_em?->format('Y-m-d H:i:s'),
         ];
     }
 }
