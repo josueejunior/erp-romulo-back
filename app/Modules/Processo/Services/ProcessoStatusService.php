@@ -71,16 +71,16 @@ class ProcessoStatusService
         $pode = false;
         $motivo = '';
 
-        // Regras de transição
+        // Regras de transição alinhadas ao fluxo definido
         $transicoesPermitidas = [
             'participacao' => ['julgamento_habilitacao', 'vencido', 'perdido'],
-            'julgamento_habilitacao' => ['vencido', 'perdido', 'execucao', 'arquivado'],
+            'julgamento_habilitacao' => ['vencido', 'perdido', 'execucao'],
             'vencido' => ['execucao'],
+            'execucao' => ['pagamento'],
+            'pagamento' => ['encerramento'],
+            'encerramento' => ['arquivado'],
             'perdido' => ['arquivado'],
-            'execucao' => ['pagamento'], // Execução pode ir para pagamento
-            'pagamento' => ['encerramento'], // Pagamento pode ir para encerramento
-            'encerramento' => ['arquivado'], // Encerramento pode ser arquivado
-            'arquivado' => [], // Não pode mudar de arquivado
+            'arquivado' => [],
         ];
 
         // Verificar se a transição é permitida
@@ -103,13 +103,12 @@ class ProcessoStatusService
                 break;
 
             case 'execucao':
-                // Permitir marcar como vencido se estiver em julgamento_habilitacao e tiver item aceito
+                // Só entra em execução vindo de vencido ou de julgamento_habilitacao com item aceito
                 if ($statusAtual === 'julgamento_habilitacao') {
-                    // Verificar se tem pelo menos um item aceito
                     if (!$this->temItemAceito($processo)) {
                         return [
                             'pode' => false,
-                            'motivo' => 'Não é possível marcar como vencido: nenhum item foi aceito'
+                            'motivo' => 'Não é possível entrar em execução: nenhum item foi aceito'
                         ];
                     }
                 } elseif ($statusAtual !== 'vencido') {
