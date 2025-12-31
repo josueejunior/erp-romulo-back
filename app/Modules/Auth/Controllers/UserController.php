@@ -200,22 +200,31 @@ class UserController extends BaseApiController
      * Busca o tenant_id correto da empresa
      * Como empresas podem estar em tenants diferentes, precisamos procurar em todos os tenants
      * 
+     * IMPORTANTE: Se a empresa existe em múltiplos tenants, retorna o primeiro encontrado.
+     * Para determinar qual tenant usar, o sistema deve considerar:
+     * 1. Se a empresa existe no tenant atual, usar o tenant atual
+     * 2. Se não existe no tenant atual, buscar em todos os tenants e retornar o primeiro encontrado
+     * 
      * @param int $empresaId ID da empresa
      * @param int $tenantIdAtual Tenant atual (para otimizar busca)
      * @return int|null Tenant ID onde a empresa foi encontrada, ou null se não encontrada
      */
     private function buscarTenantIdDaEmpresa(int $empresaId, int $tenantIdAtual): ?int
     {
+        $tenantsEncontrados = [];
+        
         // Primeiro, tentar no tenant atual (otimização)
         try {
             if (tenancy()->initialized) {
                 $empresa = \App\Models\Empresa::find($empresaId);
                 if ($empresa) {
-                    \Log::debug('UserController::buscarTenantIdDaEmpresa() - Empresa encontrada no tenant atual', [
+                    \Log::info('UserController::buscarTenantIdDaEmpresa() - Empresa encontrada no tenant atual', [
                         'empresa_id' => $empresaId,
                         'tenant_id' => $tenantIdAtual,
+                        'empresa_razao_social' => $empresa->razao_social ?? 'N/A',
+                        'empresa_cnpj' => $empresa->cnpj ?? 'N/A',
                     ]);
-                    return $tenantIdAtual;
+                    $tenantsEncontrados[] = $tenantIdAtual;
                 }
             }
         } catch (\Exception $e) {
@@ -226,7 +235,7 @@ class UserController extends BaseApiController
             ]);
         }
 
-        // Se não encontrou no tenant atual, buscar em todos os tenants
+        // Buscar em todos os tenants para verificar se existe em múltiplos
         $tenants = \App\Models\Tenant::all();
         
         foreach ($tenants as $tenant) {
@@ -241,14 +250,14 @@ class UserController extends BaseApiController
                 $empresa = \App\Models\Empresa::find($empresaId);
                 
                 if ($empresa) {
+                    $tenantsEncontrados[] = $tenant->id;
                     \Log::info('UserController::buscarTenantIdDaEmpresa() - Empresa encontrada em outro tenant', [
                         'empresa_id' => $empresaId,
                         'tenant_id_atual' => $tenantIdAtual,
                         'tenant_id_encontrado' => $tenant->id,
+                        'empresa_razao_social' => $empresa->razao_social ?? 'N/A',
+                        'empresa_cnpj' => $empresa->cnpj ?? 'N/A',
                     ]);
-                    
-                    tenancy()->end();
-                    return $tenant->id;
                 }
                 
                 tenancy()->end();
@@ -260,6 +269,20 @@ class UserController extends BaseApiController
                     'error' => $e->getMessage(),
                 ]);
             }
+        }
+
+        // Se encontrou em múltiplos tenants, avisar no log
+        if (count($tenantsEncontrados) > 1) {
+            \Log::warning('UserController::buscarTenantIdDaEmpresa() - Empresa encontrada em múltiplos tenants', [
+                'empresa_id' => $empresaId,
+                'tenants_encontrados' => $tenantsEncontrados,
+                'tenant_id_retornado' => $tenantsEncontrados[0], // Retornar o primeiro (tenant atual se existir)
+            ]);
+        }
+
+        // Retornar o primeiro encontrado (prioridade: tenant atual)
+        if (!empty($tenantsEncontrados)) {
+            return $tenantsEncontrados[0];
         }
 
         // Se não encontrou em nenhum tenant, retornar null (usar tenant atual como fallback)
