@@ -77,7 +77,7 @@ class SetorController extends BaseApiController
             // Manter a ordem e substituir entidades por modelos
             $setors->getCollection()->transform(function ($setor) use ($setorModels) {
                 return $setorModels->get($setor->id);
-            });
+            })->filter()->values();
             
             $response = SetorResource::collection($setors);
 
@@ -86,7 +86,7 @@ class SetorController extends BaseApiController
                 RedisService::set($cacheKey, $response->response()->getData(true), 300);
             }
 
-            return response()->json($response);
+            return $response->response();
         } catch (\DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage()
