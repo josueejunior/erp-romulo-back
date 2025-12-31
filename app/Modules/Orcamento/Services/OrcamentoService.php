@@ -252,6 +252,7 @@ class OrcamentoService
 
             foreach ($validated['itens'] as $itemData) {
                 $orcamentoItem = OrcamentoItem::create([
+                    'empresa_id' => $empresaId,
                     'orcamento_id' => $orcamento->id,
                     'processo_item_id' => $itemData['processo_item_id'],
                     'custo_produto' => $itemData['custo_produto'],
@@ -317,6 +318,7 @@ class OrcamentoService
         // Atualizar via repository (DDD)
         $orcamentoItemAtualizado = new \App\Domain\OrcamentoItem\Entities\OrcamentoItem(
             id: $orcamentoItemDomain->id,
+            empresaId: $orcamentoItemDomain->empresaId,
             orcamentoId: $orcamentoItemDomain->orcamentoId,
             processoItemId: $orcamentoItemDomain->processoItemId,
             custoProduto: $orcamentoItemDomain->custoProduto,

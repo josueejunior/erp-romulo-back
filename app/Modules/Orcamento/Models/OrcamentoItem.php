@@ -12,6 +12,7 @@ class OrcamentoItem extends BaseModel
     protected $table = 'orcamento_itens';
 
     protected $fillable = [
+        'empresa_id',
         'orcamento_id',
         'processo_item_id',
         'custo_produto',

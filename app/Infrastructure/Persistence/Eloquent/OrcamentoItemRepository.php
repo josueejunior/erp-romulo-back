@@ -15,6 +15,7 @@ class OrcamentoItemRepository implements OrcamentoItemRepositoryInterface
     {
         return new OrcamentoItem(
             id: $model->id,
+            empresaId: $model->empresa_id,
             orcamentoId: $model->orcamento_id,
             processoItemId: $model->processo_item_id,
             custoProduto: (float) $model->custo_produto,
@@ -30,6 +31,7 @@ class OrcamentoItemRepository implements OrcamentoItemRepositoryInterface
     private function toArray(OrcamentoItem $orcamentoItem): array
     {
         return [
+            'empresa_id' => $orcamentoItem->empresaId,
             'orcamento_id' => $orcamentoItem->orcamentoId,
             'processo_item_id' => $orcamentoItem->processoItemId,
             'custo_produto' => $orcamentoItem->custoProduto,

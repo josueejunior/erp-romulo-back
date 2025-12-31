@@ -11,6 +11,7 @@ class OrcamentoItem
 {
     public function __construct(
         public readonly ?int $id,
+        public readonly int $empresaId,
         public readonly int $orcamentoId,
         public readonly int $processoItemId,
         public readonly float $custoProduto = 0.0,
@@ -26,6 +27,10 @@ class OrcamentoItem
 
     private function validate(): void
     {
+        if ($this->empresaId <= 0) {
+            throw new DomainException('O ID da empresa é obrigatório.');
+        }
+
         if ($this->orcamentoId <= 0) {
             throw new DomainException('O ID do orçamento é obrigatório.');
         }
