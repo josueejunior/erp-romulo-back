@@ -21,17 +21,33 @@ class GetUserUseCase
      */
     public function executar(Authenticatable $user): array
     {
-        // Obter tenant do token
+        // 🔥 IMPORTANTE: Priorizar tenant_id do header X-Tenant-ID (fonte de verdade)
+        // O middleware já inicializou o tenant baseado no header
+        // Se o tenant já está inicializado, usar ele (garante que está correto)
         $tenant = null;
         $tenantId = null;
         
-        if (method_exists($user, 'currentAccessToken') && $user->currentAccessToken()) {
-            $abilities = $user->currentAccessToken()->abilities;
-            $tenantId = $abilities['tenant_id'] ?? null;
-        }
-        
-        if ($tenantId) {
-            $tenant = Tenant::find($tenantId);
+        // Prioridade 1: Usar tenant já inicializado pelo middleware (mais confiável)
+        if (tenancy()->initialized && tenancy()->tenant) {
+            $tenant = tenancy()->tenant;
+            $tenantId = $tenant->id;
+        } else {
+            // Prioridade 2: Tentar obter do header (se middleware não inicializou)
+            $request = request();
+            if ($request && $request->header('X-Tenant-ID')) {
+                $tenantId = (int) $request->header('X-Tenant-ID');
+                $tenant = Tenant::find($tenantId);
+            } else {
+                // Prioridade 3: Fallback para token (pode estar desatualizado)
+                if (method_exists($user, 'currentAccessToken') && $user->currentAccessToken()) {
+                    $abilities = $user->currentAccessToken()->abilities;
+                    $tenantId = $abilities['tenant_id'] ?? null;
+                    
+                    if ($tenantId) {
+                        $tenant = Tenant::find($tenantId);
+                    }
+                }
+            }
         }
 
         // Buscar empresa ativa e lista de empresas
