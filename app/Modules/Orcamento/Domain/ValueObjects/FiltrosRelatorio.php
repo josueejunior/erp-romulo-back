@@ -68,4 +68,16 @@ class FiltrosRelatorio
             'ordenacao' => $this->ordenacao
         ];
     }
+
+    public static function fromArray(array $data): self
+    {
+        return new self(
+            $data['data_inicio'] ?? null,
+            $data['data_fim'] ?? null,
+            isset($data['fornecedor_id']) ? (int)$data['fornecedor_id'] : null,
+            isset($data['processo_id']) ? (int)$data['processo_id'] : null,
+            $data['status'] ?? null,
+            $data['ordenacao'] ?? 'created_at_desc'
+        );
+    }
 }
