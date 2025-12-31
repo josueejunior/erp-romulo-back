@@ -10,6 +10,8 @@ use App\Application\OrgaoResponsavel\UseCases\ListarOrgaoResponsaveisUseCase;
 use App\Application\OrgaoResponsavel\UseCases\DeletarOrgaoResponsavelUseCase;
 use App\Application\OrgaoResponsavel\DTOs\CriarOrgaoResponsavelDTO;
 use App\Helpers\PermissionHelper;
+use App\Domain\Shared\ValueObjects\TenantContext;
+use App\Http\Middleware\EnsureEmpresaAtivaContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -25,7 +27,10 @@ class OrgaoResponsavelController extends BaseApiController
         private AtualizarOrgaoResponsavelUseCase $atualizarResponsavelUseCase,
         private ListarOrgaoResponsaveisUseCase $listarResponsaveisUseCase,
         private DeletarOrgaoResponsavelUseCase $deletarResponsavelUseCase,
-    ) {}
+    ) {
+        // Garante que o contexto de empresa ativa esteja setado antes das ações
+        $this->middleware(EnsureEmpresaAtivaContext::class);
+    }
 
     /**
      * Listar responsáveis de um órgão
@@ -88,6 +93,16 @@ class OrgaoResponsavelController extends BaseApiController
             }
 
             $validated['orgao_id'] = $orgaoId;
+
+            // Garantir TenantContext com empresa ativa para validação do órgão
+            $tenantId = tenancy()->tenant?->id;
+            if (!TenantContext::has() || TenantContext::get()->empresaId === null) {
+                $empresa = $this->getEmpresaAtivaOrFail();
+                if ($tenantId) {
+                    TenantContext::set($tenantId, $empresa->id);
+                }
+            }
+
             $dto = CriarOrgaoResponsavelDTO::fromArray($validated);
             $responsavel = $this->criarResponsavelUseCase->executar($dto);
 
@@ -136,6 +151,15 @@ class OrgaoResponsavelController extends BaseApiController
                 $validated['emails'] = !empty($validated['emails']) ? array_values($validated['emails']) : null;
             }
             if (isset($validated['telefones'])) {
+
+                        // Garantir TenantContext com empresa ativa para validação do órgão
+                        $tenantId = tenancy()->tenant?->id;
+                        if (!TenantContext::has() || TenantContext::get()->empresaId === null) {
+                            $empresa = $this->getEmpresaAtivaOrFail();
+                            if ($tenantId) {
+                                TenantContext::set($tenantId, $empresa->id);
+                            }
+                        }
                 $validated['telefones'] = array_filter($validated['telefones'], fn($t) => !empty($t));
                 $validated['telefones'] = !empty($validated['telefones']) ? array_values($validated['telefones']) : null;
             }
