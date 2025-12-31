@@ -167,46 +167,107 @@ class UserController extends BaseApiController
             // Executar use case (dispara Domain Event que limpa cache via Listener)
             $usuarioDomain = $this->switchEmpresaAtivaUseCase->executar($user->id, $novaEmpresaId, $context);
 
-            // O tenant não muda ao trocar de empresa se ambas estão no mesmo tenant
-            // Mas vamos garantir que estamos usando o tenant correto do contexto atual
-            // IMPORTANTE: Empresas estão no banco do tenant, então todas as empresas
-            // de um tenant estão no mesmo banco. O tenant_id só mudaria se o usuário
-            // tivesse acesso a empresas de tenants diferentes (cenário raro).
-            $tenant = tenancy()->tenant;
-            $tenantId = $tenant?->id ?? $context->tenantId;
+            // 🔍 IMPORTANTE: Buscar o tenant correto da empresa ativa
+            // Como empresas podem estar em tenants diferentes, precisamos encontrar
+            // em qual tenant a empresa ativa está armazenada
+            $tenantIdCorreto = $this->buscarTenantIdDaEmpresa($novaEmpresaId, $context->tenantId);
             
-            // 🔍 DEBUG: Verificar em qual tenant a empresa está armazenada
-            // Isso ajuda a entender se as empresas estão no mesmo tenant ou não
-            $databaseAtual = tenancy()->initialized ? \Illuminate\Support\Facades\DB::connection()->getDatabaseName() : null;
-            $empresaExisteNoTenant = false;
-            if (tenancy()->initialized) {
-                try {
-                    $empresaModel = \App\Models\Empresa::find($novaEmpresaId);
-                    $empresaExisteNoTenant = $empresaModel !== null;
-                } catch (\Exception $e) {
-                    // Ignorar erro
-                }
-            }
+            // Se encontrou um tenant diferente, usar esse; senão, usar o atual
+            $tenantId = $tenantIdCorreto ?? $context->tenantId;
             
             \Log::info('UserController::switchEmpresaAtiva() - Retornando tenant_id', [
-                'tenant_id' => $tenantId,
+                'tenant_id_retornado' => $tenantId,
+                'tenant_id_contexto' => $context->tenantId,
+                'tenant_id_empresa' => $tenantIdCorreto,
                 'empresa_ativa_id' => $usuarioDomain->empresaAtivaId,
                 'tenancy_initialized' => tenancy()->initialized,
-                'database_atual' => $databaseAtual,
-                'empresa_existe_no_tenant' => $empresaExisteNoTenant,
-                'tenant_database' => $tenant?->database,
+                'tenant_mudou' => $tenantIdCorreto !== null && $tenantIdCorreto !== $context->tenantId,
             ]);
 
             return response()->json([
                 'message' => 'Empresa ativa alterada com sucesso.',
                 'data' => [
                     'empresa_ativa_id' => $usuarioDomain->empresaAtivaId,
-                    'tenant_id' => $tenantId, // Retornar tenant_id do contexto atual (empresas no mesmo tenant)
+                    'tenant_id' => $tenantId, // Retornar tenant_id correto da empresa ativa
                 ],
             ]);
         } catch (\Exception $e) {
             return $this->handleException($e, 'Erro ao trocar empresa ativa');
         }
+    }
+
+    /**
+     * Busca o tenant_id correto da empresa
+     * Como empresas podem estar em tenants diferentes, precisamos procurar em todos os tenants
+     * 
+     * @param int $empresaId ID da empresa
+     * @param int $tenantIdAtual Tenant atual (para otimizar busca)
+     * @return int|null Tenant ID onde a empresa foi encontrada, ou null se não encontrada
+     */
+    private function buscarTenantIdDaEmpresa(int $empresaId, int $tenantIdAtual): ?int
+    {
+        // Primeiro, tentar no tenant atual (otimização)
+        try {
+            if (tenancy()->initialized) {
+                $empresa = \App\Models\Empresa::find($empresaId);
+                if ($empresa) {
+                    \Log::debug('UserController::buscarTenantIdDaEmpresa() - Empresa encontrada no tenant atual', [
+                        'empresa_id' => $empresaId,
+                        'tenant_id' => $tenantIdAtual,
+                    ]);
+                    return $tenantIdAtual;
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::debug('UserController::buscarTenantIdDaEmpresa() - Erro ao buscar no tenant atual', [
+                'empresa_id' => $empresaId,
+                'tenant_id' => $tenantIdAtual,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        // Se não encontrou no tenant atual, buscar em todos os tenants
+        $tenants = \App\Models\Tenant::all();
+        
+        foreach ($tenants as $tenant) {
+            // Pular o tenant atual (já verificamos)
+            if ($tenant->id === $tenantIdAtual) {
+                continue;
+            }
+            
+            try {
+                tenancy()->initialize($tenant);
+                
+                $empresa = \App\Models\Empresa::find($empresaId);
+                
+                if ($empresa) {
+                    \Log::info('UserController::buscarTenantIdDaEmpresa() - Empresa encontrada em outro tenant', [
+                        'empresa_id' => $empresaId,
+                        'tenant_id_atual' => $tenantIdAtual,
+                        'tenant_id_encontrado' => $tenant->id,
+                    ]);
+                    
+                    tenancy()->end();
+                    return $tenant->id;
+                }
+                
+                tenancy()->end();
+            } catch (\Exception $e) {
+                tenancy()->end();
+                \Log::debug('UserController::buscarTenantIdDaEmpresa() - Erro ao buscar no tenant', [
+                    'empresa_id' => $empresaId,
+                    'tenant_id' => $tenant->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        // Se não encontrou em nenhum tenant, retornar null (usar tenant atual como fallback)
+        \Log::warning('UserController::buscarTenantIdDaEmpresa() - Empresa não encontrada em nenhum tenant', [
+            'empresa_id' => $empresaId,
+        ]);
+        
+        return null;
     }
 }
 
