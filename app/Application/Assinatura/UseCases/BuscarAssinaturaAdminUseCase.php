@@ -55,6 +55,7 @@ class BuscarAssinaturaAdminUseCase
             'id' => $assinaturaDomain->id,
             'tenant_id' => $tenantDomain->id,
             'tenant_nome' => $tenantDomain->razaoSocial,
+            'tenant_cnpj' => $tenantDomain->cnpj,
             'plano_id' => $assinaturaDomain->planoId,
             'plano_nome' => $planoDomain?->nome ?? 'N/A',
             'status' => $assinaturaDomain->status,
