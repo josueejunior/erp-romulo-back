@@ -235,3 +235,4 @@ A lógica agora é:
 - ✅ **Melhor documentada**
 
 
+

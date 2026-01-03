@@ -121,3 +121,4 @@ $fornecedor = Fornecedor::findOrFail($fornecedorDomain->id);
 - `DDD_RESUMO_FINAL.md` - Resumo completo da implementação
 
 
+

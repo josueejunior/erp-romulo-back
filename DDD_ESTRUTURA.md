@@ -163,3 +163,4 @@ $this->app->bind(
 4. Documentar Value Objects quando necessário
 
 
+

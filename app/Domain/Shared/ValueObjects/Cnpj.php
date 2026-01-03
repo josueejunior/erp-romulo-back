@@ -96,3 +96,4 @@ readonly class Cnpj
 }
 
 
+

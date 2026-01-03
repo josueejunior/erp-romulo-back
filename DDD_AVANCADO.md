@@ -242,3 +242,4 @@ public function executar(CriarUsuarioDTO $dto): User
 - ✅ Fácil escalar e manter
 
 
+
