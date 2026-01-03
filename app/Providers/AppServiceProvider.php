@@ -223,6 +223,14 @@ class AppServiceProvider extends ServiceProvider
             ->withoutOverlapping()
             ->onOneServer();
 
+        // Agendar verificação de pagamentos pendentes
+        // Executa a cada 2 horas para verificar se pagamentos pendentes foram aprovados
+        // Serve como fallback caso o webhook não seja recebido
+        Schedule::command('pagamentos:verificar-pendentes --horas=1')
+            ->everyTwoHours()
+            ->withoutOverlapping()
+            ->onOneServer();
+
         // Registrar Listeners para Domain Events
         \Illuminate\Support\Facades\Event::listen(
             \App\Domain\Auth\Events\UsuarioCriado::class,
