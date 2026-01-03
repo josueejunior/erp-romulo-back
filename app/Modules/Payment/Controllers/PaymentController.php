@@ -85,13 +85,33 @@ class PaymentController extends BaseApiController
 
             // Se for gratuito, criar assinatura diretamente sem passar pelo gateway
             if ($isGratis) {
-                // Buscar ou criar assinatura gratuita
+                // Buscar assinatura gratuita existente para o MESMO plano
                 $assinaturaModel = Assinatura::where('tenant_id', $tenant->id)
                     ->where('plano_id', $plano->id)
                     ->where('status', 'ativa')
                     ->first();
 
                 if (!$assinaturaModel) {
+                    // CRÍTICO: Cancelar assinaturas ativas antigas antes de criar a nova
+                    $assinaturasAntigas = Assinatura::where('tenant_id', $tenant->id)
+                        ->where('status', 'ativa')
+                        ->get();
+                    
+                    foreach ($assinaturasAntigas as $assinaturaAntiga) {
+                        $assinaturaAntiga->update([
+                            'status' => 'cancelada',
+                            'data_cancelamento' => now(),
+                            'observacoes' => ($assinaturaAntiga->observacoes ?? '') . 
+                                "\n\nCancelada automaticamente por troca de plano em " . now()->format('d/m/Y H:i:s'),
+                        ]);
+                        
+                        Log::info('Assinatura antiga cancelada por troca de plano gratuito', [
+                            'assinatura_antiga_id' => $assinaturaAntiga->id,
+                            'plano_antigo_id' => $assinaturaAntiga->plano_id,
+                            'tenant_id' => $tenant->id,
+                        ]);
+                    }
+
                     // Criar nova assinatura gratuita
                     $dataInicio = now();
                     $dataFim = $dataInicio->copy()->addDays(14); // Trial de 14 dias

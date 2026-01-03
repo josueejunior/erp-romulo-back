@@ -146,7 +146,28 @@ class ProcessarAssinaturaPlanoUseCase
             $dataInicio = Carbon::now();
             $dataFim = $dataInicio->copy()->addDays($diasValidade);
 
-            // Criar assinatura
+            // CRÍTICO: Cancelar assinaturas ativas antigas antes de criar a nova
+            // Isso garante que apenas uma assinatura fique ativa por vez
+            $assinaturasAntigas = Assinatura::where('tenant_id', $tenant->id)
+                ->where('status', 'ativa')
+                ->get();
+            
+            foreach ($assinaturasAntigas as $assinaturaAntiga) {
+                $assinaturaAntiga->update([
+                    'status' => 'cancelada',
+                    'data_cancelamento' => now(),
+                    'observacoes' => ($assinaturaAntiga->observacoes ?? '') . 
+                        "\n\nCancelada automaticamente por upgrade de plano em " . now()->format('d/m/Y H:i:s'),
+                ]);
+                
+                Log::info('Assinatura antiga cancelada por upgrade', [
+                    'assinatura_antiga_id' => $assinaturaAntiga->id,
+                    'plano_antigo_id' => $assinaturaAntiga->plano_id,
+                    'tenant_id' => $tenant->id,
+                ]);
+            }
+
+            // Criar nova assinatura
             $assinatura = Assinatura::create([
                 'tenant_id' => $tenant->id,
                 'plano_id' => $plano->id,
@@ -175,6 +196,7 @@ class ProcessarAssinaturaPlanoUseCase
                 'plano_atual_id_tenant' => $tenant->plano_atual_id,
                 'assinatura_atual_id_tenant' => $tenant->assinatura_atual_id,
                 'external_id' => $paymentResult->externalId,
+                'assinaturas_canceladas' => $assinaturasAntigas->count(),
             ]);
 
             return $assinatura;

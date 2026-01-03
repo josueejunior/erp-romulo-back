@@ -35,8 +35,29 @@ class AtualizarAssinaturaViaWebhookUseCase
             throw new NotFoundException("Assinatura não encontrada para transação: {$transacaoId}");
         }
 
-        DB::transaction(function () use ($assinatura, $paymentResult) {
+        DB::transaction(function () use ($assinatura, $paymentResult, $transacaoId) {
             if ($paymentResult->isApproved() && $assinatura->status !== 'ativa') {
+                // CRÍTICO: Cancelar outras assinaturas ativas do mesmo tenant antes de ativar a nova
+                $assinaturasAntigas = \App\Modules\Assinatura\Models\Assinatura::where('tenant_id', $assinatura->tenant_id)
+                    ->where('status', 'ativa')
+                    ->where('id', '!=', $assinatura->id)
+                    ->get();
+                
+                foreach ($assinaturasAntigas as $assinaturaAntiga) {
+                    $assinaturaAntiga->update([
+                        'status' => 'cancelada',
+                        'data_cancelamento' => now(),
+                        'observacoes' => ($assinaturaAntiga->observacoes ?? '') . 
+                            "\n\nCancelada automaticamente por upgrade de plano via webhook em " . now()->format('d/m/Y H:i:s'),
+                    ]);
+                    
+                    Log::info('Assinatura antiga cancelada via webhook por upgrade', [
+                        'assinatura_antiga_id' => $assinaturaAntiga->id,
+                        'plano_antigo_id' => $assinaturaAntiga->plano_id,
+                        'tenant_id' => $assinatura->tenant_id,
+                    ]);
+                }
+
                 // Ativar assinatura
                 $assinatura->update([
                     'status' => 'ativa',
@@ -66,6 +87,7 @@ class AtualizarAssinaturaViaWebhookUseCase
                     'tenant_id' => $assinatura->tenant_id,
                     'plano_id' => $assinatura->plano_id,
                     'external_id' => $transacaoId,
+                    'assinaturas_antigas_canceladas' => $assinaturasAntigas->count(),
                 ]);
             } elseif ($paymentResult->isRejected()) {
                 // Marcar como suspensa se rejeitado
