@@ -1,0 +1,20 @@
+# Crontab para Laravel Scheduler
+# Formato: minuto hora dia mês dia-da-semana comando
+#
+# IMPORTANTE: Todos os comandos devem usar o wrapper script
+# que configura o ambiente PHP corretamente
+
+# Verificar pagamentos pendentes a cada 2 horas
+0 */2 * * * /usr/local/bin/laravel-cron.sh pagamentos:verificar-pendentes --horas=1 >> /var/log/cron.log 2>&1
+
+# Verificar assinaturas expiradas diariamente às 2h da manhã
+0 2 * * * /usr/local/bin/laravel-cron.sh assinaturas:verificar-expiradas --bloquear >> /var/log/cron.log 2>&1
+
+# Verificar documentos de habilitação vencendo/vencidos diariamente às 6h
+0 6 * * * /usr/local/bin/laravel-cron.sh documentos:vencimento >> /var/log/cron.log 2>&1
+
+# Cleanup de uploads diariamente às 3h30
+30 3 * * * /usr/local/bin/laravel-cron.sh documentos:cleanup-processos >> /var/log/cron.log 2>&1
+
+# Limpar linha em branco no final (cron requer linha em branco no final do arquivo)
+

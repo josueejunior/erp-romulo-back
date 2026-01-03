@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     libicu-dev \
     libonig-dev \
     libxml2-dev \
+    cron \
     && docker-php-ext-install \
        pdo_pgsql \
        pgsql \
@@ -48,6 +49,23 @@ COPY . /var/www/html
 # ---------------------------------------------------------
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# ---------------------------------------------------------
+# Configuração do Cron
+# ---------------------------------------------------------
+# Copiar script wrapper para cron
+COPY docker/laravel-cron.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/laravel-cron.sh
+
+# Copiar crontab
+COPY docker/crontab /etc/cron.d/laravel-cron
+RUN chmod 0644 /etc/cron.d/laravel-cron
+
+# Aplicar crontab
+RUN crontab /etc/cron.d/laravel-cron
+
+# Criar log do cron
+RUN touch /var/log/cron.log
 
 # ---------------------------------------------------------
 # Permissões (simples, para dev)

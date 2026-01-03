@@ -110,8 +110,23 @@ else
 fi
 
 echo "✅ Inicialização concluída!"
+
+# Iniciar cron em background
+echo "⏰ Iniciando cron jobs..."
+cron
+
+echo "📋 Cron jobs configurados:"
+echo "   - Verificar pagamentos pendentes: A cada 2 horas"
+echo "   - Verificar assinaturas expiradas: Diariamente às 2h"
+echo "   - Verificar documentos vencendo: Diariamente às 6h"
+echo "   - Cleanup de documentos: Diariamente às 3h30"
+
+# Mostrar logs do cron em background (opcional, para debug)
+tail -f /var/log/cron.log &
+CRON_LOG_PID=$!
+
 echo "🚀 Iniciando servidor Laravel..."
 
-# Iniciar servidor
+# Iniciar servidor (mantém o container rodando)
 exec php artisan serve --host=0.0.0.0 --port=8000
 
