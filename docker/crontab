@@ -23,3 +23,18 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 # Nota: Este comando também está no routes/console.php executando a cada minuto via Laravel Scheduler
 # No Docker, executamos a cada 5 minutos para reduzir carga
 */5 * * * * www-data /usr/local/bin/laravel-cron.sh processos:atualizar-status-automatico >> /var/log/cron.log 2>&1
+
+# Atualizar vigência de contratos e AFs diariamente às 1h
+0 1 * * * www-data /usr/local/bin/laravel-cron.sh contratos:atualizar-vigencia >> /var/log/cron.log 2>&1
+
+# Atualizar situação de empenhos a cada 6 horas
+0 */6 * * * www-data /usr/local/bin/laravel-cron.sh empenhos:atualizar-situacao >> /var/log/cron.log 2>&1
+
+# Recalcular saldos diariamente às 3h (fallback)
+0 3 * * * www-data /usr/local/bin/laravel-cron.sh saldos:recalcular >> /var/log/cron.log 2>&1
+
+# Notificar processos com disputas próximas diariamente às 8h
+0 8 * * * www-data /usr/local/bin/laravel-cron.sh processos:notificar-disputas >> /var/log/cron.log 2>&1
+
+# Notificar processos em julgamento que precisam atenção diariamente às 9h
+0 9 * * * www-data /usr/local/bin/laravel-cron.sh processos:notificar-julgamento >> /var/log/cron.log 2>&1
