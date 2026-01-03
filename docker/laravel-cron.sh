@@ -10,7 +10,9 @@ cd /var/www/html || exit 1
 
 # Carregar variáveis de ambiente do .env se existir
 if [ -f .env ]; then
-    export $(cat .env | grep -v '^#' | xargs)
+    set -a
+    source .env
+    set +a
 fi
 
 # Executar o comando Laravel passado como argumentos

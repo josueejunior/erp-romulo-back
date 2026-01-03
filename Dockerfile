@@ -57,15 +57,12 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 COPY docker/laravel-cron.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/laravel-cron.sh
 
-# Copiar crontab
+# Copiar crontab (formato /etc/cron.d/)
 COPY docker/crontab /etc/cron.d/laravel-cron
 RUN chmod 0644 /etc/cron.d/laravel-cron
 
-# Aplicar crontab
-RUN crontab /etc/cron.d/laravel-cron
-
 # Criar log do cron
-RUN touch /var/log/cron.log
+RUN touch /var/log/cron.log && chmod 666 /var/log/cron.log
 
 # ---------------------------------------------------------
 # Permissões (simples, para dev)
