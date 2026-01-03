@@ -18,3 +18,8 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # Cleanup de uploads diariamente às 3h30
 30 3 * * * www-data /usr/local/bin/laravel-cron.sh documentos:cleanup-processos >> /var/log/cron.log 2>&1
+
+# Atualizar status de processos automaticamente (a cada 5 minutos)
+# Nota: Este comando também está no routes/console.php executando a cada minuto via Laravel Scheduler
+# No Docker, executamos a cada 5 minutos para reduzir carga
+*/5 * * * * www-data /usr/local/bin/laravel-cron.sh processos:atualizar-status-automatico >> /var/log/cron.log 2>&1
