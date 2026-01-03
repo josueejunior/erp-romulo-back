@@ -217,6 +217,8 @@ class ProcessarAssinaturaPlanoUseCase
             $dataInicio = Carbon::now();
             $dataFim = $dataInicio->copy()->addDays($diasValidade);
 
+            // IMPORTANTE: NÃO atualizar tenant quando está pendente
+            // O tenant só deve ser atualizado quando o pagamento for aprovado (via webhook)
             // Criar assinatura com status pendente
             $assinatura = Assinatura::create([
                 'tenant_id' => $tenant->id,
@@ -228,13 +230,15 @@ class ProcessarAssinaturaPlanoUseCase
                 'metodo_pagamento' => $paymentResult->paymentMethod,
                 'transacao_id' => $paymentResult->externalId,
                 'dias_grace_period' => 7,
-                'observacoes' => 'Aguardando confirmação de pagamento',
+                'observacoes' => 'Aguardando confirmação de pagamento - ' . ($paymentResult->errorMessage ?? 'Em análise'),
             ]);
 
-            Log::info('Assinatura pendente criada', [
+            Log::info('Assinatura pendente criada (NÃO atualizou tenant)', [
                 'tenant_id' => $tenant->id,
                 'assinatura_id' => $assinatura->id,
                 'external_id' => $paymentResult->externalId,
+                'status_detail' => $paymentResult->errorMessage,
+                'tenant_plano_atual_id' => $tenant->plano_atual_id, // Deve continuar o mesmo
             ]);
 
             return $assinatura;

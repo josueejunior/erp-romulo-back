@@ -213,8 +213,14 @@ class PaymentController extends BaseApiController
                 'data_fim' => $assinatura->data_fim->format('Y-m-d'),
             ];
 
+            // Determinar mensagem baseada no status
+            $isPendente = $assinatura->status === 'suspensa' || $assinatura->status === 'pendente';
+            $message = $isPendente 
+                ? 'Pagamento em análise. Você será notificado quando for aprovado.' 
+                : 'Assinatura processada com sucesso';
+
             // Se for PIX e estiver pendente, incluir dados do QR Code
-            if ($paymentMethod === 'pix' && $assinatura->status === 'pendente') {
+            if ($paymentMethod === 'pix' && $isPendente) {
                 $dadosResposta = $paymentLog->dados_resposta ?? [];
                 if (isset($dadosResposta['pix_qr_code_base64']) || isset($dadosResposta['pix_qr_code'])) {
                     $responseData['pix_qr_code_base64'] = $dadosResposta['pix_qr_code_base64'] ?? null;
@@ -224,9 +230,18 @@ class PaymentController extends BaseApiController
                 }
             }
 
+            // Se estiver pendente, incluir informação adicional
+            if ($isPendente && $paymentLog) {
+                $dadosResposta = $paymentLog->dados_resposta ?? [];
+                if (isset($dadosResposta['error_message'])) {
+                    $responseData['pending_reason'] = $dadosResposta['error_message'];
+                }
+            }
+
             return response()->json([
-                'message' => 'Assinatura processada com sucesso',
+                'message' => $message,
                 'data' => $responseData,
+                'pending' => $isPendente, // Flag para o frontend saber que está pendente
             ], 201);
 
         } catch (ValidationException $e) {
