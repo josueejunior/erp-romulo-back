@@ -19,12 +19,13 @@ class EnviarNotificacaoOrcamentoCriado
             ->get();
 
         foreach ($usuarios as $usuario) {
+            $nomeFornecedor = $orcamento->fornecedor?->nome_fantasia ?? $orcamento->fornecedor?->razao_social ?? 'N/A';
             Notificacao::criar(
                 $usuario->id,
                 $orcamento->empresa_id,
                 'orcamento_criado',
                 'Novo Orçamento Criado',
-                "Orçamento #{$orcamento->id} criado para o processo #{$orcamento->processo_id} pelo fornecedor {$orcamento->fornecedor?->nome}",
+                "Orçamento #{$orcamento->id} criado para o processo #{$orcamento->processo_id} pelo fornecedor {$nomeFornecedor}",
                 [
                     'orcamento_id' => $orcamento->id,
                     'processo_id' => $orcamento->processo_id,

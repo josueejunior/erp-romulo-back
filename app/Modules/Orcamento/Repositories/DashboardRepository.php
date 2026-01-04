@@ -63,7 +63,7 @@ class DashboardRepository implements DashboardRepositoryInterface
                 DB::raw('count(case when fornecedor_escolhido = true then 1 end) as orcamentos_aprovados'),
                 DB::raw('count(case when fornecedor_escolhido = false then 1 end) as orcamentos_rejeitados')
             )
-            ->with('fornecedor')
+            ->with(['fornecedor' => fn($q) => $q->withoutGlobalScopes()])
             ->groupBy('fornecedor_id')
             ->get();
 
@@ -74,7 +74,7 @@ class DashboardRepository implements DashboardRepositoryInterface
 
             return new PerformanceFornecedor(
                 $orcamento->fornecedor_id,
-                $orcamento->fornecedor?->nome ?? 'N/A',
+                $orcamento->fornecedor?->nome_fantasia ?? $orcamento->fornecedor?->razao_social ?? 'N/A',
                 $orcamento->total_orcamentos,
                 $orcamento->valor_total ?? 0,
                 $orcamento->valor_medio ?? 0,
@@ -106,14 +106,17 @@ class DashboardRepository implements DashboardRepositoryInterface
     public function obterTimeline(int $empresaId, int $limit = 10): array
     {
         return Orcamento::where('empresa_id', $empresaId)
-            ->with(['fornecedor', 'processo'])
-            ->orderBy('created_at', 'desc')
+            ->with([
+                'fornecedor' => fn($q) => $q->withoutGlobalScopes(),
+                'processo' => fn($q) => $q->withoutGlobalScopes()
+            ])
+            ->orderByDesc('created_at')
             ->limit($limit)
             ->get()
             ->map(function ($orcamento) {
                 return [
                     'id' => $orcamento->id,
-                    'fornecedor' => $orcamento->fornecedor?->nome ?? 'N/A',
+                    'fornecedor' => $orcamento->fornecedor?->nome_fantasia ?? $orcamento->fornecedor?->razao_social ?? 'N/A',
                     'processo' => $orcamento->processo?->numero ?? 'N/A',
                     'valor' => round($orcamento->custo_total, 2),
                     'status' => $orcamento->fornecedor_escolhido ? 'escolhido' : 'pendente',
@@ -126,6 +129,7 @@ class DashboardRepository implements DashboardRepositoryInterface
     public function obterComparacaoPeriodos(int $empresaId, int $meses = 12): array
     {
         $dados = Orcamento::where('empresa_id', $empresaId)
+            ->whereNotNull('created_at')
             ->select(
                 DB::raw('DATE_TRUNC(\'month\', created_at) as periodo'),
                 DB::raw('count(*) as total'),

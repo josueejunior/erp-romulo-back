@@ -20,13 +20,17 @@ class RelatorioDomainService
 
         $this->aplicarFiltros($query, $filtros);
 
-        $orcamentos = $query->with(['fornecedor', 'processo', 'itens'])
+        $orcamentos = $query->with([
+                'fornecedor' => fn($q) => $q->withoutGlobalScopes(),
+                'processo' => fn($q) => $q->withoutGlobalScopes(),
+                'itens'
+            ])
             ->get()
             ->map(function ($o) {
                 return [
                     'id' => $o->id,
                     'data' => $o->created_at?->format('d/m/Y') ?? 'N/A',
-                    'fornecedor' => $o->fornecedor?->nome ?? 'N/A',
+                    'fornecedor' => $o->fornecedor?->nome_fantasia ?? $o->fornecedor?->razao_social ?? 'N/A',
                     'processo' => $o->processo?->numero ?? 'N/A',
                     'valor_total' => $o->custo_total,
                     'status' => $o->fornecedor_escolhido ? 'escolhido' : 'pendente',
@@ -62,13 +66,13 @@ class RelatorioDomainService
             DB::raw('count(case when fornecedor_escolhido = true then 1 end) as escolhidos'),
             DB::raw('count(case when fornecedor_escolhido = false then 1 end) as pendentes')
         )
-        ->with('fornecedor')
+        ->with(['fornecedor' => fn($q) => $q->withoutGlobalScopes()])
         ->groupBy('fornecedor_id')
         ->get()
         ->map(function ($item) {
             $total = $item->total_orcamentos ?? 1;
             return [
-                'fornecedor' => $item->fornecedor?->nome ?? 'N/A',
+                'fornecedor' => $item->fornecedor?->nome_fantasia ?? $item->fornecedor?->razao_social ?? 'N/A',
                 'total_orcamentos' => $item->total_orcamentos,
                 'valor_total' => round($item->valor_total ?? 0, 2),
                 'valor_medio' => round($item->valor_medio ?? 0, 2),
