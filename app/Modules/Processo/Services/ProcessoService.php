@@ -73,6 +73,7 @@ class ProcessoService extends BaseService
             'modalidade' => $values['modalidade'] ?? null,
             'orgao_id' => $values['orgao_id'] ?? null,
             'search' => $values['search'] ?? null,
+            'somente_com_orcamento' => $values['somente_com_orcamento'] ?? null,
             'page' => $values['page'] ?? 1,
             'per_page' => $values['per_page'] ?? 15,
             'with' => $values['with'] ?? [
