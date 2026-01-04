@@ -1,0 +1,33 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Deploy to Server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            cd /var/www/api.addireta.com
+            git fetch origin main
+            git reset --hard origin/main
+            
+            # Atualizar container se necessário
+            CONTAINER_ID=$(docker ps -q --filter "name=erp-licitacoes-backend")
+            if [ -n "$CONTAINER_ID" ]; then
+              docker exec $CONTAINER_ID php artisan cache:clear
+              docker exec $CONTAINER_ID php artisan config:clear
+              docker exec $CONTAINER_ID php artisan route:clear
+              docker exec $CONTAINER_ID php artisan migrate --force || true
+            fi
+            
+            echo "Backend deploy completed at $(date)"
