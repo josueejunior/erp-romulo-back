@@ -27,14 +27,6 @@ class CalendarioService
             throw new \InvalidArgumentException('empresa_id é obrigatório para buscar processos do calendário');
         }
 
-        // Buscar processos usando repository (com relacionamentos para cálculos)
-        $filtros = [
-            'empresa_id' => $empresaId,
-            'status' => 'participacao',
-            'data_hora_sessao_publica_inicio' => $dataInicio,
-            'data_hora_sessao_publica_fim' => $dataFim,
-        ];
-
         $with = [
             'orgao',
             'setor',
@@ -48,18 +40,31 @@ class CalendarioService
             }
         ];
 
-        // Buscar modelos Eloquent com relacionamentos (necessário para cálculos)
-        $processos = $this->processoRepository->buscarModelosComFiltros($filtros, $with);
-        
-        // Filtrar processos pendentes (adiado, suspenso, cancelado) que não têm data
-        $processosPendentes = $this->processoRepository->buscarModelosComFiltros([
+        // Buscar processos com data de sessão dentro do período
+        $filtrosComData = [
             'empresa_id' => $empresaId,
             'status' => 'participacao',
-            'status_participacao' => ['adiado', 'suspenso', 'cancelado'],
-        ], $with);
+            'data_hora_sessao_publica_inicio' => $dataInicio,
+            'data_hora_sessao_publica_fim' => $dataFim,
+        ];
+        $processosComData = $this->processoRepository->buscarModelosComFiltros($filtrosComData, $with);
+        
+        // Buscar TODOS os processos em participação (incluindo os sem data)
+        // O calendário deve mostrar processos em participação mesmo sem data definida
+        $filtrosSemData = [
+            'empresa_id' => $empresaId,
+            'status' => 'participacao',
+        ];
+        $todosProcessosParticipacao = $this->processoRepository->buscarModelosComFiltros($filtrosSemData, $with);
+        
+        // Filtrar apenas os que não têm data de sessão ou têm status especial
+        $processosSemDataOuPendentes = $todosProcessosParticipacao->filter(function ($processo) {
+            return $processo->data_hora_sessao_publica === null 
+                || in_array($processo->status_participacao, ['adiado', 'suspenso', 'cancelado']);
+        });
         
         // Combinar e remover duplicatas
-        $processos = $processos->merge($processosPendentes)->unique('id');
+        $processos = $processosComData->merge($processosSemDataOuPendentes)->unique('id');
 
         return $processos->map(function ($processo) {
             $precosMinimos = $this->calcularPrecosMinimosProcesso($processo);

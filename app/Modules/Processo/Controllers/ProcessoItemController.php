@@ -8,6 +8,7 @@ use App\Modules\Processo\Models\ProcessoItem;
 use App\Modules\Processo\Services\ProcessoItemService;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\ProcessoItem\Repositories\ProcessoItemRepositoryInterface;
+use App\Domain\ProcessoItem\Enums\UnidadeMedida;
 use Illuminate\Http\Request;
 
 class ProcessoItemController extends BaseApiController
@@ -22,6 +23,16 @@ class ProcessoItemController extends BaseApiController
     ) {
         $this->itemService = $itemService;
         $this->service = $itemService; // Para HasDefaultActions
+    }
+    
+    /**
+     * API: Listar unidades de medida disponíveis
+     */
+    public function unidadesMedida()
+    {
+        return response()->json([
+            'data' => UnidadeMedida::toArray()
+        ]);
     }
 
     /**

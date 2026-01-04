@@ -103,6 +103,9 @@ Route::prefix('v1')->group(function () {
             // Dashboard
             Route::get('/dashboard', [ApiDashboardController::class, 'index']);
             
+            // Recursos estáticos (enums, listas)
+            Route::get('/unidades-medida', [ApiProcessoItemController::class, 'unidadesMedida']);
+            
             // Calendário
             Route::prefix('calendario')->group(function () {
             // Calendário de Disputas (legado)

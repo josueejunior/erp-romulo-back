@@ -3,6 +3,7 @@
 namespace App\Domain\Processo\Entities;
 
 use App\Domain\Exceptions\DomainException;
+use App\Rules\NumeroProcessoRule;
 use Carbon\Carbon;
 
 /**
@@ -54,6 +55,11 @@ class Processo
     {
         if ($this->empresaId <= 0) {
             throw new DomainException('A empresa é obrigatória.');
+        }
+        
+        // Validar formato do número da modalidade (XXXXX/YYYY)
+        if ($this->numeroModalidade && !NumeroProcessoRule::isValid($this->numeroModalidade)) {
+            throw new DomainException('O número da modalidade deve estar no formato XXXXX/YYYY (ex: 00123/2025).');
         }
 
         // Manter compatibilidade com nomenclaturas usadas nas camadas de aplicação/infra
