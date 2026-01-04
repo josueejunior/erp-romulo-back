@@ -24,9 +24,12 @@ class CriarOrcamentoUseCase
     {
         $context = TenantContext::get();
         
+        // Usa empresaId do DTO se informado, senão usa do contexto
+        $empresaId = $dto->empresaId > 0 ? $dto->empresaId : ($context->empresaId ?? 0);
+        
         $orcamento = new Orcamento(
             id: null,
-            empresaId: $dto->empresaId,
+            empresaId: $empresaId,
             processoId: $dto->processoId,
             processoItemId: $dto->processoItemId,
             fornecedorId: $dto->fornecedorId,

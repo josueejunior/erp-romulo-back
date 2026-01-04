@@ -5,6 +5,7 @@ namespace App\Application\CustoIndireto\UseCases;
 use App\Application\CustoIndireto\DTOs\CriarCustoIndiretoDTO;
 use App\Domain\CustoIndireto\Entities\CustoIndireto;
 use App\Domain\CustoIndireto\Repositories\CustoIndiretoRepositoryInterface;
+use App\Domain\Shared\ValueObjects\TenantContext;
 use DomainException;
 
 /**
@@ -18,9 +19,15 @@ class CriarCustoIndiretoUseCase
 
     public function executar(CriarCustoIndiretoDTO $dto): CustoIndireto
     {
+        // Obter tenant_id e empresa_id do contexto
+        $context = TenantContext::get();
+        
+        // Usa empresaId do DTO se informado, senão usa do contexto
+        $empresaId = $dto->empresaId > 0 ? $dto->empresaId : ($context->empresaId ?? 0);
+        
         $custo = new CustoIndireto(
             id: null,
-            empresaId: $dto->empresaId,
+            empresaId: $empresaId,
             descricao: $dto->descricao,
             data: $dto->data,
             valor: $dto->valor,

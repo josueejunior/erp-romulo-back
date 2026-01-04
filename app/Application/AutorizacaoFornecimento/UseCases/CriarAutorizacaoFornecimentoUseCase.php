@@ -5,6 +5,7 @@ namespace App\Application\AutorizacaoFornecimento\UseCases;
 use App\Application\AutorizacaoFornecimento\DTOs\CriarAutorizacaoFornecimentoDTO;
 use App\Domain\AutorizacaoFornecimento\Entities\AutorizacaoFornecimento;
 use App\Domain\AutorizacaoFornecimento\Repositories\AutorizacaoFornecimentoRepositoryInterface;
+use App\Domain\Shared\ValueObjects\TenantContext;
 use DomainException;
 
 /**
@@ -18,9 +19,15 @@ class CriarAutorizacaoFornecimentoUseCase
 
     public function executar(CriarAutorizacaoFornecimentoDTO $dto): AutorizacaoFornecimento
     {
+        // Obter tenant_id e empresa_id do contexto
+        $context = TenantContext::get();
+        
+        // Usa empresaId do DTO se informado, senão usa do contexto
+        $empresaId = $dto->empresaId > 0 ? $dto->empresaId : ($context->empresaId ?? 0);
+        
         $autorizacao = new AutorizacaoFornecimento(
             id: null,
-            empresaId: $dto->empresaId,
+            empresaId: $empresaId,
             processoId: $dto->processoId,
             contratoId: $dto->contratoId,
             numero: $dto->numero,

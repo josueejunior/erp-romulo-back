@@ -24,14 +24,15 @@ class CriarContratoUseCase
 
     public function executar(CriarContratoDTO $dto): Contrato
     {
-        // Obter tenant_id do contexto (invisível para o controller)
+        // Obter tenant_id e empresa_id do contexto (invisível para o controller)
         $context = TenantContext::get();
         
-        // Por enquanto, mantemos empresaId no DTO para compatibilidade
-        // Mas o tenant_id já está disponível no contexto se necessário
+        // Usa empresaId do DTO se informado, senão usa do contexto
+        $empresaId = $dto->empresaId > 0 ? $dto->empresaId : ($context->empresaId ?? 0);
+        
         $contrato = new Contrato(
             id: null,
-            empresaId: $dto->empresaId,
+            empresaId: $empresaId,
             processoId: $dto->processoId,
             numero: $dto->numero,
             dataInicio: $dto->dataInicio,

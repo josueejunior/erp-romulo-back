@@ -5,6 +5,7 @@ namespace App\Application\Processo\UseCases;
 use App\Application\Processo\DTOs\CriarProcessoDTO;
 use App\Domain\Processo\Entities\Processo;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
+use App\Domain\Shared\ValueObjects\TenantContext;
 use DomainException;
 
 /**
@@ -23,10 +24,16 @@ class CriarProcessoUseCase
      */
     public function executar(CriarProcessoDTO $dto): Processo
     {
+        // Obter tenant_id e empresa_id do contexto
+        $context = TenantContext::get();
+        
+        // Usa empresaId do DTO se informado, senão usa do contexto
+        $empresaId = $dto->empresaId > 0 ? $dto->empresaId : ($context->empresaId ?? 0);
+        
         // Criar entidade Processo (regras de negócio)
         $processo = new Processo(
             id: null, // Será gerado pelo repository
-            empresaId: $dto->empresaId,
+            empresaId: $empresaId,
             orgaoId: $dto->orgaoId,
             setorId: $dto->setorId,
             modalidade: $dto->modalidade,
