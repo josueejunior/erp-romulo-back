@@ -18,7 +18,11 @@ return Application::configure(basePath: dirname(__DIR__))
             'tenancy' => \App\Http\Middleware\InitializeTenancyByRequestData::class,
             'rate.limit.redis' => \App\Http\Middleware\RateLimitRedis::class,
             'admin' => \App\Http\Middleware\EnsureAdmin::class,
+            'security.headers' => \App\Http\Middleware\SecurityHeaders::class,
         ]);
+        
+        // Headers de segurança devem rodar em TODAS as requisições
+        $middleware->prepend(\App\Http\Middleware\SecurityHeaders::class);
         
         // Configurar CORS para React
         $middleware->api(prepend: [
@@ -31,5 +35,63 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(\App\Http\Middleware\EnsureEmpresaAtivaContext::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // Exceções de Domínio - Bad Request (400)
+        $exceptions->render(function (\App\Domain\Exceptions\DomainException $e, $request) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => $e->getMessage(),
+                    'code' => 'DOMAIN_ERROR',
+                ], 400);
+            }
+        });
+        
+        // Exceções de Validação de Domínio - Unprocessable Entity (422)
+        $exceptions->render(function (\App\Domain\Exceptions\ValidationException $e, $request) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => $e->getMessage(),
+                    'errors' => $e->errors,
+                    'code' => 'VALIDATION_ERROR',
+                ], 422);
+            }
+        });
+        
+        // Exceções de Regra de Negócio - Bad Request com detalhes (400)
+        $exceptions->render(function (\App\Domain\Exceptions\BusinessRuleException $e, $request) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => $e->getMessage(),
+                    'rule' => $e->rule,
+                    'context' => $e->context,
+                    'code' => 'BUSINESS_RULE_VIOLATION',
+                ], 400);
+            }
+        });
+        
+        // Exceções de Não Encontrado - Not Found (404)
+        $exceptions->render(function (\App\Domain\Exceptions\NotFoundException $e, $request) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => $e->getMessage(),
+                    'code' => 'NOT_FOUND',
+                ], 404);
+            }
+        });
+        
+        // Exceções de Não Autorizado - Forbidden (403)
+        $exceptions->render(function (\App\Domain\Exceptions\UnauthorizedException $e, $request) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => $e->getMessage(),
+                    'code' => 'UNAUTHORIZED',
+                ], 403);
+            }
+        });
+        
+        // Logar exceções não tratadas para debugging
+        $exceptions->report(function (\Throwable $e) {
+            if (app()->bound('sentry')) {
+                app('sentry')->captureException($e);
+            }
+        });
     })->create();
