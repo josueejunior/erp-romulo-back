@@ -129,7 +129,7 @@ class OrcamentoController extends BaseApiController
     /**
      * API: Criar orçamento (Route::module)
      */
-    public function store(Request $request)
+    public function store(OrcamentoCreateRequest $request)
     {
         $processoId = $request->route()->parameter('processo');
         $itemId = $request->route()->parameter('item');
