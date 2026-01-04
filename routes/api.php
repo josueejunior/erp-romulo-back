@@ -231,6 +231,9 @@ Route::prefix('v1')->group(function () {
             Route::module('fornecedores', ApiFornecedorController::class, 'fornecedor')
                 ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
             
+            // Consulta de CNPJ na Receita Federal
+            Route::get('/fornecedores/consultar-cnpj/{cnpj}', [ApiFornecedorController::class, 'consultarCnpj']);
+            
             Route::module('custos-indiretos', ApiCustoIndiretoController::class, 'id')
                 ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy'])
                 ->group(function () {
