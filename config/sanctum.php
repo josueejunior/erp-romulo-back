@@ -42,11 +42,12 @@ return [
     | considered expired. This will override any values set in the token's
     | "expires_at" attribute, but first-party sessions are not affected.
     |
-    | Configuração: 7 dias = 10080 minutos (pode ser ajustado via .env)
+    | NOTA: Mantido como null para compatibilidade com tokens existentes.
+    | Para habilitar expiração, todos os tokens precisam ter expires_at definido.
     |
     */
 
-    'expiration' => env('SANCTUM_TOKEN_EXPIRATION', 60 * 24 * 7), // 7 dias
+    'expiration' => null,
 
     /*
     |--------------------------------------------------------------------------
