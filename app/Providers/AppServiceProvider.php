@@ -34,6 +34,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        // Registrar ApplicationContext como singleton (único ponto de verdade para contexto)
+        $this->app->singleton(\App\Services\ApplicationContext::class, function ($app) {
+            return new \App\Services\ApplicationContext();
+        });
+        
         // Registrar modelo customizado do Sanctum para usar timestamps em português
         Sanctum::usePersonalAccessTokenModel(PersonalAccessToken::class);
         

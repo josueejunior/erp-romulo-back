@@ -3,34 +3,28 @@
 namespace App\Application\Fornecedor\UseCases;
 
 use App\Application\Fornecedor\DTOs\CriarFornecedorDTO;
+use App\Application\Shared\Traits\HasApplicationContext;
 use App\Domain\Fornecedor\Entities\Fornecedor;
 use App\Domain\Fornecedor\Repositories\FornecedorRepositoryInterface;
-use App\Domain\Shared\ValueObjects\TenantContext;
 use DomainException;
 
 /**
  * Application Service: CriarFornecedorUseCase
  * 
- * 🔥 ONDE O TENANT É USADO DE VERDADE
- * 
- * O service pega o tenant_id do TenantContext (setado pelo middleware).
- * O controller não sabe que isso existe.
+ * Usa o trait HasApplicationContext para resolver empresa_id de forma robusta.
  */
 class CriarFornecedorUseCase
 {
+    use HasApplicationContext;
+    
     public function __construct(
         private FornecedorRepositoryInterface $fornecedorRepository,
     ) {}
 
     public function executar(CriarFornecedorDTO $dto): Fornecedor
     {
-        // Obter tenant_id e empresa_id do contexto (invisível para o controller)
-        $context = TenantContext::get();
-        
-        // Usa empresaId do DTO se informado, senão tenta do contexto, senão do app container
-        $empresaId = $dto->empresaId > 0 
-            ? $dto->empresaId 
-            : ($context->empresaId ?? (app()->bound('current_empresa_id') ? app('current_empresa_id') : 0));
+        // Resolver empresa_id usando o trait (fallbacks robustos)
+        $empresaId = $this->resolveEmpresaId($dto->empresaId);
         
         $fornecedor = new Fornecedor(
             id: null,

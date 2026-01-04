@@ -125,6 +125,22 @@ class InitializeTenancyByRequestData extends IdentificationMiddleware
             // Setar no TenantContext COM empresa_id (invisível para o controller)
             \App\Domain\Shared\ValueObjects\TenantContext::set($tenant->id, $empresaId);
             
+            // Inicializar ApplicationContext (novo serviço centralizado)
+            $user = $request->user();
+            $empresaIdFromHeader = $request->header('X-Empresa-ID') 
+                ? (int) $request->header('X-Empresa-ID') 
+                : null;
+            
+            if (app()->bound(\App\Services\ApplicationContext::class)) {
+                $appContext = app(\App\Services\ApplicationContext::class);
+                $appContext->initialize($user, $tenant->id, $empresaIdFromHeader);
+                
+                // Usar empresa_id do ApplicationContext se disponível
+                if ($appContext->getEmpresaIdOrNull()) {
+                    $empresaId = $appContext->getEmpresaId();
+                }
+            }
+            
             // Também disponibilizar via app() para Global Scopes e UseCases
             if ($empresaId) {
                 app()->instance('current_empresa_id', $empresaId);

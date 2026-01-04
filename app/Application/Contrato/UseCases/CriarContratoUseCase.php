@@ -3,34 +3,28 @@
 namespace App\Application\Contrato\UseCases;
 
 use App\Application\Contrato\DTOs\CriarContratoDTO;
+use App\Application\Shared\Traits\HasApplicationContext;
 use App\Domain\Contrato\Entities\Contrato;
 use App\Domain\Contrato\Repositories\ContratoRepositoryInterface;
-use App\Domain\Shared\ValueObjects\TenantContext;
 use DomainException;
 
 /**
  * Application Service: CriarContratoUseCase
  * 
- * 🔥 ONDE O TENANT É USADO DE VERDADE
- * 
- * O service pega o tenant_id do TenantContext (setado pelo middleware).
- * O controller não sabe que isso existe.
+ * Usa o trait HasApplicationContext para resolver empresa_id de forma robusta.
  */
 class CriarContratoUseCase
 {
+    use HasApplicationContext;
+    
     public function __construct(
         private ContratoRepositoryInterface $contratoRepository,
     ) {}
 
     public function executar(CriarContratoDTO $dto): Contrato
     {
-        // Obter tenant_id e empresa_id do contexto (invisível para o controller)
-        $context = TenantContext::get();
-        
-        // Usa empresaId do DTO se informado, senão tenta do contexto, senão do app container
-        $empresaId = $dto->empresaId > 0 
-            ? $dto->empresaId 
-            : ($context->empresaId ?? (app()->bound('current_empresa_id') ? app('current_empresa_id') : 0));
+        // Resolver empresa_id usando o trait (fallbacks robustos)
+        $empresaId = $this->resolveEmpresaId($dto->empresaId);
         
         $contrato = new Contrato(
             id: null,

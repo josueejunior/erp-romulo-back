@@ -3,18 +3,20 @@
 namespace App\Application\Processo\UseCases;
 
 use App\Application\Processo\DTOs\CriarProcessoDTO;
+use App\Application\Shared\Traits\HasApplicationContext;
 use App\Domain\Processo\Entities\Processo;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
-use App\Domain\Shared\ValueObjects\TenantContext;
 use DomainException;
 
 /**
  * Use Case: Criar Processo
  * 
- * Coordena o fluxo de criação, mas não sabe nada de banco de dados
+ * Usa o trait HasApplicationContext para resolver empresa_id de forma robusta.
  */
 class CriarProcessoUseCase
 {
+    use HasApplicationContext;
+    
     public function __construct(
         private ProcessoRepositoryInterface $processoRepository,
     ) {}
@@ -24,13 +26,8 @@ class CriarProcessoUseCase
      */
     public function executar(CriarProcessoDTO $dto): Processo
     {
-        // Obter tenant_id e empresa_id do contexto
-        $context = TenantContext::get();
-        
-        // Usa empresaId do DTO se informado, senão tenta do contexto, senão do app container
-        $empresaId = $dto->empresaId > 0 
-            ? $dto->empresaId 
-            : ($context->empresaId ?? (app()->bound('current_empresa_id') ? app('current_empresa_id') : 0));
+        // Resolver empresa_id usando o trait (fallbacks robustos)
+        $empresaId = $this->resolveEmpresaId($dto->empresaId);
         
         // Criar entidade Processo (regras de negócio)
         $processo = new Processo(

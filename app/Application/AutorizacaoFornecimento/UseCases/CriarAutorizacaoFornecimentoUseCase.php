@@ -3,29 +3,28 @@
 namespace App\Application\AutorizacaoFornecimento\UseCases;
 
 use App\Application\AutorizacaoFornecimento\DTOs\CriarAutorizacaoFornecimentoDTO;
+use App\Application\Shared\Traits\HasApplicationContext;
 use App\Domain\AutorizacaoFornecimento\Entities\AutorizacaoFornecimento;
 use App\Domain\AutorizacaoFornecimento\Repositories\AutorizacaoFornecimentoRepositoryInterface;
-use App\Domain\Shared\ValueObjects\TenantContext;
 use DomainException;
 
 /**
  * Use Case: Criar Autorização de Fornecimento
+ * 
+ * Usa o trait HasApplicationContext para resolver empresa_id de forma robusta.
  */
 class CriarAutorizacaoFornecimentoUseCase
 {
+    use HasApplicationContext;
+    
     public function __construct(
         private AutorizacaoFornecimentoRepositoryInterface $autorizacaoRepository,
     ) {}
 
     public function executar(CriarAutorizacaoFornecimentoDTO $dto): AutorizacaoFornecimento
     {
-        // Obter tenant_id e empresa_id do contexto
-        $context = TenantContext::get();
-        
-        // Usa empresaId do DTO se informado, senão tenta do contexto, senão do app container
-        $empresaId = $dto->empresaId > 0 
-            ? $dto->empresaId 
-            : ($context->empresaId ?? (app()->bound('current_empresa_id') ? app('current_empresa_id') : 0));
+        // Resolver empresa_id usando o trait (fallbacks robustos)
+        $empresaId = $this->resolveEmpresaId($dto->empresaId);
         
         $autorizacao = new AutorizacaoFornecimento(
             id: null,
