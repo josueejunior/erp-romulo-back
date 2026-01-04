@@ -117,9 +117,20 @@ class ProcessoService extends BaseService
                   ->orWhere('objeto_resumido', 'like', "%{$search}%");
             });
         }
+        
+        // Filtro para processos com orçamentos
+        if (isset($params['somente_com_orcamento']) && ($params['somente_com_orcamento'] === true || $params['somente_com_orcamento'] === 'true' || $params['somente_com_orcamento'] === '1')) {
+            $builder->whereHas('itens.orcamentos');
+        }
 
         // Carregar relacionamentos padrão necessários para ProcessoListResource
         $defaultWith = ['orgao', 'setor'];
+        
+        // Se solicitou filtro de orçamento, carregar também os itens com orçamentos
+        if (isset($params['somente_com_orcamento']) && ($params['somente_com_orcamento'] === true || $params['somente_com_orcamento'] === 'true' || $params['somente_com_orcamento'] === '1')) {
+            $defaultWith[] = 'itens.orcamentos.fornecedor';
+        }
+        
         $with = array_merge($defaultWith, $params['with'] ?? []);
         $builder->with(array_unique($with));
 
