@@ -242,8 +242,11 @@ class OrcamentoService
         }
 
         return DB::transaction(function () use ($processo, $validated, $empresaId) {
+            // Usar empresa_id do processo para garantir consistência
+            $empresaIdProcesso = $processo->empresa_id;
+            
             $orcamento = Orcamento::create([
-                'empresa_id' => $empresaId,
+                'empresa_id' => $empresaIdProcesso,
                 'processo_id' => $processo->id,
                 'fornecedor_id' => $validated['fornecedor_id'],
                 'transportadora_id' => $validated['transportadora_id'] ?? null,
@@ -252,7 +255,7 @@ class OrcamentoService
 
             foreach ($validated['itens'] as $itemData) {
                 $orcamentoItem = OrcamentoItem::create([
-                    'empresa_id' => $empresaId,
+                    'empresa_id' => $empresaIdProcesso,
                     'orcamento_id' => $orcamento->id,
                     'processo_item_id' => $itemData['processo_item_id'],
                     'custo_produto' => $itemData['custo_produto'],
@@ -369,10 +372,14 @@ class OrcamentoService
 
     /**
      * Listar orçamentos de um processo
+     * Usa withoutGlobalScope para evitar problemas com filtro de empresa
      */
     public function listByProcesso(Processo $processo): \Illuminate\Database\Eloquent\Collection
     {
-        return $processo->orcamentos()
+        // Usar withoutGlobalScope porque o relacionamento já garante que são do processo correto
+        // e o processo já foi validado para a empresa do usuário
+        return Orcamento::withoutGlobalScope('empresa')
+            ->where('processo_id', $processo->id)
             ->with(['fornecedor', 'transportadora', 'itens.processoItem', 'itens.formacaoPreco'])
             ->orderBy(\App\Database\Schema\Blueprint::CREATED_AT, 'desc')
             ->get();
