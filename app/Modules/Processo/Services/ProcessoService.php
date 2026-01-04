@@ -120,6 +120,9 @@ class ProcessoService extends BaseService
         
         // Filtro para processos com orçamentos
         if (isset($params['somente_com_orcamento']) && ($params['somente_com_orcamento'] === true || $params['somente_com_orcamento'] === 'true' || $params['somente_com_orcamento'] === '1')) {
+            \Log::debug('ProcessoService::list() - Aplicando filtro somente_com_orcamento', [
+                'param_value' => $params['somente_com_orcamento'],
+            ]);
             // Usar whereHas com orcamento_itens que é a tabela intermediária atual
             $builder->whereHas('itens.orcamentoItens', function($query) {
                 // Não precisa de condição adicional, apenas verificar existência
