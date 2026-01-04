@@ -47,6 +47,11 @@ class SecurityHeaders
     {
         $response = $next($request);
         
+        // Se não for uma Response válida, retornar sem modificar
+        if (!$response instanceof Response) {
+            return $response;
+        }
+        
         // Adicionar headers básicos de segurança
         foreach ($this->headers as $header => $value) {
             if ($value === '') {
