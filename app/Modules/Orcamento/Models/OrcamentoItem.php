@@ -36,7 +36,9 @@ class OrcamentoItem extends BaseModel
 
     public function orcamento(): BelongsTo
     {
-        return $this->belongsTo(Orcamento::class);
+        // Remove global scope 'empresa' porque o orçamento pode ter empresa_id diferente
+        // durante a consulta (ex: listagem através de processo)
+        return $this->belongsTo(Orcamento::class)->withoutGlobalScope('empresa');
     }
 
     public function processoItem(): BelongsTo

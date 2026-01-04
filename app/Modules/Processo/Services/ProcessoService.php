@@ -120,7 +120,10 @@ class ProcessoService extends BaseService
         
         // Filtro para processos com orçamentos
         if (isset($params['somente_com_orcamento']) && ($params['somente_com_orcamento'] === true || $params['somente_com_orcamento'] === 'true' || $params['somente_com_orcamento'] === '1')) {
-            $builder->whereHas('itens.orcamentos');
+            // Usar whereHas com orcamento_itens que é a tabela intermediária atual
+            $builder->whereHas('itens.orcamentoItens', function($query) {
+                // Não precisa de condição adicional, apenas verificar existência
+            });
         }
 
         // Carregar relacionamentos padrão necessários para ProcessoListResource
@@ -128,7 +131,7 @@ class ProcessoService extends BaseService
         
         // Se solicitou filtro de orçamento, carregar também os itens com orçamentos
         if (isset($params['somente_com_orcamento']) && ($params['somente_com_orcamento'] === true || $params['somente_com_orcamento'] === 'true' || $params['somente_com_orcamento'] === '1')) {
-            $defaultWith[] = 'itens.orcamentos.fornecedor';
+            $defaultWith[] = 'itens.orcamentoItens.orcamento.fornecedor';
         }
         
         $with = array_merge($defaultWith, $params['with'] ?? []);

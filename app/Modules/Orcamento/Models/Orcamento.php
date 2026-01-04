@@ -61,7 +61,8 @@ class Orcamento extends BaseModel
 
     public function fornecedor(): BelongsTo
     {
-        return $this->belongsTo(Fornecedor::class);
+        // Fornecedor pode estar em outra empresa, removemos o scope 
+        return $this->belongsTo(Fornecedor::class)->withoutGlobalScopes();
     }
 
     public function transportadora(): BelongsTo
