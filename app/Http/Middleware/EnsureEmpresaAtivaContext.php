@@ -48,7 +48,7 @@ class EnsureEmpresaAtivaContext
                 $empresaId = $empresaIdFromHeader;
                 
                 // Se empresa_ativa_id do usuário for diferente, atualizar
-                if (method_exists($user, 'empresa_ativa_id') && $user->empresa_ativa_id !== $empresaId) {
+                if ($user->empresa_ativa_id !== $empresaId) {
                     $user->empresa_ativa_id = $empresaId;
                     $user->save();
                     
@@ -66,7 +66,7 @@ class EnsureEmpresaAtivaContext
         }
         
         // Prioridade 2: empresa_ativa_id do usuário (se header não foi fornecido)
-        if (!$empresaId && method_exists($user, 'empresa_ativa_id') && $user->empresa_ativa_id) {
+        if (!$empresaId && $user->empresa_ativa_id) {
             $empresaId = $user->empresa_ativa_id;
             
             // Verificar se a empresa existe
@@ -88,15 +88,13 @@ class EnsureEmpresaAtivaContext
                     $empresaId = $empresa->id;
                     
                     // Atualizar empresa_ativa_id no banco
-                    if (method_exists($user, 'empresa_ativa_id')) {
-                        $user->empresa_ativa_id = $empresaId;
-                        $user->save();
-                        
-                        Log::info('Empresa ativa atualizada automaticamente', [
-                            'user_id' => $user->id,
-                            'empresa_id' => $empresaId,
-                        ]);
-                    }
+                    $user->empresa_ativa_id = $empresaId;
+                    $user->save();
+                    
+                    Log::info('Empresa ativa atualizada automaticamente', [
+                        'user_id' => $user->id,
+                        'empresa_id' => $empresaId,
+                    ]);
                 }
             } catch (\Exception $e) {
                 Log::error('Erro ao buscar empresa do usuário', [
