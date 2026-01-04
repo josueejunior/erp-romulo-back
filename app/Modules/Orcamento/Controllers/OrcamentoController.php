@@ -120,7 +120,9 @@ class OrcamentoController extends BaseApiController
 
             $orcamentos = $this->orcamentoService->listByItem($item);
 
-            return OrcamentoResource::collection($orcamentos);
+            return response()->json([
+                'data' => OrcamentoResource::collection($orcamentos),
+            ]);
         } catch (\Exception $e) {
             return $this->handleException($e, 'Erro ao listar orçamentos');
         }
@@ -341,14 +343,16 @@ class OrcamentoController extends BaseApiController
     /**
      * Lista orçamentos vinculados ao processo
      */
-    public function indexByProcesso(Processo $processo)
+    public function indexByProcesso(Processo $processo): JsonResponse
     {
         $empresa = $this->getEmpresaAtivaOrFail();
         
         try {
             $this->orcamentoService->validarProcessoEmpresa($processo, $empresa->id);
             $orcamentos = $this->orcamentoService->listByProcesso($processo);
-            return OrcamentoResource::collection($orcamentos);
+            return response()->json([
+                'data' => OrcamentoResource::collection($orcamentos),
+            ]);
         } catch (\Exception $e) {
             return response()->json([
                 'message' => $e->getMessage()
