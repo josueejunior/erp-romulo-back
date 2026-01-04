@@ -52,7 +52,7 @@ class CriarOrcamentoUseCase
         if ($dto->processoItemId) {
             $orcamentoItem = new OrcamentoItem(
                 id: null,
-                empresaId: $context->empresaId,
+                empresaId: $empresaId,
                 orcamentoId: $orcamento->id,
                 processoItemId: $dto->processoItemId,
                 custoProduto: $dto->custoProduto,
