@@ -25,15 +25,33 @@ class EnsureEmpresaAtivaContext
      */
     public function handle(Request $request, Closure $next): Response
     {
+        // Log de entrada do middleware
+        Log::debug('EnsureEmpresaAtivaContext::handle() - INÍCIO', [
+            'url' => $request->url(),
+            'method' => $request->method(),
+            'auth_check' => Auth::check(),
+            'header_X-Empresa-ID' => $request->header('X-Empresa-ID'),
+            'header_X-Tenant-ID' => $request->header('X-Tenant-ID'),
+            'tenancy_tenant_id' => tenancy()->tenant?->id,
+        ]);
+        
         // Apenas para rotas autenticadas
         if (!Auth::check()) {
+            Log::debug('EnsureEmpresaAtivaContext - Usuário não autenticado, pulando');
             return $next($request);
         }
 
         $user = Auth::user();
+        
+        Log::debug('EnsureEmpresaAtivaContext - Usuário autenticado', [
+            'user_id' => $user->id,
+            'user_email' => $user->email,
+            'empresa_ativa_id_atual' => $user->empresa_ativa_id,
+        ]);
 
         // Se for admin, não precisa de empresa
         if (method_exists($user, 'isAdmin') && $user->isAdmin()) {
+            Log::debug('EnsureEmpresaAtivaContext - Usuário é admin, pulando');
             return $next($request);
         }
 
@@ -122,15 +140,48 @@ class EnsureEmpresaAtivaContext
             // Setar empresaId no TenantContext (para Use Cases)
             // Atualizar o contexto mesmo que já tenha sido setado antes
             $tenantId = tenancy()->tenant?->id;
+            
+            Log::debug('EnsureEmpresaAtivaContext - Setando contexto', [
+                'empresaId' => $empresaId,
+                'tenantId_disponivel' => $tenantId,
+                'tenantContext_has' => \App\Domain\Shared\ValueObjects\TenantContext::has(),
+            ]);
+            
             if ($tenantId) {
                 \App\Domain\Shared\ValueObjects\TenantContext::set($tenantId, $empresaId);
+                Log::debug('EnsureEmpresaAtivaContext - TenantContext setado via tenantId', [
+                    'tenantId' => $tenantId,
+                    'empresaId' => $empresaId,
+                ]);
             } elseif (\App\Domain\Shared\ValueObjects\TenantContext::has()) {
                 // Se o contexto já existe mas não temos tenantId ainda, 
                 // vamos obter do contexto existente e atualizar
                 $context = \App\Domain\Shared\ValueObjects\TenantContext::get();
                 \App\Domain\Shared\ValueObjects\TenantContext::set($context->tenantId, $empresaId);
+                Log::debug('EnsureEmpresaAtivaContext - TenantContext atualizado com empresaId', [
+                    'tenantId_existente' => $context->tenantId,
+                    'empresaId' => $empresaId,
+                ]);
+            } else {
+                Log::warning('EnsureEmpresaAtivaContext - NÃO FOI POSSÍVEL setar TenantContext', [
+                    'empresaId' => $empresaId,
+                    'tenantId' => $tenantId,
+                    'tenantContext_has' => false,
+                ]);
             }
+        } else {
+            Log::warning('EnsureEmpresaAtivaContext - NENHUM empresaId encontrado!', [
+                'user_id' => $user->id,
+                'user_empresa_ativa_id' => $user->empresa_ativa_id,
+            ]);
         }
+        
+        // Log final antes de passar para o próximo middleware
+        Log::debug('EnsureEmpresaAtivaContext::handle() - FIM', [
+            'empresaId_final' => $empresaId,
+            'current_empresa_id_bound' => app()->bound('current_empresa_id'),
+            'current_empresa_id_value' => app()->bound('current_empresa_id') ? app('current_empresa_id') : null,
+        ]);
 
         return $next($request);
     }
