@@ -2,7 +2,7 @@
 
 namespace App\Domain\OrcamentoItem\Entities;
 
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Entidade OrcamentoItem - Representa um item de orçamento

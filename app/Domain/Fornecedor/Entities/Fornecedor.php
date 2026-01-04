@@ -2,7 +2,7 @@
 
 namespace App\Domain\Fornecedor\Entities;
 
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Entidade Fornecedor - Representa um fornecedor no domínio

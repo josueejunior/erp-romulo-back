@@ -2,7 +2,7 @@
 
 namespace App\Domain\Shared\ValueObjects;
 
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 use Illuminate\Support\Facades\Hash;
 
 /**

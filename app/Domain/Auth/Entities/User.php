@@ -2,7 +2,7 @@
 
 namespace App\Domain\Auth\Entities;
 
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Entidade User - Representa um usuário no domínio

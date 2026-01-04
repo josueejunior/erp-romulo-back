@@ -2,7 +2,7 @@
 
 namespace App\Domain\FormacaoPreco\Entities;
 
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Entidade FormacaoPreco - Representa uma formação de preço no domínio

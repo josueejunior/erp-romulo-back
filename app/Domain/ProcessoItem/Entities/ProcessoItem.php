@@ -3,7 +3,7 @@
 namespace App\Domain\ProcessoItem\Entities;
 
 use Carbon\Carbon;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Entidade ProcessoItem - Representa um item de processo licitatório

@@ -2,7 +2,7 @@
 
 namespace App\Domain\AutorizacaoFornecimento\Entities;
 
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 use Carbon\Carbon;
 
 /**

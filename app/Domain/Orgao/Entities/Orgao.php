@@ -2,7 +2,7 @@
 
 namespace App\Domain\Orgao\Entities;
 
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Entidade Orgao - Representa um órgão público no domínio

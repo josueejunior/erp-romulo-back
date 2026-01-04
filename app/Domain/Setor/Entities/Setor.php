@@ -2,7 +2,7 @@
 
 namespace App\Domain\Setor\Entities;
 
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Entidade Setor - Representa um setor de um órgão no domínio

@@ -2,7 +2,7 @@
 
 namespace App\Domain\Empresa\Entities;
 
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Entidade Empresa - Representa uma empresa dentro de um tenant

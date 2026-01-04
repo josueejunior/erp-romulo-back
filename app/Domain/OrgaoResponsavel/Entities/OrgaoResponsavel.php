@@ -2,7 +2,7 @@
 
 namespace App\Domain\OrgaoResponsavel\Entities;
 
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Entidade OrgaoResponsavel - Representa um responsável de um órgão
