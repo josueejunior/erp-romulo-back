@@ -119,12 +119,22 @@ class InitializeTenancyByRequestData extends IdentificationMiddleware
         try {
             tenancy()->initialize($tenant);
             
-            // Setar no TenantContext (invisível para o controller)
-            \App\Domain\Shared\ValueObjects\TenantContext::set($tenant->id);
+            // Determinar empresa_id do contexto
+            $empresaId = $this->determinarEmpresaId($request, $tenant->id);
+            
+            // Setar no TenantContext COM empresa_id (invisível para o controller)
+            \App\Domain\Shared\ValueObjects\TenantContext::set($tenant->id, $empresaId);
+            
+            // Também disponibilizar via app() para Global Scopes e UseCases
+            if ($empresaId) {
+                app()->instance('current_empresa_id', $empresaId);
+                $request->attributes->set('empresa_id', $empresaId);
+            }
             
             \Log::debug('Tenancy inicializado com sucesso', [
                 'tenant_id' => $tenant->id,
                 'tenant_razao_social' => $tenant->razao_social,
+                'empresa_id' => $empresaId,
                 'url' => $request->url()
             ]);
         } catch (\Exception $e) {
@@ -139,6 +149,59 @@ class InitializeTenancyByRequestData extends IdentificationMiddleware
         }
 
         return $next($request);
+    }
+    
+    /**
+     * Determinar empresa_id baseado no header, usuário autenticado ou tenant
+     */
+    protected function determinarEmpresaId(Request $request, int $tenantId): ?int
+    {
+        $empresaId = null;
+        
+        // Prioridade 1: Header X-Empresa-ID
+        if ($request->header('X-Empresa-ID')) {
+            $empresaId = (int) $request->header('X-Empresa-ID');
+            \Log::debug('InitializeTenancyByRequestData - empresaId do header X-Empresa-ID', [
+                'empresa_id' => $empresaId
+            ]);
+            return $empresaId;
+        }
+        
+        // Prioridade 2: empresa_ativa_id do usuário autenticado
+        $user = $request->user();
+        if ($user && $user->empresa_ativa_id) {
+            $empresaId = $user->empresa_ativa_id;
+            \Log::debug('InitializeTenancyByRequestData - empresaId do user.empresa_ativa_id', [
+                'empresa_id' => $empresaId,
+                'user_id' => $user->id
+            ]);
+            return $empresaId;
+        }
+        
+        // Prioridade 3: Primeira empresa do usuário
+        if ($user) {
+            $empresa = $user->empresas()->first();
+            if ($empresa) {
+                $empresaId = $empresa->id;
+                
+                // Atualizar empresa_ativa_id do usuário
+                $user->empresa_ativa_id = $empresaId;
+                $user->save();
+                
+                \Log::debug('InitializeTenancyByRequestData - empresaId da primeira empresa do usuário', [
+                    'empresa_id' => $empresaId,
+                    'user_id' => $user->id
+                ]);
+                return $empresaId;
+            }
+        }
+        
+        \Log::warning('InitializeTenancyByRequestData - Nenhum empresaId encontrado', [
+            'tenant_id' => $tenantId,
+            'user_id' => $user?->id
+        ]);
+        
+        return null;
     }
 
     /**
