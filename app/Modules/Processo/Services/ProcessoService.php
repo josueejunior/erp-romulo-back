@@ -131,7 +131,9 @@ class ProcessoService extends BaseService
         
         // Se solicitou filtro de orçamento, carregar também os itens com orçamentos
         if (isset($params['somente_com_orcamento']) && ($params['somente_com_orcamento'] === true || $params['somente_com_orcamento'] === 'true' || $params['somente_com_orcamento'] === '1')) {
-            $defaultWith[] = 'itens.orcamentoItens.orcamento.fornecedor';
+            // Usar o relacionamento 'orcamentos' (que é hasManyThrough via orcamentoItens)
+            // O ProcessoItemResource espera 'orcamentos', não 'orcamentoItens'
+            $defaultWith[] = 'itens.orcamentos.fornecedor';
         }
         
         $with = array_merge($defaultWith, $params['with'] ?? []);
