@@ -22,8 +22,10 @@ class CriarAutorizacaoFornecimentoUseCase
         // Obter tenant_id e empresa_id do contexto
         $context = TenantContext::get();
         
-        // Usa empresaId do DTO se informado, senão usa do contexto
-        $empresaId = $dto->empresaId > 0 ? $dto->empresaId : ($context->empresaId ?? 0);
+        // Usa empresaId do DTO se informado, senão tenta do contexto, senão do app container
+        $empresaId = $dto->empresaId > 0 
+            ? $dto->empresaId 
+            : ($context->empresaId ?? (app()->bound('current_empresa_id') ? app('current_empresa_id') : 0));
         
         $autorizacao = new AutorizacaoFornecimento(
             id: null,
