@@ -25,11 +25,11 @@ class RelatorioDomainService
             ->map(function ($o) {
                 return [
                     'id' => $o->id,
-                    'data' => $o->created_at->format('d/m/Y'),
+                    'data' => $o->created_at?->format('d/m/Y') ?? 'N/A',
                     'fornecedor' => $o->fornecedor?->nome ?? 'N/A',
                     'processo' => $o->processo?->numero ?? 'N/A',
-                    'valor_total' => $o->valor_total,
-                    'status' => $o->status,
+                    'valor_total' => $o->custo_total,
+                    'status' => $o->fornecedor_escolhido ? 'escolhido' : 'pendente',
                     'total_itens' => $o->itens->count()
                 ];
             });
@@ -57,10 +57,10 @@ class RelatorioDomainService
         $por_fornecedor = $query->select(
             'fornecedor_id',
             DB::raw('count(*) as total_orcamentos'),
-            DB::raw('sum(valor_total) as valor_total'),
-            DB::raw('avg(valor_total) as valor_medio'),
-            DB::raw('count(case when status = "aprovado" then 1 end) as aprovados'),
-            DB::raw('count(case when status = "rejeitado" then 1 end) as rejeitados')
+            DB::raw('sum(coalesce(custo_produto, 0) + coalesce(frete, 0)) as valor_total'),
+            DB::raw('avg(coalesce(custo_produto, 0) + coalesce(frete, 0)) as valor_medio'),
+            DB::raw('count(case when fornecedor_escolhido = true then 1 end) as escolhidos'),
+            DB::raw('count(case when fornecedor_escolhido = false then 1 end) as pendentes')
         )
         ->with('fornecedor')
         ->groupBy('fornecedor_id')
@@ -70,10 +70,10 @@ class RelatorioDomainService
             return [
                 'fornecedor' => $item->fornecedor?->nome ?? 'N/A',
                 'total_orcamentos' => $item->total_orcamentos,
-                'valor_total' => round($item->valor_total, 2),
-                'valor_medio' => round($item->valor_medio, 2),
-                'taxa_aprovacao' => round(($item->aprovados / $total * 100), 2) . '%',
-                'taxa_rejeicao' => round(($item->rejeitados / $total * 100), 2) . '%'
+                'valor_total' => round($item->valor_total ?? 0, 2),
+                'valor_medio' => round($item->valor_medio ?? 0, 2),
+                'taxa_escolhidos' => round(($item->escolhidos / $total * 100), 2) . '%',
+                'taxa_pendentes' => round(($item->pendentes / $total * 100), 2) . '%'
             ];
         });
 
@@ -97,19 +97,19 @@ class RelatorioDomainService
         $this->aplicarFiltros($query, $filtros);
 
         $por_status = $query->select(
-            'status',
+            'fornecedor_escolhido',
             DB::raw('count(*) as total'),
-            DB::raw('sum(valor_total) as valor_total'),
-            DB::raw('avg(valor_total) as valor_medio')
+            DB::raw('sum(coalesce(custo_produto, 0) + coalesce(frete, 0)) as valor_total'),
+            DB::raw('avg(coalesce(custo_produto, 0) + coalesce(frete, 0)) as valor_medio')
         )
-        ->groupBy('status')
+        ->groupBy('fornecedor_escolhido')
         ->get()
         ->map(function ($item) {
             return [
-                'status' => $item->status,
+                'status' => $item->fornecedor_escolhido ? 'escolhido' : 'pendente',
                 'total' => $item->total,
-                'valor_total' => round($item->valor_total, 2),
-                'valor_medio' => round($item->valor_medio, 2)
+                'valor_total' => round($item->valor_total ?? 0, 2),
+                'valor_medio' => round($item->valor_medio ?? 0, 2)
             ];
         });
 
@@ -179,12 +179,12 @@ class RelatorioDomainService
         $query = Orcamento::where('empresa_id', $empresaId);
         $this->aplicarFiltros($query, $filtros);
 
-        $orcamentos = $query->get();
+        $orcamentos = $query->with('itens')->get();
 
-        $valor_total = $orcamentos->sum('valor_total');
+        $valor_total = $orcamentos->sum(fn($o) => $o->custo_total);
         $total_orcamentos = $orcamentos->count();
-        $total_aprovados = $orcamentos->where('status', 'aprovado')->count();
-        $total_rejeitados = $orcamentos->where('status', 'rejeitado')->count();
+        $total_escolhidos = $orcamentos->where('fornecedor_escolhido', true)->count();
+        $total_pendentes = $orcamentos->where('fornecedor_escolhido', false)->count();
 
         return [
             'titulo' => 'Relatório Executivo',
@@ -193,8 +193,8 @@ class RelatorioDomainService
                 'total_orcamentos' => $total_orcamentos,
                 'valor_total' => round($valor_total, 2),
                 'valor_medio' => round($valor_total / max($total_orcamentos, 1), 2),
-                'taxa_aprovacao' => round(($total_aprovados / max($total_orcamentos, 1)) * 100, 2) . '%',
-                'taxa_rejeicao' => round(($total_rejeitados / max($total_orcamentos, 1)) * 100, 2) . '%',
+                'taxa_escolhidos' => round(($total_escolhidos / max($total_orcamentos, 1)) * 100, 2) . '%',
+                'taxa_pendentes' => round(($total_pendentes / max($total_orcamentos, 1)) * 100, 2) . '%',
                 'total_fornecedores' => $orcamentos->pluck('fornecedor_id')->unique()->count(),
                 'total_processos' => $orcamentos->pluck('processo_id')->unique()->count()
             ],
@@ -221,7 +221,8 @@ class RelatorioDomainService
             $query->where('processo_id', $filtros->getProcessoId());
         }
         if ($filtros->getStatus()) {
-            $query->where('status', $filtros->getStatus());
+            // Mapeia 'escolhido' -> true, 'pendente' -> false
+            $query->where('fornecedor_escolhido', $filtros->getStatus() === 'escolhido');
         }
     }
 
@@ -253,13 +254,14 @@ class RelatorioDomainService
 
     private function calcularTendencias($orcamentos): array
     {
-        $porMes = $orcamentos->groupBy(fn($o) => $o->created_at->format('Y-m'));
+        $porMes = $orcamentos->filter(fn($o) => $o->created_at !== null)
+            ->groupBy(fn($o) => $o->created_at->format('Y-m'));
         
         $tendencias = [];
         foreach ($porMes as $mes => $items) {
             $tendencias[$mes] = [
                 'total' => $items->count(),
-                'valor' => round($items->sum('valor_total'), 2)
+                'valor' => round($items->sum(fn($o) => $o->custo_total), 2)
             ];
         }
 
@@ -272,7 +274,7 @@ class RelatorioDomainService
             ->map(fn($items) => [
                 'fornecedor_id' => $items[0]->fornecedor_id,
                 'total' => $items->count(),
-                'valor' => round($items->sum('valor_total'), 2)
+                'valor' => round($items->sum(fn($o) => $o->custo_total), 2)
             ])
             ->sortByDesc('valor')
             ->take($limite)
@@ -285,7 +287,7 @@ class RelatorioDomainService
             ->map(fn($items) => [
                 'processo_id' => $items[0]->processo_id,
                 'total' => $items->count(),
-                'valor' => round($items->sum('valor_total'), 2)
+                'valor' => round($items->sum(fn($o) => $o->custo_total), 2)
             ])
             ->sortByDesc('valor')
             ->take($limite)

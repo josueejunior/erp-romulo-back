@@ -17,9 +17,11 @@ class DashboardRepository implements DashboardRepositoryInterface
     public function obterMetricas(int $empresaId): MetricaOrcamento
     {
         $totalOrcamentos = Orcamento::where('empresa_id', $empresaId)->count();
-        $valorTotal = Orcamento::where('empresa_id', $empresaId)->sum('valor_total') ?? 0;
+        $valorTotal = Orcamento::where('empresa_id', $empresaId)
+            ->selectRaw('sum(coalesce(custo_produto, 0) + coalesce(frete, 0)) as total')
+            ->value('total') ?? 0;
 
-        return new MetricaOrcamento($totalOrcamentos, $valorTotal);
+        return new MetricaOrcamento($totalOrcamentos, (float) $valorTotal);
     }
 
     public function obterAnalisePrecos(int $empresaId): array
@@ -56,10 +58,10 @@ class DashboardRepository implements DashboardRepositoryInterface
             ->select(
                 'fornecedor_id',
                 DB::raw('count(*) as total_orcamentos'),
-                DB::raw('sum(valor_total) as valor_total'),
-                DB::raw('avg(valor_total) as valor_medio'),
-                DB::raw('count(case when status = "aprovado" then 1 end) as orcamentos_aprovados'),
-                DB::raw('count(case when status = "rejeitado" then 1 end) as orcamentos_rejeitados')
+                DB::raw('sum(coalesce(custo_produto, 0) + coalesce(frete, 0)) as valor_total'),
+                DB::raw('avg(coalesce(custo_produto, 0) + coalesce(frete, 0)) as valor_medio'),
+                DB::raw('count(case when fornecedor_escolhido = true then 1 end) as orcamentos_aprovados'),
+                DB::raw('count(case when fornecedor_escolhido = false then 1 end) as orcamentos_rejeitados')
             )
             ->with('fornecedor')
             ->groupBy('fornecedor_id')
@@ -85,14 +87,19 @@ class DashboardRepository implements DashboardRepositoryInterface
     public function obterResumoStatus(int $empresaId): array
     {
         $resumo = Orcamento::where('empresa_id', $empresaId)
-            ->select('status', DB::raw('count(*) as total'), DB::raw('sum(valor_total) as valor'))
-            ->groupBy('status')
+            ->select(
+                'fornecedor_escolhido',
+                DB::raw('count(*) as total'),
+                DB::raw('sum(coalesce(custo_produto, 0) + coalesce(frete, 0)) as valor')
+            )
+            ->groupBy('fornecedor_escolhido')
             ->get();
 
         $totalGeral = $resumo->sum('total');
 
         return $resumo->map(function ($item) use ($totalGeral) {
-            return new ResumoStatusOrcamento($item->status, $item->total, $item->valor ?? 0);
+            $status = $item->fornecedor_escolhido ? 'escolhido' : 'pendente';
+            return new ResumoStatusOrcamento($status, $item->total, $item->valor ?? 0);
         })->map(fn($item) => $item->toArray($totalGeral))->toArray();
     }
 
@@ -108,9 +115,9 @@ class DashboardRepository implements DashboardRepositoryInterface
                     'id' => $orcamento->id,
                     'fornecedor' => $orcamento->fornecedor?->nome ?? 'N/A',
                     'processo' => $orcamento->processo?->numero ?? 'N/A',
-                    'valor' => round($orcamento->valor_total, 2),
-                    'status' => $orcamento->status,
-                    'data_criacao' => $orcamento->created_at->format('d/m/Y H:i'),
+                    'valor' => round($orcamento->custo_total, 2),
+                    'status' => $orcamento->fornecedor_escolhido ? 'escolhido' : 'pendente',
+                    'data_criacao' => $orcamento->created_at?->format('d/m/Y H:i') ?? 'N/A',
                     'tipo_evento' => 'Orçamento Criado'
                 ];
             })->toArray();
@@ -122,7 +129,7 @@ class DashboardRepository implements DashboardRepositoryInterface
             ->select(
                 DB::raw('DATE_TRUNC(\'month\', created_at) as periodo'),
                 DB::raw('count(*) as total'),
-                DB::raw('sum(valor_total) as valor')
+                DB::raw('sum(coalesce(custo_produto, 0) + coalesce(frete, 0)) as valor')
             )
             ->groupBy('periodo')
             ->orderBy('periodo', 'asc')
@@ -142,7 +149,8 @@ class DashboardRepository implements DashboardRepositoryInterface
     {
         return Processo::where('empresa_id', $empresaId)
             ->with(['orcamentos' => function ($query) {
-                $query->select('processo_id', DB::raw('sum(valor_total) as total'));
+                $query->selectRaw('processo_id, sum(coalesce(custo_produto, 0) + coalesce(frete, 0)) as total')
+                    ->groupBy('processo_id');
             }])
             ->get()
             ->map(function ($processo) {

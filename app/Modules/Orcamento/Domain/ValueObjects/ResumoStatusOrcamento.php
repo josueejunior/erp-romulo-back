@@ -10,7 +10,7 @@ class ResumoStatusOrcamento
 
     public function __construct(string $status, int $total, float $valor)
     {
-        $statusValidos = ['pendente', 'aprovado', 'rejeitado', 'em_analise'];
+        $statusValidos = ['pendente', 'aprovado', 'rejeitado', 'em_analise', 'escolhido'];
         if (!in_array($status, $statusValidos)) {
             throw new \InvalidArgumentException('Status inválido: ' . $status);
         }

@@ -39,8 +39,8 @@ class OrcamentoCriado implements ShouldBroadcast
             'orcamento_id' => $this->orcamento->id,
             'fornecedor_id' => $this->orcamento->fornecedor_id,
             'processo_id' => $this->orcamento->processo_id,
-            'valor_total' => $this->orcamento->valor_total,
-            'status' => $this->orcamento->status,
+            'valor_total' => $this->orcamento->custo_total,
+            'status' => $this->orcamento->fornecedor_escolhido ? 'escolhido' : 'pendente',
             'created_at' => $this->orcamento->created_at
         ];
     }

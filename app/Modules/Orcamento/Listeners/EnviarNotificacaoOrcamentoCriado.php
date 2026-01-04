@@ -29,7 +29,7 @@ class EnviarNotificacaoOrcamentoCriado
                     'orcamento_id' => $orcamento->id,
                     'processo_id' => $orcamento->processo_id,
                     'fornecedor_id' => $orcamento->fornecedor_id,
-                    'valor' => $orcamento->valor_total
+                    'valor' => $orcamento->custo_total
                 ]
             );
         }

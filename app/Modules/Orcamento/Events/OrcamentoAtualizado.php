@@ -46,7 +46,7 @@ class OrcamentoAtualizado implements ShouldBroadcast
             'campo' => $this->campo,
             'valor_anterior' => $this->valorAnterior,
             'valor_novo' => $this->valorNovo,
-            'status' => $this->orcamento->status,
+            'status' => $this->orcamento->fornecedor_escolhido ? 'escolhido' : 'pendente',
             'updated_at' => $this->orcamento->updated_at
         ];
     }
