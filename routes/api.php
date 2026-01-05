@@ -84,6 +84,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/status', [ApiAssinaturaController::class, 'status']);
             Route::get('/', [ApiAssinaturaController::class, 'index']);
             Route::post('/', [ApiAssinaturaController::class, 'store']);
+            Route::post('/trocar-plano', [ApiAssinaturaController::class, 'trocarPlano']);
             Route::post('/{assinatura}/renovar', [ApiAssinaturaController::class, 'renovar']);
             Route::post('/{assinatura}/cancelar', [ApiAssinaturaController::class, 'cancelar']);
         });

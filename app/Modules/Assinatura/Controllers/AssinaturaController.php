@@ -9,12 +9,15 @@ use App\Application\Assinatura\UseCases\ObterStatusAssinaturaUseCase;
 use App\Application\Assinatura\UseCases\ListarAssinaturasUseCase;
 use App\Application\Assinatura\UseCases\CancelarAssinaturaUseCase;
 use App\Application\Assinatura\UseCases\CriarAssinaturaUseCase;
+use App\Application\Assinatura\UseCases\TrocarPlanoAssinaturaUseCase;
 use App\Application\Assinatura\DTOs\CriarAssinaturaDTO;
 use App\Application\Assinatura\Resources\AssinaturaResource;
 use App\Application\Payment\UseCases\RenovarAssinaturaUseCase;
 use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
+use App\Domain\Payment\Repositories\PaymentProviderInterface;
 use App\Http\Requests\Assinatura\RenovarAssinaturaRequest;
 use App\Http\Requests\Assinatura\CriarAssinaturaRequest;
+use App\Http\Requests\Assinatura\TrocarPlanoRequest;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
@@ -38,7 +41,9 @@ class AssinaturaController extends BaseApiController
         private ListarAssinaturasUseCase $listarAssinaturasUseCase,
         private CancelarAssinaturaUseCase $cancelarAssinaturaUseCase,
         private CriarAssinaturaUseCase $criarAssinaturaUseCase,
+        private TrocarPlanoAssinaturaUseCase $trocarPlanoAssinaturaUseCase,
         private RenovarAssinaturaUseCase $renovarAssinaturaUseCase,
+        private PaymentProviderInterface $paymentProvider,
         private AssinaturaResource $assinaturaResource,
         private AssinaturaRepositoryInterface $assinaturaRepository,
     ) {}
@@ -357,6 +362,117 @@ class AssinaturaController extends BaseApiController
             ], 400);
         } catch (\Exception $e) {
             return $this->handleException($e, 'Erro ao cancelar assinatura');
+        }
+    }
+
+    /**
+     * Trocar plano da assinatura (upgrade/downgrade)
+     * Calcula pro-rata e permite trocar de plano mantendo crédito proporcional
+     */
+    public function trocarPlano(TrocarPlanoRequest $request): JsonResponse
+    {
+        try {
+            // Obter tenant automaticamente (middleware já inicializou)
+            $tenant = $this->getTenantOrFail();
+
+            // Request já está validado
+            $validated = $request->validated();
+            $novoPlanoId = $validated['plano_id'];
+            $periodo = $validated['periodo'];
+
+            // Executar Use Case para trocar plano (calcula pro-rata)
+            $resultado = $this->trocarPlanoAssinaturaUseCase->executar($tenant->id, $novoPlanoId, $periodo);
+
+            $novaAssinatura = $resultado['assinatura'];
+            $credito = $resultado['credito'];
+            $valorCobrar = $resultado['valor_cobrar'];
+
+            // Se há valor a cobrar, processar pagamento
+            if ($valorCobrar > 0 && isset($validated['payment_data'])) {
+                $paymentData = $validated['payment_data'];
+                
+                // Criar PaymentRequest
+                $paymentRequest = \App\Domain\Payment\ValueObjects\PaymentRequest::fromArray([
+                    'amount' => $valorCobrar,
+                    'description' => "Troca de plano - Crédito aplicado: R$ {$credito}",
+                    'payer_email' => $paymentData['payer_email'],
+                    'payer_cpf' => $paymentData['payer_cpf'] ?? null,
+                    'card_token' => $paymentData['card_token'],
+                    'installments' => $paymentData['installments'] ?? 1,
+                    'payment_method_id' => 'credit_card',
+                    'external_reference' => "plan_change_tenant_{$tenant->id}_assinatura_{$novaAssinatura->id}",
+                    'metadata' => [
+                        'tenant_id' => $tenant->id,
+                        'assinatura_id' => $novaAssinatura->id,
+                        'plano_id' => $novoPlanoId,
+                        'credito_aplicado' => $credito,
+                        'tipo' => 'troca_plano',
+                    ],
+                ]);
+
+                // Gerar chave de idempotência
+                $idempotencyKey = 'plan_change_' . $tenant->id . '_' . $novaAssinatura->id . '_' . time();
+
+                // Processar pagamento
+                $paymentResult = $this->paymentProvider->processPayment($paymentRequest, $idempotencyKey);
+
+                // Se aprovado, ativar assinatura
+                if ($paymentResult->isApproved()) {
+                    $novaAssinatura->update([
+                        'status' => 'ativa',
+                        'metodo_pagamento' => $paymentResult->paymentMethod,
+                        'transacao_id' => $paymentResult->externalId,
+                    ]);
+                } elseif ($paymentResult->isPending()) {
+                    // Se pendente (ex: PIX), manter como pendente
+                    $novaAssinatura->update([
+                        'status' => 'pendente',
+                        'transacao_id' => $paymentResult->externalId,
+                        'observacoes' => ($novaAssinatura->observacoes ?? '') . "\nPagamento pendente - aguardando confirmação.",
+                    ]);
+                } else {
+                    // Se rejeitado, lançar exceção
+                    throw new \App\Domain\Exceptions\DomainException(
+                        $paymentResult->errorMessage ?? 'Pagamento rejeitado pelo gateway.'
+                    );
+                }
+            }
+
+            // Buscar entidade atualizada e transformar em DTO
+            $assinaturaDomain = $this->assinaturaRepository->buscarPorId($novaAssinatura->id);
+            if ($assinaturaDomain) {
+                $responseDTO = $this->assinaturaResource->toResponse($assinaturaDomain);
+                
+                return response()->json([
+                    'message' => 'Plano alterado com sucesso',
+                    'data' => $responseDTO->toArray(),
+                    'credito_aplicado' => $credito,
+                    'valor_cobrado' => $valorCobrar,
+                ], 200);
+            }
+
+            // Fallback
+            return response()->json([
+                'message' => 'Plano alterado com sucesso',
+                'data' => [
+                    'id' => $novaAssinatura->id,
+                    'status' => $novaAssinatura->status,
+                ],
+                'credito_aplicado' => $credito,
+                'valor_cobrado' => $valorCobrar,
+            ], 200);
+
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 400);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'message' => 'Erro de validação',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao trocar plano');
         }
     }
 }
