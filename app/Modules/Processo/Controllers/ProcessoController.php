@@ -447,9 +447,18 @@ class ProcessoController extends Controller
             $validator = $this->processoService->validateStoreData($request->all());
             
             if ($validator->fails()) {
+                $errors = $validator->errors();
+                
+                // Log detalhado dos erros de validação
+                \Log::warning('Erro de validação ao criar processo', [
+                    'errors' => $errors->toArray(),
+                    'fields' => array_keys($errors->toArray()),
+                    'data' => $request->all(),
+                ]);
+                
                 return response()->json([
                     'message' => 'Dados inválidos',
-                    'errors' => $validator->errors()
+                    'errors' => $errors->toArray()
                 ], 422);
             }
 
@@ -481,9 +490,19 @@ class ProcessoController extends Controller
             $validator = $this->processoService->validateUpdateData($request->all(), $id);
             
             if ($validator->fails()) {
+                $errors = $validator->errors();
+                
+                // Log detalhado dos erros de validação
+                \Log::warning('Erro de validação ao atualizar processo', [
+                    'processo_id' => $id,
+                    'errors' => $errors->toArray(),
+                    'fields' => array_keys($errors->toArray()),
+                    'data' => $request->all(),
+                ]);
+                
                 return response()->json([
                     'message' => 'Dados inválidos',
-                    'errors' => $validator->errors()
+                    'errors' => $errors->toArray()
                 ], 422);
             }
 

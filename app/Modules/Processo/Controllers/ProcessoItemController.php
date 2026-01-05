@@ -111,9 +111,19 @@ class ProcessoItemController extends BaseApiController
             $item = $this->itemService->storeItem($processo, $request->all());
             return response()->json(['data' => $item], 201);
         } catch (\Illuminate\Validation\ValidationException $e) {
+            $errors = $e->errors();
+            
+            // Log detalhado dos erros de validação
+            \Log::warning('Erro de validação ao criar item de processo', [
+                'processo_id' => $processoId,
+                'errors' => $errors,
+                'fields' => array_keys($errors),
+                'data' => $request->all(),
+            ]);
+            
             return response()->json([
                 'message' => 'Erro de validação',
-                'errors' => $e->errors()
+                'errors' => $errors
             ], 422);
         } catch (\Exception $e) {
             return response()->json([
@@ -153,9 +163,20 @@ class ProcessoItemController extends BaseApiController
             $item = $this->itemService->updateItem($processo, $item, $request->all());
             return response()->json(['data' => $item]);
         } catch (\Illuminate\Validation\ValidationException $e) {
+            $errors = $e->errors();
+            
+            // Log detalhado dos erros de validação
+            \Log::warning('Erro de validação ao atualizar item de processo', [
+                'processo_id' => $processoId,
+                'item_id' => $id,
+                'errors' => $errors,
+                'fields' => array_keys($errors),
+                'data' => $request->all(),
+            ]);
+            
             return response()->json([
                 'message' => 'Erro de validação',
-                'errors' => $e->errors()
+                'errors' => $errors
             ], 422);
         } catch (\Exception $e) {
             return response()->json([

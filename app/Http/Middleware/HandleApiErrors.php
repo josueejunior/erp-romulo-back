@@ -63,9 +63,21 @@ class HandleApiErrors
                 'X-RateLimit-Remaining' => $headers['X-RateLimit-Remaining'] ?? '0',
             ]);
         } catch (ValidationException $e) {
+            $errors = $e->errors();
+            
+            // Log detalhado dos erros de validação
+            \Log::warning('Erro de validação capturado no middleware', [
+                'url' => $request->fullUrl(),
+                'method' => $request->method(),
+                'errors' => $errors,
+                'fields' => array_keys($errors),
+                'user_id' => auth()->id(),
+                'data' => $request->all(),
+            ]);
+            
             return response()->json([
                 'message' => 'Dados inválidos',
-                'errors' => $e->errors(),
+                'errors' => $errors,
             ], 422);
         } catch (ModelNotFoundException $e) {
             \Log::warning('Model não encontrado', [

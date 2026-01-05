@@ -88,6 +88,28 @@ return Application::configure(basePath: dirname(__DIR__))
             }
         });
         
+        // Exceções de Validação do Laravel - Unprocessable Entity (422)
+        $exceptions->render(function (\Illuminate\Validation\ValidationException $e, $request) {
+            if ($request->expectsJson()) {
+                $errors = $e->errors();
+                
+                // Log detalhado dos erros de validação
+                \Log::warning('Erro de validação do Laravel capturado no exception handler', [
+                    'url' => $request->fullUrl(),
+                    'method' => $request->method(),
+                    'errors' => $errors,
+                    'fields' => array_keys($errors),
+                    'user_id' => auth()->id(),
+                    'data' => $request->all(),
+                ]);
+                
+                return response()->json([
+                    'message' => 'Dados inválidos',
+                    'errors' => $errors,
+                ], 422);
+            }
+        });
+        
         // Logar exceções não tratadas para debugging
         $exceptions->report(function (\Throwable $e) {
             if (app()->bound('sentry')) {
