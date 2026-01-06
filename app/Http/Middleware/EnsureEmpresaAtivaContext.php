@@ -27,17 +27,44 @@ class EnsureEmpresaAtivaContext
      */
     public function handle(Request $request, Closure $next): Response
     {
-        \Log::debug('EnsureEmpresaAtivaContext::handle - INÍCIO', [
+        \Log::info('EnsureEmpresaAtivaContext::handle - ✅ INÍCIO', [
             'path' => $request->path(),
             'method' => $request->method(),
+            'url' => $request->fullUrl(),
             'auth_check' => auth('sanctum')->check(),
+            'user_id' => auth('sanctum')->id(),
+            'route' => $request->route() ? $request->route()->getName() : 'NO_ROUTE',
         ]);
-        $this->context->bootstrap($request);
-        $response = $next($request);
-        \Log::debug('EnsureEmpresaAtivaContext::handle - FIM', [
-            'status' => method_exists($response, 'getStatusCode') ? $response->getStatusCode() : null,
-        ]);
-        return $response;
+        
+        try {
+            \Log::debug('EnsureEmpresaAtivaContext::handle - Chamando context->bootstrap()');
+            $startTime = microtime(true);
+            $this->context->bootstrap($request);
+            $elapsedTime = microtime(true) - $startTime;
+            \Log::info('EnsureEmpresaAtivaContext::handle - context->bootstrap() concluído', [
+                'elapsed_time' => round($elapsedTime, 3) . 's',
+            ]);
+            
+            \Log::debug('EnsureEmpresaAtivaContext::handle - Chamando $next($request)');
+            $startTime = microtime(true);
+            $response = $next($request);
+            $elapsedTime = microtime(true) - $startTime;
+            
+            \Log::info('EnsureEmpresaAtivaContext::handle - ✅ FIM', [
+                'status' => method_exists($response, 'getStatusCode') ? $response->getStatusCode() : null,
+                'elapsed_time' => round($elapsedTime, 3) . 's',
+            ]);
+            
+            return $response;
+        } catch (\Exception $e) {
+            \Log::error('EnsureEmpresaAtivaContext::handle - ❌ ERRO', [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            throw $e;
+        }
     }
 }
 
