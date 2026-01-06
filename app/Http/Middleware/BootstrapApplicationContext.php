@@ -29,7 +29,13 @@ class BootstrapApplicationContext
 {
     public function __construct(
         private ApplicationContextContract $context
-    ) {}
+    ) {
+        // 🔥 LOG CRÍTICO: Se este log não aparecer, o middleware não está sendo instanciado
+        error_log('BootstrapApplicationContext::__construct - CONSTRUTOR EXECUTADO (error_log)');
+        Log::emergency('BootstrapApplicationContext::__construct - CONSTRUTOR EXECUTADO', [
+            'context_class' => get_class($context),
+        ]);
+    }
 
     public function handle(Request $request, Closure $next): Response
     {
