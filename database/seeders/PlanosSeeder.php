@@ -32,6 +32,26 @@ class PlanosSeeder extends Seeder
 
         $planos = [
             [
+                'nome' => 'Gratuito',
+                'descricao' => 'Plano de teste gratuito para conhecer o sistema. Ideal para avaliação inicial.',
+                'preco_mensal' => 0.00,
+                'preco_anual' => null,
+                'limite_processos' => 2, // Limite reduzido para teste
+                'restricao_diaria' => true, // 1 processo por dia
+                'limite_usuarios' => 1, // Apenas 1 usuário
+                'limite_armazenamento_mb' => null,
+                'recursos_disponiveis' => [
+                    'cadastros_completos',
+                    'processos_todas_etapas',
+                    'itens_processo',
+                    'formacao_precos',
+                    'execucao',
+                    'controle_operacional',
+                ],
+                'ativo' => true,
+                'ordem' => 0, // Primeiro na lista
+            ],
+            [
                 'nome' => 'Essencial',
                 'descricao' => 'Operação completa, mas sem visão estratégica. Ideal para empresas que estão começando.',
                 'preco_mensal' => 97.00,

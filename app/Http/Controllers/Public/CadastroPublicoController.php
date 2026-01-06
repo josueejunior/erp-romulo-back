@@ -70,27 +70,41 @@ class CadastroPublicoController extends Controller
 
             // Calcular data de término baseado no período
             $dataInicio = Carbon::now();
-            $dataFim = $periodo === 'anual' 
-                ? $dataInicio->copy()->addYear() 
-                : $dataInicio->copy()->addMonth();
             
-            $valorPago = $periodo === 'anual' && $plano->preco_anual 
-                ? $plano->preco_anual 
-                : $plano->preco_mensal;
+            // Se o plano for gratuito (preço zero), aplicar 3 dias de teste
+            $isPlanoGratuito = ($plano->preco_mensal == 0 || $plano->preco_mensal === null);
+            
+            if ($isPlanoGratuito) {
+                $dataFim = $dataInicio->copy()->addDays(3); // 3 dias de teste
+            } else {
+                $dataFim = $periodo === 'anual' 
+                    ? $dataInicio->copy()->addYear() 
+                    : $dataInicio->copy()->addMonth();
+            }
+            
+            $valorPago = $isPlanoGratuito 
+                ? 0 
+                : ($periodo === 'anual' && $plano->preco_anual 
+                    ? $plano->preco_anual 
+                    : $plano->preco_mensal);
 
             // Para cadastro público, criar assinatura como 'ativa' mas com observação de pagamento pendente
             // O pagamento pode ser processado posteriormente
+            $observacoes = $isPlanoGratuito 
+                ? 'Plano gratuito - teste de 3 dias' 
+                : 'Cadastro público - pagamento pendente';
+            
             $assinaturaDTO = new CriarAssinaturaDTO(
                 tenantId: $tenant->id,
                 planoId: $plano->id,
                 status: 'ativa', // Ativa para permitir uso imediato
                 dataInicio: $dataInicio,
                 dataFim: $dataFim,
-                valorPago: 0, // Será atualizado quando o pagamento for processado
-                metodoPagamento: 'gratuito', // Será atualizado quando o pagamento for processado
+                valorPago: $valorPago,
+                metodoPagamento: $isPlanoGratuito ? 'gratuito' : 'pendente',
                 transacaoId: null,
-                diasGracePeriod: 7,
-                observacoes: 'Cadastro público - pagamento pendente',
+                diasGracePeriod: $isPlanoGratuito ? 0 : 7,
+                observacoes: $observacoes,
             );
 
             $assinatura = $this->criarAssinaturaUseCase->executar($assinaturaDTO);
