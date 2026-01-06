@@ -27,8 +27,41 @@ class InitializeTenancyByRequestData
      */
     public function handle(Request $request, Closure $next): Response
     {
-        $this->context->bootstrap($request);
-        return $next($request);
+        \Log::info('InitializeTenancyByRequestData::handle - ✅ INÍCIO', [
+            'path' => $request->path(),
+            'method' => $request->method(),
+            'url' => $request->fullUrl(),
+        ]);
+        
+        try {
+            \Log::debug('InitializeTenancyByRequestData::handle - Chamando context->bootstrap()');
+            $startTime = microtime(true);
+            $this->context->bootstrap($request);
+            $elapsedTime = microtime(true) - $startTime;
+            \Log::info('InitializeTenancyByRequestData::handle - context->bootstrap() concluído', [
+                'elapsed_time' => round($elapsedTime, 3) . 's',
+            ]);
+            
+            \Log::debug('InitializeTenancyByRequestData::handle - Chamando $next($request)');
+            $startTime = microtime(true);
+            $response = $next($request);
+            $elapsedTime = microtime(true) - $startTime;
+            
+            \Log::info('InitializeTenancyByRequestData::handle - ✅ FIM', [
+                'status' => method_exists($response, 'getStatusCode') ? $response->getStatusCode() : null,
+                'elapsed_time' => round($elapsedTime, 3) . 's',
+            ]);
+            
+            return $response;
+        } catch (\Exception $e) {
+            \Log::error('InitializeTenancyByRequestData::handle - ❌ ERRO', [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            throw $e;
+        }
     }
 }
 

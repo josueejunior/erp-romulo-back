@@ -89,15 +89,24 @@ class TenantAuthIdentity implements IAuthIdentity
         string $scope = 'api-v1',
         ?TenantRepositoryInterface $tenantRepository = null
     ) {
+        \Log::debug('TenantAuthIdentity::__construct - INÍCIO', [
+            'user_id' => $user->id,
+            'scope' => $scope,
+        ]);
+        
         $this->user = $user;
         $this->scope = $scope;
         
         // Obter tenant_id de múltiplas fontes
+        \Log::debug('TenantAuthIdentity::__construct - Resolvendo tenant_id');
         $tenantId = $request->header('X-Tenant-ID')
             ?? $this->getTenantIdFromToken($request)
             ?? null;
+        \Log::debug('TenantAuthIdentity::__construct - tenant_id resolvido', ['tenant_id' => $tenantId]);
 
         if ($tenantId) {
+            \Log::debug('TenantAuthIdentity::__construct - Buscando tenant', ['tenant_id' => $tenantId]);
+            $startTime = microtime(true);
             // 🔥 ARQUITETURA LIMPA: Usar TenantRepository em vez de Eloquent direto
             if ($tenantRepository) {
                 $tenantDomain = $tenantRepository->buscarPorId($tenantId);
@@ -108,10 +117,19 @@ class TenantAuthIdentity implements IAuthIdentity
                 // Fallback para compatibilidade (não recomendado)
                 $this->tenant = Tenant::find($tenantId);
             }
+            $elapsedTime = microtime(true) - $startTime;
+            \Log::debug('TenantAuthIdentity::__construct - Tenant buscado', [
+                'elapsed_time' => round($elapsedTime, 3) . 's',
+                'tenant_found' => $this->tenant !== null,
+            ]);
         }
 
         // Obter empresa ativa (mantém Eloquent direto porque precisa do relacionamento)
         // Isso é aceitável porque é infraestrutura de autenticação e precisa do modelo
+        \Log::debug('TenantAuthIdentity::__construct - Resolvendo empresa ativa', [
+            'empresa_ativa_id' => $this->user->empresa_ativa_id,
+        ]);
+        $startTime = microtime(true);
         if ($this->user->empresa_ativa_id) {
             $this->empresa = Empresa::find($this->user->empresa_ativa_id);
         } else {
@@ -121,6 +139,13 @@ class TenantAuthIdentity implements IAuthIdentity
                 $this->user->save();
             }
         }
+        $elapsedTime = microtime(true) - $startTime;
+        \Log::debug('TenantAuthIdentity::__construct - Empresa resolvida', [
+            'elapsed_time' => round($elapsedTime, 3) . 's',
+            'empresa_id' => $this->empresa?->id,
+        ]);
+        
+        \Log::debug('TenantAuthIdentity::__construct - FIM');
     }
 
     public function getUserId(): ?int
