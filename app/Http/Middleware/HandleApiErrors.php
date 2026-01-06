@@ -149,7 +149,16 @@ class HandleApiErrors
             if (config('cors.supports_credentials', false)) {
                 $response->headers->set('Access-Control-Allow-Credentials', 'true');
             }
-            $response->headers->set('Access-Control-Allow-Methods', implode(', ', config('cors.allowed_methods', ['*'])));
+            
+            // Métodos permitidos
+            $allowedMethods = config('cors.allowed_methods', ['*']);
+            if (is_array($allowedMethods)) {
+                $response->headers->set('Access-Control-Allow-Methods', implode(', ', $allowedMethods));
+            } else {
+                $response->headers->set('Access-Control-Allow-Methods', $allowedMethods);
+            }
+            
+            // Headers permitidos
             $allowedHeaders = config('cors.allowed_headers', ['*']);
             if (is_array($allowedHeaders)) {
                 $response->headers->set('Access-Control-Allow-Headers', implode(', ', $allowedHeaders));
