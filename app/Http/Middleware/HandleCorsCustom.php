@@ -150,6 +150,19 @@ class HandleCorsCustom
             // Registrar tempo antes de chamar $next
             $startTime = microtime(true);
             
+            // Registrar erro fatal handler antes de chamar $next
+            register_shutdown_function(function () use ($request, $startTime) {
+                $elapsedTime = microtime(true) - $startTime;
+                if ($elapsedTime > 25) {
+                    \Log::error('HandleCorsCustom - Possível timeout ou erro fatal', [
+                        'path' => $request->path(),
+                        'method' => $request->method(),
+                        'elapsed_time' => round($elapsedTime, 3) . 's',
+                        'last_error' => error_get_last(),
+                    ]);
+                }
+            });
+            
             $response = $next($request);
             
             $elapsedTime = microtime(true) - $startTime;

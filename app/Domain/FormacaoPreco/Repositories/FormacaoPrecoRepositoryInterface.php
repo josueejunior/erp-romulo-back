@@ -9,7 +9,7 @@ interface FormacaoPrecoRepositoryInterface
 {
     public function criar(FormacaoPreco $formacao): FormacaoPreco;
     public function buscarPorId(int $id): ?FormacaoPreco;
-    public function buscarModeloPorId(int $id, array $with = []): ?\App\Models\FormacaoPreco;
+    public function buscarModeloPorId(int $id, array $with = []): ?\App\Modules\Orcamento\Models\FormacaoPreco;
     public function buscarComFiltros(array $filtros = []): LengthAwarePaginator;
     public function atualizar(FormacaoPreco $formacao): FormacaoPreco;
     public function deletar(int $id): void;
