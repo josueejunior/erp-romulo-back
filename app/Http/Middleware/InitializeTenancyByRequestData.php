@@ -27,10 +27,13 @@ class InitializeTenancyByRequestData
      */
     public function handle(Request $request, Closure $next): Response
     {
-        \Log::info('InitializeTenancyByRequestData::handle - ✅ INÍCIO', [
+        // Log IMEDIATO - antes de qualquer coisa
+        error_log('InitializeTenancyByRequestData::handle - PRIMEIRO LOG (error_log)');
+        \Log::emergency('InitializeTenancyByRequestData::handle - ✅ INÍCIO (EMERGENCY)', [
             'path' => $request->path(),
             'method' => $request->method(),
             'url' => $request->fullUrl(),
+            'memory' => memory_get_usage(true),
         ]);
         
         try {

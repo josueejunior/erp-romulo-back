@@ -75,11 +75,12 @@ class SetAuthContext
         app()->instance(IAuthIdentity::class, $identity);
 
         \Log::debug('SetAuthContext::handle - Chamando $next($request)');
+        \Log::info('SetAuthContext::handle - ANTES DE $next - Próximo middleware deve ser InitializeTenancyByRequestData');
         $startTime = microtime(true);
         $response = $next($request);
         $elapsedTime = microtime(true) - $startTime;
         
-        \Log::info('SetAuthContext::handle - ✅ FIM', [
+        \Log::info('SetAuthContext::handle - ✅ FIM (DEPOIS DE $next)', [
             'status' => method_exists($response, 'getStatusCode') ? $response->getStatusCode() : null,
             'elapsed_time' => round($elapsedTime, 3) . 's',
         ]);
