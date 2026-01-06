@@ -289,7 +289,7 @@ public function buscarAssinaturaAtual(int $tenantId): ?Assinatura
             }
         } else {
             // Se não foi fornecido, tentar buscar através do usuário
-            $user = \App\Models\User::find($assinatura->userId);
+            $user = \App\Modules\Auth\Models\User::find($assinatura->userId);
             if ($user && $user->empresa_ativa_id) {
                 // Buscar tenant através da empresa ativa do usuário
                 $allTenants = Tenant::all();

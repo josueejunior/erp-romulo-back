@@ -8,6 +8,7 @@ use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
 use App\Domain\Exceptions\DomainException;
 use App\Modules\Assinatura\Models\Plano;
 use App\Models\Tenant;
+use App\Modules\Auth\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 
@@ -31,7 +32,7 @@ class CriarAssinaturaUseCase
     public function executar(CriarAssinaturaDTO $dto): Assinatura
     {
         // 🔥 NOVO: Validar que o usuário existe
-        $user = \App\Models\User::find($dto->userId);
+        $user = User::find($dto->userId);
         if (!$user) {
             throw new DomainException('Usuário não encontrado.');
         }
