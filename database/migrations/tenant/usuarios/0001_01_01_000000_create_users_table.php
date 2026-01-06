@@ -28,7 +28,7 @@ return new class extends Migration
             $table->timestamp(Blueprint::DELETED_AT)->nullable();
             
             // ⚡ Índices para performance
-            $table->index('email');
+            // email já tem índice único (->unique())
             $table->index('empresa_ativa_id');
         });
     }
