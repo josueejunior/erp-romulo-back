@@ -59,8 +59,9 @@ Route::prefix('v1')->group(function () {
     // Rotas públicas (autenticação)
     // Rate limiting: aumentado para desenvolvimento/testes
     // Em produção, considere reduzir para prevenir brute force
-    Route::post('/auth/login', [AuthController::class, 'login'])
-        ->middleware(['throttle:20,1', 'throttle:50,60']); // 20/min, 50/hora
+    // 🔥 TESTE: Throttle comentado para diagnóstico
+    Route::post('/auth/login', [AuthController::class, 'login']);
+        // ->middleware(['throttle:20,1', 'throttle:50,60']); // 20/min, 50/hora
     Route::post('/auth/register', [AuthController::class, 'register'])
         ->middleware(['throttle:10,1', 'throttle:20,60']); // 10/min, 20/hora
     Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])
