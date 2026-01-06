@@ -29,19 +29,17 @@ class CriarAssinaturaDTO
     public static function fromArray(array $data): self
     {
         return new self(
-            tenantId: $data['tenant_id'] ?? $data['tenantId'] ?? 0,
+            userId: $data['user_id'] ?? $data['userId'] ?? 0, // 🔥 NOVO: userId é obrigatório
             planoId: $data['plano_id'] ?? $data['planoId'] ?? 0,
             status: $data['status'] ?? 'ativa',
             dataInicio: isset($data['data_inicio']) ? Carbon::parse($data['data_inicio']) : (isset($data['dataInicio']) ? Carbon::parse($data['dataInicio']) : now()),
-            dataFim: isset($data['data_fim']) ? Carbon::parse($data['data_fim']) : (isset($data['dataFim']) ? Carbon::parse($data['dataFim']) : null),
+            dataFim: isset($data['data_fim']) ? Carbon::parse($data['dataFim']) : (isset($data['dataFim']) ? Carbon::parse($data['dataFim']) : null),
             valorPago: isset($data['valor_pago']) ? (float) $data['valor_pago'] : (isset($data['valorPago']) ? (float) $data['valorPago'] : 0),
             metodoPagamento: $data['metodo_pagamento'] ?? $data['metodoPagamento'] ?? 'gratuito',
             transacaoId: $data['transacao_id'] ?? $data['transacaoId'] ?? null,
             diasGracePeriod: $data['dias_grace_period'] ?? $data['diasGracePeriod'] ?? 7,
             observacoes: $data['observacoes'] ?? null,
+            tenantId: $data['tenant_id'] ?? $data['tenantId'] ?? null, // Opcional
         );
     }
 }
-
-
-

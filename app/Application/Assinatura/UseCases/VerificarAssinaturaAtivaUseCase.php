@@ -20,22 +20,24 @@ class VerificarAssinaturaAtivaUseCase
     /**
      * Executa o caso de uso
      * 
-     * @param int $tenantId ID do tenant
+     * 🔥 NOVO: Assinatura pertence ao usuário, não ao tenant
+     * 
+     * @param int $userId ID do usuário
      * @return array Array com informações sobre a assinatura e se pode acessar
      */
-    public function executar(int $tenantId): array
+    public function executar(int $userId): array
     {
         try {
             \Log::info('VerificarAssinaturaAtivaUseCase - Iniciando verificação', [
-                'tenant_id' => $tenantId,
+                'user_id' => $userId,
                 'tenancy_initialized' => tenancy()->initialized,
                 'tenancy_tenant_id' => tenancy()->tenant?->id,
             ]);
             
-            $assinaturaDomain = $this->assinaturaRepository->buscarAssinaturaAtual($tenantId);
+            $assinaturaDomain = $this->assinaturaRepository->buscarAssinaturaAtualPorUsuario($userId);
             
             \Log::info('VerificarAssinaturaAtivaUseCase - Resultado da busca', [
-                'tenant_id' => $tenantId,
+                'user_id' => $userId,
                 'assinatura_encontrada' => $assinaturaDomain !== null,
                 'assinatura_id' => $assinaturaDomain?->id,
                 'assinatura_status' => $assinaturaDomain?->status,
@@ -43,7 +45,7 @@ class VerificarAssinaturaAtivaUseCase
             
             if (!$assinaturaDomain) {
                 \Log::warning('VerificarAssinaturaAtivaUseCase - Assinatura não encontrada', [
-                    'tenant_id' => $tenantId,
+                    'user_id' => $userId,
                 ]);
                 
                 return [
@@ -124,7 +126,7 @@ class VerificarAssinaturaAtivaUseCase
             ];
         } catch (\Exception $e) {
             \Log::error('Erro ao verificar assinatura ativa', [
-                'tenant_id' => $tenantId,
+                'user_id' => $userId,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);

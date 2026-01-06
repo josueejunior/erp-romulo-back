@@ -61,36 +61,40 @@ class CheckSubscription
 
         $user = Auth::user();
         
-        // 2. Obtém tenant_id do contexto (já inicializado pelo middleware anterior)
+        // 🔥 NOVO: Validar assinatura do USUÁRIO, não do tenant
+        // A assinatura pertence ao usuário, que pode ter acesso a múltiplas empresas/tenants
+        
+        // 2. Validar se o tenant/empresa pertence ao usuário (opcional, mas recomendado)
         $tenantId = $this->context->getTenantIdOrNull();
+        $empresaId = $this->context->getEmpresaIdOrNull();
         
-        if (!$tenantId) {
-            // Tentar obter do tenancy se o contexto não tiver
-            $tenantId = tenancy()->tenant?->id;
-        }
-        
-        if (!$tenantId) {
-            Log::warning('CheckSubscription - Tenant não identificado', [
-                'user_id' => $user->id,
-                'url' => $request->url(),
-                'empresa_ativa_id' => $user->empresa_ativa_id,
-            ]);
-            
-            return response()->json([
-                'message' => 'Não foi possível determinar o tenant. Verifique se você tem uma empresa ativa.',
-                'code' => 'TENANT_NOT_FOUND'
-            ], 403);
+        // Se empresaId foi fornecido, validar que o usuário tem acesso a ela
+        if ($empresaId && $user->empresa_ativa_id !== $empresaId) {
+            // Verificar se o usuário tem acesso a esta empresa
+            $temAcesso = $user->empresas()->where('empresas.id', $empresaId)->exists();
+            if (!$temAcesso) {
+                Log::warning('CheckSubscription - Usuário não tem acesso à empresa', [
+                    'user_id' => $user->id,
+                    'empresa_id' => $empresaId,
+                    'empresa_ativa_id' => $user->empresa_ativa_id,
+                ]);
+                
+                return response()->json([
+                    'message' => 'Você não tem acesso a esta empresa.',
+                    'code' => 'COMPANY_ACCESS_DENIED'
+                ], 403);
+            }
         }
 
-        // 3. Busca assinatura ativa do tenant
-        Log::info('CheckSubscription - Validando assinatura', [
+        // 3. Busca assinatura ativa do USUÁRIO
+        Log::info('CheckSubscription - Validando assinatura do usuário', [
             'user_id' => $user->id,
             'tenant_id' => $tenantId,
-            'empresa_id' => $this->context->getEmpresaIdOrNull(),
+            'empresa_id' => $empresaId,
         ]);
 
-        // Verificar assinatura usando Use Case DDD
-        $resultado = $this->verificarAssinaturaAtivaUseCase->executar($tenantId);
+        // Verificar assinatura usando Use Case DDD (por userId)
+        $resultado = $this->verificarAssinaturaAtivaUseCase->executar($user->id);
         
         Log::info('CheckSubscription - Resultado da verificação', [
             'user_id' => $user->id,
@@ -104,6 +108,7 @@ class CheckSubscription
             Log::warning('CheckSubscription - Acesso negado', [
                 'user_id' => $user->id,
                 'tenant_id' => $tenantId,
+                'empresa_id' => $empresaId,
                 'code' => $resultado['code'] ?? null,
                 'message' => $resultado['message'] ?? null,
             ]);

@@ -52,5 +52,25 @@ class User extends Authenticatable
             ->withPivot('perfil')
             ->withTimestamps();
     }
+
+    /**
+     * 🔥 NOVO: Assinaturas do usuário
+     * A assinatura pertence ao usuário, não ao tenant
+     */
+    public function assinaturas()
+    {
+        return $this->hasMany(\App\Modules\Assinatura\Models\Assinatura::class, 'user_id');
+    }
+
+    /**
+     * Assinatura atual do usuário
+     */
+    public function assinaturaAtual()
+    {
+        return $this->hasOne(\App\Modules\Assinatura\Models\Assinatura::class, 'user_id')
+            ->where('status', '!=', 'cancelada')
+            ->orderBy('data_fim', 'desc')
+            ->orderBy('criado_em', 'desc');
+    }
 }
 

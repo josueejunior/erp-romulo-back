@@ -16,21 +16,40 @@ interface AssinaturaRepositoryInterface
     public function buscarPorId(int $id): ?Assinatura;
 
     /**
-     * Buscar assinatura atual do tenant
+     * Buscar assinatura atual do tenant (DEPRECATED - usar buscarAssinaturaAtualPorUsuario)
      * 
      * @param int $tenantId ID do tenant
      * @return Assinatura|null
+     * @deprecated Use buscarAssinaturaAtualPorUsuario() em vez disso
      */
     public function buscarAssinaturaAtual(int $tenantId): ?Assinatura;
 
     /**
-     * Listar assinaturas do tenant
+     * 🔥 NOVO: Buscar assinatura atual do usuário
+     * 
+     * @param int $userId ID do usuário
+     * @return Assinatura|null
+     */
+    public function buscarAssinaturaAtualPorUsuario(int $userId): ?Assinatura;
+
+    /**
+     * Listar assinaturas do tenant (DEPRECATED)
      * 
      * @param int $tenantId ID do tenant
      * @param array $filtros Filtros opcionais
      * @return Collection<Assinatura>
+     * @deprecated Use listarPorUsuario() em vez disso
      */
     public function listarPorTenant(int $tenantId, array $filtros = []): Collection;
+
+    /**
+     * 🔥 NOVO: Listar assinaturas do usuário
+     * 
+     * @param int $userId ID do usuário
+     * @param array $filtros Filtros opcionais
+     * @return Collection<Assinatura>
+     */
+    public function listarPorUsuario(int $userId, array $filtros = []): Collection;
 
     /**
      * Buscar modelo Eloquent por ID (para casos especiais onde precisa do modelo, não da entidade)

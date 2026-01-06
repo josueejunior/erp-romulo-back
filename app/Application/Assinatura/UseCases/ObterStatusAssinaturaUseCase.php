@@ -18,17 +18,19 @@ class ObterStatusAssinaturaUseCase
     /**
      * Executar o caso de uso
      * 
-     * @param int $tenantId ID do tenant
+     * 🔥 NOVO: Assinatura pertence ao usuário, não ao tenant
+     * 
+     * @param int $userId ID do usuário
      * @param int $empresaId ID da empresa ativa (para contar usuários)
      * @return array Dados do status da assinatura
      * @throws NotFoundException Se a assinatura não for encontrada
      */
-    public function executar(int $tenantId, int $empresaId): array
+    public function executar(int $userId, int $empresaId): array
     {
-        $assinatura = $this->assinaturaRepository->buscarAssinaturaAtual($tenantId);
+        $assinatura = $this->assinaturaRepository->buscarAssinaturaAtualPorUsuario($userId);
 
         if (!$assinatura) {
-            throw new NotFoundException("Nenhuma assinatura encontrada para este tenant.");
+            throw new NotFoundException("Nenhuma assinatura encontrada para este usuário.");
         }
 
         // Buscar modelo para acessar relacionamento com plano

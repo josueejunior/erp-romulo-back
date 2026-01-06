@@ -30,10 +30,10 @@ class CriarAssinaturaUseCase
      */
     public function executar(CriarAssinaturaDTO $dto): Assinatura
     {
-        // Validar que o tenant existe
-        $tenant = Tenant::find($dto->tenantId);
-        if (!$tenant) {
-            throw new DomainException('Tenant não encontrado.');
+        // 🔥 NOVO: Validar que o usuário existe
+        $user = \App\Models\User::find($dto->userId);
+        if (!$user) {
+            throw new DomainException('Usuário não encontrado.');
         }
 
         // Validar que o plano existe
@@ -42,10 +42,20 @@ class CriarAssinaturaUseCase
             throw new DomainException('Plano não encontrado.');
         }
 
+        // Se tenantId foi fornecido, validar que existe (opcional)
+        $tenant = null;
+        if ($dto->tenantId) {
+            $tenant = Tenant::find($dto->tenantId);
+            if (!$tenant) {
+                throw new DomainException('Tenant não encontrado.');
+            }
+        }
+
         // Criar entidade do domínio
         $assinatura = new Assinatura(
             id: null, // Nova assinatura
-            tenantId: $dto->tenantId,
+            userId: $dto->userId, // 🔥 NOVO: Assinatura pertence ao usuário
+            tenantId: $dto->tenantId, // Opcional para compatibilidade
             planoId: $dto->planoId,
             status: $dto->status,
             dataInicio: $dto->dataInicio ?? Carbon::now(),
@@ -61,19 +71,26 @@ class CriarAssinaturaUseCase
         // Salvar usando repository
         $assinaturaSalva = $this->assinaturaRepository->salvar($assinatura);
 
-        // Se for a primeira assinatura ou se for ativa, atualizar tenant
-        if (!$tenant->assinatura_atual_id || $dto->status === 'ativa') {
+        // Se tenant foi fornecido e for a primeira assinatura ou se for ativa, atualizar tenant (compatibilidade)
+        if ($tenant && (!$tenant->assinatura_atual_id || $dto->status === 'ativa')) {
             $tenant->update([
                 'plano_atual_id' => $plano->id,
                 'assinatura_atual_id' => $assinaturaSalva->id,
             ]);
 
-            Log::info('Assinatura criada e definida como atual do tenant', [
+            Log::info('Assinatura criada e definida como atual do tenant (compatibilidade)', [
+                'user_id' => $dto->userId,
                 'tenant_id' => $dto->tenantId,
                 'assinatura_id' => $assinaturaSalva->id,
                 'plano_id' => $plano->id,
             ]);
         }
+
+        Log::info('Assinatura criada para o usuário', [
+            'user_id' => $dto->userId,
+            'assinatura_id' => $assinaturaSalva->id,
+            'plano_id' => $plano->id,
+        ]);
 
         return $assinaturaSalva;
     }

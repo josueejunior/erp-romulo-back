@@ -128,8 +128,14 @@ class PaymentController extends BaseApiController
                     $dataInicio = Carbon::now();
                     $dataFim = $dataInicio->copy()->addDays(14); // Trial de 14 dias
 
+                    // 🔥 CRÍTICO: Obter usuário autenticado
+                    $user = auth()->user();
+                    if (!$user) {
+                        return response()->json(['message' => 'Usuário não autenticado'], 401);
+                    }
+
                     $assinaturaDTO = new CriarAssinaturaDTO(
-                        tenantId: $tenant->id,
+                        userId: $user->id, // 🔥 NOVO: Assinatura pertence ao usuário
                         planoId: $plano->id,
                         status: 'ativa',
                         dataInicio: $dataInicio,
@@ -139,6 +145,7 @@ class PaymentController extends BaseApiController
                         transacaoId: null,
                         diasGracePeriod: 0,
                         observacoes: 'Assinatura gratuita (Trial)',
+                        tenantId: $tenant->id, // Opcional para compatibilidade
                     );
 
                     $assinaturaDomain = $this->criarAssinaturaUseCase->executar($assinaturaDTO);

@@ -95,7 +95,7 @@ class CadastroPublicoController extends Controller
                 : 'Cadastro público - pagamento pendente';
             
             $assinaturaDTO = new CriarAssinaturaDTO(
-                tenantId: $tenant->id,
+                userId: $adminUser->id, // 🔥 NOVO: Assinatura pertence ao usuário criado
                 planoId: $plano->id,
                 status: 'ativa', // Ativa para permitir uso imediato
                 dataInicio: $dataInicio,
@@ -105,6 +105,7 @@ class CadastroPublicoController extends Controller
                 transacaoId: null,
                 diasGracePeriod: $isPlanoGratuito ? 0 : 7,
                 observacoes: $observacoes,
+                tenantId: $tenant->id, // Opcional para compatibilidade
             );
 
             $assinatura = $this->criarAssinaturaUseCase->executar($assinaturaDTO);

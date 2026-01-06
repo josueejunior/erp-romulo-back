@@ -180,11 +180,63 @@ public function buscarAssinaturaAtual(int $tenantId): ?Assinatura
     }
 
     /**
-     * Listar assinaturas do tenant
+     * Listar assinaturas do tenant (DEPRECATED)
      */
     public function listarPorTenant(int $tenantId, array $filtros = []): Collection
     {
         $query = AssinaturaModel::where('tenant_id', $tenantId);
+
+        // Aplicar filtros
+        if (isset($filtros['status'])) {
+            $query->where('status', $filtros['status']);
+        }
+
+        $models = $query->orderBy('criado_em', 'desc')->get();
+
+        return $models->map(fn($model) => $this->toDomain($model));
+    }
+
+    /**
+     * 🔥 NOVO: Buscar assinatura atual do usuário
+     * A assinatura pertence ao usuário, não ao tenant
+     */
+    public function buscarAssinaturaAtualPorUsuario(int $userId): ?Assinatura
+    {
+        \Log::debug('AssinaturaRepository::buscarAssinaturaAtualPorUsuario() - Iniciando busca', [
+            'user_id' => $userId,
+        ]);
+
+        // Buscar assinatura mais recente do usuário (não cancelada)
+        $model = AssinaturaModel::with('plano')
+            ->where('user_id', $userId)
+            ->where('status', '!=', 'cancelada')
+            ->orderBy('data_fim', 'desc')
+            ->orderBy('criado_em', 'desc')
+            ->first();
+
+        if ($model) {
+            \Log::info('AssinaturaRepository::buscarAssinaturaAtualPorUsuario() - Assinatura encontrada', [
+                'user_id' => $userId,
+                'assinatura_id' => $model->id,
+                'status' => $model->status,
+                'data_fim' => $model->data_fim?->format('Y-m-d'),
+            ]);
+            return $this->toDomain($model);
+        }
+
+        \Log::warning('AssinaturaRepository::buscarAssinaturaAtualPorUsuario() - Nenhuma assinatura encontrada', [
+            'user_id' => $userId,
+        ]);
+
+        return null;
+    }
+
+    /**
+     * 🔥 NOVO: Listar assinaturas do usuário
+     */
+    public function listarPorUsuario(int $userId, array $filtros = []): Collection
+    {
+        $query = AssinaturaModel::where('user_id', $userId);
 
         // Aplicar filtros
         if (isset($filtros['status'])) {
@@ -222,19 +274,65 @@ public function buscarAssinaturaAtual(int $tenantId): ?Assinatura
      */
     public function salvar(Assinatura $assinatura): Assinatura
     {
-        // Buscar tenant
-        $tenant = Tenant::find($assinatura->tenantId);
-        if (!$tenant) {
-            throw new \RuntimeException("Tenant não encontrado: {$assinatura->tenantId}");
-        }
-
-        // 🔥 CRÍTICO: Garantir que o tenancy está inicializado para o tenant correto
+        // 🔥 NOVO: Assinatura pertence ao usuário, não ao tenant
+        // Mas ainda precisamos inicializar o tenancy para salvar no banco correto
+        $tenant = null;
         $jaInicializado = tenancy()->initialized;
         $tenantAtual = tenancy()->tenant;
-        $precisaReinicializar = !$jaInicializado || ($tenantAtual && $tenantAtual->id !== $assinatura->tenantId);
+        $precisaReinicializar = false;
+        
+        // Se tenantId foi fornecido, usar ele
+        if ($assinatura->tenantId) {
+            $tenant = Tenant::find($assinatura->tenantId);
+            if (!$tenant) {
+                throw new \RuntimeException("Tenant não encontrado: {$assinatura->tenantId}");
+            }
+        } else {
+            // Se não foi fornecido, tentar buscar através do usuário
+            $user = \App\Models\User::find($assinatura->userId);
+            if ($user && $user->empresa_ativa_id) {
+                // Buscar tenant através da empresa ativa do usuário
+                $allTenants = Tenant::all();
+                foreach ($allTenants as $t) {
+                    try {
+                        tenancy()->initialize($t);
+                        $empresa = \App\Models\Empresa::find($user->empresa_ativa_id);
+                        if ($empresa) {
+                            $tenant = $t;
+                            tenancy()->end();
+                            break;
+                        }
+                        tenancy()->end();
+                    } catch (\Exception $e) {
+                        if (tenancy()->initialized) {
+                            tenancy()->end();
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Se ainda não encontrou tenant, usar o atual se estiver inicializado
+        if (!$tenant && $tenantAtual) {
+            $tenant = $tenantAtual;
+        }
+        
+        // Se ainda não encontrou, tentar inicializar qualquer tenant (fallback)
+        if (!$tenant) {
+            \Log::warning('AssinaturaRepository::salvar() - Nenhum tenant encontrado, usando tenant atual se disponível', [
+                'user_id' => $assinatura->userId,
+                'tenant_id_fornecido' => $assinatura->tenantId,
+            ]);
+        }
+        
+        if ($tenant) {
+            $precisaReinicializar = !$jaInicializado || ($tenantAtual && $tenantAtual->id !== $tenant->id);
+        }
         
         \Log::debug('AssinaturaRepository::salvar() - Verificando tenancy', [
+            'user_id' => $assinatura->userId,
             'tenant_id' => $assinatura->tenantId,
+            'tenant_id_encontrado' => $tenant?->id,
             'tenant_id_atual' => $tenantAtual?->id,
             'ja_inicializado' => $jaInicializado,
             'precisa_reinicializar' => $precisaReinicializar,
@@ -242,7 +340,7 @@ public function buscarAssinaturaAtual(int $tenantId): ?Assinatura
         ]);
         
         try {
-            if ($precisaReinicializar) {
+            if ($precisaReinicializar && $tenant) {
                 if ($jaInicializado) {
                     tenancy()->end();
                 }
@@ -256,7 +354,8 @@ public function buscarAssinaturaAtual(int $tenantId): ?Assinatura
                 // Atualizar
                 $model = AssinaturaModel::findOrFail($assinatura->id);
                 $model->update([
-                    'tenant_id' => $assinatura->tenantId,
+                    'user_id' => $assinatura->userId, // 🔥 NOVO: userId é obrigatório
+                    'tenant_id' => $assinatura->tenantId, // Opcional
                     'plano_id' => $assinatura->planoId,
                     'status' => $assinatura->status,
                     'data_inicio' => $assinatura->dataInicio,
@@ -270,6 +369,7 @@ public function buscarAssinaturaAtual(int $tenantId): ?Assinatura
                 ]);
                 
                 \Log::info('AssinaturaRepository::salvar() - Assinatura atualizada', [
+                    'user_id' => $assinatura->userId,
                     'tenant_id' => $assinatura->tenantId,
                     'assinatura_id' => $model->id,
                     'status' => $model->status,
@@ -277,7 +377,8 @@ public function buscarAssinaturaAtual(int $tenantId): ?Assinatura
             } else {
                 // Criar
                 $model = AssinaturaModel::create([
-                    'tenant_id' => $assinatura->tenantId,
+                    'user_id' => $assinatura->userId, // 🔥 NOVO: userId é obrigatório
+                    'tenant_id' => $assinatura->tenantId, // Opcional
                     'plano_id' => $assinatura->planoId,
                     'status' => $assinatura->status,
                     'data_inicio' => $assinatura->dataInicio ?? now(),
@@ -291,6 +392,7 @@ public function buscarAssinaturaAtual(int $tenantId): ?Assinatura
                 ]);
                 
                 \Log::info('AssinaturaRepository::salvar() - Assinatura criada', [
+                    'user_id' => $assinatura->userId,
                     'tenant_id' => $assinatura->tenantId,
                     'assinatura_id' => $model->id,
                     'status' => $model->status,

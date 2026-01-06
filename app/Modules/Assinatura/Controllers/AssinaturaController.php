@@ -102,9 +102,10 @@ class AssinaturaController extends BaseApiController
                 'tenant_id' => $tenant->id,
             ]);
             
+            // 🔥 NOVO: Buscar assinatura do USUÁRIO, não do tenant
             // Tentar buscar assinatura, mas não lançar erro se não encontrar
             try {
-                $assinatura = $this->buscarAssinaturaAtualUseCase->executar($tenant->id);
+                $assinatura = $this->buscarAssinaturaAtualUseCase->executar($user->id);
                 
                 // Transformar entidade do domínio em DTO de resposta
                 $responseDTO = $this->assinaturaResource->toResponse($assinatura);

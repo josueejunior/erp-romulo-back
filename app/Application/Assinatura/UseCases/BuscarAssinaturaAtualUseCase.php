@@ -7,8 +7,10 @@ use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
 use App\Domain\Exceptions\NotFoundException;
 
 /**
- * Use Case: Buscar Assinatura Atual do Tenant
- * Orquestra a busca da assinatura atual de um tenant
+ * Use Case: Buscar Assinatura Atual do Usuário
+ * Orquestra a busca da assinatura atual de um usuário
+ * 
+ * 🔥 NOVO: Assinatura pertence ao usuário, não ao tenant
  */
 class BuscarAssinaturaAtualUseCase
 {
@@ -19,16 +21,16 @@ class BuscarAssinaturaAtualUseCase
     /**
      * Executar o caso de uso
      * 
-     * @param int $tenantId ID do tenant
+     * @param int $userId ID do usuário
      * @return Assinatura
      * @throws NotFoundException Se a assinatura não for encontrada
      */
-    public function executar(int $tenantId): Assinatura
+    public function executar(int $userId): Assinatura
     {
-        $assinatura = $this->assinaturaRepository->buscarAssinaturaAtual($tenantId);
+        $assinatura = $this->assinaturaRepository->buscarAssinaturaAtualPorUsuario($userId);
 
         if (!$assinatura) {
-            throw new NotFoundException("Nenhuma assinatura encontrada para este tenant.");
+            throw new NotFoundException("Nenhuma assinatura encontrada para este usuário.");
         }
 
         return $assinatura;
