@@ -6,10 +6,15 @@ return [
 
     'allowed_methods' => ['*'],
 
-    // Permitir todas as origens (API pública)
-    // Se quiser restringir, defina CORS_ALLOWED_ORIGINS no .env
-    // IMPORTANTE: Se CORS_ALLOWED_ORIGINS não estiver definido ou estiver vazio, permite todas as origens (*)
-    'allowed_origins' => ['*'],
+    // Origens permitidas
+    // Se CORS_ALLOWED_ORIGINS estiver definido no .env, usa ele
+    // Caso contrário, usa a lista abaixo
+    'allowed_origins' => env('CORS_ALLOWED_ORIGINS') 
+        ? explode(',', env('CORS_ALLOWED_ORIGINS'))
+        : [
+            'https://gestor.addsimp.com',
+            'https://www.gestor.addsimp.com',
+        ],
 
     'allowed_origins_patterns' => [],
 

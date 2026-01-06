@@ -123,7 +123,12 @@ class HandleCorsCustom
         ]);
         
         try {
+            \Log::debug('HandleCorsCustom - Chamando $next($request)');
             $response = $next($request);
+            \Log::debug('HandleCorsCustom - $next($request) retornou', [
+                'status_code' => $response ? $response->getStatusCode() : 'NULL',
+                'response_type' => get_class($response),
+            ]);
         } catch (\Throwable $e) {
             \Log::error('HandleCorsCustom - Exceção capturada', [
                 'message' => $e->getMessage(),
@@ -133,6 +138,16 @@ class HandleCorsCustom
                 'trace' => config('app.debug') ? $e->getTraceAsString() : null,
             ]);
             throw $e; // Re-lançar para ser tratado pelo Exception Handler
+        } catch (\Error $e) {
+            // Capturar erros fatais do PHP (PHP 7+)
+            \Log::error('HandleCorsCustom - Erro fatal capturado', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'class' => get_class($e),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null,
+            ]);
+            throw $e;
         }
         
         if ($isAllowed && $response instanceof Response) {

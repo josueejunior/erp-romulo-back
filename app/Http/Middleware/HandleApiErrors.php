@@ -22,13 +22,16 @@ class HandleApiErrors
         \Log::info('HandleApiErrors::handle - Iniciando', [
             'url' => $request->fullUrl(),
             'method' => $request->method(),
+            'path' => $request->path(),
         ]);
         
         try {
+            \Log::debug('HandleApiErrors::handle - Chamando $next($request)');
             $response = $next($request);
             
             \Log::debug('HandleApiErrors::handle - Resposta recebida', [
                 'status' => $response->getStatusCode(),
+                'response_type' => get_class($response),
             ]);
             
             // Log erros 5xx
