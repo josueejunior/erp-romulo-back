@@ -122,7 +122,18 @@ class HandleCorsCustom
             'method' => $method,
         ]);
         
-        $response = $next($request);
+        try {
+            $response = $next($request);
+        } catch (\Throwable $e) {
+            \Log::error('HandleCorsCustom - Exceção capturada', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'class' => get_class($e),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null,
+            ]);
+            throw $e; // Re-lançar para ser tratado pelo Exception Handler
+        }
         
         if ($isAllowed && $response instanceof Response) {
             $response->headers->set('Access-Control-Allow-Origin', $allowedOrigin);
