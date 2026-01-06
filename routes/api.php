@@ -309,12 +309,14 @@ Route::prefix('v1')->group(function () {
 });
 
 // Rotas do Painel Admin Central (fora do tenant e fora do v1)
+// 🔥 IMPORTANTE: Rotas admin devem estar dentro do prefixo 'api' mas fora do 'v1'
 Route::prefix('admin')->group(function () {
     // Autenticação admin - Rate limiting mais restritivo (3/min, 5/hora)
     Route::post('/login', [AdminAuthController::class, 'login'])
         ->middleware(['throttle:3,1', 'throttle:5,60']);
     
     // 🔥 JWT STATELESS: Rotas admin - usar AuthenticateAndBootstrap (JWT)
+    // Middleware AuthenticateAndBootstrap valida JWT e inicializa contexto
     Route::middleware([\App\Http\Middleware\AuthenticateAndBootstrap::class, 'admin'])->group(function () {
         // Autenticação admin
         Route::post('/logout', [AdminAuthController::class, 'logout']);

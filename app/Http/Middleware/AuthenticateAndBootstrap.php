@@ -44,10 +44,13 @@ class AuthenticateAndBootstrap
     {
         $startTime = microtime(true);
         
-        Log::info('AuthenticateAndBootstrap::handle - ✅ INÍCIO', [
+        // 🔥 LOG CRÍTICO: Se este log não aparecer, o middleware não está sendo executado
+        error_log('AuthenticateAndBootstrap::handle - ✅ INÍCIO (error_log)');
+        Log::emergency('AuthenticateAndBootstrap::handle - ✅ INÍCIO (EMERGENCY)', [
             'path' => $request->path(),
             'method' => $request->method(),
             'url' => $request->fullUrl(),
+            'route' => $request->route() ? $request->route()->getName() : 'NO_ROUTE',
         ]);
 
         try {
