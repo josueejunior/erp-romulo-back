@@ -121,53 +121,77 @@ class HandleApiErrors
     }
     
     /**
-     * Adicionar headers CORS à resposta usando a mesma lógica do HandleCors
+     * Adicionar headers CORS à resposta usando a mesma lógica do HandleCorsCustom
      */
     protected function addCorsHeaders(Request $request, Response $response): Response
     {
         $origin = $request->header('Origin');
-        $allowedOrigins = config('cors.allowed_origins', []);
+        $allowedOrigins = config('cors.allowed_origins', ['*']);
+        
+        // Verificar se permite todas as origens (mesma lógica do HandleCorsCustom)
+        $allowAll = in_array('*', $allowedOrigins);
         
         // Verificar se a origem está permitida
-        $isAllowed = false;
-        if ($origin) {
+        $isAllowed = $allowAll;
+        $allowedOrigin = '*';
+        
+        if ($allowAll) {
+            // Se permite todas as origens, usar a origem específica se disponível
+            if ($origin) {
+                $allowedOrigin = $origin;
+            }
+        } elseif ($origin) {
             // Verificar se está na lista de origens permitidas
             if (in_array($origin, $allowedOrigins)) {
                 $isAllowed = true;
+                $allowedOrigin = $origin;
             }
             // Verificar padrões (se houver)
             foreach (config('cors.allowed_origins_patterns', []) as $pattern) {
                 if (preg_match($pattern, $origin)) {
                     $isAllowed = true;
+                    $allowedOrigin = $origin;
                     break;
                 }
             }
         }
         
         if ($isAllowed) {
-            $response->headers->set('Access-Control-Allow-Origin', $origin);
-            if (config('cors.supports_credentials', false)) {
+            $response->headers->set('Access-Control-Allow-Origin', $allowedOrigin);
+            $response->headers->set('Access-Control-Allow-Methods', $this->getAllowedMethods());
+            $response->headers->set('Access-Control-Allow-Headers', $this->getAllowedHeaders());
+            
+            // Só adicionar credentials se não for origem * e se configurado
+            if (config('cors.supports_credentials', false) && !$allowAll) {
                 $response->headers->set('Access-Control-Allow-Credentials', 'true');
-            }
-            
-            // Métodos permitidos
-            $allowedMethods = config('cors.allowed_methods', ['*']);
-            if (is_array($allowedMethods)) {
-                $response->headers->set('Access-Control-Allow-Methods', implode(', ', $allowedMethods));
-            } else {
-                $response->headers->set('Access-Control-Allow-Methods', $allowedMethods);
-            }
-            
-            // Headers permitidos
-            $allowedHeaders = config('cors.allowed_headers', ['*']);
-            if (is_array($allowedHeaders)) {
-                $response->headers->set('Access-Control-Allow-Headers', implode(', ', $allowedHeaders));
-            } else {
-                $response->headers->set('Access-Control-Allow-Headers', $allowedHeaders);
             }
         }
         
         return $response;
+    }
+    
+    /**
+     * Obter métodos permitidos formatados
+     */
+    protected function getAllowedMethods(): string
+    {
+        $allowedMethods = config('cors.allowed_methods', ['*']);
+        if (is_array($allowedMethods)) {
+            return implode(', ', $allowedMethods);
+        }
+        return $allowedMethods;
+    }
+    
+    /**
+     * Obter headers permitidos formatados
+     */
+    protected function getAllowedHeaders(): string
+    {
+        $allowedHeaders = config('cors.allowed_headers', ['*']);
+        if (is_array($allowedHeaders)) {
+            return implode(', ', $allowedHeaders);
+        }
+        return $allowedHeaders;
     }
 }
 

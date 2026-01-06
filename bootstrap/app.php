@@ -40,61 +40,94 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(\App\Http\Middleware\EnsureEmpresaAtivaContext::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // Helper para adicionar CORS em respostas de erro
+        $addCorsToResponse = function ($response, $request) {
+            if (!$request->expectsJson()) {
+                return $response;
+            }
+            
+            $origin = $request->header('Origin');
+            $allowedOrigins = config('cors.allowed_origins', ['*']);
+            $allowAll = in_array('*', $allowedOrigins);
+            $isAllowed = $allowAll;
+            $allowedOrigin = '*';
+            
+            if ($allowAll && $origin) {
+                $allowedOrigin = $origin;
+            } elseif ($origin && in_array($origin, $allowedOrigins)) {
+                $isAllowed = true;
+                $allowedOrigin = $origin;
+            }
+            
+            if ($isAllowed) {
+                $response->headers->set('Access-Control-Allow-Origin', $allowedOrigin);
+                $response->headers->set('Access-Control-Allow-Methods', implode(', ', config('cors.allowed_methods', ['*'])));
+                $response->headers->set('Access-Control-Allow-Headers', implode(', ', config('cors.allowed_headers', ['*'])));
+            }
+            
+            return $response;
+        };
+        
         // Exceções de Domínio - Bad Request (400)
-        $exceptions->render(function (\App\Domain\Exceptions\DomainException $e, $request) {
+        $exceptions->render(function (\App\Domain\Exceptions\DomainException $e, $request) use ($addCorsToResponse) {
             if ($request->expectsJson()) {
-                return response()->json([
+                $response = response()->json([
                     'message' => $e->getMessage(),
                     'code' => 'DOMAIN_ERROR',
                 ], 400);
+                return $addCorsToResponse($response, $request);
             }
         });
         
         // Exceções de Validação de Domínio - Unprocessable Entity (422)
-        $exceptions->render(function (\App\Domain\Exceptions\ValidationException $e, $request) {
+        $exceptions->render(function (\App\Domain\Exceptions\ValidationException $e, $request) use ($addCorsToResponse) {
             if ($request->expectsJson()) {
-                return response()->json([
+                $response = response()->json([
                     'message' => $e->getMessage(),
                     'errors' => $e->errors,
                     'code' => 'VALIDATION_ERROR',
                 ], 422);
+                return $addCorsToResponse($response, $request);
             }
         });
         
         // Exceções de Regra de Negócio - Bad Request com detalhes (400)
-        $exceptions->render(function (\App\Domain\Exceptions\BusinessRuleException $e, $request) {
+        $exceptions->render(function (\App\Domain\Exceptions\BusinessRuleException $e, $request) use ($addCorsToResponse) {
             if ($request->expectsJson()) {
-                return response()->json([
+                $response = response()->json([
                     'message' => $e->getMessage(),
                     'rule' => $e->rule,
                     'context' => $e->context,
                     'code' => 'BUSINESS_RULE_VIOLATION',
                 ], 400);
+                return $addCorsToResponse($response, $request);
             }
         });
         
         // Exceções de Não Encontrado - Not Found (404)
-        $exceptions->render(function (\App\Domain\Exceptions\NotFoundException $e, $request) {
+        $exceptions->render(function (\App\Domain\Exceptions\NotFoundException $e, $request) use ($addCorsToResponse) {
             if ($request->expectsJson()) {
-                return response()->json([
+                $response = response()->json([
                     'message' => $e->getMessage(),
                     'code' => 'NOT_FOUND',
                 ], 404);
+                return $addCorsToResponse($response, $request);
             }
         });
         
         // Exceções de Não Autorizado - Forbidden (403)
-        $exceptions->render(function (\App\Domain\Exceptions\UnauthorizedException $e, $request) {
+        $exceptions->render(function (\App\Domain\Exceptions\UnauthorizedException $e, $request) use ($addCorsToResponse) {
             if ($request->expectsJson()) {
-                return response()->json([
+                $response = response()->json([
                     'message' => $e->getMessage(),
                     'code' => 'UNAUTHORIZED',
                 ], 403);
+                return $addCorsToResponse($response, $request);
             }
         });
         
         // Exceções de Validação do Laravel - Unprocessable Entity (422)
-        $exceptions->render(function (\Illuminate\Validation\ValidationException $e, $request) {
+        $exceptions->render(function (\Illuminate\Validation\ValidationException $e, $request) use ($addCorsToResponse) {
             if ($request->expectsJson()) {
                 $errors = $e->errors();
                 
@@ -108,10 +141,32 @@ return Application::configure(basePath: dirname(__DIR__))
                     'data' => $request->all(),
                 ]);
                 
-                return response()->json([
+                $response = response()->json([
                     'message' => 'Dados inválidos',
                     'errors' => $errors,
                 ], 422);
+                return $addCorsToResponse($response, $request);
+            }
+        });
+        
+        // Exceções genéricas não tratadas - Internal Server Error (500)
+        $exceptions->render(function (\Throwable $e, $request) use ($addCorsToResponse) {
+            if ($request->expectsJson() && !($e instanceof \Illuminate\Validation\ValidationException)) {
+                \Log::error('Exceção não tratada no Exception Handler', [
+                    'message' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                    'url' => $request->fullUrl(),
+                    'method' => $request->method(),
+                    'trace' => config('app.debug') ? $e->getTraceAsString() : null,
+                ]);
+                
+                $response = response()->json([
+                    'message' => config('app.debug') 
+                        ? $e->getMessage() 
+                        : 'Erro interno do servidor',
+                ], 500);
+                return $addCorsToResponse($response, $request);
             }
         });
         
