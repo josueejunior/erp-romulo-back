@@ -1,7 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\DashboardController;
+use App\Modules\Dashboard\Controllers\DashboardController;
 use App\Http\Controllers\EmpresaSelecaoController;
 use App\Http\Controllers\ProcessoController;
 use App\Http\Controllers\OrgaoController;
