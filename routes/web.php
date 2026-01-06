@@ -32,8 +32,8 @@ Route::middleware(['auth', 'empresa.ativa'])->group(function () {
     Route::get('/empresas/selecionar', [EmpresaSelecaoController::class, 'selecionar'])->name('empresas.selecionar');
     Route::post('/empresas/definir', [EmpresaSelecaoController::class, 'definir'])->name('empresas.definir');
 
-    // Processos
-    Route::resource('processos', ProcessoController::class);
+    // Processos (resource removido - conflita com API, usar apenas rotas específicas)
+    // Route::resource('processos', ProcessoController::class); // ❌ Removido - conflito com api.php
     Route::post('/processos/{processo}/marcar-vencido', [ProcessoController::class, 'marcarVencido'])->name('processos.marcar-vencido');
     Route::post('/processos/{processo}/marcar-perdido', [ProcessoController::class, 'marcarPerdido'])->name('processos.marcar-perdido');
     
