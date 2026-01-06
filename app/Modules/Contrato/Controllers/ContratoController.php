@@ -84,8 +84,18 @@ class ContratoController extends BaseApiController
      * Lista todos os contratos (não apenas de um processo)
      * Com filtros, indicadores e paginação
      * 
+     * ✅ O QUE O CONTROLLER FAZ:
+     * - Recebe request com filtros
+     * - Obtém empresa automaticamente via getEmpresaAtivaOrFail()
+     * - Chama Service para listar (temporário - será migrado para Use Case)
+     * 
+     * ❌ O QUE O CONTROLLER NÃO FAZ:
+     * - Não lê tenant_id diretamente
+     * - Não acessa Tenant diretamente
+     * - O sistema já injeta o contexto (tenant, empresa) via middleware
+     * 
      * O middleware já inicializou o tenant correto baseado no X-Tenant-ID do header.
-     * Apenas retorna os dados dos contratos da empresa ativa.
+     * A empresa é obtida automaticamente via getEmpresaAtivaOrFail() que prioriza header X-Empresa-ID.
      */
     public function listarTodos(Request $request): JsonResponse
     {
@@ -147,9 +157,21 @@ class ContratoController extends BaseApiController
 
     /**
      * Listar contratos de um processo
+     * Retorna entidades de domínio transformadas via Resource
+     * 
+     * ✅ O QUE O CONTROLLER FAZ:
+     * - Recebe request
+     * - Obtém empresa automaticamente via getEmpresaAtivaOrFail()
+     * - Chama Use Case para listar
+     * - Transforma entidades em arrays
+     * 
+     * ❌ O QUE O CONTROLLER NÃO FAZ:
+     * - Não lê tenant_id diretamente
+     * - Não acessa Tenant diretamente
+     * - O sistema já injeta o contexto (tenant, empresa) via middleware
      * 
      * O middleware já inicializou o tenant correto baseado no X-Tenant-ID do header.
-     * Apenas retorna os dados dos contratos da empresa ativa.
+     * A empresa é obtida automaticamente via getEmpresaAtivaOrFail() que prioriza header X-Empresa-ID.
      */
     public function index(Processo $processo): JsonResponse
     {
@@ -215,13 +237,16 @@ class ContratoController extends BaseApiController
      * ✅ O QUE O CONTROLLER FAZ:
      * - Recebe request
      * - Valida dados (via Form Request)
-     * - Chama um Application Service
+     * - Chama Use Case para criar
+     * - Transforma entidade em array
      * 
      * ❌ O QUE O CONTROLLER NÃO FAZ:
-     * - Não lê tenant_id
-     * - Não acessa Tenant
-     * - Não sabe se existe multi-tenant
-     * - Não filtra nada por tenant_id
+     * - Não lê tenant_id diretamente
+     * - Não acessa Tenant diretamente
+     * - O sistema já injeta o contexto (tenant, empresa) via middleware
+     * 
+     * O middleware já inicializou o tenant correto baseado no X-Tenant-ID do header.
+     * A empresa é obtida automaticamente via getEmpresaAtivaOrFail() que prioriza header X-Empresa-ID.
      */
     public function storeWeb(ContratoCreateRequest $request, Processo $processo): JsonResponse
     {
@@ -263,14 +288,26 @@ class ContratoController extends BaseApiController
 
     /**
      * Obter contrato específico
+     * Retorna entidade de domínio transformada
+     * 
+     * ✅ O QUE O CONTROLLER FAZ:
+     * - Recebe request
+     * - Obtém empresa automaticamente via getEmpresaAtivaOrFail()
+     * - Chama Use Case para buscar
+     * - Transforma entidade em array
+     * 
+     * ❌ O QUE O CONTROLLER NÃO FAZ:
+     * - Não lê tenant_id diretamente
+     * - Não acessa Tenant diretamente
+     * - O sistema já injeta o contexto (tenant, empresa) via middleware
      * 
      * O middleware já inicializou o tenant correto baseado no X-Tenant-ID do header.
-     * Apenas retorna os dados do contrato da empresa ativa.
+     * A empresa é obtida automaticamente via getEmpresaAtivaOrFail() que prioriza header X-Empresa-ID.
      */
     public function show(Processo $processo, Contrato $contrato): JsonResponse
     {
         try {
-            // Obter empresa automaticamente (middleware já inicializou)
+            // Obter empresa automaticamente (middleware já inicializou baseado no X-Empresa-ID)
             $empresa = $this->getEmpresaAtivaOrFail();
             
             // Validar que o processo e contrato pertencem à empresa
@@ -346,46 +383,108 @@ class ContratoController extends BaseApiController
 
     /**
      * Web: Atualizar contrato
+     * 
+     * ✅ O QUE O CONTROLLER FAZ:
+     * - Recebe request
+     * - Valida dados (via Form Request - quando implementado)
+     * - Chama Service (temporário - será migrado para Use Case)
+     * 
+     * ❌ O QUE O CONTROLLER NÃO FAZ:
+     * - Não lê tenant_id diretamente
+     * - Não acessa Tenant diretamente
+     * - O sistema já injeta o contexto (tenant, empresa) via middleware
+     * 
+     * O middleware já inicializou o tenant correto baseado no X-Tenant-ID do header.
+     * A empresa é obtida automaticamente via getEmpresaAtivaOrFail() que prioriza header X-Empresa-ID.
      */
-    public function updateWeb(Request $request, Processo $processo, Contrato $contrato)
+    public function updateWeb(Request $request, Processo $processo, Contrato $contrato): JsonResponse
     {
-        $empresa = $this->getEmpresaAtivaOrFail();
-        
-        // Verificar permissão usando Policy
-        $this->authorize('update', $contrato);
-
         try {
+            // Obter empresa automaticamente (middleware já inicializou baseado no X-Empresa-ID)
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Validar que o processo pertence à empresa
+            if ($processo->empresa_id !== $empresa->id) {
+                return response()->json(['message' => 'Processo não encontrado'], 404);
+            }
+            
+            // Validar que o contrato pertence à empresa
+            if ($contrato->empresa_id !== $empresa->id) {
+                return response()->json(['message' => 'Contrato não encontrado'], 404);
+            }
+            
+            // Verificar permissão usando Policy
+            $this->authorize('update', $contrato);
+
+            // TODO: Migrar para Use Case (AtualizarContratoUseCase)
+            // Por enquanto, usando Service diretamente
             $contrato = $this->contratoService->update($processo, $contrato, $request->all(), $request, $empresa->id);
-            return response()->json($contrato);
+            
+            // Buscar modelo Eloquent para incluir relacionamentos
+            $contratoModel = $this->contratoRepository->buscarModeloPorId(
+                $contrato->id,
+                ['processo', 'empenhos']
+            );
+            
+            return response()->json([
+                'message' => 'Contrato atualizado com sucesso',
+                'data' => $contratoModel ? $contratoModel->toArray() : $contrato->toArray(),
+            ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'message' => 'Dados inválidos',
                 'errors' => $e->errors()
             ], 422);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 404);
+            return $this->handleException($e, 'Erro ao atualizar contrato');
         }
     }
 
     /**
      * Web: Excluir contrato
+     * 
+     * ✅ O QUE O CONTROLLER FAZ:
+     * - Recebe request
+     * - Valida permissões
+     * - Chama Service (temporário - será migrado para Use Case)
+     * 
+     * ❌ O QUE O CONTROLLER NÃO FAZ:
+     * - Não lê tenant_id diretamente
+     * - Não acessa Tenant diretamente
+     * - O sistema já injeta o contexto (tenant, empresa) via middleware
+     * 
+     * O middleware já inicializou o tenant correto baseado no X-Tenant-ID do header.
+     * A empresa é obtida automaticamente via getEmpresaAtivaOrFail() que prioriza header X-Empresa-ID.
      */
-    public function destroyWeb(Processo $processo, Contrato $contrato)
+    public function destroyWeb(Processo $processo, Contrato $contrato): JsonResponse
     {
-        $empresa = $this->getEmpresaAtivaOrFail();
-        
-        // Verificar permissão usando Policy
-        $this->authorize('delete', $contrato);
-
         try {
+            // Obter empresa automaticamente (middleware já inicializou baseado no X-Empresa-ID)
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Validar que o processo pertence à empresa
+            if ($processo->empresa_id !== $empresa->id) {
+                return response()->json(['message' => 'Processo não encontrado'], 404);
+            }
+            
+            // Validar que o contrato pertence à empresa
+            if ($contrato->empresa_id !== $empresa->id) {
+                return response()->json(['message' => 'Contrato não encontrado'], 404);
+            }
+            
+            // Verificar permissão usando Policy
+            $this->authorize('delete', $contrato);
+
+            // TODO: Migrar para Use Case (DeletarContratoUseCase)
+            // Por enquanto, usando Service diretamente
             $this->contratoService->delete($processo, $contrato, $empresa->id);
-            return response()->json(null, 204);
+            
+            return response()->json(['message' => 'Contrato deletado com sucesso'], 204);
         } catch (\Exception $e) {
+            $statusCode = $e->getMessage() === 'Não é possível excluir um contrato que possui empenhos vinculados.' ? 403 : 404;
             return response()->json([
                 'message' => $e->getMessage()
-            ], $e->getMessage() === 'Não é possível excluir um contrato que possui empenhos vinculados.' ? 403 : 404);
+            ], $statusCode);
         }
     }
 }

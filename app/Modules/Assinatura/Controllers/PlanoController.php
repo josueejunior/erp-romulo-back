@@ -12,10 +12,18 @@ use Illuminate\Http\JsonResponse;
 /**
  * Controller para gerenciamento de Planos
  * 
- * Rotas públicas - podem ser visualizadas sem autenticação
+ * Refatorado para seguir DDD rigorosamente:
+ * - Usa Use Cases para lógica de negócio
+ * - Usa Repository para acesso a dados
+ * - Não acessa modelos Eloquent diretamente
+ * - Não contém lógica de infraestrutura (cache, etc.)
  * 
- * Refatorado para usar DDD (Domain-Driven Design)
- * Organizado por módulo seguindo Arquitetura Hexagonal
+ * Rotas públicas - podem ser visualizadas sem autenticação
+ * Não requer tenant ou empresa (planos são globais)
+ * 
+ * Segue o mesmo padrão do OrgaoController:
+ * - Não precisa de tenant_id (planos são globais)
+ * - Não precisa de empresa_id (planos são globais)
  */
 class PlanoController extends BaseApiController
 {
@@ -27,12 +35,25 @@ class PlanoController extends BaseApiController
 
     /**
      * Lista todos os planos ativos
+     * Retorna entidades de domínio transformadas
+     * 
+     * ✅ O QUE O CONTROLLER FAZ:
+     * - Recebe request
+     * - Aplica filtros opcionais
+     * - Chama Use Case para listar
+     * - Transforma entidades em arrays
+     * 
+     * ❌ O QUE O CONTROLLER NÃO FAZ:
+     * - Não lê tenant_id (planos são globais)
+     * - Não acessa Tenant (planos são globais)
+     * - Não filtra por empresa (planos são globais)
      * 
      * GET /api/v1/planos
      */
     public function list(Request $request): JsonResponse
     {
         try {
+            // Preparar filtros
             $filtros = [];
             
             // Aplicar filtros se necessário
@@ -40,7 +61,7 @@ class PlanoController extends BaseApiController
                 $filtros['ativo'] = $request->boolean('ativo');
             }
 
-            // Buscar planos usando o UseCase (retorna entidades de domínio)
+            // Executar Use Case (retorna entidades de domínio)
             $planosDomain = $this->listarPlanosUseCase->executar($filtros);
 
             // Converter entidades de domínio para modelos Eloquent para manter compatibilidade com frontend
@@ -61,16 +82,34 @@ class PlanoController extends BaseApiController
 
     /**
      * Busca um plano específico por ID
+     * Retorna entidade de domínio transformada
+     * 
+     * ✅ O QUE O CONTROLLER FAZ:
+     * - Recebe request
+     * - Chama Use Case para buscar
+     * - Transforma entidade em array
+     * 
+     * ❌ O QUE O CONTROLLER NÃO FAZ:
+     * - Não lê tenant_id (planos são globais)
+     * - Não acessa Tenant (planos são globais)
+     * - Não filtra por empresa (planos são globais)
      * 
      * GET /api/v1/planos/{plano}
      */
     public function get(Request $request, int $plano): JsonResponse
     {
         try {
+            // Executar Use Case
             $planoDomain = $this->buscarPlanoUseCase->executar($plano);
             
             // Buscar modelo Eloquent para resposta (mantém compatibilidade com frontend)
-            $planoModel = $this->planoRepository->buscarModeloPorId($plano);
+            $planoModel = $this->planoRepository->buscarModeloPorId($planoDomain->id);
+
+            if (!$planoModel) {
+                return response()->json([
+                    'message' => 'Plano não encontrado'
+                ], 404);
+            }
 
             return response()->json([
                 'data' => $planoModel
