@@ -17,29 +17,37 @@ class TenantDatabaseService implements TenantDatabaseServiceInterface
 {
     /**
      * Encontrar o próximo número de tenant disponível
-     * Verifica quais bancos já existem e retorna o próximo número livre
+     * Verifica quais bancos já existem E quais tenants já existem na tabela
+     * Retorna o próximo número que não tem nem banco nem tenant
      */
     public function encontrarProximoNumeroDisponivel(): int
     {
         try {
             $centralConnection = \Illuminate\Support\Facades\DB::connection();
             
-            // Buscar todos os bancos que começam com 'tenant_'
+            // 1. Buscar todos os bancos que começam com 'tenant_'
             $databases = $centralConnection->select(
                 "SELECT datname FROM pg_database WHERE datname LIKE 'tenant_%' ORDER BY datname"
             );
             
             // Extrair números dos bancos existentes
-            $numerosExistentes = [];
+            $numerosBancos = [];
             foreach ($databases as $db) {
                 $dbName = $db->datname;
                 // Extrair número de 'tenant_X'
                 if (preg_match('/^tenant_(\d+)$/', $dbName, $matches)) {
-                    $numerosExistentes[] = (int) $matches[1];
+                    $numerosBancos[] = (int) $matches[1];
                 }
             }
             
-            // Encontrar o próximo número disponível
+            // 2. Buscar todos os IDs de tenants existentes na tabela
+            $tenantsExistentes = \App\Models\Tenant::pluck('id')->toArray();
+            
+            // 3. Combinar ambos os arrays (bancos e tenants)
+            $numerosExistentes = array_unique(array_merge($numerosBancos, $tenantsExistentes));
+            sort($numerosExistentes);
+            
+            // 4. Encontrar o próximo número disponível (que não está em nenhum dos dois)
             $proximoNumero = 1;
             while (in_array($proximoNumero, $numerosExistentes)) {
                 $proximoNumero++;
@@ -47,16 +55,25 @@ class TenantDatabaseService implements TenantDatabaseServiceInterface
             
             Log::info('Próximo número de tenant disponível encontrado', [
                 'proximo_numero' => $proximoNumero,
-                'numeros_existentes' => $numerosExistentes,
+                'numeros_bancos' => $numerosBancos,
+                'numeros_tenants' => $tenantsExistentes,
+                'numeros_existentes_combinados' => $numerosExistentes,
             ]);
             
             return $proximoNumero;
         } catch (\Exception $e) {
-            Log::warning('Erro ao encontrar próximo número disponível, usando 1', [
+            Log::warning('Erro ao encontrar próximo número disponível, usando próximo disponível', [
                 'error' => $e->getMessage(),
             ]);
-            // Em caso de erro, começar do 1
-            return 1;
+            
+            // Em caso de erro, tentar encontrar o próximo ID disponível na tabela
+            try {
+                $maxId = \App\Models\Tenant::max('id') ?? 0;
+                return $maxId + 1;
+            } catch (\Exception $e2) {
+                // Se tudo falhar, começar do 1
+                return 1;
+            }
         }
     }
 

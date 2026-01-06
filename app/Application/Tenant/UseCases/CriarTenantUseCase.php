@@ -94,32 +94,84 @@ class CriarTenantUseCase
                 ]);
             }
             
-            // Criar novo tenant com ID específico (próximo número disponível)
-            $tenant = $this->tenantRepository->criarComId(
-                new Tenant(
-                    id: null,
-                    razaoSocial: $dto->razaoSocial,
-                    cnpj: $dto->cnpj,
-                    email: $dto->email,
-                    status: $dto->status,
-                    endereco: $dto->endereco,
-                    cidade: $dto->cidade,
-                    estado: $dto->estado,
-                    cep: $dto->cep,
-                    telefones: $dto->telefones,
-                    emailsAdicionais: $dto->emailsAdicionais,
-                    banco: $dto->banco,
-                    agencia: $dto->agencia,
-                    conta: $dto->conta,
-                    tipoConta: $dto->tipoConta,
-                    pix: $dto->pix,
-                    representanteLegalNome: $dto->representanteLegalNome,
-                    representanteLegalCpf: $dto->representanteLegalCpf,
-                    representanteLegalCargo: $dto->representanteLegalCargo,
-                    logo: $dto->logo,
-                ),
-                $e->proximoNumeroDisponivel
-            );
+            // Tentar criar com o próximo número disponível
+            // Se falhar (porque o número já existe), tentar novamente com próximo
+            $tentativas = 0;
+            $maxTentativas = 5;
+            $proximoNumero = $e->proximoNumeroDisponivel;
+            $tenant = null;
+            
+            while ($tentativas < $maxTentativas && !$tenant) {
+                $tentativas++;
+                
+                try {
+                    // Verificar se o número já existe antes de tentar criar
+                    $tenantExistente = $this->tenantRepository->buscarPorId($proximoNumero);
+                    if ($tenantExistente) {
+                        Log::warning('Próximo número já existe como tenant, tentando próximo', [
+                            'numero_tentado' => $proximoNumero,
+                            'tentativa' => $tentativas,
+                        ]);
+                        $proximoNumero++;
+                        continue;
+                    }
+                    
+                    // Criar novo tenant com ID específico (próximo número disponível)
+                    $tenant = $this->tenantRepository->criarComId(
+                        new Tenant(
+                            id: null,
+                            razaoSocial: $dto->razaoSocial,
+                            cnpj: $dto->cnpj,
+                            email: $dto->email,
+                            status: $dto->status,
+                            endereco: $dto->endereco,
+                            cidade: $dto->cidade,
+                            estado: $dto->estado,
+                            cep: $dto->cep,
+                            telefones: $dto->telefones,
+                            emailsAdicionais: $dto->emailsAdicionais,
+                            banco: $dto->banco,
+                            agencia: $dto->agencia,
+                            conta: $dto->conta,
+                            tipoConta: $dto->tipoConta,
+                            pix: $dto->pix,
+                            representanteLegalNome: $dto->representanteLegalNome,
+                            representanteLegalCpf: $dto->representanteLegalCpf,
+                            representanteLegalCargo: $dto->representanteLegalCargo,
+                            logo: $dto->logo,
+                        ),
+                        $proximoNumero
+                    );
+                    
+                    // Se chegou aqui, sucesso!
+                    break;
+                    
+                } catch (\RuntimeException $runtimeException) {
+                    // Se o erro é porque o ID já existe, tentar próximo
+                    if (str_contains($runtimeException->getMessage(), 'Já existe um tenant com ID')) {
+                        Log::warning('ID já existe, tentando próximo', [
+                            'numero_tentado' => $proximoNumero,
+                            'tentativa' => $tentativas,
+                        ]);
+                        $proximoNumero++;
+                        continue;
+                    }
+                    // Outros erros: relançar
+                    throw $runtimeException;
+                } catch (\Exception $createException) {
+                    Log::error('Erro ao criar tenant com ID específico', [
+                        'numero_tentado' => $proximoNumero,
+                        'tentativa' => $tentativas,
+                        'error' => $createException->getMessage(),
+                    ]);
+                    throw $createException;
+                }
+            }
+            
+            // Verificar se conseguiu criar o tenant
+            if (!$tenant) {
+                throw new DomainException("Não foi possível criar tenant após {$maxTentativas} tentativas. Todos os números disponíveis já estão em uso.");
+            }
             
             // Tentar criar banco novamente com o novo ID
             try {

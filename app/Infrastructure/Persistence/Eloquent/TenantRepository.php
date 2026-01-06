@@ -88,7 +88,11 @@ class TenantRepository implements TenantRepositoryInterface
             // Verificar se já existe tenant com esse ID
             $existente = TenantModel::find($id);
             if ($existente) {
-                throw new \RuntimeException("Já existe um tenant com ID {$id}");
+                \Log::warning('Tentativa de criar tenant com ID que já existe', [
+                    'id' => $id,
+                    'tenant_existente' => $existente->razao_social,
+                ]);
+                throw new \RuntimeException("Já existe um tenant com ID {$id}. Por favor, use um ID diferente.");
             }
             
             // Ajustar sequência do PostgreSQL para permitir inserir ID específico
