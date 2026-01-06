@@ -15,66 +15,119 @@ class InitializeTenancyByRequestData extends IdentificationMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // Verificar se há tenant_id no header ou no request
-        $tenantId = $request->header('X-Tenant-ID') 
-            ?? $request->input('tenant_id')
-            ?? $this->getTenantIdFromToken($request)
-            ?? $this->getTenantIdFromUser($request);
+        // 🔥 CRÍTICO: Buscar tenant correto baseado na empresa ativa
+        // Prioridade: empresa_id do header > empresa_ativa_id do usuário > tenant_id do header
+        
+        $tenantId = null;
+        $tenant = null;
+        
+        // Prioridade 1: Se tiver X-Empresa-ID, buscar tenant onde essa empresa está
+        $empresaId = $request->header('X-Empresa-ID') 
+            ? (int) $request->header('X-Empresa-ID') 
+            : null;
+        
+        if ($empresaId) {
+            $tenant = $this->buscarTenantPorEmpresa($empresaId);
+            if ($tenant) {
+                $tenantId = $tenant->id;
+                \Log::info('InitializeTenancyByRequestData - Tenant encontrado via empresa_id do header', [
+                    'empresa_id' => $empresaId,
+                    'tenant_id' => $tenantId,
+                    'url' => $request->url()
+                ]);
+            }
+        }
+        
+        // Prioridade 2: Se não encontrou via empresa_id, tentar empresa_ativa_id do usuário
+        if (!$tenant) {
+            $user = $request->user();
+            if ($user && $user->empresa_ativa_id) {
+                $tenant = $this->buscarTenantPorEmpresa($user->empresa_ativa_id);
+                if ($tenant) {
+                    $tenantId = $tenant->id;
+                    \Log::info('InitializeTenancyByRequestData - Tenant encontrado via empresa_ativa_id do usuário', [
+                        'empresa_ativa_id' => $user->empresa_ativa_id,
+                        'tenant_id' => $tenantId,
+                        'user_id' => $user->id,
+                        'url' => $request->url()
+                    ]);
+                }
+            }
+        }
+        
+        // Prioridade 3: Fallback para X-Tenant-ID do header
+        if (!$tenant) {
+            $tenantId = $request->header('X-Tenant-ID') 
+                ?? $request->input('tenant_id')
+                ?? $this->getTenantIdFromToken($request)
+                ?? $this->getTenantIdFromUser($request);
+            
+            if ($tenantId) {
+                $tenant = \App\Models\Tenant::find($tenantId);
+                if ($tenant) {
+                    \Log::debug('InitializeTenancyByRequestData - Tenant obtido do header/token (fallback)', [
+                        'tenant_id' => $tenantId,
+                        'url' => $request->url()
+                    ]);
+                }
+            }
+        }
 
         // Verificar se já há tenancy inicializado
         if (tenancy()->initialized) {
             $currentTenant = tenancy()->tenant;
             $currentTenantId = $currentTenant?->id;
             
-            // Se o tenant_id do header é diferente do tenant atual, reinicializar
-            if ($tenantId && (string)$currentTenantId !== (string)$tenantId) {
+            // Se o tenant correto é diferente do tenant atual, reinicializar
+            if ($tenant && $tenant->id !== $currentTenantId) {
                 \Log::info('Tenant mudou, reinicializando tenancy', [
                     'tenant_id_atual' => $currentTenantId,
-                    'tenant_id_header' => $tenantId,
+                    'tenant_id_correto' => $tenant->id,
+                    'empresa_id' => $empresaId,
                     'url' => $request->url()
                 ]);
                 
                 // Finalizar tenant atual
                 tenancy()->end();
                 
-                // Buscar novo tenant e inicializar
-                $newTenant = \App\Models\Tenant::find($tenantId);
-                if ($newTenant) {
-                    tenancy()->initialize($newTenant);
-                    
-                    // Setar no TenantContext (invisível para o controller)
-                    \App\Domain\Shared\ValueObjects\TenantContext::set($newTenant->id);
-                    
-                    \Log::debug('Tenancy reinicializado com sucesso', [
-                        'tenant_id' => $newTenant->id,
-                        'tenant_razao_social' => $newTenant->razao_social,
-                        'url' => $request->url()
-                    ]);
-                } else {
-                    \Log::warning('Novo tenant não encontrado, mantendo tenant atual', [
-                        'tenant_id_procurado' => $tenantId,
-                        'tenant_id_atual' => $currentTenantId,
-                        'url' => $request->url()
-                    ]);
-                }
+                // Inicializar tenant correto
+                tenancy()->initialize($tenant);
+                
+                // Setar no TenantContext (invisível para o controller)
+                \App\Domain\Shared\ValueObjects\TenantContext::set($tenant->id);
+                
+                \Log::debug('Tenancy reinicializado com sucesso', [
+                    'tenant_id' => $tenant->id,
+                    'tenant_razao_social' => $tenant->razao_social,
+                    'url' => $request->url()
+                ]);
             } else {
                 \Log::debug('Tenancy já inicializado com tenant correto', [
                     'tenant_id' => $currentTenantId,
-                    'tenant_id_header' => $tenantId,
                     'url' => $request->url()
                 ]);
             }
+            
+            // Determinar empresa_id e atualizar contexto
+            $empresaIdFinal = $this->determinarEmpresaId($request, $tenant?->id ?? $currentTenantId);
+            if ($empresaIdFinal) {
+                \App\Domain\Shared\ValueObjects\TenantContext::set($tenant?->id ?? $currentTenantId, $empresaIdFinal);
+                app()->instance('current_empresa_id', $empresaIdFinal);
+                $request->attributes->set('empresa_id', $empresaIdFinal);
+            }
+            
             return $next($request);
         }
 
         \Log::debug('Tentando inicializar tenancy', [
             'tenant_id_header' => $request->header('X-Tenant-ID'),
-            'tenant_id_input' => $request->input('tenant_id'),
+            'empresa_id_header' => $request->header('X-Empresa-ID'),
             'tenant_id_final' => $tenantId,
+            'tenant_encontrado' => $tenant ? $tenant->id : null,
             'url' => $request->url()
         ]);
 
-        if (!$tenantId) {
+        if (!$tenant) {
             // Se for admin, não precisa de tenant
             $user = $request->user();
             if ($user && $user instanceof \App\Modules\Auth\Models\AdminUser) {
@@ -85,33 +138,16 @@ class InitializeTenancyByRequestData extends IdentificationMiddleware
                 return $next($request);
             }
             
-            \Log::warning('Tenant ID não fornecido', [
+            \Log::warning('Tenant não encontrado', [
                 'url' => $request->url(),
                 'user_id' => $user?->id,
-                'user_type' => $user ? get_class($user) : null,
+                'empresa_id_header' => $request->header('X-Empresa-ID'),
+                'tenant_id_header' => $request->header('X-Tenant-ID'),
                 'headers' => $request->headers->all()
             ]);
             return response()->json([
-                'message' => 'Tenant ID não fornecido. Use o header X-Tenant-ID ou inclua tenant_id no request.',
-                'code' => 'TENANT_ID_REQUIRED'
-            ], 400);
-        }
-
-        // Buscar tenant no banco central
-        // O modelo Tenant usa a conexão padrão (central) por padrão
-        $tenant = \App\Models\Tenant::find($tenantId);
-
-        if (!$tenant) {
-            \Log::warning('Tenant não encontrado no middleware', [
-                'tenant_id' => $tenantId,
-                'url' => $request->url(),
-                'path' => $request->path(),
-                'method' => $request->method(),
-                'headers' => $request->headers->all()
-            ]);
-            return response()->json([
-                'message' => 'Tenant não encontrado.',
-                'tenant_id_procurado' => $tenantId
+                'message' => 'Tenant não encontrado. Verifique se a empresa existe e está vinculada a um tenant.',
+                'code' => 'TENANT_NOT_FOUND'
             ], 404);
         }
 
@@ -257,6 +293,61 @@ class InitializeTenancyByRequestData extends IdentificationMiddleware
         }
         
         return null;
+    }
+
+    /**
+     * Buscar tenant correto baseado na empresa
+     * Itera por todos os tenants procurando a empresa
+     * 
+     * 🔥 CRÍTICO: Garante que o tenant retornado seja o correto da empresa,
+     * não apenas o tenant do header (que pode estar desatualizado)
+     */
+    protected function buscarTenantPorEmpresa(int $empresaId): ?\App\Models\Tenant
+    {
+        // Buscar em todos os tenants
+        $tenants = \App\Models\Tenant::all();
+        
+        foreach ($tenants as $tenant) {
+            try {
+                // Inicializar contexto do tenant
+                tenancy()->initialize($tenant);
+                
+                try {
+                    // Tentar buscar empresa neste tenant
+                    $empresa = \App\Models\Empresa::find($empresaId);
+                    if ($empresa) {
+                        // Empresa encontrada neste tenant - este é o tenant correto
+                        tenancy()->end();
+                        
+                        \Log::info('InitializeTenancyByRequestData::buscarTenantPorEmpresa() - Tenant encontrado', [
+                            'empresa_id' => $empresaId,
+                            'tenant_id' => $tenant->id,
+                            'tenant_razao_social' => $tenant->razao_social,
+                        ]);
+                        
+                        return $tenant;
+                    }
+                } finally {
+                    // Sempre finalizar contexto
+                    if (tenancy()->initialized) {
+                        tenancy()->end();
+                    }
+                }
+            } catch (\Exception $e) {
+                // Se houver erro ao acessar o tenant, continuar para o próximo
+                \Log::debug("Erro ao buscar empresa no tenant {$tenant->id}: " . $e->getMessage());
+                if (tenancy()->initialized) {
+                    tenancy()->end();
+                }
+                continue;
+            }
+        }
+        
+        \Log::warning('InitializeTenancyByRequestData::buscarTenantPorEmpresa() - Empresa não encontrada em nenhum tenant', [
+            'empresa_id' => $empresaId,
+        ]);
+        
+        return null; // Empresa não encontrada em nenhum tenant
     }
 }
 
