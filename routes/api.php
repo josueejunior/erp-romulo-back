@@ -84,7 +84,7 @@ Route::prefix('v1')->group(function () {
     // Rate limiting: 120 requisições por minuto, 1000 por hora
     // Rotas de criação/edição têm rate limiting adicional
     // Rotas autenticadas: aqui sim aplicamos contexto (empresa/tenant) após auth
-    Route::middleware(['auth:sanctum', \App\Http\Middleware\SetAuthContext::class, 'tenancy', 'empresa.context', 'throttle:120,1'])->group(function () {
+    Route::middleware(['auth:sanctum', \App\Http\Middleware\SetAuthContext::class, \App\Http\Middleware\InitializeTenancyByRequestData::class, 'empresa.context', 'throttle:120,1'])->group(function () {
         // Rotas que NÃO precisam de assinatura (exceções)
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::get('/auth/user', [AuthController::class, 'user']);
