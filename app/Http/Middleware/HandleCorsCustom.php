@@ -137,11 +137,19 @@ class HandleCorsCustom
         ]);
         
         try {
-            \Log::debug('HandleCorsCustom - Chamando $next($request)');
+            \Log::debug('HandleCorsCustom - Chamando $next($request)', [
+                'path' => $request->path(),
+                'route' => $request->route() ? $request->route()->getName() : 'NO_ROUTE',
+            ]);
+            
+            // Usar set_time_limit para evitar timeout silencioso
+            set_time_limit(30);
+            
             $response = $next($request);
+            
             \Log::debug('HandleCorsCustom - $next($request) retornou', [
                 'status_code' => $response ? $response->getStatusCode() : 'NULL',
-                'response_type' => get_class($response),
+                'response_type' => $response ? get_class($response) : 'NULL',
             ]);
         } catch (\Throwable $e) {
             \Log::error('HandleCorsCustom - Exceção capturada', [
