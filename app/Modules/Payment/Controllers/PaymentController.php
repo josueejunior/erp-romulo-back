@@ -4,6 +4,8 @@ namespace App\Modules\Payment\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
 use App\Application\Payment\UseCases\ProcessarAssinaturaPlanoUseCase;
+use App\Application\Assinatura\UseCases\CriarAssinaturaUseCase;
+use App\Application\Assinatura\DTOs\CriarAssinaturaDTO;
 use App\Domain\Payment\ValueObjects\PaymentRequest;
 use App\Domain\Plano\Repositories\PlanoRepositoryInterface;
 use App\Http\Requests\Payment\ProcessarAssinaturaRequest;
@@ -11,6 +13,7 @@ use App\Models\Tenant;
 use App\Modules\Assinatura\Models\Assinatura;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use Carbon\Carbon;
 
 /**
  * Controller para processamento de pagamentos
@@ -20,6 +23,7 @@ class PaymentController extends BaseApiController
     public function __construct(
         private ProcessarAssinaturaPlanoUseCase $processarAssinaturaUseCase,
         private PlanoRepositoryInterface $planoRepository,
+        private CriarAssinaturaUseCase $criarAssinaturaUseCase,
     ) {}
 
     /**
@@ -85,6 +89,14 @@ class PaymentController extends BaseApiController
 
             // Se for gratuito, criar assinatura diretamente sem passar pelo gateway
             if ($isGratis) {
+                // 🔥 CRÍTICO: Garantir que o tenancy está inicializado para o tenant correto
+                if (!tenancy()->initialized || tenancy()->tenant->id !== $tenant->id) {
+                    if (tenancy()->initialized) {
+                        tenancy()->end();
+                    }
+                    tenancy()->initialize($tenant);
+                }
+
                 // Buscar assinatura gratuita existente para o MESMO plano
                 $assinaturaModel = Assinatura::where('tenant_id', $tenant->id)
                     ->where('plano_id', $plano->id)
@@ -112,29 +124,26 @@ class PaymentController extends BaseApiController
                         ]);
                     }
 
-                    // Criar nova assinatura gratuita
-                    $dataInicio = now();
+                    // Criar nova assinatura gratuita usando Use Case (garante tenancy correto)
+                    $dataInicio = Carbon::now();
                     $dataFim = $dataInicio->copy()->addDays(14); // Trial de 14 dias
 
-                    $assinaturaModel = Assinatura::create([
-                        'tenant_id' => $tenant->id,
-                        'plano_id' => $plano->id,
-                        'status' => 'ativa',
-                        'data_inicio' => $dataInicio,
-                        'data_fim' => $dataFim,
-                        'valor_pago' => 0,
-                        'metodo_pagamento' => 'gratuito',
-                        'transacao_id' => null,
-                        'dias_grace_period' => 0,
-                        'observacoes' => 'Assinatura gratuita (Trial)',
-                    ]);
-                }
+                    $assinaturaDTO = new CriarAssinaturaDTO(
+                        tenantId: $tenant->id,
+                        planoId: $plano->id,
+                        status: 'ativa',
+                        dataInicio: $dataInicio,
+                        dataFim: $dataFim,
+                        valorPago: 0,
+                        metodoPagamento: 'gratuito',
+                        transacaoId: null,
+                        diasGracePeriod: 0,
+                        observacoes: 'Assinatura gratuita (Trial)',
+                    );
 
-                // IMPORTANTE: Atualizar tenant com assinatura atual (mesmo para planos gratuitos)
-                $tenant->update([
-                    'plano_atual_id' => $plano->id,
-                    'assinatura_atual_id' => $assinaturaModel->id,
-                ]);
+                    $assinaturaDomain = $this->criarAssinaturaUseCase->executar($assinaturaDTO);
+                    $assinaturaModel = Assinatura::find($assinaturaDomain->id);
+                }
 
                 Log::info('Assinatura gratuita criada e vinculada ao tenant', [
                     'tenant_id' => $tenant->id,

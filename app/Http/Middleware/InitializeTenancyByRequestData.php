@@ -304,10 +304,36 @@ class InitializeTenancyByRequestData extends IdentificationMiddleware
      */
     protected function buscarTenantPorEmpresa(int $empresaId): ?\App\Models\Tenant
     {
-        // Buscar em todos os tenants
+        // 🔥 CRÍTICO: Priorizar o tenant atual se já estiver inicializado e tiver a empresa
+        $tenantAtual = tenancy()->tenant;
+        if ($tenantAtual && tenancy()->initialized) {
+            try {
+                $empresa = \App\Models\Empresa::find($empresaId);
+                if ($empresa) {
+                    \Log::info('InitializeTenancyByRequestData::buscarTenantPorEmpresa() - Empresa encontrada no tenant atual', [
+                        'empresa_id' => $empresaId,
+                        'tenant_id' => $tenantAtual->id,
+                        'tenant_razao_social' => $tenantAtual->razao_social,
+                    ]);
+                    return $tenantAtual;
+                }
+            } catch (\Exception $e) {
+                \Log::debug('InitializeTenancyByRequestData::buscarTenantPorEmpresa() - Erro ao verificar tenant atual', [
+                    'tenant_id' => $tenantAtual->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+        
+        // Se não encontrou no tenant atual, buscar em todos os tenants
         $tenants = \App\Models\Tenant::all();
         
         foreach ($tenants as $tenant) {
+            // Pular o tenant atual se já verificamos
+            if ($tenantAtual && $tenant->id === $tenantAtual->id) {
+                continue;
+            }
+            
             try {
                 // Inicializar contexto do tenant
                 tenancy()->initialize($tenant);
