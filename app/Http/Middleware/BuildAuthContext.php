@@ -67,7 +67,13 @@ class BuildAuthContext
             'is_admin' => $identity->isAdminCentral(),
         ]);
 
-        return $next($request);
+        Log::debug('BuildAuthContext::handle - Chamando $next($request)');
+        $response = $next($request);
+        Log::debug('BuildAuthContext::handle - $next($request) retornou', [
+            'status' => method_exists($response, 'getStatusCode') ? $response->getStatusCode() : null,
+        ]);
+
+        return $response;
     }
 }
 

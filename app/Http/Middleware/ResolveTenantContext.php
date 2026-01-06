@@ -31,6 +31,8 @@ class ResolveTenantContext
 
     public function handle(Request $request, Closure $next): Response
     {
+        // 🔥 LOG CRÍTICO: Se este log não aparecer, o middleware não está sendo executado
+        error_log('ResolveTenantContext::handle - ✅ INÍCIO (error_log)');
         Log::info('ResolveTenantContext::handle - ✅ INÍCIO', [
             'path' => $request->path(),
             'method' => $request->method(),

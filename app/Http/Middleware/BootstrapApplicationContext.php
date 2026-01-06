@@ -33,6 +33,8 @@ class BootstrapApplicationContext
 
     public function handle(Request $request, Closure $next): Response
     {
+        // 🔥 LOG CRÍTICO: Se este log não aparecer, o middleware não está sendo executado
+        error_log('BootstrapApplicationContext::handle - ✅ INÍCIO (error_log)');
         Log::info('BootstrapApplicationContext::handle - ✅ INÍCIO', [
             'path' => $request->path(),
         ]);
