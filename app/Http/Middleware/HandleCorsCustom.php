@@ -18,20 +18,34 @@ class HandleCorsCustom
     public function handle(Request $request, Closure $next): Response
     {
         $origin = $request->header('Origin');
-        $allowedOrigins = config('cors.allowed_origins', []);
+        $allowedOrigins = config('cors.allowed_origins', ['*']);
+        
+        // Verificar se permite todas as origens
+        $allowAll = in_array('*', $allowedOrigins);
         
         // Verificar se a origem está permitida
-        $isAllowed = false;
-        if ($origin) {
+        $isAllowed = $allowAll;
+        $allowedOrigin = '*';
+        
+        if ($allowAll) {
+            // Se permite todas as origens, usar a origem específica se disponível
+            // Caso contrário, usar '*'
+            if ($origin) {
+                $allowedOrigin = $origin;
+            }
+        } elseif ($origin) {
             // Verificar se está na lista de origens permitidas
             if (in_array($origin, $allowedOrigins)) {
                 $isAllowed = true;
-            }
-            // Verificar padrões (se houver)
-            foreach (config('cors.allowed_origins_patterns', []) as $pattern) {
-                if (preg_match($pattern, $origin)) {
-                    $isAllowed = true;
-                    break;
+                $allowedOrigin = $origin;
+            } else {
+                // Verificar padrões (se houver)
+                foreach (config('cors.allowed_origins_patterns', []) as $pattern) {
+                    if (preg_match($pattern, $origin)) {
+                        $isAllowed = true;
+                        $allowedOrigin = $origin;
+                        break;
+                    }
                 }
             }
         }
@@ -41,12 +55,13 @@ class HandleCorsCustom
             $response = response('', 204);
             
             if ($isAllowed) {
-                $response->headers->set('Access-Control-Allow-Origin', $origin);
+                $response->headers->set('Access-Control-Allow-Origin', $allowedOrigin);
                 $response->headers->set('Access-Control-Allow-Methods', $this->getAllowedMethods());
                 $response->headers->set('Access-Control-Allow-Headers', $this->getAllowedHeaders());
                 $response->headers->set('Access-Control-Max-Age', config('cors.max_age', 0));
                 
-                if (config('cors.supports_credentials', false)) {
+                // Só adicionar credentials se não for origem *
+                if (config('cors.supports_credentials', false) && !$allowAll) {
                     $response->headers->set('Access-Control-Allow-Credentials', 'true');
                 }
             }
@@ -58,11 +73,12 @@ class HandleCorsCustom
         $response = $next($request);
         
         if ($isAllowed && $response instanceof Response) {
-            $response->headers->set('Access-Control-Allow-Origin', $origin);
+            $response->headers->set('Access-Control-Allow-Origin', $allowedOrigin);
             $response->headers->set('Access-Control-Allow-Methods', $this->getAllowedMethods());
             $response->headers->set('Access-Control-Allow-Headers', $this->getAllowedHeaders());
             
-            if (config('cors.supports_credentials', false)) {
+            // Só adicionar credentials se não for origem *
+            if (config('cors.supports_credentials', false) && !$allowAll) {
                 $response->headers->set('Access-Control-Allow-Credentials', 'true');
             }
             
