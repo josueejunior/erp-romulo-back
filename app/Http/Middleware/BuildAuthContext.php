@@ -32,6 +32,8 @@ class BuildAuthContext
 
     public function handle(Request $request, Closure $next, ?string $scope = null): Response
     {
+        Log::debug('➡ BuildAuthContext entrou', ['path' => $request->path()]);
+        
         $scope = $scope ?? 'api-v1';
 
         // Verificar se usuário está autenticado (deve ter sido definido por AuthenticateJWT)
@@ -50,6 +52,7 @@ class BuildAuthContext
         app()->instance(IAuthIdentity::class, $identity);
         $request->scope = $scope;
 
+        Log::debug('⬅ BuildAuthContext: identidade criada', ['user_id' => $identity->getUserId()]);
         return $next($request);
     }
 }

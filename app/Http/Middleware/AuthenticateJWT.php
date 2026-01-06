@@ -34,6 +34,8 @@ class AuthenticateJWT
 
     public function handle(Request $request, Closure $next): Response
     {
+        Log::debug('➡ AuthenticateJWT entrou', ['path' => $request->path()]);
+
         // 1. Obter token do header Authorization
         $token = $request->bearerToken();
 
@@ -69,6 +71,7 @@ class AuthenticateJWT
             // 5. Definir usuário no guard
             auth()->guard('sanctum')->setUser($user);
 
+            Log::debug('⬅ AuthenticateJWT: autenticado', ['user_id' => $user->id]);
             return $next($request);
 
         } catch (\Exception $e) {

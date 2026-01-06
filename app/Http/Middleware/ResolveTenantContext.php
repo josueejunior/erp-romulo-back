@@ -16,40 +16,41 @@ use Illuminate\Support\Facades\Log;
  * ✅ Faz:
  * - Resolve tenant (header / rota / payload JWT)
  * - Inicializa tenancy: tenancy()->initialize($tenant)
- * - Bind no container
  * 
  * ❌ NUNCA faz:
  * - Autenticação (já foi feita por AuthenticateJWT)
  * - Validação de regras de negócio
- * - Bootstrap de empresa (isso é ApplicationContext)
+ * 
+ * 🔥 IMPORTANTE: Rotas auth.* são ISENTAS de tenant obrigatório
  */
 class ResolveTenantContext
 {
     public function __construct(
         private ApplicationContextContract $context
-    ) {
-        // 🔥 LOG CRÍTICO: Se este log não aparecer, o middleware não está sendo instanciado
-        error_log('ResolveTenantContext::__construct - CONSTRUTOR EXECUTADO (error_log)');
-        Log::emergency('ResolveTenantContext::__construct - CONSTRUTOR EXECUTADO', [
-            'context_class' => get_class($context),
-        ]);
-    }
+    ) {}
 
     public function handle(Request $request, Closure $next): Response
     {
-        // 🔥 LOG CRÍTICO: Se este log não aparecer, o middleware não está sendo executado
-        error_log('ResolveTenantContext::handle - ✅ INÍCIO (error_log)');
-        Log::info('ResolveTenantContext::handle - ✅ INÍCIO', [
-            'path' => $request->path(),
-            'method' => $request->method(),
-        ]);
+        Log::debug('➡ ResolveTenantContext entrou', ['path' => $request->path()]);
+
+        // 🔥 CRÍTICO: Se não há rota resolvida, pular middleware
+        if (!$request->route()) {
+            Log::debug('⬅ ResolveTenantContext: sem rota, pulando');
+            return $next($request);
+        }
+
+        // 🔥 CRÍTICO: Rotas de autenticação NÃO exigem tenant
+        // O frontend precisa chamar essas rotas ANTES de saber o tenant
+        if ($this->isExemptRoute($request)) {
+            Log::debug('⬅ ResolveTenantContext: rota isenta', ['route' => $request->route()->getName()]);
+            return $next($request);
+        }
 
         // Verificar se usuário está autenticado
-        // 🔥 IMPORTANTE: Usar guard 'sanctum' explicitamente (mesmo guard usado por AuthenticateJWT)
         $user = auth('sanctum')->user();
         
         if (!$user) {
-            Log::warning('ResolveTenantContext::handle - Usuário não autenticado');
+            Log::warning('ResolveTenantContext: Usuário não autenticado');
             return response()->json([
                 'message' => 'Não autenticado. Faça login para continuar.',
             ], 401);
@@ -57,34 +58,27 @@ class ResolveTenantContext
 
         // Se for admin, não precisa de tenant
         if ($user instanceof \App\Modules\Auth\Models\AdminUser) {
-            // Garantir que não há tenancy ativo para admin
             if (tenancy()->initialized) {
                 tenancy()->end();
             }
-            Log::debug('ResolveTenantContext::handle - Admin detectado, pulando tenancy');
+            Log::debug('⬅ ResolveTenantContext: admin detectado');
             return $next($request);
         }
 
-        // Resolver tenant_id de múltiplas fontes (prioridade)
+        // Resolver tenant_id de múltiplas fontes
         $tenantId = $this->resolveTenantId($request);
         
         if (!$tenantId) {
-            Log::warning('ResolveTenantContext::handle - Tenant não identificado');
+            Log::warning('ResolveTenantContext: Tenant não identificado');
             return response()->json([
                 'message' => 'Tenant não identificado. Envie o header X-Tenant-ID.',
             ], 400);
         }
 
         // Inicializar tenancy
-        Log::debug('ResolveTenantContext::handle - Inicializando tenancy', [
-            'tenant_id' => $tenantId,
-        ]);
-        
         $tenant = \App\Models\Tenant::find($tenantId);
         if (!$tenant) {
-            Log::warning('ResolveTenantContext::handle - Tenant não encontrado', [
-                'tenant_id' => $tenantId,
-            ]);
+            Log::warning('ResolveTenantContext: Tenant não encontrado', ['tenant_id' => $tenantId]);
             return response()->json([
                 'message' => 'Tenant não encontrado.',
             ], 404);
@@ -92,11 +86,49 @@ class ResolveTenantContext
 
         tenancy()->initialize($tenant);
         
-        Log::info('ResolveTenantContext::handle - ✅ Tenancy inicializado', [
-            'tenant_id' => $tenantId,
-        ]);
+        Log::debug('⬅ ResolveTenantContext: tenancy inicializado', ['tenant_id' => $tenantId]);
 
         return $next($request);
+    }
+
+    /**
+     * Verificar se a rota é isenta de tenant obrigatório
+     */
+    private function isExemptRoute(Request $request): bool
+    {
+        $routeName = $request->route()->getName();
+        
+        // Rotas isentas por nome
+        $exemptPatterns = [
+            'auth.*',           // Login, logout, refresh, etc
+            'login',
+            'logout',
+            'register',
+            'password.*',       // Reset de senha
+            'verification.*',   // Verificação de email
+        ];
+
+        foreach ($exemptPatterns as $pattern) {
+            if ($routeName && fnmatch($pattern, $routeName)) {
+                return true;
+            }
+        }
+
+        // Rotas isentas por path
+        $exemptPaths = [
+            'api/v1/auth/*',
+            'api/auth/*',
+            'auth/*',
+        ];
+
+        $path = $request->path();
+        foreach ($exemptPaths as $exemptPath) {
+            if (fnmatch($exemptPath, $path)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -131,4 +163,3 @@ class ResolveTenantContext
         return null;
     }
 }
-

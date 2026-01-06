@@ -7,171 +7,113 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * 🔥 CORS Middleware - Versão Robusta
+ * 🔥 CORS Middleware - Versão Definitiva
  * 
- * Responsabilidades:
- * 1. Responder OPTIONS (preflight) imediatamente com headers CORS
- * 2. Adicionar headers CORS em todas as respostas (incluindo erros 500)
+ * REGRA: SEMPRE adiciona headers CORS, mesmo em erros 500
+ * 
+ * Pipeline:
+ * 1. OPTIONS → responde 204 com headers CORS
+ * 2. Outras requisições → try/catch garante CORS mesmo em exceção
  */
 class HandleCorsCustom
 {
-    /**
-     * Cache das configurações CORS
-     */
-    private ?array $config = null;
-
-    /**
-     * Handle an incoming request.
-     */
     public function handle(Request $request, Closure $next): Response
     {
-        $config = $this->getConfig();
-        $origin = $request->header('Origin');
-        $allowedOrigin = $this->resolveAllowedOrigin($origin, $config);
-        
-        // Se for OPTIONS (preflight), responder imediatamente
-        if ($request->isMethod('OPTIONS')) {
-            return $this->handlePreflight($allowedOrigin, $config);
+        // OPTIONS (preflight) → responde imediatamente
+        if ($request->getMethod() === 'OPTIONS') {
+            return response('', 204)->withHeaders($this->headers($request));
         }
-        
-        // 🔥 CRÍTICO: Capturar exceções para garantir CORS mesmo em erro 500
+
+        // 🔥 CRÍTICO: try-catch para SEMPRE adicionar CORS
         try {
             $response = $next($request);
         } catch (\Throwable $e) {
-            // Criar resposta de erro 500 COM CORS
-            $response = response()->json([
-                'message' => config('app.debug') ? $e->getMessage() : 'Erro interno do servidor',
-                'file' => config('app.debug') ? $e->getFile() : null,
-                'line' => config('app.debug') ? $e->getLine() : null,
-            ], 500);
-            
-            // Log do erro
-            \Log::error('CORS: erro 500 capturado', [
+            // Log do erro real (para debug)
+            \Log::error('HandleCorsCustom capturou exceção', [
                 'message' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
                 'url' => $request->fullUrl(),
             ]);
+            
+            // Criar resposta de erro COM headers CORS
+            $response = response()->json([
+                'message' => config('app.debug') ? $e->getMessage() : 'Erro interno do servidor',
+                'error' => config('app.debug') ? [
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                ] : null,
+            ], 500);
         }
-        
-        // Adicionar headers CORS na resposta (sempre)
-        return $this->addCorsHeaders($response, $allowedOrigin, $config);
+
+        // SEMPRE adicionar headers CORS na resposta
+        return $response->withHeaders($this->headers($request));
     }
 
     /**
-     * Responder requisição OPTIONS (preflight)
+     * Headers CORS baseados na config
      */
-    private function handlePreflight(?string $allowedOrigin, array $config): Response
+    private function headers(Request $request): array
     {
-        $response = response('', 204);
+        $origin = $request->header('Origin');
+        $allowedOrigin = $this->resolveOrigin($origin);
         
-        if ($allowedOrigin) {
-            $response->headers->set('Access-Control-Allow-Origin', $allowedOrigin);
-            $response->headers->set('Access-Control-Allow-Methods', $this->formatMethods($config['allowed_methods']));
-            $response->headers->set('Access-Control-Allow-Headers', $this->formatHeaders($config['allowed_headers']));
-            $response->headers->set('Access-Control-Max-Age', (string) ($config['max_age'] ?? 0));
-            
-            if ($config['supports_credentials'] && $allowedOrigin !== '*') {
-                $response->headers->set('Access-Control-Allow-Credentials', 'true');
-            }
+        if (!$allowedOrigin) {
+            return [];
         }
-        
-        return $response;
-    }
 
-    /**
-     * Adicionar headers CORS à resposta
-     */
-    public function addCorsHeaders(Response $response, ?string $allowedOrigin = null, ?array $config = null): Response
-    {
-        if ($allowedOrigin === null) {
-            $config = $config ?? $this->getConfig();
-            $origin = request()->header('Origin');
-            $allowedOrigin = $this->resolveAllowedOrigin($origin, $config);
+        $headers = [
+            'Access-Control-Allow-Origin' => $allowedOrigin,
+            'Access-Control-Allow-Methods' => 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers' => 'Content-Type, Authorization, X-Requested-With, X-Tenant-ID, X-Empresa-ID, Accept, Origin',
+            'Access-Control-Max-Age' => '86400',
+        ];
+
+        // Credentials só se não for wildcard
+        if ($allowedOrigin !== '*' && config('cors.supports_credentials', false)) {
+            $headers['Access-Control-Allow-Credentials'] = 'true';
         }
-        
-        $config = $config ?? $this->getConfig();
-        
-        if ($allowedOrigin) {
-            $response->headers->set('Access-Control-Allow-Origin', $allowedOrigin);
-            $response->headers->set('Access-Control-Allow-Methods', $this->formatMethods($config['allowed_methods']));
-            $response->headers->set('Access-Control-Allow-Headers', $this->formatHeaders($config['allowed_headers']));
-            
-            if ($config['supports_credentials'] && $allowedOrigin !== '*') {
-                $response->headers->set('Access-Control-Allow-Credentials', 'true');
-            }
-            
-            if (!empty($config['exposed_headers'])) {
-                $exposed = is_array($config['exposed_headers']) 
-                    ? implode(', ', $config['exposed_headers']) 
-                    : $config['exposed_headers'];
-                $response->headers->set('Access-Control-Expose-Headers', $exposed);
-            }
+
+        // Exposed headers
+        $exposed = config('cors.exposed_headers', []);
+        if (!empty($exposed)) {
+            $headers['Access-Control-Expose-Headers'] = is_array($exposed) ? implode(', ', $exposed) : $exposed;
         }
-        
-        return $response;
+
+        return $headers;
     }
 
     /**
      * Resolver origem permitida
      */
-    private function resolveAllowedOrigin(?string $origin, array $config): ?string
+    private function resolveOrigin(?string $origin): ?string
     {
-        $allowedOrigins = $config['allowed_origins'];
-        
-        if (in_array('*', $allowedOrigins)) {
-            return $origin ?: '*';
-        }
-        
         if (!$origin) {
-            return null;
+            return '*';
         }
+
+        $allowed = config('cors.allowed_origins', ['*']);
         
+        // Wildcard permite tudo
+        if (in_array('*', $allowed)) {
+            return $origin;
+        }
+
+        // Verificar lista exata
         $originLower = strtolower($origin);
-        foreach ($allowedOrigins as $allowed) {
-            if (strtolower($allowed) === $originLower) {
+        foreach ($allowed as $allowedOrigin) {
+            if (strtolower($allowedOrigin) === $originLower) {
                 return $origin;
             }
         }
-        
-        foreach ($config['allowed_origins_patterns'] as $pattern) {
+
+        // Verificar patterns
+        foreach (config('cors.allowed_origins_patterns', []) as $pattern) {
             if (preg_match($pattern, $origin)) {
                 return $origin;
             }
         }
-        
+
         return null;
-    }
-
-    private function formatMethods(array $methods): string
-    {
-        if (in_array('*', $methods)) {
-            return 'GET, POST, PUT, PATCH, DELETE, OPTIONS';
-        }
-        return implode(', ', $methods);
-    }
-
-    private function formatHeaders(array $headers): string
-    {
-        if (in_array('*', $headers)) {
-            return 'Content-Type, Authorization, X-Requested-With, X-Tenant-ID, X-Empresa-ID, Accept, Origin';
-        }
-        return implode(', ', $headers);
-    }
-
-    private function getConfig(): array
-    {
-        if ($this->config === null) {
-            $this->config = [
-                'allowed_origins' => config('cors.allowed_origins', ['*']),
-                'allowed_origins_patterns' => config('cors.allowed_origins_patterns', []),
-                'allowed_methods' => config('cors.allowed_methods', ['*']),
-                'allowed_headers' => config('cors.allowed_headers', ['*']),
-                'exposed_headers' => config('cors.exposed_headers', []),
-                'max_age' => config('cors.max_age', 0),
-                'supports_credentials' => config('cors.supports_credentials', false),
-            ];
-        }
-        return $this->config;
     }
 }
