@@ -41,10 +41,11 @@ class AppServiceProvider extends ServiceProvider
             \App\Services\ApplicationContext::class
         );
         
-        // Registrar também a classe concreta para compatibilidade (deprecated)
-        $this->app->singleton(\App\Services\ApplicationContext::class, function ($app) {
-            return $app->make(\App\Contracts\ApplicationContextContract::class);
-        });
+        // ✅ Alias para compatibilidade: classe concreta -> interface (sem loop)
+        $this->app->alias(
+            \App\Contracts\ApplicationContextContract::class,
+            \App\Services\ApplicationContext::class
+        );
         
         // Registrar modelo customizado do Sanctum para usar timestamps em português
         Sanctum::usePersonalAccessTokenModel(PersonalAccessToken::class);
