@@ -28,12 +28,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'security.headers' => \App\Http\Middleware\SecurityHeaders::class,
         ]);
         
-        // ✅ CORS no grupo api (prepend para tratar OPTIONS antes de autenticação)
-        // prepend no grupo api = após rota ser resolvida, mas ANTES dos middlewares da rota
-        // Isso garante que OPTIONS seja tratado antes de qualquer autenticação
-        $middleware->api(prepend: [
-            \App\Http\Middleware\HandleCorsCustom::class,
-        ]);
+        // ✅ CORS como middleware GLOBAL (prepend)
+        // Isso garante CORS em TODAS as requisições, mesmo em erros antes da rota ser resolvida
+        // O middleware trata OPTIONS e captura exceções para garantir headers CORS
+        $middleware->prepend(\App\Http\Middleware\HandleCorsCustom::class);
         
         // Headers de segurança apenas para rotas web (não interfere com API/CORS)
         $middleware->web(append: [
