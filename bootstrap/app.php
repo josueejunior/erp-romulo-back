@@ -21,13 +21,15 @@ return Application::configure(basePath: dirname(__DIR__))
             'security.headers' => \App\Http\Middleware\SecurityHeaders::class,
         ]);
         
-        // Headers de segurança devem rodar em TODAS as requisições
-        $middleware->prepend(\App\Http\Middleware\SecurityHeaders::class);
-        
-        // Configurar CORS para React
+        // Configurar CORS para React - DEVE rodar ANTES de qualquer outro middleware
         $middleware->api(prepend: [
             \Illuminate\Http\Middleware\HandleCors::class,
             \App\Http\Middleware\HandleApiErrors::class,
+        ]);
+        
+        // Headers de segurança apenas para rotas web (não interfere com API/CORS)
+        $middleware->web(append: [
+            \App\Http\Middleware\SecurityHeaders::class,
         ]);
         
         // Middleware de contexto de empresa deve rodar APÓS autenticação
