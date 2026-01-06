@@ -21,13 +21,15 @@ class HandleCorsCustom
         $method = $request->method();
         $url = $request->fullUrl();
         $allowedOrigins = config('cors.allowed_origins', ['*']);
+        $envCorsValue = env('CORS_ALLOWED_ORIGINS', 'NOT_SET');
         
         // Log inicial da requisição
         \Log::info('HandleCorsCustom - Requisição recebida', [
             'method' => $method,
             'url' => $url,
             'origin' => $origin,
-            'allowed_origins' => $allowedOrigins,
+            'env_CORS_ALLOWED_ORIGINS' => $envCorsValue,
+            'config_cors_allowed_origins' => $allowedOrigins,
             'user_agent' => $request->header('User-Agent'),
             'request_headers' => $request->headers->all(),
         ]);
