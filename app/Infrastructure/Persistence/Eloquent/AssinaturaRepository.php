@@ -22,7 +22,8 @@ class AssinaturaRepository implements AssinaturaRepositoryInterface
     {
         return new Assinatura(
             id: $model->id,
-            tenantId: $model->tenant_id,
+            userId: $model->user_id, // NOVO: userId é obrigatório
+            tenantId: $model->tenant_id, // Mantido para compatibilidade
             planoId: $model->plano_id,
             status: $model->status,
             dataInicio: $model->data_inicio ? Carbon::parse($model->data_inicio) : null,

@@ -10,7 +10,7 @@ use Carbon\Carbon;
 class CriarAssinaturaDTO
 {
     public function __construct(
-        public readonly int $tenantId,
+        public readonly int $userId, // 🔥 NOVO: Assinatura pertence ao usuário
         public readonly int $planoId,
         public readonly string $status = 'ativa',
         public readonly ?Carbon $dataInicio = null,
@@ -20,6 +20,7 @@ class CriarAssinaturaDTO
         public readonly ?string $transacaoId = null,
         public readonly int $diasGracePeriod = 7,
         public readonly ?string $observacoes = null,
+        public readonly ?int $tenantId = null, // Opcional para compatibilidade
     ) {}
 
     /**

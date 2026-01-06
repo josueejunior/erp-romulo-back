@@ -12,7 +12,8 @@ class Assinatura
 {
     public function __construct(
         public readonly ?int $id,
-        public readonly int $tenantId,
+        public readonly ?int $userId, // 🔥 NOVO: Assinatura pertence ao usuário
+        public readonly ?int $tenantId, // Mantido para compatibilidade, mas pode ser nullable
         public readonly int $planoId,
         public readonly string $status,
         public readonly ?Carbon $dataInicio = null,
@@ -29,8 +30,14 @@ class Assinatura
 
     private function validate(): void
     {
-        if ($this->tenantId <= 0) {
-            throw new DomainException('O tenant é obrigatório.');
+        // 🔥 CRÍTICO: userId é obrigatório (assinatura pertence ao usuário)
+        if (!$this->userId || $this->userId <= 0) {
+            throw new DomainException('O usuário é obrigatório para criar uma assinatura.');
+        }
+        
+        // tenantId pode ser nullable agora (opcional para compatibilidade)
+        if ($this->tenantId !== null && $this->tenantId <= 0) {
+            throw new DomainException('O tenant_id deve ser válido se fornecido.');
         }
 
         if ($this->planoId <= 0) {
