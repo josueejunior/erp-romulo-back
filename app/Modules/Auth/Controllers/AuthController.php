@@ -44,11 +44,17 @@ class AuthController extends Controller
     public function login(LoginRequest $request)
     {
         try {
+            \Log::info('AuthController::login - Iniciando login', [
+                'email' => $request->input('email'),
+                'has_tenant_id' => !empty($request->input('tenant_id')),
+            ]);
+            
             // Request já está validado via Form Request
             $validated = $request->validated();
 
             // Verificar se é admin - se for, autenticar como admin
             // Usar Use Case DDD para buscar admin user
+            \Log::debug('AuthController::login - Buscando admin user');
             $adminUser = $this->buscarAdminUserPorEmailUseCase->executar($validated['email']);
             
             // Prevenir enumeração: sempre usar mesmo tempo de resposta
@@ -85,10 +91,16 @@ class AuthController extends Controller
             }
 
             // Criar DTO
+            \Log::debug('AuthController::login - Criando LoginDTO');
             $dto = LoginDTO::fromRequest($request);
 
             // Executar Use Case (aqui está a lógica)
+            \Log::debug('AuthController::login - Executando LoginUseCase', [
+                'email' => $dto->email,
+                'has_tenant_id' => !empty($dto->tenantId),
+            ]);
             $data = $this->loginUseCase->executar($dto);
+            \Log::info('AuthController::login - LoginUseCase executado com sucesso');
 
             // Usar Resource para padronizar resposta
             $authData = array_merge($data, ['is_admin' => false]);

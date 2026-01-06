@@ -151,20 +151,29 @@ return Application::configure(basePath: dirname(__DIR__))
         
         // Exceções genéricas não tratadas - Internal Server Error (500)
         $exceptions->render(function (\Throwable $e, $request) use ($addCorsToResponse) {
+            // Logar TODAS as exceções não tratadas, mesmo que não sejam JSON
+            \Log::error('Exceção não tratada no Exception Handler', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'url' => $request->fullUrl(),
+                'method' => $request->method(),
+                'class' => get_class($e),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null,
+                'previous' => $e->getPrevious() ? [
+                    'message' => $e->getPrevious()->getMessage(),
+                    'file' => $e->getPrevious()->getFile(),
+                    'line' => $e->getPrevious()->getLine(),
+                ] : null,
+            ]);
+            
             if ($request->expectsJson() && !($e instanceof \Illuminate\Validation\ValidationException)) {
-                \Log::error('Exceção não tratada no Exception Handler', [
-                    'message' => $e->getMessage(),
-                    'file' => $e->getFile(),
-                    'line' => $e->getLine(),
-                    'url' => $request->fullUrl(),
-                    'method' => $request->method(),
-                    'trace' => config('app.debug') ? $e->getTraceAsString() : null,
-                ]);
-                
                 $response = response()->json([
                     'message' => config('app.debug') 
                         ? $e->getMessage() 
                         : 'Erro interno do servidor',
+                    'file' => config('app.debug') ? $e->getFile() : null,
+                    'line' => config('app.debug') ? $e->getLine() : null,
                 ], 500);
                 return $addCorsToResponse($response, $request);
             }

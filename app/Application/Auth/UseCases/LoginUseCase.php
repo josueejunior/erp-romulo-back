@@ -32,35 +32,46 @@ class LoginUseCase
      */
     public function executar(LoginDTO $dto): array
     {
-        // Validar email usando Value Object
-        $email = Email::criar($dto->email);
-
-        // Se tenant_id não foi fornecido, tentar detectar automaticamente
-        $tenant = null;
-        if ($dto->tenantId) {
-            // 🔥 ARQUITETURA LIMPA: Usar TenantRepository em vez de Eloquent direto
-            $tenantDomain = $this->tenantRepository->buscarPorId($dto->tenantId);
-            if (!$tenantDomain) {
-                throw new DomainException('Tenant não encontrado.');
-            }
-            // Converter para Model (necessário para tenancy()->initialize())
-            $tenant = $this->tenantRepository->buscarModeloPorId($dto->tenantId);
-            if (!$tenant) {
-                throw new DomainException('Tenant não encontrado.');
-            }
-        } else {
-            // Buscar tenant automaticamente pelo email
-            $tenant = $this->buscarTenantPorEmail($email->value);
-            if (!$tenant) {
-                throw new DomainException('Usuário não encontrado em nenhum tenant. Verifique suas credenciais.');
-            }
-        }
-
-        // Inicializar contexto do tenant
-        tenancy()->initialize($tenant);
-
+        \Log::info('LoginUseCase::executar - Iniciando', [
+            'email' => $dto->email,
+            'has_tenant_id' => !empty($dto->tenantId),
+        ]);
+        
         try {
+            // Validar email usando Value Object
+            \Log::debug('LoginUseCase::executar - Criando Email Value Object');
+            $email = Email::criar($dto->email);
+            \Log::debug('LoginUseCase::executar - Email Value Object criado', ['email' => $email->value]);
+
+            // Se tenant_id não foi fornecido, tentar detectar automaticamente
+            $tenant = null;
+            if ($dto->tenantId) {
+                \Log::debug('LoginUseCase::executar - Buscando tenant por ID', ['tenant_id' => $dto->tenantId]);
+                // 🔥 ARQUITETURA LIMPA: Usar TenantRepository em vez de Eloquent direto
+                $tenantDomain = $this->tenantRepository->buscarPorId($dto->tenantId);
+                if (!$tenantDomain) {
+                    throw new DomainException('Tenant não encontrado.');
+                }
+                // Converter para Model (necessário para tenancy()->initialize())
+                $tenant = $this->tenantRepository->buscarModeloPorId($dto->tenantId);
+                if (!$tenant) {
+                    throw new DomainException('Tenant não encontrado.');
+                }
+            } else {
+                \Log::debug('LoginUseCase::executar - Buscando tenant automaticamente por email');
+                // Buscar tenant automaticamente pelo email
+                $tenant = $this->buscarTenantPorEmail($email->value);
+                if (!$tenant) {
+                    throw new DomainException('Usuário não encontrado em nenhum tenant. Verifique suas credenciais.');
+                }
+            }
+
+            \Log::debug('LoginUseCase::executar - Inicializando tenancy', ['tenant_id' => $tenant->id]);
+            // Inicializar contexto do tenant
+            tenancy()->initialize($tenant);
+
             // Buscar usuário no banco do tenant através do repository
+            \Log::debug('LoginUseCase::executar - Buscando usuário por email');
             $user = $this->userRepository->buscarPorEmail($email->value);
 
             if (!$user) {
@@ -68,12 +79,14 @@ class LoginUseCase
             }
 
             // Validar senha usando Value Object
+            \Log::debug('LoginUseCase::executar - Validando senha');
             $senha = new Senha($user->senhaHash);
             if (!$senha->verificar($dto->password)) {
                 throw new DomainException('Credenciais inválidas.');
             }
 
             // Obter empresa ativa do usuário
+            \Log::debug('LoginUseCase::executar - Buscando empresa ativa');
             $empresaAtiva = $this->userRepository->buscarEmpresaAtiva($user->id);
             
             // Se não tem empresa ativa, buscar primeira empresa
@@ -91,6 +104,7 @@ class LoginUseCase
             // A empresa ativa pode estar em outro tenant que não o onde o usuário foi encontrado
             $tenantCorreto = $tenant; // Fallback: usar tenant onde usuário foi encontrado
             if ($empresaAtiva) {
+                \Log::debug('LoginUseCase::executar - Buscando tenant correto por empresa', ['empresa_id' => $empresaAtiva->id]);
                 $tenantCorreto = $this->buscarTenantPorEmpresa($empresaAtiva->id);
                 if (!$tenantCorreto) {
                     // Se não encontrou, usar o tenant onde o usuário foi encontrado
@@ -110,8 +124,14 @@ class LoginUseCase
 
             // Criar token (infraestrutura - Sanctum)
             // Nota: Token é criado no modelo Eloquent, mas isso é aceitável pois é detalhe de infraestrutura
+            \Log::debug('LoginUseCase::executar - Criando token');
             $userModel = \App\Modules\Auth\Models\User::find($user->id);
             $token = $userModel->createToken('api-token', ['tenant_id' => $tenantCorreto->id])->plainTextToken;
+
+            \Log::info('LoginUseCase::executar - Login realizado com sucesso', [
+                'user_id' => $user->id,
+                'tenant_id' => $tenantCorreto->id,
+            ]);
 
             return [
                 'user' => [
@@ -131,6 +151,20 @@ class LoginUseCase
                 ] : null,
                 'token' => $token,
             ];
+        } catch (\Exception $e) {
+            \Log::error('LoginUseCase::executar - Erro capturado', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'class' => get_class($e),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null,
+                'previous' => $e->getPrevious() ? [
+                    'message' => $e->getPrevious()->getMessage(),
+                    'file' => $e->getPrevious()->getFile(),
+                    'line' => $e->getPrevious()->getLine(),
+                ] : null,
+            ]);
+            throw $e; // Re-lançar para ser capturado pelo controller
         } finally {
             // Finalizar contexto do tenant
             if (tenancy()->initialized) {
@@ -147,9 +181,15 @@ class LoginUseCase
      */
     private function buscarTenantPorEmail(string $email): ?Tenant
     {
+        \Log::debug('LoginUseCase::buscarTenantPorEmail - Iniciando busca', ['email' => $email]);
+        
         // Buscar todos os tenants usando repository (Domain, não Eloquent)
         $tenantsPaginator = $this->tenantRepository->buscarComFiltros([
             'per_page' => 1000, // Buscar todos
+        ]);
+        
+        \Log::debug('LoginUseCase::buscarTenantPorEmail - Tenants encontrados', [
+            'total' => $tenantsPaginator->total(),
         ]);
         
         foreach ($tenantsPaginator->items() as $tenantDomain) {
@@ -161,6 +201,10 @@ class LoginUseCase
                 });
                 
                 if ($user) {
+                    \Log::info('LoginUseCase::buscarTenantPorEmail - Usuário encontrado', [
+                        'tenant_id' => $tenantDomain->id,
+                        'user_id' => $user->id,
+                    ]);
                     // Converter Domain Entity para Model (necessário para tenancy()->initialize())
                     $tenantModel = $this->tenantRepository->buscarModeloPorId($tenantDomain->id);
                     return $tenantModel; // Usuário encontrado neste tenant
@@ -173,6 +217,9 @@ class LoginUseCase
             }
         }
         
+        \Log::warning('LoginUseCase::buscarTenantPorEmail - Usuário não encontrado em nenhum tenant', [
+            'email' => $email,
+        ]);
         return null; // Usuário não encontrado em nenhum tenant
     }
 

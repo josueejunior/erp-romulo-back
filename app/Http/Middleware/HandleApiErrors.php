@@ -19,8 +19,17 @@ class HandleApiErrors
      */
     public function handle(Request $request, Closure $next): Response
     {
+        \Log::info('HandleApiErrors::handle - Iniciando', [
+            'url' => $request->fullUrl(),
+            'method' => $request->method(),
+        ]);
+        
         try {
             $response = $next($request);
+            
+            \Log::debug('HandleApiErrors::handle - Resposta recebida', [
+                'status' => $response->getStatusCode(),
+            ]);
             
             // Log erros 5xx
             if ($response->getStatusCode() >= 500) {
