@@ -16,13 +16,18 @@ use Symfony\Component\HttpFoundation\Response;
 class InitializeTenancyByRequestData
 {
     public function __construct(
-        private ApplicationContextContract $context
+        private ?ApplicationContextContract $context = null
     ) {
         // Log no construtor para verificar se está sendo instanciado
         error_log('InitializeTenancyByRequestData::__construct - CONSTRUTOR EXECUTADO');
-        \Log::emergency('InitializeTenancyByRequestData::__construct - CONSTRUTOR EXECUTADO', [
-            'context_class' => get_class($context),
-        ]);
+        try {
+            \Log::emergency('InitializeTenancyByRequestData::__construct - CONSTRUTOR EXECUTADO', [
+                'context_class' => $context ? get_class($context) : 'NULL',
+                'context_resolved' => $context !== null,
+            ]);
+        } catch (\Exception $e) {
+            error_log('InitializeTenancyByRequestData::__construct - ERRO NO LOG: ' . $e->getMessage());
+        }
     }
     
     /**
@@ -40,7 +45,22 @@ class InitializeTenancyByRequestData
             'method' => $request->method(),
             'url' => $request->fullUrl(),
             'memory' => memory_get_usage(true),
+            'context_exists' => $this->context !== null,
         ]);
+        
+        // Se não há context, tentar resolver
+        if (!$this->context) {
+            \Log::warning('InitializeTenancyByRequestData::handle - Context não injetado, tentando resolver');
+            try {
+                $this->context = app(ApplicationContextContract::class);
+                \Log::info('InitializeTenancyByRequestData::handle - Context resolvido via container');
+            } catch (\Exception $e) {
+                \Log::error('InitializeTenancyByRequestData::handle - Erro ao resolver context', [
+                    'error' => $e->getMessage(),
+                ]);
+                throw $e;
+            }
+        }
         
         try {
             \Log::debug('InitializeTenancyByRequestData::handle - Chamando context->bootstrap()');
