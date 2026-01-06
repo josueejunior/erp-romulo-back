@@ -133,11 +133,11 @@ class InitializeApplicationContext
             return (int) $request->input('tenant_id');
         }
         
-        // Prioridade 3: Tenant do token Sanctum
-        if (method_exists($user, 'currentAccessToken') && $user->currentAccessToken()) {
-            $abilities = $user->currentAccessToken()->abilities ?? [];
-            if (isset($abilities['tenant_id'])) {
-                return (int) $abilities['tenant_id'];
+        // 🔥 JWT STATELESS: Prioridade 3: Tenant do payload JWT
+        if ($request->attributes->has('auth')) {
+            $payload = $request->attributes->get('auth');
+            if (isset($payload['tenant_id'])) {
+                return (int) $payload['tenant_id'];
             }
         }
         
