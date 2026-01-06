@@ -40,32 +40,15 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(\App\Http\Middleware\EnsureEmpresaAtivaContext::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        // Helper para adicionar CORS em respostas de erro
+        // 🔥 ARQUITETURA LIMPA: Usar HandleCorsCustom como único responsável por CORS
+        // Helper que delega para o middleware centralizado
         $addCorsToResponse = function ($response, $request) {
-            if (!$request->expectsJson()) {
+            if (!$request->expectsJson() || !($response instanceof \Symfony\Component\HttpFoundation\Response)) {
                 return $response;
             }
             
-            $origin = $request->header('Origin');
-            $allowedOrigins = config('cors.allowed_origins', ['*']);
-            $allowAll = in_array('*', $allowedOrigins);
-            $isAllowed = $allowAll;
-            $allowedOrigin = '*';
-            
-            if ($allowAll && $origin) {
-                $allowedOrigin = $origin;
-            } elseif ($origin && in_array($origin, $allowedOrigins)) {
-                $isAllowed = true;
-                $allowedOrigin = $origin;
-            }
-            
-            if ($isAllowed) {
-                $response->headers->set('Access-Control-Allow-Origin', $allowedOrigin);
-                $response->headers->set('Access-Control-Allow-Methods', implode(', ', config('cors.allowed_methods', ['*'])));
-                $response->headers->set('Access-Control-Allow-Headers', implode(', ', config('cors.allowed_headers', ['*'])));
-            }
-            
-            return $response;
+            // Delegar para HandleCorsCustom (único dono da lógica CORS)
+            return app(\App\Http\Middleware\HandleCorsCustom::class)->addCorsHeaders($request, $response);
         };
         
         // Exceções de Domínio - Bad Request (400)

@@ -9,12 +9,17 @@ return [
     // Origens permitidas
     // Se CORS_ALLOWED_ORIGINS estiver definido no .env, usa ele
     // Caso contrário, usa a lista abaixo
-    'allowed_origins' => env('CORS_ALLOWED_ORIGINS') 
-        ? explode(',', env('CORS_ALLOWED_ORIGINS'))
-        : [
-            'https://gestor.addsimp.com',
-            'https://www.gestor.addsimp.com',
-        ],
+    'allowed_origins' => array_filter(
+        array_map(
+            'trim',
+            env('CORS_ALLOWED_ORIGINS') 
+                ? explode(',', env('CORS_ALLOWED_ORIGINS'))
+                : [
+                    'https://gestor.addsimp.com',
+                    'https://www.gestor.addsimp.com',
+                ]
+        )
+    ),
 
     'allowed_origins_patterns' => [],
 

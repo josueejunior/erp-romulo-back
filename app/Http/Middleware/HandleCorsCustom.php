@@ -152,29 +152,18 @@ class HandleCorsCustom
                 'trace' => config('app.debug') ? $e->getTraceAsString() : null,
             ]);
             
-            // Criar resposta de erro com headers CORS ANTES de relançar
-            // Isso garante que mesmo em caso de erro, os headers CORS sejam enviados
+            // Criar resposta de erro e adicionar CORS usando método centralizado
             $errorResponse = response()->json([
                 'message' => config('app.debug') ? $e->getMessage() : 'Erro interno do servidor',
             ], 500);
             
-            // Adicionar headers CORS na resposta de erro
-            if ($isAllowed && $errorResponse instanceof Response) {
-                $errorResponse->headers->set('Access-Control-Allow-Origin', $allowedOrigin);
-                $errorResponse->headers->set('Access-Control-Allow-Methods', $this->getAllowedMethods());
-                $errorResponse->headers->set('Access-Control-Allow-Headers', $this->getAllowedHeaders());
-                
-                if (config('cors.supports_credentials', false) && !$allowAll) {
-                    $errorResponse->headers->set('Access-Control-Allow-Credentials', 'true');
-                }
-                
-                \Log::info('HandleCorsCustom - Headers CORS adicionados na resposta de erro', [
-                    'Access-Control-Allow-Origin' => $allowedOrigin,
-                ]);
-            }
+            // Adicionar headers CORS usando método centralizado
+            $errorResponse = $this->addCorsHeaders($request, $errorResponse);
             
-            // Retornar resposta de erro com CORS em vez de relançar
-            // O Exception Handler também vai adicionar CORS, mas isso garante que sempre tenha
+            \Log::info('HandleCorsCustom - Headers CORS adicionados na resposta de erro', [
+                'has_cors_origin' => $errorResponse->headers->has('Access-Control-Allow-Origin'),
+            ]);
+            
             return $errorResponse;
         } catch (\Error $e) {
             // Capturar erros fatais do PHP (PHP 7+)
@@ -186,31 +175,77 @@ class HandleCorsCustom
                 'trace' => config('app.debug') ? $e->getTraceAsString() : null,
             ]);
             
-            // Criar resposta de erro com headers CORS
+            // Criar resposta de erro e adicionar CORS usando método centralizado
             $errorResponse = response()->json([
                 'message' => config('app.debug') ? $e->getMessage() : 'Erro interno do servidor',
             ], 500);
             
-            if ($isAllowed && $errorResponse instanceof Response) {
-                $errorResponse->headers->set('Access-Control-Allow-Origin', $allowedOrigin);
-                $errorResponse->headers->set('Access-Control-Allow-Methods', $this->getAllowedMethods());
-                $errorResponse->headers->set('Access-Control-Allow-Headers', $this->getAllowedHeaders());
-                
-                if (config('cors.supports_credentials', false) && !$allowAll) {
-                    $errorResponse->headers->set('Access-Control-Allow-Credentials', 'true');
-                }
-            }
+            // Adicionar headers CORS usando método centralizado
+            $errorResponse = $this->addCorsHeaders($request, $errorResponse);
             
             return $errorResponse;
         }
         
-        // Adicionar headers CORS na resposta normal
+        // Adicionar headers CORS na resposta normal usando método centralizado
+        $response = $this->addCorsHeaders($request, $response);
+        
+        \Log::info('HandleCorsCustom - Headers CORS adicionados na resposta normal', [
+            'status_code' => $response->getStatusCode(),
+            'has_cors_origin' => $response->headers->has('Access-Control-Allow-Origin'),
+        ]);
+        
+        return $response;
+    }
+    
+    /**
+     * Adicionar headers CORS à resposta
+     * 
+     * 🔥 MÉTODO PÚBLICO: Único lugar que adiciona CORS headers
+     * Pode ser chamado por outros middlewares/handlers quando necessário
+     * 
+     * @param Request $request
+     * @param Response $response
+     * @return Response
+     */
+    public function addCorsHeaders(Request $request, Response $response): Response
+    {
+        $origin = $request->header('Origin');
+        $allowedOrigins = config('cors.allowed_origins', ['*']);
+        $allowAll = in_array('*', $allowedOrigins);
+        
+        // Verificar se a origem está permitida
+        $isAllowed = false;
+        $allowedOrigin = null;
+        
+        if ($allowAll) {
+            $isAllowed = true;
+            $allowedOrigin = $origin ?: '*';
+        } elseif ($origin) {
+            // Comparação case-insensitive
+            $allowedOriginsNormalized = array_map('strtolower', $allowedOrigins);
+            $originNormalized = strtolower($origin);
+            
+            if (in_array($originNormalized, $allowedOriginsNormalized)) {
+                $isAllowed = true;
+                $allowedOrigin = $origin;
+            } else {
+                // Verificar padrões (se houver)
+                foreach (config('cors.allowed_origins_patterns', []) as $pattern) {
+                    if (preg_match($pattern, $origin)) {
+                        $isAllowed = true;
+                        $allowedOrigin = $origin;
+                        break;
+                    }
+                }
+            }
+        }
+        
         if ($isAllowed && $response instanceof Response) {
             $response->headers->set('Access-Control-Allow-Origin', $allowedOrigin);
             $response->headers->set('Access-Control-Allow-Methods', $this->getAllowedMethods());
             $response->headers->set('Access-Control-Allow-Headers', $this->getAllowedHeaders());
             
-            // Só adicionar credentials se não for origem *
+            // Só adicionar credentials se não for origem * e se configurado
             if (config('cors.supports_credentials', false) && !$allowAll) {
                 $response->headers->set('Access-Control-Allow-Credentials', 'true');
             }
@@ -224,18 +259,6 @@ class HandleCorsCustom
                     $response->headers->set('Access-Control-Expose-Headers', $exposedHeaders);
                 }
             }
-            
-            \Log::info('HandleCorsCustom - Headers CORS adicionados na resposta normal', [
-                'Access-Control-Allow-Origin' => $allowedOrigin,
-                'status_code' => $response->getStatusCode(),
-                'response_headers' => $response->headers->all(),
-            ]);
-        } else {
-            \Log::warning('HandleCorsCustom - Headers CORS NÃO adicionados na resposta normal', [
-                'is_allowed' => $isAllowed,
-                'is_response' => $response instanceof Response,
-                'origin' => $origin,
-            ]);
         }
         
         return $response;

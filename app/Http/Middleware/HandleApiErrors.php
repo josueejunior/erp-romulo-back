@@ -75,7 +75,8 @@ class HandleApiErrors
                 'X-RateLimit-Remaining' => $headers['X-RateLimit-Remaining'] ?? '0',
             ]);
             
-            return $this->addCorsHeaders($request, $response);
+            // 🔥 ARQUITETURA LIMPA: Usar método centralizado do HandleCorsCustom
+            return app(\App\Http\Middleware\HandleCorsCustom::class)->addCorsHeaders($request, $response);
         } catch (ValidationException $e) {
             $errors = $e->errors();
             
@@ -94,7 +95,8 @@ class HandleApiErrors
                 'errors' => $errors,
             ], 422);
             
-            return $this->addCorsHeaders($request, $response);
+            // 🔥 ARQUITETURA LIMPA: Usar método centralizado do HandleCorsCustom
+            return app(\App\Http\Middleware\HandleCorsCustom::class)->addCorsHeaders($request, $response);
         } catch (ModelNotFoundException $e) {
             \Log::warning('Model não encontrado', [
                 'model' => class_basename($e->getModel()),
@@ -105,13 +107,15 @@ class HandleApiErrors
                 'message' => 'Recurso não encontrado',
             ], 404);
             
-            return $this->addCorsHeaders($request, $response);
+            // 🔥 ARQUITETURA LIMPA: Usar método centralizado do HandleCorsCustom
+            return app(\App\Http\Middleware\HandleCorsCustom::class)->addCorsHeaders($request, $response);
         } catch (AuthenticationException $e) {
             $response = response()->json([
                 'message' => 'Não autenticado',
             ], 401);
             
-            return $this->addCorsHeaders($request, $response);
+            // 🔥 ARQUITETURA LIMPA: Usar método centralizado do HandleCorsCustom
+            return app(\App\Http\Middleware\HandleCorsCustom::class)->addCorsHeaders($request, $response);
         } catch (\Exception $e) {
             \Log::error('Erro não tratado na API', [
                 'message' => $e->getMessage(),
@@ -128,82 +132,9 @@ class HandleApiErrors
                     : 'Erro interno do servidor',
             ], 500);
             
-            return $this->addCorsHeaders($request, $response);
+            // 🔥 ARQUITETURA LIMPA: Usar método centralizado do HandleCorsCustom
+            return app(\App\Http\Middleware\HandleCorsCustom::class)->addCorsHeaders($request, $response);
         }
-    }
-    
-    /**
-     * Adicionar headers CORS à resposta usando a mesma lógica do HandleCorsCustom
-     */
-    protected function addCorsHeaders(Request $request, Response $response): Response
-    {
-        $origin = $request->header('Origin');
-        $allowedOrigins = config('cors.allowed_origins', ['*']);
-        
-        // Verificar se permite todas as origens (mesma lógica do HandleCorsCustom)
-        $allowAll = in_array('*', $allowedOrigins);
-        
-        // Verificar se a origem está permitida
-        $isAllowed = $allowAll;
-        $allowedOrigin = '*';
-        
-        if ($allowAll) {
-            // Se permite todas as origens, usar a origem específica se disponível
-            if ($origin) {
-                $allowedOrigin = $origin;
-            }
-        } elseif ($origin) {
-            // Verificar se está na lista de origens permitidas
-            if (in_array($origin, $allowedOrigins)) {
-                $isAllowed = true;
-                $allowedOrigin = $origin;
-            }
-            // Verificar padrões (se houver)
-            foreach (config('cors.allowed_origins_patterns', []) as $pattern) {
-                if (preg_match($pattern, $origin)) {
-                    $isAllowed = true;
-                    $allowedOrigin = $origin;
-                    break;
-                }
-            }
-        }
-        
-        if ($isAllowed) {
-            $response->headers->set('Access-Control-Allow-Origin', $allowedOrigin);
-            $response->headers->set('Access-Control-Allow-Methods', $this->getAllowedMethods());
-            $response->headers->set('Access-Control-Allow-Headers', $this->getAllowedHeaders());
-            
-            // Só adicionar credentials se não for origem * e se configurado
-            if (config('cors.supports_credentials', false) && !$allowAll) {
-                $response->headers->set('Access-Control-Allow-Credentials', 'true');
-            }
-        }
-        
-        return $response;
-    }
-    
-    /**
-     * Obter métodos permitidos formatados
-     */
-    protected function getAllowedMethods(): string
-    {
-        $allowedMethods = config('cors.allowed_methods', ['*']);
-        if (is_array($allowedMethods)) {
-            return implode(', ', $allowedMethods);
-        }
-        return $allowedMethods;
-    }
-    
-    /**
-     * Obter headers permitidos formatados
-     */
-    protected function getAllowedHeaders(): string
-    {
-        $allowedHeaders = config('cors.allowed_headers', ['*']);
-        if (is_array($allowedHeaders)) {
-            return implode(', ', $allowedHeaders);
-        }
-        return $allowedHeaders;
     }
 }
 
