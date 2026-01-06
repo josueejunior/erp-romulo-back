@@ -45,6 +45,11 @@ class SecurityHeaders
      */
     public function handle(Request $request, Closure $next): Response
     {
+        // Não interferir com requisições OPTIONS (preflight CORS)
+        if ($request->isMethod('OPTIONS')) {
+            return $next($request);
+        }
+        
         $response = $next($request);
         
         // Se não for uma Response válida, retornar sem modificar

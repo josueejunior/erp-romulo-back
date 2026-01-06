@@ -6,11 +6,10 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => array_filter(
-        array_map('trim', 
-            explode(',', env('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173,https://addireta.com,https://www.addireta.com'))
-        )
-    ),
+    // Permitir todas as origens (API pública)
+    // Se quiser restringir, defina CORS_ALLOWED_ORIGINS no .env
+    // IMPORTANTE: Se CORS_ALLOWED_ORIGINS não estiver definido ou estiver vazio, permite todas as origens (*)
+    'allowed_origins' => ['*'],
 
     'allowed_origins_patterns' => [],
 
@@ -20,7 +19,9 @@ return [
 
     'max_age' => 0,
 
-    'supports_credentials' => true,
+    // Quando allowed_origins é '*', supports_credentials deve ser false
+    // (restrição do CORS: não pode usar credentials com origem *)
+    'supports_credentials' => false,
 
 ];
 
