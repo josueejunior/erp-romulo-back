@@ -256,5 +256,11 @@ class AppServiceProvider extends ServiceProvider
             \App\Domain\Tenant\Events\EmpresaVinculada::class,
             \App\Listeners\EmpresaVinculadaListener::class
         );
+
+        // Listener para enviar email de boas-vindas após login
+        \Illuminate\Support\Facades\Event::listen(
+            \Illuminate\Auth\Events\Login::class,
+            \App\Listeners\EnviarEmailBemVindo::class
+        );
     }
 }
