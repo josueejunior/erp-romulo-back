@@ -22,6 +22,14 @@ class CalendarioDisputasController extends BaseApiController
      */
     public function index(Request $request)
     {
+        // Verificar se o plano tem acesso a calendários
+        $tenant = tenancy()->tenant;
+        if (!$tenant || !$tenant->temAcessoCalendario()) {
+            return response()->json([
+                'message' => 'O calendário não está disponível no seu plano. Faça upgrade para o plano Profissional ou superior.',
+            ], 403);
+        }
+
         $empresa = $this->getEmpresaAtivaOrFail();
         $query = Processo::where('empresa_id', $empresa->id)
             ->whereIn('status', ['participacao', 'julgamento_habilitacao'])
@@ -107,6 +115,14 @@ class CalendarioDisputasController extends BaseApiController
      */
     public function eventos(Request $request)
     {
+        // Verificar se o plano tem acesso a calendários
+        $tenant = tenancy()->tenant;
+        if (!$tenant || !$tenant->temAcessoCalendario()) {
+            return response()->json([
+                'message' => 'O calendário não está disponível no seu plano. Faça upgrade para o plano Profissional ou superior.',
+            ], 403);
+        }
+
         $empresa = $this->getEmpresaAtivaOrFail();
         
         // Filtrar APENAS processos da empresa ativa (não incluir NULL)

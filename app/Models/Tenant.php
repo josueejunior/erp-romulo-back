@@ -220,7 +220,7 @@ class Tenant extends BaseTenant implements TenantWithDatabase
     }
 
     /**
-     * Verifica se pode criar processo (dentro do limite)
+     * Verifica se pode criar processo (dentro do limite mensal e diário)
      */
     public function podeCriarProcesso(): bool
     {
@@ -230,27 +230,67 @@ class Tenant extends BaseTenant implements TenantWithDatabase
 
         $plano = $this->planoAtual;
         
-        // Se não tem limite, pode criar
-        if (!$plano || $plano->temProcessosIlimitados()) {
+        if (!$plano) {
+            return false;
+        }
+
+        // Se não tem limite, pode criar (mas ainda precisa verificar restrição diária)
+        $temProcessosIlimitados = $plano->temProcessosIlimitados();
+        
+        // Verificar restrição diária (1 processo por dia)
+        if ($plano->temRestricaoDiaria()) {
+            try {
+                $jaInicializado = tenancy()->initialized;
+                if (!$jaInicializado) {
+                    tenancy()->initialize($this);
+                }
+                
+                // Verificar se já existe processo criado hoje
+                $hoje = now()->startOfDay();
+                $amanha = now()->copy()->addDay()->startOfDay();
+                
+                $processosHoje = \App\Modules\Processo\Models\Processo::whereBetween('criado_em', [$hoje, $amanha])->count();
+                
+                if (!$jaInicializado) {
+                    tenancy()->end();
+                }
+                
+                // Se já tem processo criado hoje, não pode criar outro
+                if ($processosHoje > 0) {
+                    return false;
+                }
+            } catch (\Exception $e) {
+                // Se houver erro, assumir que pode criar (fail open)
+                \Log::warning('Erro ao verificar restrição diária de processos', [
+                    'tenant_id' => $this->id,
+                    'error' => $e->getMessage()
+                ]);
+            }
+        }
+
+        // Se tem processos ilimitados e passou pela restrição diária (ou não tem), pode criar
+        if ($temProcessosIlimitados) {
             return true;
         }
 
-        // Contar processos ativos no tenant
-        // Nota: Este método deve ser chamado dentro do contexto do tenant
-        // Para contar corretamente, precisa estar no banco do tenant
+        // Verificar limite mensal de processos
         try {
             $jaInicializado = tenancy()->initialized;
             if (!$jaInicializado) {
                 tenancy()->initialize($this);
             }
             
-            $processosAtivos = \App\Models\Processo::count();
+            // Contar processos criados no mês atual
+            $inicioMes = now()->startOfMonth();
+            $fimMes = now()->copy()->endOfMonth();
+            
+            $processosMes = \App\Modules\Processo\Models\Processo::whereBetween('criado_em', [$inicioMes, $fimMes])->count();
             
             if (!$jaInicializado) {
                 tenancy()->end();
             }
             
-            return $processosAtivos < $plano->limite_processos;
+            return $processosMes < $plano->limite_processos;
         } catch (\Exception $e) {
             // Se houver erro, assumir que pode criar (fail open)
             \Log::warning('Erro ao verificar limite de processos', [
@@ -283,5 +323,51 @@ class Tenant extends BaseTenant implements TenantWithDatabase
         })->count();
 
         return $usuarios < $plano->limite_usuarios;
+    }
+
+    /**
+     * Verifica se o plano tem acesso a um recurso específico
+     */
+    public function temRecurso(string $recurso): bool
+    {
+        if (!$this->temAssinaturaAtiva()) {
+            return false;
+        }
+
+        $plano = $this->planoAtual;
+        
+        if (!$plano) {
+            return false;
+        }
+
+        $recursosDisponiveis = $plano->recursos_disponiveis ?? [];
+        
+        return in_array($recurso, $recursosDisponiveis);
+    }
+
+    /**
+     * Verifica se o plano tem acesso a calendários
+     */
+    public function temAcessoCalendario(): bool
+    {
+        return $this->temRecurso('calendarios');
+    }
+
+    /**
+     * Verifica se o plano tem acesso a relatórios
+     */
+    public function temAcessoRelatorios(): bool
+    {
+        return $this->temRecurso('relatorios');
+    }
+
+    /**
+     * Verifica se o plano tem acesso a dashboard
+     */
+    public function temAcessoDashboard(): bool
+    {
+        // Dashboard está disponível apenas para planos Profissional, Master e Ilimitado
+        // Essencial não tem dashboard
+        return $this->temRecurso('relatorios') || $this->temRecurso('dashboard_analytics');
     }
 }

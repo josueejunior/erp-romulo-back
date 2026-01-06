@@ -23,6 +23,14 @@ class RelatorioFinanceiroController extends BaseApiController
 
     public function index(Request $request)
     {
+        // Verificar se o plano tem acesso a relatórios
+        $tenant = tenancy()->tenant;
+        if (!$tenant || !$tenant->temAcessoRelatorios()) {
+            return response()->json([
+                'message' => 'Os relatórios não estão disponíveis no seu plano. Faça upgrade para o plano Profissional ou superior.',
+            ], 403);
+        }
+
         // RBAC: apenas usuários autorizados podem ver relatórios financeiros
         if (!PermissionHelper::canViewFinancialReports()) {
             return response()->json([
@@ -171,6 +179,14 @@ class RelatorioFinanceiroController extends BaseApiController
      */
     public function gestaoMensal(Request $request)
     {
+        // Verificar se o plano tem acesso a relatórios
+        $tenant = tenancy()->tenant;
+        if (!$tenant || !$tenant->temAcessoRelatorios()) {
+            return response()->json([
+                'message' => 'Os relatórios não estão disponíveis no seu plano. Faça upgrade para o plano Profissional ou superior.',
+            ], 403);
+        }
+
         if (!PermissionHelper::canViewFinancialReports()) {
             return response()->json([
                 'message' => 'Você não tem permissão para visualizar relatórios financeiros.',

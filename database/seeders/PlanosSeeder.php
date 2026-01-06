@@ -10,9 +10,10 @@ use Illuminate\Support\Facades\DB;
  * Seeder para criar planos de assinatura
  * 
  * Este seeder cria planos padrão para o sistema:
- * - Básico: Plano inicial com recursos limitados
- * - Profissional: Plano intermediário com mais recursos
- * - Enterprise: Plano completo com recursos ilimitados
+ * - Essencial: Operação completa, mas sem visão estratégica
+ * - Profissional: Visão estratégica e previsibilidade
+ * - Master: Controle total e escalabilidade
+ * - Ilimitado: Sem limites, máxima escalabilidade
  */
 class PlanosSeeder extends Seeder
 {
@@ -31,91 +32,103 @@ class PlanosSeeder extends Seeder
 
         $planos = [
             [
-                'nome' => 'Básico',
-                'descricao' => 'Plano ideal para pequenas empresas que estão começando. Inclui recursos essenciais para gerenciar processos licitatórios.',
-                'preco_mensal' => 99.90,
-                'preco_anual' => 999.00, // ~17% de desconto
-                'limite_processos' => 10,
-                'limite_usuarios' => 3,
-                'limite_armazenamento_mb' => 1024, // 1 GB
+                'nome' => 'Essencial',
+                'descricao' => 'Operação completa, mas sem visão estratégica. Ideal para empresas que estão começando.',
+                'preco_mensal' => 97.00,
+                'preco_anual' => null,
+                'limite_processos' => 5,
+                'restricao_diaria' => true, // 1 processo por dia
+                'limite_usuarios' => 2, // 1 Administrador + 1 Operacional
+                'limite_armazenamento_mb' => null,
                 'recursos_disponiveis' => [
-                    'processos_licitatorios',
-                    'orcamentos',
-                    'contratos',
-                    'relatorios_basicos',
-                    'suporte_email',
+                    'cadastros_completos', // órgãos/setores, fornecedores/transportadoras
+                    'processos_todas_etapas', // participação, disputa, julgamento e habilitação, execução
+                    'itens_processo', // cadastro completo, orçamentos, escolha de fornecedor
+                    'formacao_precos', // calculadora, preço mínimo
+                    'execucao', // contratos, AFs, empenhos, NF-e de entrada e saída
+                    'controle_operacional', // status dos itens, saldo por processo
                 ],
                 'ativo' => true,
                 'ordem' => 1,
             ],
             [
                 'nome' => 'Profissional',
-                'descricao' => 'Plano completo para empresas em crescimento. Inclui todos os recursos do plano Básico, além de funcionalidades avançadas e mais capacidade.',
-                'preco_mensal' => 299.90,
-                'preco_anual' => 2999.00, // ~17% de desconto
-                'limite_processos' => 50,
-                'limite_usuarios' => 10,
-                'limite_armazenamento_mb' => 5120, // 5 GB
+                'descricao' => 'Visão estratégica e previsibilidade. Inclui todos os recursos do Essencial, além de calendários, relatórios e funcionalidades avançadas.',
+                'preco_mensal' => 120.00,
+                'preco_anual' => null,
+                'limite_processos' => 20,
+                'restricao_diaria' => true, // 1 processo por dia
+                'limite_usuarios' => 5,
+                'limite_armazenamento_mb' => null,
                 'recursos_disponiveis' => [
-                    'processos_licitatorios',
-                    'orcamentos',
-                    'contratos',
-                    'empenhos',
-                    'notas_fiscais',
-                    'relatorios_avancados',
-                    'dashboard_analytics',
-                    'exportacao_dados',
-                    'suporte_prioritario',
-                    'integracao_api',
+                    'cadastros_completos',
+                    'processos_todas_etapas',
+                    'itens_processo',
+                    'formacao_precos',
+                    'execucao',
+                    'controle_operacional',
+                    'calendarios', // disputas e julgamentos
+                    'relatorios', // desempenho, taxa de aproveitamento, processos por período
+                    'formacao_precos_avancada', // preço mínimo e recomendado
+                    'julgamento_avancado', // chance de arremate, lembretes, valores negociados
+                    'exportacoes', // proposta comercial, ficha técnica
                 ],
                 'ativo' => true,
                 'ordem' => 2,
             ],
             [
-                'nome' => 'Enterprise',
-                'descricao' => 'Plano completo com recursos ilimitados. Ideal para grandes empresas que precisam de máxima capacidade e suporte dedicado.',
-                'preco_mensal' => 999.90,
-                'preco_anual' => 9999.00, // ~17% de desconto
-                'limite_processos' => null, // Ilimitado
+                'nome' => 'Master',
+                'descricao' => 'Controle total e escalabilidade. Inclui todas as funcionalidades do Profissional, além de gestão financeira completa e histórico imutável.',
+                'preco_mensal' => 160.00,
+                'preco_anual' => null,
+                'limite_processos' => 30,
+                'restricao_diaria' => false, // Sem restrição diária
                 'limite_usuarios' => null, // Ilimitado
-                'limite_armazenamento_mb' => null, // Ilimitado
+                'limite_armazenamento_mb' => null,
                 'recursos_disponiveis' => [
-                    'processos_licitatorios',
-                    'orcamentos',
-                    'contratos',
-                    'empenhos',
-                    'notas_fiscais',
-                    'autorizacoes_fornecimento',
-                    'custos_indiretos',
-                    'relatorios_avancados',
-                    'dashboard_analytics',
-                    'exportacao_dados',
-                    'api_ilimitada',
-                    'webhooks',
-                    'suporte_dedicado',
-                    'treinamento_equipe',
-                    'customizacoes',
-                    'backup_automatico',
-                    'sla_garantido',
+                    'cadastros_completos',
+                    'processos_todas_etapas',
+                    'itens_processo',
+                    'formacao_precos',
+                    'execucao',
+                    'controle_operacional',
+                    'calendarios',
+                    'relatorios',
+                    'formacao_precos_avancada',
+                    'julgamento_avancado',
+                    'exportacoes',
+                    'gestao_financeira_completa', // custos diretos e indiretos, lucro real, margem, saldo a receber
+                    'historico_imutavel',
                 ],
                 'ativo' => true,
                 'ordem' => 3,
             ],
             [
-                'nome' => 'Trial',
-                'descricao' => 'Plano de teste gratuito por 14 dias. Ideal para conhecer o sistema antes de assinar um plano pago.',
-                'preco_mensal' => 0.00,
-                'preco_anual' => 0.00,
-                'limite_processos' => 3,
-                'limite_usuarios' => 1,
-                'limite_armazenamento_mb' => 100, // 100 MB
+                'nome' => 'Ilimitado',
+                'descricao' => 'Sem limites, máxima escalabilidade. Inclui todas as funcionalidades do Master, com processos e usuários ilimitados.',
+                'preco_mensal' => 299.00,
+                'preco_anual' => null,
+                'limite_processos' => null, // Ilimitado
+                'restricao_diaria' => false, // Sem restrição diária
+                'limite_usuarios' => null, // Ilimitado
+                'limite_armazenamento_mb' => null,
                 'recursos_disponiveis' => [
-                    'processos_licitatorios',
-                    'orcamentos',
-                    'relatorios_basicos',
+                    'cadastros_completos',
+                    'processos_todas_etapas',
+                    'itens_processo',
+                    'formacao_precos',
+                    'execucao',
+                    'controle_operacional',
+                    'calendarios',
+                    'relatorios',
+                    'formacao_precos_avancada',
+                    'julgamento_avancado',
+                    'exportacoes',
+                    'gestao_financeira_completa',
+                    'historico_imutavel',
                 ],
                 'ativo' => true,
-                'ordem' => 0, // Primeiro na listagem
+                'ordem' => 4,
             ],
         ];
 
@@ -137,8 +150,10 @@ class PlanosSeeder extends Seeder
             $this->command->info('Planos disponíveis:');
             foreach ($planos as $planoData) {
                 $precoMensal = number_format($planoData['preco_mensal'], 2, ',', '.');
-                $precoAnual = number_format($planoData['preco_anual'], 2, ',', '.');
-                $this->command->info("  • {$planoData['nome']}: R$ {$precoMensal}/mês ou R$ {$precoAnual}/ano");
+                $limiteProcessos = $planoData['limite_processos'] ?? 'Ilimitado';
+                $limiteUsuarios = $planoData['limite_usuarios'] ?? 'Ilimitado';
+                $restricaoDiaria = $planoData['restricao_diaria'] ? '1 por dia' : 'Sem restrição';
+                $this->command->info("  • {$planoData['nome']}: R$ {$precoMensal}/mês - {$limiteProcessos} processos/mês - {$limiteUsuarios} usuários - {$restricaoDiaria}");
             }
             $this->command->info('═══════════════════════════════════════════════════════');
             

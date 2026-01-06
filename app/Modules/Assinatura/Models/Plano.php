@@ -17,6 +17,7 @@ class Plano extends BaseModel
         'preco_mensal',
         'preco_anual',
         'limite_processos',
+        'restricao_diaria',
         'limite_usuarios',
         'limite_armazenamento_mb',
         'recursos_disponiveis',
@@ -30,6 +31,7 @@ class Plano extends BaseModel
             'preco_mensal' => 'decimal:2',
             'preco_anual' => 'decimal:2',
             'limite_processos' => 'integer',
+            'restricao_diaria' => 'boolean',
             'limite_usuarios' => 'integer',
             'limite_armazenamento_mb' => 'integer',
             'recursos_disponiveis' => 'array',
@@ -65,6 +67,14 @@ class Plano extends BaseModel
     public function temUsuariosIlimitados(): bool
     {
         return $this->limite_usuarios === null;
+    }
+
+    /**
+     * Verifica se o plano tem restrição diária (1 processo por dia)
+     */
+    public function temRestricaoDiaria(): bool
+    {
+        return $this->restricao_diaria === true;
     }
 }
 

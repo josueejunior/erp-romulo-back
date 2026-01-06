@@ -22,6 +22,14 @@ class CalendarioController extends BaseApiController
      */
     public function disputas(Request $request)
     {
+        // Verificar se o plano tem acesso a calendários
+        $tenant = tenancy()->tenant;
+        if (!$tenant || !$tenant->temAcessoCalendario()) {
+            return response()->json([
+                'message' => 'O calendário não está disponível no seu plano. Faça upgrade para o plano Profissional ou superior.',
+            ], 403);
+        }
+
         $empresa = $this->getEmpresaAtivaOrFail();
         
         $dataInicio = $request->has('data_inicio') 
@@ -67,6 +75,14 @@ class CalendarioController extends BaseApiController
      */
     public function julgamento(Request $request)
     {
+        // Verificar se o plano tem acesso a calendários
+        $tenant = tenancy()->tenant;
+        if (!$tenant || !$tenant->temAcessoCalendario()) {
+            return response()->json([
+                'message' => 'O calendário não está disponível no seu plano. Faça upgrade para o plano Profissional ou superior.',
+            ], 403);
+        }
+
         $empresa = $this->getEmpresaAtivaOrFail();
         
         $dataInicio = $request->has('data_inicio') 
@@ -90,6 +106,14 @@ class CalendarioController extends BaseApiController
      */
     public function avisosUrgentes()
     {
+        // Verificar se o plano tem acesso a calendários
+        $tenant = tenancy()->tenant;
+        if (!$tenant || !$tenant->temAcessoCalendario()) {
+            return response()->json([
+                'message' => 'O calendário não está disponível no seu plano. Faça upgrade para o plano Profissional ou superior.',
+            ], 403);
+        }
+
         $empresa = $this->getEmpresaAtivaOrFail();
         $avisos = $this->calendarioService->getAvisosUrgentes($empresa->id);
 

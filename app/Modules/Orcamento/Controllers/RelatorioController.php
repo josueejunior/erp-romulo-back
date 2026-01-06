@@ -26,6 +26,14 @@ class RelatorioController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        // Verificar se o plano tem acesso a relatórios
+        $tenant = tenancy()->tenant;
+        if (!$tenant || !$tenant->temAcessoRelatorios()) {
+            return response()->json([
+                'message' => 'Os relatórios não estão disponíveis no seu plano. Faça upgrade para o plano Profissional ou superior.',
+            ], 403);
+        }
+
         try {
             $empresa = $this->getEmpresaAtivaOrFail();
             
@@ -65,6 +73,14 @@ class RelatorioController extends Controller
      */
     public function export(Request $request): mixed
     {
+        // Verificar se o plano tem acesso a relatórios
+        $tenant = tenancy()->tenant;
+        if (!$tenant || !$tenant->temAcessoRelatorios()) {
+            return response()->json([
+                'message' => 'Os relatórios não estão disponíveis no seu plano. Faça upgrade para o plano Profissional ou superior.',
+            ], 403);
+        }
+
         try {
             $empresa = $this->getEmpresaAtivaOrFail();
             $formato = $request->get('formato', 'csv');
@@ -102,6 +118,14 @@ class RelatorioController extends Controller
      */
     public function porFornecedor(Request $request): JsonResponse
     {
+        // Verificar se o plano tem acesso a relatórios
+        $tenant = tenancy()->tenant;
+        if (!$tenant || !$tenant->temAcessoRelatorios()) {
+            return response()->json([
+                'message' => 'Os relatórios não estão disponíveis no seu plano. Faça upgrade para o plano Profissional ou superior.',
+            ], 403);
+        }
+
         try {
             $empresa = $this->getEmpresaAtivaOrFail();
             
@@ -134,6 +158,14 @@ class RelatorioController extends Controller
      */
     public function porStatus(Request $request): JsonResponse
     {
+        // Verificar se o plano tem acesso a relatórios
+        $tenant = tenancy()->tenant;
+        if (!$tenant || !$tenant->temAcessoRelatorios()) {
+            return response()->json([
+                'message' => 'Os relatórios não estão disponíveis no seu plano. Faça upgrade para o plano Profissional ou superior.',
+            ], 403);
+        }
+
         try {
             $empresa = $this->getEmpresaAtivaOrFail();
             

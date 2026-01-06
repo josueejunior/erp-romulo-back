@@ -23,6 +23,14 @@ class DashboardController extends BaseApiController
      */
     public function index()
     {
+        // Verificar se o plano tem acesso a dashboard
+        $tenant = tenancy()->tenant;
+        if (!$tenant || !$tenant->temAcessoDashboard()) {
+            return response()->json([
+                'message' => 'O dashboard não está disponível no seu plano. Faça upgrade para o plano Profissional ou superior.',
+            ], 403);
+        }
+
         $empresa = $this->getEmpresaAtivaOrFail();
         $tenantId = tenancy()->tenant?->id;
         

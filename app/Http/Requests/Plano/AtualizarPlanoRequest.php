@@ -22,6 +22,7 @@ class AtualizarPlanoRequest extends FormRequest
             'preco_mensal' => 'sometimes|required|numeric|min:0',
             'preco_anual' => 'nullable|numeric|min:0',
             'limite_processos' => 'nullable|integer|min:0',
+            'restricao_diaria' => 'nullable|boolean',
             'limite_usuarios' => 'nullable|integer|min:0',
             'limite_armazenamento_mb' => 'nullable|integer|min:0',
             'recursos_disponiveis' => 'nullable|array',
