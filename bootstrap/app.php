@@ -28,16 +28,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'security.headers' => \App\Http\Middleware\SecurityHeaders::class,
         ]);
         
-        // 🔥 CAMADA 1 - Infra (antes de tudo)
-        // CORS DEVE ser o PRIMEIRO middleware - executar globalmente antes de tudo
-        // Isso garante que requisições OPTIONS sejam processadas antes de qualquer outro middleware
-        $middleware->prepend(\App\Http\Middleware\HandleCorsCustom::class);
-        
-        // 🔥 CAMADA 2 - Error Boundary (prepend para capturar exceções)
-        // HandleApiErrors deve rodar como prepend para capturar exceções de todos os middlewares seguintes
-        // Ele é um boundary que traduz exceptions em JSON, não participa do fluxo de decisão
-        $middleware->api(prepend: [
-            \App\Http\Middleware\HandleApiErrors::class,
+        // ✅ CORS no grupo api (após rota ser resolvida)
+        // CORS NÃO deve rodar antes da rota existir (evita NO_ROUTE)
+        $middleware->api(append: [
+            \App\Http\Middleware\HandleCorsCustom::class,
         ]);
         
         // Headers de segurança apenas para rotas web (não interfere com API/CORS)
@@ -50,15 +44,38 @@ return Application::configure(basePath: dirname(__DIR__))
         // Ele depende de auth/tenancy e deve ser aplicado apenas nas rotas autenticadas.
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        // 🔥 ARQUITETURA LIMPA: Usar HandleCorsCustom como único responsável por CORS
-        // Helper que delega para o middleware centralizado
+        // ✅ Helper simples para CORS no Exception Handler
+        // Middleware ≠ Exception handler - cada um com sua responsabilidade
         $addCorsToResponse = function ($response, $request) {
             if (!$request->expectsJson() || !($response instanceof \Symfony\Component\HttpFoundation\Response)) {
                 return $response;
             }
             
-            // Delegar para HandleCorsCustom (único dono da lógica CORS)
-            return app(\App\Http\Middleware\HandleCorsCustom::class)->addCorsHeaders($request, $response);
+            $origin = $request->headers->get('Origin');
+            if (!$origin) {
+                return $response;
+            }
+            
+            // Verificar origem permitida
+            $allowedOrigins = config('cors.allowed_origins', ['*']);
+            $allowAll = in_array('*', $allowedOrigins);
+            $isAllowed = $allowAll;
+            $allowedOrigin = $origin;
+            
+            if (!$allowAll && $origin) {
+                $allowedOriginsNormalized = array_map('strtolower', $allowedOrigins);
+                $originNormalized = strtolower($origin);
+                $isAllowed = in_array($originNormalized, $allowedOriginsNormalized);
+            }
+            
+            if ($isAllowed) {
+                $response->headers->set('Access-Control-Allow-Origin', $allowedOrigin);
+                $response->headers->set('Access-Control-Allow-Credentials', 'true');
+                $response->headers->set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+                $response->headers->set('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+            }
+            
+            return $response;
         };
         
         // Exceções de Domínio - Bad Request (400)

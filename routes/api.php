@@ -91,8 +91,8 @@ Route::prefix('v1')->group(function () {
     Route::middleware([
         'jwt.auth',                    // CAMADA 3: Autenticação JWT
         'auth.context',                // CAMADA 4: Identidade
-        'tenant.context',              // CAMADA 5: Tenancy
-        'bootstrap.context',           // CAMADA 6: Bootstrap empresa
+        \App\Http\Middleware\ResolveTenantContext::class,  // CAMADA 5: Tenancy (usando classe completa para debug)
+        \App\Http\Middleware\BootstrapApplicationContext::class,  // CAMADA 6: Bootstrap empresa (usando classe completa para debug)
         'throttle:200,1'               // Rate limiting
     ])->group(function () {
         // Rotas que NÃO precisam de assinatura (exceções)
