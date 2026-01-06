@@ -40,10 +40,14 @@ class BuildAuthContext
         ]);
 
         // Verificar se usuário está autenticado (deve ter sido definido por AuthenticateJWT)
-        $user = $request->user();
+        // 🔥 IMPORTANTE: Usar guard 'sanctum' explicitamente (mesmo guard usado por AuthenticateJWT)
+        $user = auth('sanctum')->user();
         
         if (!$user) {
-            Log::warning('BuildAuthContext::handle - Usuário não autenticado');
+            Log::warning('BuildAuthContext::handle - Usuário não autenticado', [
+                'guard_check' => auth('sanctum')->check(),
+                'guard_id' => auth('sanctum')->id(),
+            ]);
             return response()->json([
                 'message' => 'Não autenticado. Faça login para continuar.',
             ], 401);

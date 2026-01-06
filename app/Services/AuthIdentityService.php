@@ -27,7 +27,9 @@ class AuthIdentityService
      */
     public function createFromRequest(Request $request, string $scope = 'api-v1'): IAuthIdentity
     {
-        $user = $request->user();
+        // 🔥 IMPORTANTE: Usar guard 'sanctum' explicitamente
+        // O AuthenticateJWT define o usuário no guard 'sanctum', não no guard padrão
+        $user = auth('sanctum')->user();
         
         if (!$user) {
             return new NullAuthIdentity($scope);
