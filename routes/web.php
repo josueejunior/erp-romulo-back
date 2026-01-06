@@ -52,18 +52,18 @@ Route::middleware(['auth', 'empresa.ativa'])->group(function () {
     Route::put('/processos/{processo}/itens/{item}', [ProcessoItemController::class, 'updateWeb'])->name('processo-itens.update');
     Route::delete('/processos/{processo}/itens/{item}', [ProcessoItemController::class, 'destroyWeb'])->name('processo-itens.destroy');
     
-    // Orçamentos
-    Route::get('/processos/{processo}/itens/{item}/orcamentos/create', [OrcamentoController::class, 'create'])->name('orcamentos.create');
-    Route::post('/processos/{processo}/itens/{item}/orcamentos', [OrcamentoController::class, 'store'])->name('orcamentos.store');
-    Route::get('/processos/{processo}/itens/{item}/orcamentos/{orcamento}/edit', [OrcamentoController::class, 'edit'])->name('orcamentos.edit');
-    Route::put('/processos/{processo}/itens/{item}/orcamentos/{orcamento}', [OrcamentoController::class, 'update'])->name('orcamentos.update');
-    Route::delete('/processos/{processo}/itens/{item}/orcamentos/{orcamento}', [OrcamentoController::class, 'destroy'])->name('orcamentos.destroy');
+    // Orçamentos (rotas web - nomes prefixados para evitar conflito com API)
+    Route::get('/processos/{processo}/itens/{item}/orcamentos/create', [OrcamentoController::class, 'create'])->name('web.orcamentos.create');
+    Route::post('/processos/{processo}/itens/{item}/orcamentos', [OrcamentoController::class, 'store'])->name('web.orcamentos.store');
+    Route::get('/processos/{processo}/itens/{item}/orcamentos/{orcamento}/edit', [OrcamentoController::class, 'edit'])->name('web.orcamentos.edit');
+    Route::put('/processos/{processo}/itens/{item}/orcamentos/{orcamento}', [OrcamentoController::class, 'update'])->name('web.orcamentos.update');
+    Route::delete('/processos/{processo}/itens/{item}/orcamentos/{orcamento}', [OrcamentoController::class, 'destroy'])->name('web.orcamentos.destroy');
     
-    // Formação de Preços
-    Route::get('/processos/{processo}/itens/{item}/orcamentos/{orcamento}/formacao-preco/create', [FormacaoPrecoController::class, 'create'])->name('formacao-precos.create');
-    Route::post('/processos/{processo}/itens/{item}/orcamentos/{orcamento}/formacao-preco', [FormacaoPrecoController::class, 'store'])->name('formacao-precos.store');
-    Route::get('/processos/{processo}/itens/{item}/orcamentos/{orcamento}/formacao-preco/{formacaoPreco}/edit', [FormacaoPrecoController::class, 'edit'])->name('formacao-precos.edit');
-    Route::put('/processos/{processo}/itens/{item}/orcamentos/{orcamento}/formacao-preco/{formacaoPreco}', [FormacaoPrecoController::class, 'update'])->name('formacao-precos.update');
+    // Formação de Preços (rotas web - nomes prefixados para evitar conflito com API)
+    Route::get('/processos/{processo}/itens/{item}/orcamentos/{orcamento}/formacao-preco/create', [FormacaoPrecoController::class, 'create'])->name('web.formacao-precos.create');
+    Route::post('/processos/{processo}/itens/{item}/orcamentos/{orcamento}/formacao-preco', [FormacaoPrecoController::class, 'store'])->name('web.formacao-precos.store');
+    Route::get('/processos/{processo}/itens/{item}/orcamentos/{orcamento}/formacao-preco/{formacaoPreco}/edit', [FormacaoPrecoController::class, 'edit'])->name('web.formacao-precos.edit');
+    Route::put('/processos/{processo}/itens/{item}/orcamentos/{orcamento}/formacao-preco/{formacaoPreco}', [FormacaoPrecoController::class, 'update'])->name('web.formacao-precos.update');
 
     // Calendário
     Route::get('/calendario', [CalendarioDisputasController::class, 'index'])->name('calendario.index');
