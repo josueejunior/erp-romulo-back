@@ -70,6 +70,71 @@ class TenantRepository implements TenantRepositoryInterface
         ];
     }
 
+    /**
+     * Criar tenant com ID específico
+     * Usado quando precisamos garantir que o ID não conflite com bancos existentes
+     */
+    public function criarComId(Tenant $tenant, int $id): Tenant
+    {
+        try {
+            $data = $this->toArray($tenant);
+            
+            \Log::debug('Criando tenant com ID específico', [
+                'id' => $id,
+                'razao_social' => $data['razao_social'] ?? null,
+                'cnpj' => $data['cnpj'] ?? null,
+            ]);
+            
+            // Verificar se já existe tenant com esse ID
+            $existente = TenantModel::find($id);
+            if ($existente) {
+                throw new \RuntimeException("Já existe um tenant com ID {$id}");
+            }
+            
+            // Ajustar sequência do PostgreSQL para permitir inserir ID específico
+            try {
+                // Obter o maior ID atual
+                $maxId = TenantModel::max('id') ?? 0;
+                $nextId = max($id, $maxId + 1);
+                
+                // Ajustar sequência para o próximo valor ser maior que o ID fornecido
+                \Illuminate\Support\Facades\DB::statement(
+                    "SELECT setval(pg_get_serial_sequence('tenants', 'id'), {$nextId}, false)"
+                );
+            } catch (\Exception $seqException) {
+                \Log::warning('Erro ao ajustar sequência, continuando mesmo assim', [
+                    'error' => $seqException->getMessage(),
+                ]);
+            }
+            
+            // Criar tenant com ID específico usando insert() para forçar o ID
+            $data['id'] = $id;
+            $data['criado_em'] = now();
+            $data['atualizado_em'] = now();
+            
+            // Usar insert() para forçar o ID
+            \Illuminate\Support\Facades\DB::table('tenants')->insert($data);
+            
+            // Buscar o modelo criado
+            $model = TenantModel::findOrFail($id);
+            
+            \Log::info('Tenant criado com ID específico', [
+                'tenant_id' => $model->id,
+                'razao_social' => $model->razao_social,
+            ]);
+            
+            return $this->toDomain($model);
+            
+        } catch (\Exception $e) {
+            \Log::error('Erro ao criar tenant com ID específico', [
+                'id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            throw new \RuntimeException('Erro ao criar tenant com ID específico: ' . $e->getMessage(), 0, $e);
+        }
+    }
+
     public function criar(Tenant $tenant): Tenant
     {
         try {

@@ -69,7 +69,7 @@ class CriarTenantUseCase
             }
         }
 
-        // Persistir tenant (infraestrutura)
+        // Persistir tenant (infraestrutura) - primeira tentativa com ID automático
         $tenant = $this->tenantRepository->criar($tenant);
 
         try {
@@ -77,20 +77,86 @@ class CriarTenantUseCase
             $this->databaseService->criarBancoDados($tenant);
             // Executar migrations
             $this->databaseService->executarMigrations($tenant);
-        } catch (\Exception $e) {
-            // Se falhar, deletar o tenant criado
+        } catch (\App\Domain\Exceptions\DatabaseAlreadyExistsException $e) {
+            // 🔥 NOVO: Banco já existe, criar tenant com próximo número disponível
+            Log::info('Banco já existe, recriando tenant com próximo número disponível', [
+                'tenant_id_anterior' => $tenant->id,
+                'proximo_numero' => $e->proximoNumeroDisponivel,
+            ]);
+            
+            // Deletar tenant criado anteriormente
             try {
                 $this->tenantRepository->deletar($tenant->id);
             } catch (\Exception $deleteException) {
-                Log::warning('Erro ao deletar tenant após falha na criação do banco', [
+                Log::warning('Erro ao deletar tenant anterior', [
                     'tenant_id' => $tenant->id,
                     'error' => $deleteException->getMessage(),
                 ]);
             }
             
+            // Criar novo tenant com ID específico (próximo número disponível)
+            $tenant = $this->tenantRepository->criarComId(
+                new Tenant(
+                    id: null,
+                    razaoSocial: $dto->razaoSocial,
+                    cnpj: $dto->cnpj,
+                    email: $dto->email,
+                    status: $dto->status,
+                    endereco: $dto->endereco,
+                    cidade: $dto->cidade,
+                    estado: $dto->estado,
+                    cep: $dto->cep,
+                    telefones: $dto->telefones,
+                    emailsAdicionais: $dto->emailsAdicionais,
+                    banco: $dto->banco,
+                    agencia: $dto->agencia,
+                    conta: $dto->conta,
+                    tipoConta: $dto->tipoConta,
+                    pix: $dto->pix,
+                    representanteLegalNome: $dto->representanteLegalNome,
+                    representanteLegalCpf: $dto->representanteLegalCpf,
+                    representanteLegalCargo: $dto->representanteLegalCargo,
+                    logo: $dto->logo,
+                ),
+                $e->proximoNumeroDisponivel
+            );
+            
+            // Tentar criar banco novamente com o novo ID
+            try {
+                $this->databaseService->criarBancoDados($tenant);
+                $this->databaseService->executarMigrations($tenant);
+            } catch (\Exception $retryException) {
+                // Se ainda falhar, deletar o tenant e lançar erro
+                try {
+                    $this->tenantRepository->deletar($tenant->id);
+                } catch (\Exception $deleteException) {
+                    Log::warning('Erro ao deletar tenant após falha na segunda tentativa', [
+                        'tenant_id' => $tenant->id,
+                        'error' => $deleteException->getMessage(),
+                    ]);
+                }
+                
+                throw new DomainException('Erro ao criar o banco de dados da empresa após tentar com próximo número disponível: ' . $retryException->getMessage());
+            }
+            
+        } catch (\Exception $e) {
+            // Outros erros
+            // Se falhar, deletar o tenant criado
+            if ($tenant && $tenant->id) {
+                try {
+                    $this->tenantRepository->deletar($tenant->id);
+                } catch (\Exception $deleteException) {
+                    Log::warning('Erro ao deletar tenant após falha na criação do banco', [
+                        'tenant_id' => $tenant->id,
+                        'error' => $deleteException->getMessage(),
+                    ]);
+                }
+            }
+            
             // Melhorar mensagem de erro
             $errorMessage = $e->getMessage();
-            if (str_contains($errorMessage, 'already exists') || str_contains($errorMessage, 'Database') && str_contains($errorMessage, 'exists')) {
+            if (str_contains($errorMessage, 'already exists') || 
+                (str_contains($errorMessage, 'Database') && str_contains($errorMessage, 'exists'))) {
                 throw new DomainException("Erro ao criar banco de dados: O banco de dados 'tenant_{$tenant->id}' já existe. Isso pode acontecer se uma tentativa anterior de criação falhou. Por favor, delete o banco de dados manualmente ou entre em contato com o suporte técnico.");
             }
             

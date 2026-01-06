@@ -17,6 +17,15 @@ interface TenantRepositoryInterface
     public function criar(Tenant $tenant): Tenant;
 
     /**
+     * Criar tenant com ID específico (para evitar conflitos de banco de dados)
+     * 
+     * @param Tenant $tenant Entidade do tenant
+     * @param int $id ID específico para o tenant
+     * @return Tenant Tenant criado
+     */
+    public function criarComId(Tenant $tenant, int $id): Tenant;
+
+    /**
      * Buscar tenant por ID
      */
     public function buscarPorId(int $id): ?Tenant;

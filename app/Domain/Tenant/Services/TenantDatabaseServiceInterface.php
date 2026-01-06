@@ -19,6 +19,14 @@ interface TenantDatabaseServiceInterface
      * Executar migrations no banco do tenant
      */
     public function executarMigrations(Tenant $tenant): void;
+
+    /**
+     * Encontrar o próximo número de tenant disponível
+     * Verifica quais bancos já existem e retorna o próximo número livre
+     * 
+     * @return int Próximo número disponível para criar tenant
+     */
+    public function encontrarProximoNumeroDisponivel(): int;
 }
 
 

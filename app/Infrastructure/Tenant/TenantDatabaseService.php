@@ -15,6 +15,51 @@ use Illuminate\Support\Facades\Log;
  */
 class TenantDatabaseService implements TenantDatabaseServiceInterface
 {
+    /**
+     * Encontrar o próximo número de tenant disponível
+     * Verifica quais bancos já existem e retorna o próximo número livre
+     */
+    public function encontrarProximoNumeroDisponivel(): int
+    {
+        try {
+            $centralConnection = \Illuminate\Support\Facades\DB::connection();
+            
+            // Buscar todos os bancos que começam com 'tenant_'
+            $databases = $centralConnection->select(
+                "SELECT datname FROM pg_database WHERE datname LIKE 'tenant_%' ORDER BY datname"
+            );
+            
+            // Extrair números dos bancos existentes
+            $numerosExistentes = [];
+            foreach ($databases as $db) {
+                $dbName = $db->datname;
+                // Extrair número de 'tenant_X'
+                if (preg_match('/^tenant_(\d+)$/', $dbName, $matches)) {
+                    $numerosExistentes[] = (int) $matches[1];
+                }
+            }
+            
+            // Encontrar o próximo número disponível
+            $proximoNumero = 1;
+            while (in_array($proximoNumero, $numerosExistentes)) {
+                $proximoNumero++;
+            }
+            
+            Log::info('Próximo número de tenant disponível encontrado', [
+                'proximo_numero' => $proximoNumero,
+                'numeros_existentes' => $numerosExistentes,
+            ]);
+            
+            return $proximoNumero;
+        } catch (\Exception $e) {
+            Log::warning('Erro ao encontrar próximo número disponível, usando 1', [
+                'error' => $e->getMessage(),
+            ]);
+            // Em caso de erro, começar do 1
+            return 1;
+        }
+    }
+
     public function criarBancoDados(Tenant $tenant): void
     {
         try {
@@ -141,8 +186,20 @@ class TenantDatabaseService implements TenantDatabaseServiceInterface
                     ]);
                 }
                 
-                $databaseName = $tenantModel->database()->getName() ?? "tenant_{$tenant->id}";
-                throw new \Exception("Banco de dados '{$databaseName}' já existe. Se você está tentando recriar a empresa, por favor, delete o banco de dados manualmente ou entre em contato com o suporte.");
+                // 🔥 NOVO: Se o banco já existe e tem dados, lançar exceção especial
+                // O UseCase vai tratar isso e criar o tenant com próximo número disponível
+                $proximoNumero = $this->encontrarProximoNumeroDisponivel();
+                
+                Log::warning('Banco já existe e tem dados, próximo número disponível encontrado', [
+                    'tenant_id_atual' => $tenant->id,
+                    'database_atual' => $databaseName,
+                    'proximo_numero' => $proximoNumero,
+                ]);
+                
+                throw new \App\Domain\Exceptions\DatabaseAlreadyExistsException(
+                    "Banco de dados '{$databaseName}' já existe e contém dados. Próximo número disponível: {$proximoNumero}",
+                    $proximoNumero
+                );
             }
             
             Log::error('Erro ao criar banco do tenant', [
