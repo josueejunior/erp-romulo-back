@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Models\Traits\HasTimestampsCustomizados;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -16,11 +15,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class TenantEmpresa extends Model
 {
-    use HasTimestampsCustomizados;
-    
     protected $table = 'tenant_empresas';
     
-    public $timestamps = true;
+    // Tabela não tem colunas created_at/updated_at
+    public $timestamps = false;
     
     protected $fillable = [
         'tenant_id',

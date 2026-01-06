@@ -68,8 +68,12 @@ class AuthenticateJWT
                 ], 401);
             }
             
-            // 5. Definir usuário no guard
-            auth()->guard('sanctum')->setUser($user);
+            // 5. Definir usuário no guard (ambos: padrão e sanctum)
+            auth()->setUser($user); // Guard padrão - para $request->user()
+            auth()->guard('sanctum')->setUser($user); // Guard sanctum
+            
+            // 6. Também vincular no request para $request->user() funcionar
+            $request->setUserResolver(fn () => $user);
 
             Log::debug('⬅ AuthenticateJWT: autenticado', ['user_id' => $user->id]);
             return $next($request);
