@@ -9,7 +9,7 @@ interface EmpenhoRepositoryInterface
 {
     public function criar(Empenho $empenho): Empenho;
     public function buscarPorId(int $id): ?Empenho;
-    public function buscarModeloPorId(int $id, array $with = []): ?\App\Models\Empenho;
+    public function buscarModeloPorId(int $id, array $with = []): ?\App\Modules\Empenho\Models\Empenho;
     public function buscarComFiltros(array $filtros = []): LengthAwarePaginator;
     public function atualizar(Empenho $empenho): Empenho;
     public function deletar(int $id): void;
