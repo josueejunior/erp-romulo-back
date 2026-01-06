@@ -88,6 +88,35 @@ return Application::configure(basePath: dirname(__DIR__))
             }
         });
         
+        // 🔥 Throttle Requests Exception - Rate Limit (429)
+        // Garantir que sempre retorne JSON amigável, mesmo se não for capturado pelo HandleApiErrors
+        $exceptions->render(function (\Illuminate\Http\Exceptions\ThrottleRequestsException $e, $request) use ($addCorsToResponse) {
+            if ($request->expectsJson() || $request->is('api/*')) {
+                $headers = $e->getHeaders();
+                $retryAfter = $headers['Retry-After'] ?? 60;
+                
+                $message = 'Muitas requisições. Por favor, aguarde ' . (int) $retryAfter . ' segundo(s) antes de tentar novamente.';
+                if ($retryAfter >= 60) {
+                    $minutes = round($retryAfter / 60);
+                    $message = "Muitas requisições. Por favor, aguarde {$minutes} minuto(s) antes de tentar novamente.";
+                }
+                
+                $response = response()->json([
+                    'message' => $message,
+                    'error' => 'Too Many Attempts.',
+                    'retry_after' => (int) $retryAfter,
+                    'retry_after_seconds' => (int) $retryAfter,
+                    'success' => false,
+                ], 429)->withHeaders([
+                    'Retry-After' => (string) $retryAfter,
+                    'X-RateLimit-Limit' => (string) ($headers['X-RateLimit-Limit'] ?? '200'),
+                    'X-RateLimit-Remaining' => (string) ($headers['X-RateLimit-Remaining'] ?? '0'),
+                ]);
+                
+                return $addCorsToResponse($response, $request);
+            }
+        });
+        
         // Exceções de Não Encontrado - Not Found (404)
         $exceptions->render(function (\App\Domain\Exceptions\NotFoundException $e, $request) use ($addCorsToResponse) {
             if ($request->expectsJson()) {

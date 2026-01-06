@@ -81,13 +81,13 @@ Route::prefix('v1')->group(function () {
         ->middleware(['throttle:10,1']); // 10 consultas por minuto
 
     // Rotas autenticadas
-    // Rate limiting: 120 requisições por minuto, 1000 por hora
+    // Rate limiting: 200 requisições por minuto (aumentado para evitar bloqueios)
     // Rotas de criação/edição têm rate limiting adicional
     // Rotas autenticadas: aqui sim aplicamos contexto (empresa/tenant) após auth
     // 🔥 JWT STATELESS: Middleware unificado com autenticação JWT
     // Consolida JWT auth + SetAuthContext + EnsureEmpresaAtivaContext em um único middleware
     // Sem estado, sem sessão, sem Redis - perfeito para escalabilidade horizontal
-    Route::middleware([\App\Http\Middleware\AuthenticateAndBootstrap::class, 'throttle:120,1'])->group(function () {
+    Route::middleware([\App\Http\Middleware\AuthenticateAndBootstrap::class, 'throttle:200,1'])->group(function () {
         // Rotas que NÃO precisam de assinatura (exceções)
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::get('/auth/user', [AuthController::class, 'user']);

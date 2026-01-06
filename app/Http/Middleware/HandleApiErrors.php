@@ -80,6 +80,7 @@ class HandleApiErrors
                 'ip' => $request->ip(),
                 'user_id' => auth()->id(),
                 'retry_after' => $retryAfter,
+                'headers' => $headers,
             ]);
             
             $message = 'Muitas requisições. Por favor, aguarde ' . (int) $retryAfter . ' segundo(s) antes de tentar novamente.';
@@ -95,9 +96,9 @@ class HandleApiErrors
                 'retry_after_seconds' => (int) $retryAfter,
                 'success' => false,
             ], 429)->withHeaders([
-                'Retry-After' => $retryAfter,
-                'X-RateLimit-Limit' => $headers['X-RateLimit-Limit'] ?? '120',
-                'X-RateLimit-Remaining' => $headers['X-RateLimit-Remaining'] ?? '0',
+                'Retry-After' => (string) $retryAfter,
+                'X-RateLimit-Limit' => (string) ($headers['X-RateLimit-Limit'] ?? '200'),
+                'X-RateLimit-Remaining' => (string) ($headers['X-RateLimit-Remaining'] ?? '0'),
             ]);
             
             // 🔥 ARQUITETURA LIMPA: Usar método centralizado do HandleCorsCustom
