@@ -28,12 +28,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'security.headers' => \App\Http\Middleware\SecurityHeaders::class,
         ]);
         
-        // ✅ CORS no grupo api (append)
-        // O middleware usa try-catch interno para SEMPRE adicionar headers CORS
-        // Mesmo em erros 500, o CORS é garantido
-        $middleware->api(append: [
-            \App\Http\Middleware\HandleCorsCustom::class,
-        ]);
+        // ✅ CORS como GLOBAL PREPEND
+        // Roda PRIMEIRO (antes de tudo) e processa resposta por ÚLTIMO
+        // Isso garante que QUALQUER erro seja capturado pelo try-catch do CORS
+        $middleware->prepend(\App\Http\Middleware\HandleCorsCustom::class);
         
         // Headers de segurança apenas para rotas web (não interfere com API/CORS)
         $middleware->web(append: [

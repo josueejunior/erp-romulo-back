@@ -19,15 +19,20 @@ class HandleCorsCustom
 {
     public function handle(Request $request, Closure $next): Response
     {
+        \Log::debug('➡ HandleCorsCustom entrou', ['path' => $request->path(), 'method' => $request->method()]);
+
         // OPTIONS (preflight) → responde imediatamente
         if ($request->getMethod() === 'OPTIONS') {
+            \Log::debug('⬅ HandleCorsCustom: OPTIONS preflight');
             return response('', 204)->withHeaders($this->headers($request));
         }
 
         // 🔥 CRÍTICO: try-catch para SEMPRE adicionar CORS
         try {
             $response = $next($request);
+            \Log::debug('⬅ HandleCorsCustom: resposta OK', ['status' => $response->getStatusCode()]);
         } catch (\Throwable $e) {
+            \Log::error('⬅ HandleCorsCustom: EXCEÇÃO CAPTURADA', ['error' => $e->getMessage()]);
             // Log do erro real (para debug)
             \Log::error('HandleCorsCustom capturou exceção', [
                 'message' => $e->getMessage(),
