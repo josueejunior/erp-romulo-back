@@ -81,6 +81,8 @@ class AssinaturaController extends BaseApiController
             // Tentar buscar assinatura, mas não lançar erro se não encontrar
             try {
                 $assinatura = $this->buscarAssinaturaAtualUseCase->executar($tenant->id);
+
+                \Log::info('AssinaturaController@atual - Tenant ID', ['tenant_id' => $tenant->id]);
                 
                 // Transformar entidade do domínio em DTO de resposta
                 $responseDTO = $this->assinaturaResource->toResponse($assinatura);
