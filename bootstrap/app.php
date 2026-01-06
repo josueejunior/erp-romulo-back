@@ -21,9 +21,13 @@ return Application::configure(basePath: dirname(__DIR__))
             'security.headers' => \App\Http\Middleware\SecurityHeaders::class,
         ]);
         
-        // Configurar CORS para React - DEVE rodar ANTES de qualquer outro middleware
+        // Configurar CORS para React - DEVE rodar PRIMEIRO para preflight OPTIONS
         $middleware->api(prepend: [
             \Illuminate\Http\Middleware\HandleCors::class,
+        ]);
+        
+        // HandleApiErrors após CORS
+        $middleware->api(prepend: [
             \App\Http\Middleware\HandleApiErrors::class,
         ]);
         

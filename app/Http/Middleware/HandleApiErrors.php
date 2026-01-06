@@ -51,7 +51,7 @@ class HandleApiErrors
                 $message = "Muitas requisições. Por favor, aguarde {$minutes} minuto(s) antes de tentar novamente.";
             }
             
-            return response()->json([
+            $response = response()->json([
                 'message' => $message,
                 'error' => 'Too Many Attempts.',
                 'retry_after' => (int) $retryAfter,
@@ -62,6 +62,8 @@ class HandleApiErrors
                 'X-RateLimit-Limit' => $headers['X-RateLimit-Limit'] ?? '120',
                 'X-RateLimit-Remaining' => $headers['X-RateLimit-Remaining'] ?? '0',
             ]);
+            
+            return $this->addCorsHeaders($request, $response);
         } catch (ValidationException $e) {
             $errors = $e->errors();
             
@@ -75,23 +77,29 @@ class HandleApiErrors
                 'data' => $request->all(),
             ]);
             
-            return response()->json([
+            $response = response()->json([
                 'message' => 'Dados inválidos',
                 'errors' => $errors,
             ], 422);
+            
+            return $this->addCorsHeaders($request, $response);
         } catch (ModelNotFoundException $e) {
             \Log::warning('Model não encontrado', [
                 'model' => class_basename($e->getModel()),
                 'url' => $request->fullUrl(),
             ]);
             
-            return response()->json([
+            $response = response()->json([
                 'message' => 'Recurso não encontrado',
             ], 404);
+            
+            return $this->addCorsHeaders($request, $response);
         } catch (AuthenticationException $e) {
-            return response()->json([
+            $response = response()->json([
                 'message' => 'Não autenticado',
             ], 401);
+            
+            return $this->addCorsHeaders($request, $response);
         } catch (\Exception $e) {
             \Log::error('Erro não tratado na API', [
                 'message' => $e->getMessage(),
@@ -102,12 +110,55 @@ class HandleApiErrors
                 'trace' => config('app.debug') ? $e->getTraceAsString() : null,
             ]);
             
-            return response()->json([
+            $response = response()->json([
                 'message' => config('app.debug') 
                     ? $e->getMessage() 
                     : 'Erro interno do servidor',
             ], 500);
+            
+            return $this->addCorsHeaders($request, $response);
         }
+    }
+    
+    /**
+     * Adicionar headers CORS à resposta usando a mesma lógica do HandleCors
+     */
+    protected function addCorsHeaders(Request $request, Response $response): Response
+    {
+        $origin = $request->header('Origin');
+        $allowedOrigins = config('cors.allowed_origins', []);
+        
+        // Verificar se a origem está permitida
+        $isAllowed = false;
+        if ($origin) {
+            // Verificar se está na lista de origens permitidas
+            if (in_array($origin, $allowedOrigins)) {
+                $isAllowed = true;
+            }
+            // Verificar padrões (se houver)
+            foreach (config('cors.allowed_origins_patterns', []) as $pattern) {
+                if (preg_match($pattern, $origin)) {
+                    $isAllowed = true;
+                    break;
+                }
+            }
+        }
+        
+        if ($isAllowed) {
+            $response->headers->set('Access-Control-Allow-Origin', $origin);
+            if (config('cors.supports_credentials', false)) {
+                $response->headers->set('Access-Control-Allow-Credentials', 'true');
+            }
+            $response->headers->set('Access-Control-Allow-Methods', implode(', ', config('cors.allowed_methods', ['*'])));
+            $allowedHeaders = config('cors.allowed_headers', ['*']);
+            if (is_array($allowedHeaders)) {
+                $response->headers->set('Access-Control-Allow-Headers', implode(', ', $allowedHeaders));
+            } else {
+                $response->headers->set('Access-Control-Allow-Headers', $allowedHeaders);
+            }
+        }
+        
+        return $response;
     }
 }
 
