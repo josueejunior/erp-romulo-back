@@ -23,11 +23,25 @@ class HandleApiErrors
             'url' => $request->fullUrl(),
             'method' => $request->method(),
             'path' => $request->path(),
+            'route' => $request->route() ? $request->route()->getName() : 'NO_ROUTE',
+            'route_action' => $request->route() ? $request->route()->getActionName() : 'NO_ACTION',
         ]);
         
         try {
-            \Log::debug('HandleApiErrors::handle - Chamando $next($request)');
+            \Log::debug('HandleApiErrors::handle - Chamando $next($request)', [
+                'route' => $request->route() ? $request->route()->getName() : 'NO_ROUTE',
+            ]);
+            
+            // Registrar tempo antes de chamar $next
+            $startTime = microtime(true);
+            
             $response = $next($request);
+            
+            $elapsedTime = microtime(true) - $startTime;
+            
+            \Log::debug('HandleApiErrors::handle - $next($request) retornou', [
+                'elapsed_time' => round($elapsedTime, 3) . 's',
+            ]);
             
             \Log::debug('HandleApiErrors::handle - Resposta recebida', [
                 'status' => $response->getStatusCode(),
