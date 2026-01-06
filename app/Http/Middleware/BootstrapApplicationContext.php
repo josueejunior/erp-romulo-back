@@ -12,75 +12,41 @@ use Illuminate\Support\Facades\Log;
  * 🔥 CAMADA 6 - Bootstrap de Contexto (Empresa)
  * 
  * Responsabilidade ÚNICA: Inicializar ApplicationContext (empresa ativa)
- * 
- * ✅ Faz:
- * - Chama ApplicationContext::bootstrap()
- * - Resolve empresa ativa
- * - Valida assinatura (se necessário)
- * 
- * ❌ NUNCA faz:
- * - Autenticação (já foi feita)
- * - Tenancy (já foi inicializado por ResolveTenantContext)
- * - Validação de regras de negócio
- * 
- * 📌 Nota: Este middleware só deve rodar APÓS ResolveTenantContext
  */
 class BootstrapApplicationContext
 {
-    public function __construct(
-        private ApplicationContextContract $context
-    ) {
-        // 🔥 LOG CRÍTICO: Se este log não aparecer, o middleware não está sendo instanciado
-        error_log('BootstrapApplicationContext::__construct - CONSTRUTOR EXECUTADO (error_log)');
-        Log::emergency('BootstrapApplicationContext::__construct - CONSTRUTOR EXECUTADO', [
-            'context_class' => get_class($context),
-        ]);
-    }
-
     public function handle(Request $request, Closure $next): Response
     {
-        // 🔥 LOG CRÍTICO: Se este log não aparecer, o middleware não está sendo executado
-        error_log('BootstrapApplicationContext::handle - ✅ INÍCIO (error_log)');
-        Log::info('BootstrapApplicationContext::handle - ✅ INÍCIO', [
-            'path' => $request->path(),
-        ]);
+        Log::debug('➡ BootstrapApplicationContext entrou', ['path' => $request->path()]);
 
         // Verificar se usuário está autenticado
-        // 🔥 IMPORTANTE: Usar guard 'sanctum' explicitamente (mesmo guard usado por AuthenticateJWT)
         $user = auth('sanctum')->user();
         
         if (!$user) {
-            Log::warning('BootstrapApplicationContext::handle - Usuário não autenticado');
+            Log::warning('BootstrapApplicationContext: Usuário não autenticado');
             return response()->json([
                 'message' => 'Não autenticado. Faça login para continuar.',
             ], 401);
         }
 
-        // Se for admin, não precisa de bootstrap (não tem empresa/tenant)
+        // Se for admin, não precisa de bootstrap
         if ($user instanceof \App\Modules\Auth\Models\AdminUser) {
-            Log::debug('BootstrapApplicationContext::handle - Admin detectado, pulando bootstrap');
+            Log::debug('⬅ BootstrapApplicationContext: admin, pulando');
             return $next($request);
         }
 
-        // Bootstrap do ApplicationContext (resolve empresa ativa, valida assinatura, etc.)
+        // Bootstrap do ApplicationContext
         try {
-            Log::debug('BootstrapApplicationContext::handle - Iniciando bootstrap');
-            $startTime = microtime(true);
+            $context = app(ApplicationContextContract::class);
+            $context->bootstrap($request);
             
-            $this->context->bootstrap($request);
-            
-            $elapsed = microtime(true) - $startTime;
-            Log::info('BootstrapApplicationContext::handle - ✅ Bootstrap concluído', [
-                'elapsed_time' => round($elapsed, 3) . 's',
-                'tenant_id' => $this->context->getTenantIdOrNull(),
-                'empresa_id' => $this->context->getEmpresaIdOrNull(),
+            Log::debug('⬅ BootstrapApplicationContext: bootstrap OK', [
+                'tenant_id' => $context->getTenantIdOrNull(),
+                'empresa_id' => $context->getEmpresaIdOrNull(),
             ]);
         } catch (\Exception $e) {
-            Log::error('BootstrapApplicationContext::handle - Erro no bootstrap', [
+            Log::error('BootstrapApplicationContext: erro', [
                 'error' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString(),
             ]);
             throw $e;
         }
