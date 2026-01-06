@@ -22,8 +22,9 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
         
         // Configurar CORS para React - DEVE rodar PRIMEIRO para preflight OPTIONS
+        // Usando middleware customizado para garantir que funcione corretamente
         $middleware->api(prepend: [
-            \Illuminate\Http\Middleware\HandleCors::class,
+            \App\Http\Middleware\HandleCorsCustom::class,
         ]);
         
         // HandleApiErrors após CORS
