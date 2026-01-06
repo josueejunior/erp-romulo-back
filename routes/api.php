@@ -63,6 +63,10 @@ Route::prefix('v1')->group(function () {
         ->middleware(['throttle:20,1', 'throttle:50,60']); // 20/min, 50/hora
     Route::post('/auth/register', [AuthController::class, 'register'])
         ->middleware(['throttle:10,1', 'throttle:20,60']); // 10/min, 20/hora
+    Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])
+        ->middleware(['throttle:5,1', 'throttle:10,60']); // 5/min, 10/hora (prevenir spam)
+    Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])
+        ->middleware(['throttle:5,1', 'throttle:10,60']); // 5/min, 10/hora
     
     // Cadastro público (cria tenant + assinatura + usuário)
     Route::post('/cadastro-publico', [\App\Http\Controllers\Public\CadastroPublicoController::class, 'store'])
