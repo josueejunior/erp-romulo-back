@@ -201,23 +201,14 @@ class AssinaturaController extends BaseApiController
      */
     public function atual(Request $request): JsonResponse
     {
-        try {
+        
             // 🔥 CRÍTICO: Buscar tenant correto baseado na empresa ativa
             // Isso garante que mesmo se o header X-Tenant-ID estiver desatualizado,
             // ainda buscaremos a assinatura no tenant correto da empresa ativa
             $tenant = $this->getTenantCorretoDaEmpresaAtiva();
 
-            if (!$tenant) {
-                // Se não conseguir determinar o tenant, retornar null (sem assinatura)
-                return response()->json([
-                    'data' => null,
-                    'message' => 'Nenhuma assinatura encontrada',
-                    'code' => 'NO_SUBSCRIPTION'
-                ], 200);
-            }
-
-            // Tentar buscar assinatura, mas não lançar erro se não encontrar
-            try {
+           
+       
                 $assinatura = $this->buscarAssinaturaAtualUseCase->executar($tenant->id);
                 
                 // Transformar entidade do domínio em DTO de resposta
@@ -226,17 +217,7 @@ class AssinaturaController extends BaseApiController
                 return response()->json([
                     'data' => $responseDTO->toArray()
                 ]);
-            } catch (\App\Domain\Exceptions\NotFoundException $e) {
-                // Não há assinatura - retornar null para que o frontend possa tratar
-                return response()->json([
-                    'data' => null,
-                    'message' => 'Nenhuma assinatura encontrada',
-                    'code' => 'NO_SUBSCRIPTION'
-                ], 200);
-            }
-        } catch (\Exception $e) {
-            return $this->handleException($e, 'Erro ao buscar assinatura atual');
-        }
+             
     }
 
     /**
