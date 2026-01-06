@@ -206,10 +206,16 @@ class AssinaturaController extends BaseApiController
             // Isso garante que mesmo se o header X-Tenant-ID estiver desatualizado,
             // ainda buscaremos a assinatura no tenant correto da empresa ativa
 
-     
             $tenant = $this->getTenantCorretoDaEmpresaAtiva();
 
-            dd($tenant->id);
+            // Salvar no log qual id está sendo utilizado
+            if ($tenant) {
+                \Log::info('AssinaturaController::atual() - Tenant ID utilizado', [
+                    'tenant_id' => $tenant->id,
+                ]);
+            } else {
+                \Log::warning('AssinaturaController::atual() - Nenhum tenant encontrado');
+            }
        
                 $assinatura = $this->buscarAssinaturaAtualUseCase->executar($tenant->id);
                 
