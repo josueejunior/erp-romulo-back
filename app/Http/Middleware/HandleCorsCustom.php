@@ -136,6 +136,14 @@ class HandleCorsCustom
             'method' => $method,
         ]);
         
+        // 🔥 BLINDAGEM TOTAL: Garantir que CORS seja aplicado SEMPRE, mesmo em erros 500
+        // Usar set_time_limit para evitar timeout silencioso
+        set_time_limit(30);
+        
+        // Registrar tempo antes de chamar $next
+        $startTime = microtime(true);
+        $response = null;
+        
         try {
             \Log::debug('HandleCorsCustom - Chamando $next($request)', [
                 'path' => $request->path(),
@@ -144,52 +152,8 @@ class HandleCorsCustom
                 'route_action' => $request->route() ? $request->route()->getActionName() : 'NO_ACTION',
             ]);
             
-            // Usar set_time_limit para evitar timeout silencioso
-            set_time_limit(30);
-            
-            // Registrar tempo antes de chamar $next
-            $startTime = microtime(true);
-            
-            // Registrar erro fatal handler antes de chamar $next
-            $shutdownRegistered = false;
-            register_shutdown_function(function () use ($request, $startTime, &$shutdownRegistered) {
-                if ($shutdownRegistered) {
-                    return; // Evitar múltiplas execuções
-                }
-                $shutdownRegistered = true;
-                
-                $elapsedTime = microtime(true) - $startTime;
-                $lastError = error_get_last();
-                
-                if ($elapsedTime > 5 || $lastError) {
-                    \Log::error('HandleCorsCustom - Shutdown function executado', [
-                        'path' => $request->path(),
-                        'method' => $request->method(),
-                        'elapsed_time' => round($elapsedTime, 3) . 's',
-                        'last_error' => $lastError,
-                        'memory_usage' => memory_get_usage(true),
-                        'memory_peak' => memory_get_peak_usage(true),
-                    ]);
-                }
-            });
-            
-            // Tentar capturar qualquer erro durante $next($request)
-            $response = null;
-            $exception = null;
-            
-            try {
-                $response = $next($request);
-            } catch (\Throwable $e) {
-                $exception = $e;
-                \Log::error('HandleCorsCustom - Exceção durante $next($request)', [
-                    'message' => $e->getMessage(),
-                    'file' => $e->getFile(),
-                    'line' => $e->getLine(),
-                    'class' => get_class($e),
-                    'trace' => config('app.debug') ? $e->getTraceAsString() : null,
-                ]);
-                throw $e; // Re-lançar para ser capturado pelo catch externo
-            }
+            // Tentar executar $next($request)
+            $response = $next($request);
             
             $elapsedTime = microtime(true) - $startTime;
             
@@ -198,55 +162,69 @@ class HandleCorsCustom
                 'response_type' => $response ? get_class($response) : 'NULL',
                 'elapsed_time' => round($elapsedTime, 3) . 's',
             ]);
+            
         } catch (\Throwable $e) {
-            \Log::error('HandleCorsCustom - Exceção capturada', [
+            // 🔥 CRÍTICO: Capturar QUALQUER exceção e garantir CORS
+            $elapsedTime = microtime(true) - $startTime;
+            
+            \Log::error('HandleCorsCustom - Exceção capturada (500)', [
                 'message' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
                 'class' => get_class($e),
+                'elapsed_time' => round($elapsedTime, 3) . 's',
                 'trace' => config('app.debug') ? $e->getTraceAsString() : null,
+                'previous' => $e->getPrevious() ? [
+                    'message' => $e->getPrevious()->getMessage(),
+                    'file' => $e->getPrevious()->getFile(),
+                    'line' => $e->getPrevious()->getLine(),
+                ] : null,
             ]);
             
-            // Criar resposta de erro e adicionar CORS usando método centralizado
-            $errorResponse = response()->json([
+            // Criar resposta de erro 500 COM CORS
+            $response = response()->json([
                 'message' => config('app.debug') ? $e->getMessage() : 'Erro interno do servidor',
+                'file' => config('app.debug') ? $e->getFile() : null,
+                'line' => config('app.debug') ? $e->getLine() : null,
             ], 500);
             
-            // Adicionar headers CORS usando método centralizado
-            $errorResponse = $this->addCorsHeaders($request, $errorResponse);
-            
-            \Log::info('HandleCorsCustom - Headers CORS adicionados na resposta de erro', [
-                'has_cors_origin' => $errorResponse->headers->has('Access-Control-Allow-Origin'),
-            ]);
-            
-            return $errorResponse;
         } catch (\Error $e) {
-            // Capturar erros fatais do PHP (PHP 7+)
-            \Log::error('HandleCorsCustom - Erro fatal capturado', [
+            // 🔥 CRÍTICO: Capturar erros fatais do PHP (PHP 7+)
+            $elapsedTime = microtime(true) - $startTime;
+            
+            \Log::error('HandleCorsCustom - Erro fatal capturado (500)', [
                 'message' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
                 'class' => get_class($e),
+                'elapsed_time' => round($elapsedTime, 3) . 's',
                 'trace' => config('app.debug') ? $e->getTraceAsString() : null,
             ]);
             
-            // Criar resposta de erro e adicionar CORS usando método centralizado
-            $errorResponse = response()->json([
+            // Criar resposta de erro 500 COM CORS
+            $response = response()->json([
                 'message' => config('app.debug') ? $e->getMessage() : 'Erro interno do servidor',
+                'file' => config('app.debug') ? $e->getFile() : null,
+                'line' => config('app.debug') ? $e->getLine() : null,
             ], 500);
-            
-            // Adicionar headers CORS usando método centralizado
-            $errorResponse = $this->addCorsHeaders($request, $errorResponse);
-            
-            return $errorResponse;
         }
         
-        // Adicionar headers CORS na resposta normal usando método centralizado
+        // 🔥 GARANTIA ABSOLUTA: CORS SEMPRE aplicado, mesmo em erro 500
+        // Se $response for null (não deveria acontecer, mas vamos garantir)
+        if (!$response) {
+            \Log::error('HandleCorsCustom - Response é NULL, criando resposta padrão');
+            $response = response()->json([
+                'message' => 'Erro interno do servidor',
+            ], 500);
+        }
+        
+        // Adicionar headers CORS usando método centralizado (SEMPRE, mesmo em erro 500)
         $response = $this->addCorsHeaders($request, $response);
         
-        \Log::info('HandleCorsCustom - Headers CORS adicionados na resposta normal', [
+        \Log::info('HandleCorsCustom - Headers CORS aplicados', [
             'status_code' => $response->getStatusCode(),
             'has_cors_origin' => $response->headers->has('Access-Control-Allow-Origin'),
+            'cors_origin_value' => $response->headers->get('Access-Control-Allow-Origin'),
         ]);
         
         return $response;
