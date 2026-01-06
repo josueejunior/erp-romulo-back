@@ -13,8 +13,6 @@ use Illuminate\Support\Facades\Auth;
 
 /**
  * Service para criar e gerenciar identidade de autenticação
- * 
- * 🔥 ARQUITETURA LIMPA: Usa TenantRepository para buscar tenants
  */
 class AuthIdentityService
 {
@@ -27,20 +25,16 @@ class AuthIdentityService
      */
     public function createFromRequest(Request $request, string $scope = 'api-v1'): IAuthIdentity
     {
-        // 🔥 IMPORTANTE: Usar guard 'sanctum' explicitamente
-        // O AuthenticateJWT define o usuário no guard 'sanctum', não no guard padrão
         $user = auth('sanctum')->user();
         
         if (!$user) {
             return new NullAuthIdentity($scope);
         }
 
-        // Verificar se é admin central
         if ($user instanceof AdminUser) {
             return new AdminAuthIdentity($user, $scope);
         }
 
-        // Usuário do tenant
         if ($user instanceof User) {
             return new TenantAuthIdentity($user, $request, $scope, $this->tenantRepository);
         }
@@ -75,8 +69,6 @@ class AuthIdentityService
 
 /**
  * Implementação para usuário do tenant
- * 
- * 🔥 ARQUITETURA LIMPA: Usa TenantRepository para buscar tenant
  */
 class TenantAuthIdentity implements IAuthIdentity
 {
@@ -91,47 +83,26 @@ class TenantAuthIdentity implements IAuthIdentity
         string $scope = 'api-v1',
         ?TenantRepositoryInterface $tenantRepository = null
     ) {
-        \Log::debug('TenantAuthIdentity::__construct - INÍCIO', [
-            'user_id' => $user->id,
-            'scope' => $scope,
-        ]);
-        
         $this->user = $user;
         $this->scope = $scope;
         
-        // Obter tenant_id de múltiplas fontes
-        \Log::debug('TenantAuthIdentity::__construct - Resolvendo tenant_id');
+        // Resolver tenant_id
         $tenantId = $request->header('X-Tenant-ID')
             ?? $this->getTenantIdFromToken($request)
             ?? null;
-        \Log::debug('TenantAuthIdentity::__construct - tenant_id resolvido', ['tenant_id' => $tenantId]);
 
         if ($tenantId) {
-            \Log::debug('TenantAuthIdentity::__construct - Buscando tenant', ['tenant_id' => $tenantId]);
-            $startTime = microtime(true);
-            // 🔥 ARQUITETURA LIMPA: Usar TenantRepository em vez de Eloquent direto
             if ($tenantRepository) {
                 $tenantDomain = $tenantRepository->buscarPorId($tenantId);
                 if ($tenantDomain) {
                     $this->tenant = $tenantRepository->buscarModeloPorId($tenantId);
                 }
             } else {
-                // Fallback para compatibilidade (não recomendado)
                 $this->tenant = Tenant::find($tenantId);
             }
-            $elapsedTime = microtime(true) - $startTime;
-            \Log::debug('TenantAuthIdentity::__construct - Tenant buscado', [
-                'elapsed_time' => round($elapsedTime, 3) . 's',
-                'tenant_found' => $this->tenant !== null,
-            ]);
         }
 
-        // Obter empresa ativa (mantém Eloquent direto porque precisa do relacionamento)
-        // Isso é aceitável porque é infraestrutura de autenticação e precisa do modelo
-        \Log::debug('TenantAuthIdentity::__construct - Resolvendo empresa ativa', [
-            'empresa_ativa_id' => $this->user->empresa_ativa_id,
-        ]);
-        $startTime = microtime(true);
+        // Resolver empresa ativa
         if ($this->user->empresa_ativa_id) {
             $this->empresa = Empresa::find($this->user->empresa_ativa_id);
         } else {
@@ -141,13 +112,6 @@ class TenantAuthIdentity implements IAuthIdentity
                 $this->user->save();
             }
         }
-        $elapsedTime = microtime(true) - $startTime;
-        \Log::debug('TenantAuthIdentity::__construct - Empresa resolvida', [
-            'elapsed_time' => round($elapsedTime, 3) . 's',
-            'empresa_id' => $this->empresa?->id,
-        ]);
-        
-        \Log::debug('TenantAuthIdentity::__construct - FIM');
     }
 
     public function getUserId(): ?int
@@ -197,13 +161,11 @@ class TenantAuthIdentity implements IAuthIdentity
 
     protected function getTenantIdFromToken(Request $request): ?string
     {
-        // 🔥 JWT STATELESS: Obter tenant_id do payload JWT
         if ($request->attributes->has('auth')) {
             $payload = $request->attributes->get('auth');
             return $payload['tenant_id'] ?? null;
         }
         
-        // Fallback: tentar obter do header
         $tenantId = $request->header('X-Tenant-ID');
         return $tenantId ? (string) $tenantId : null;
     }
@@ -230,12 +192,12 @@ class AdminAuthIdentity implements IAuthIdentity
 
     public function getTenantId(): ?string
     {
-        return null; // Admin não tem tenant
+        return null;
     }
 
     public function getEmpresaId(): ?int
     {
-        return null; // Admin não tem empresa
+        return null;
     }
 
     public function getUser(): ?\Illuminate\Contracts\Auth\Authenticatable
@@ -326,4 +288,3 @@ class NullAuthIdentity implements IAuthIdentity
         return $this->scope;
     }
 }
-

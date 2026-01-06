@@ -33,67 +33,23 @@ class BuildAuthContext
     public function handle(Request $request, Closure $next, ?string $scope = null): Response
     {
         $scope = $scope ?? 'api-v1';
-        
-        Log::info('BuildAuthContext::handle - ✅ INÍCIO', [
-            'path' => $request->path(),
-            'scope' => $scope,
-        ]);
 
         // Verificar se usuário está autenticado (deve ter sido definido por AuthenticateJWT)
-        // 🔥 IMPORTANTE: Usar guard 'sanctum' explicitamente (mesmo guard usado por AuthenticateJWT)
         $user = auth('sanctum')->user();
         
         if (!$user) {
-            Log::warning('BuildAuthContext::handle - Usuário não autenticado', [
-                'guard_check' => auth('sanctum')->check(),
-                'guard_id' => auth('sanctum')->id(),
-            ]);
             return response()->json([
                 'message' => 'Não autenticado. Faça login para continuar.',
             ], 401);
         }
 
         // Criar identidade de autenticação
-        Log::debug('BuildAuthContext::handle - Criando identidade de autenticação');
         $identity = $this->authIdentityService->createFromRequest($request, $scope);
         
         // Bind no container
         app()->instance(IAuthIdentity::class, $identity);
         $request->scope = $scope;
-        
-        Log::info('BuildAuthContext::handle - ✅ Identidade criada', [
-            'user_id' => $identity->getUserId(),
-            'tenant_id' => $identity->getTenantId(),
-            'is_admin' => $identity->isAdminCentral(),
-        ]);
 
-        Log::debug('BuildAuthContext::handle - Chamando $next($request)');
-        
-        // 🔥 LOG: Verificar middlewares da rota antes de chamar $next
-        $route = $request->route();
-        if ($route) {
-            $middlewares = $route->gatherMiddleware();
-            error_log('BuildAuthContext::handle - Middlewares da rota: ' . json_encode($middlewares));
-            Log::debug('BuildAuthContext::handle - Middlewares da rota', [
-                'middlewares' => $middlewares,
-            ]);
-        }
-        
-        try {
-            $response = $next($request);
-            Log::debug('BuildAuthContext::handle - $next($request) retornou', [
-                'status' => method_exists($response, 'getStatusCode') ? $response->getStatusCode() : null,
-            ]);
-            return $response;
-        } catch (\Exception $e) {
-            Log::error('BuildAuthContext::handle - Erro ao chamar $next($request)', [
-                'error' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-            throw $e;
-        }
+        return $next($request);
     }
 }
-

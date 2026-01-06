@@ -29,20 +29,17 @@ class JWTService
 
     /**
      * Gerar token JWT
-     * 
-     * @param array $payload Dados do usuário (user_id, tenant_id, role, etc.)
-     * @return string Token JWT
      */
     public function generateToken(array $payload): string
     {
         $now = time();
         
         $jwtPayload = [
-            'iss' => $this->issuer, // Issuer
-            'sub' => $payload['user_id'] ?? null, // Subject (user_id)
-            'iat' => $now, // Issued at
-            'exp' => $now + $this->expiration, // Expiration
-            'nbf' => $now, // Not before
+            'iss' => $this->issuer,
+            'sub' => $payload['user_id'] ?? null,
+            'iat' => $now,
+            'exp' => $now + $this->expiration,
+            'nbf' => $now,
         ];
 
         // Adicionar dados customizados
@@ -69,64 +66,28 @@ class JWTService
             }
         }
 
-        try {
-            $token = JWT::encode($jwtPayload, $this->secret, 'HS256');
-            
-            Log::debug('JWTService::generateToken - Token gerado', [
-                'user_id' => $payload['user_id'] ?? null,
-                'tenant_id' => $payload['tenant_id'] ?? null,
-                'expires_in' => $this->expiration,
-            ]);
-            
-            return $token;
-        } catch (\Exception $e) {
-            Log::error('JWTService::generateToken - Erro ao gerar token', [
-                'error' => $e->getMessage(),
-            ]);
-            throw $e;
-        }
+        return JWT::encode($jwtPayload, $this->secret, 'HS256');
     }
 
     /**
      * Validar e decodificar token JWT
-     * 
-     * @param string $token Token JWT
-     * @return array Payload decodificado
-     * @throws \Exception Se o token for inválido
      */
     public function validateToken(string $token): array
     {
         try {
             $decoded = JWT::decode($token, new Key($this->secret, 'HS256'));
-            
-            // Converter objeto para array
-            $payload = (array) $decoded;
-            
-            Log::debug('JWTService::validateToken - Token válido', [
-                'user_id' => $payload['sub'] ?? null,
-                'tenant_id' => $payload['tenant_id'] ?? null,
-            ]);
-            
-            return $payload;
+            return (array) $decoded;
         } catch (ExpiredException $e) {
-            Log::warning('JWTService::validateToken - Token expirado');
             throw new \Exception('Token expirado', 401);
         } catch (SignatureInvalidException $e) {
-            Log::warning('JWTService::validateToken - Assinatura inválida');
             throw new \Exception('Token inválido', 401);
         } catch (\Exception $e) {
-            Log::error('JWTService::validateToken - Erro ao validar token', [
-                'error' => $e->getMessage(),
-            ]);
             throw new \Exception('Token inválido', 401);
         }
     }
 
     /**
      * Obter payload do token sem validar (útil para debug)
-     * 
-     * @param string $token Token JWT
-     * @return array Payload (sem validação)
      */
     public function getPayload(string $token): array
     {
@@ -144,4 +105,3 @@ class JWTService
         return $payload;
     }
 }
-

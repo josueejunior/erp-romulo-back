@@ -25,8 +25,6 @@ use Illuminate\Support\Facades\Log;
  * - Empresa (outro middleware)
  * - Admin (outro middleware)
  * - Subscription (outro middleware)
- * 
- * 🎯 Princípio: JWT não sabe o que é empresa/tenant
  */
 class AuthenticateJWT
 {
@@ -36,16 +34,10 @@ class AuthenticateJWT
 
     public function handle(Request $request, Closure $next): Response
     {
-        Log::info('AuthenticateJWT::handle - ✅ INÍCIO', [
-            'path' => $request->path(),
-            'method' => $request->method(),
-        ]);
-
         // 1. Obter token do header Authorization
         $token = $request->bearerToken();
 
         if (!$token) {
-            Log::warning('AuthenticateJWT::handle - Token ausente');
             return response()->json([
                 'message' => 'Token de autenticação ausente. Faça login para continuar.',
             ], 401);
@@ -53,7 +45,6 @@ class AuthenticateJWT
 
         try {
             // 2. Validar e decodificar token JWT
-            Log::debug('AuthenticateJWT::handle - Validando token JWT');
             $payload = $this->jwtService->validateToken($token);
             
             // 3. Injetar payload no request (para outros middlewares)
@@ -67,7 +58,7 @@ class AuthenticateJWT
             $user = $this->resolveUser($payload);
             
             if (!$user) {
-                Log::warning('AuthenticateJWT::handle - Usuário não encontrado', [
+                Log::warning('JWT: usuário não encontrado', [
                     'user_id' => $payload['sub'] ?? null,
                 ]);
                 return response()->json([
@@ -77,19 +68,13 @@ class AuthenticateJWT
             
             // 5. Definir usuário no guard
             auth()->guard('sanctum')->setUser($user);
-            
-            Log::info('AuthenticateJWT::handle - ✅ Usuário autenticado', [
-                'user_id' => $user->id,
-                'user_class' => get_class($user),
-            ]);
 
             return $next($request);
 
         } catch (\Exception $e) {
-            Log::error('AuthenticateJWT::handle - Erro ao validar token', [
+            Log::warning('JWT: token inválido', [
                 'error' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
+                'path' => $request->path(),
             ]);
             
             return response()->json([
@@ -100,9 +85,6 @@ class AuthenticateJWT
 
     /**
      * Resolver usuário do banco baseado no payload JWT
-     * 
-     * 🔥 Responsabilidade única: Buscar User ou AdminUser
-     * ❌ NÃO inicializa tenancy (isso é responsabilidade de ResolveTenantContext)
      */
     private function resolveUser(array $payload): ?\Illuminate\Contracts\Auth\Authenticatable
     {
@@ -115,29 +97,13 @@ class AuthenticateJWT
 
         // Admin: buscar AdminUser (sem tenancy)
         if ($isAdmin) {
-            // Garantir que não há tenancy ativo para admin
             if (tenancy()->initialized) {
                 tenancy()->end();
             }
-            
-            $user = \App\Modules\Auth\Models\AdminUser::find($userId);
-            if ($user) {
-                Log::debug('AuthenticateJWT::resolveUser - AdminUser encontrado', [
-                    'user_id' => $user->id,
-                ]);
-            }
-            return $user;
+            return \App\Modules\Auth\Models\AdminUser::find($userId);
         }
 
-        // Usuário comum: buscar User (tenancy será inicializado por ResolveTenantContext)
-        // NÃO inicializar tenancy aqui - isso é responsabilidade de outro middleware
-        $user = \App\Modules\Auth\Models\User::find($userId);
-        if ($user) {
-            Log::debug('AuthenticateJWT::resolveUser - User encontrado', [
-                'user_id' => $user->id,
-            ]);
-        }
-        return $user;
+        // Usuário comum: buscar User
+        return \App\Modules\Auth\Models\User::find($userId);
     }
 }
-
