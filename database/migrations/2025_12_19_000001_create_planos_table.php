@@ -20,6 +20,7 @@ return new class extends Migration
             $table->decimal('preco_mensal', 10, 2);
             $table->decimal('preco_anual', 10, 2)->nullable();
             $table->integer('limite_processos')->nullable(); // null = ilimitado
+            $table->boolean('restricao_diaria')->default(true); // Restrição de 1 processo por dia
             $table->integer('limite_usuarios')->nullable(); // null = ilimitado
             $table->integer('limite_armazenamento_mb')->nullable(); // null = ilimitado
             $table->json('recursos_disponiveis')->nullable(); // Lista de funcionalidades

@@ -269,9 +269,10 @@ class AssinaturaController extends BaseApiController
             // Obter empresa automaticamente (middleware já inicializou baseado no X-Empresa-ID)
             $empresa = $this->getEmpresaAtivaOrFail();
             
+            // 🔥 NOVO: Buscar status da assinatura do USUÁRIO, não do tenant
             // Tentar buscar status, mas não lançar erro se não encontrar assinatura
             try {
-                $statusData = $this->obterStatusAssinaturaUseCase->executar($tenant->id, $empresa->id);
+                $statusData = $this->obterStatusAssinaturaUseCase->executar($user->id, $empresa->id);
 
                 return response()->json([
                     'data' => $statusData
