@@ -34,18 +34,23 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // 🔥 PROTEÇÃO ARQUITETURAL: Registrar ApplicationContext via interface
-        // Isso garante que todos dependam do contrato, não da implementação
-        $this->app->singleton(
-            \App\Contracts\ApplicationContextContract::class,
-            \App\Services\ApplicationContext::class
-        );
+        // 🔥 ApplicationContext - Singleton simples (sem dependências circulares)
+        // Criar instância única e compartilhá-la via interface E classe concreta
+        $contextInstance = null;
         
-        // ✅ Alias para compatibilidade: classe concreta -> interface (sem loop)
-        $this->app->alias(
-            \App\Contracts\ApplicationContextContract::class,
-            \App\Services\ApplicationContext::class
-        );
+        $this->app->singleton(\App\Contracts\ApplicationContextContract::class, function ($app) use (&$contextInstance) {
+            if (!$contextInstance) {
+                $contextInstance = new \App\Services\ApplicationContext(null);
+            }
+            return $contextInstance;
+        });
+        
+        $this->app->singleton(\App\Services\ApplicationContext::class, function ($app) use (&$contextInstance) {
+            if (!$contextInstance) {
+                $contextInstance = new \App\Services\ApplicationContext(null);
+            }
+            return $contextInstance;
+        });
         
         // Registrar modelo customizado do Sanctum para usar timestamps em português
         Sanctum::usePersonalAccessTokenModel(PersonalAccessToken::class);
