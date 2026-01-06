@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Contracts\IAuthIdentity;
 use App\Services\AuthIdentityService;
+use App\Contracts\ApplicationContextContract;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -20,10 +21,14 @@ class SetAuthContext
     public static string $scope = 'api-v1';
 
     protected AuthIdentityService $authIdentityService;
+    protected ApplicationContextContract $context;
 
-    public function __construct(AuthIdentityService $authIdentityService)
-    {
+    public function __construct(
+        AuthIdentityService $authIdentityService,
+        ApplicationContextContract $context
+    ) {
         $this->authIdentityService = $authIdentityService;
+        $this->context = $context;
     }
 
     /**
@@ -74,8 +79,26 @@ class SetAuthContext
         
         app()->instance(IAuthIdentity::class, $identity);
 
+        // 🔥 CORREÇÃO: Fazer bootstrap do ApplicationContext aqui mesmo
+        // Isso garante que o tenancy seja inicializado antes de continuar
+        \Log::info('SetAuthContext::handle - Chamando context->bootstrap()');
+        $startTime = microtime(true);
+        try {
+            $this->context->bootstrap($request);
+            $elapsedTime = microtime(true) - $startTime;
+            \Log::info('SetAuthContext::handle - context->bootstrap() concluído', [
+                'elapsed_time' => round($elapsedTime, 3) . 's',
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('SetAuthContext::handle - Erro no bootstrap', [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+            throw $e;
+        }
+
         \Log::debug('SetAuthContext::handle - Chamando $next($request)');
-        \Log::info('SetAuthContext::handle - ANTES DE $next - Próximo middleware deve ser EnsureEmpresaAtivaContext (empresa.context)');
         $startTime = microtime(true);
         $response = $next($request);
         $elapsedTime = microtime(true) - $startTime;
