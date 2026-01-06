@@ -151,19 +151,45 @@ class HandleCorsCustom
             $startTime = microtime(true);
             
             // Registrar erro fatal handler antes de chamar $next
-            register_shutdown_function(function () use ($request, $startTime) {
+            $shutdownRegistered = false;
+            register_shutdown_function(function () use ($request, $startTime, &$shutdownRegistered) {
+                if ($shutdownRegistered) {
+                    return; // Evitar múltiplas execuções
+                }
+                $shutdownRegistered = true;
+                
                 $elapsedTime = microtime(true) - $startTime;
-                if ($elapsedTime > 25) {
-                    \Log::error('HandleCorsCustom - Possível timeout ou erro fatal', [
+                $lastError = error_get_last();
+                
+                if ($elapsedTime > 5 || $lastError) {
+                    \Log::error('HandleCorsCustom - Shutdown function executado', [
                         'path' => $request->path(),
                         'method' => $request->method(),
                         'elapsed_time' => round($elapsedTime, 3) . 's',
-                        'last_error' => error_get_last(),
+                        'last_error' => $lastError,
+                        'memory_usage' => memory_get_usage(true),
+                        'memory_peak' => memory_get_peak_usage(true),
                     ]);
                 }
             });
             
-            $response = $next($request);
+            // Tentar capturar qualquer erro durante $next($request)
+            $response = null;
+            $exception = null;
+            
+            try {
+                $response = $next($request);
+            } catch (\Throwable $e) {
+                $exception = $e;
+                \Log::error('HandleCorsCustom - Exceção durante $next($request)', [
+                    'message' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                    'class' => get_class($e),
+                    'trace' => config('app.debug') ? $e->getTraceAsString() : null,
+                ]);
+                throw $e; // Re-lançar para ser capturado pelo catch externo
+            }
             
             $elapsedTime = microtime(true) - $startTime;
             
