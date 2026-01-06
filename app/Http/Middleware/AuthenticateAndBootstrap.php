@@ -12,17 +12,17 @@ use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Support\Facades\Log;
 
 /**
- * 🔥 MIDDLEWARE UNIFICADO: Autenticação + Bootstrap
+ * 🔥 MIDDLEWARE UNIFICADO: Autenticação JWT + Bootstrap
  * 
- * Este middleware consolida toda a lógica de autenticação e inicialização
- * do contexto em um único lugar, evitando problemas de travamento entre
- * middlewares separados.
+ * Este middleware consolida toda a lógica de autenticação JWT e inicialização
+ * do contexto em um único lugar.
  * 
  * Responsabilidades:
- * 1. Autentica o usuário via Sanctum
- * 2. Cria identidade de autenticação
- * 3. Inicializa ApplicationContext (tenancy, empresa, etc.)
- * 4. Continua com a requisição
+ * 1. Valida token JWT (stateless)
+ * 2. Define usuário autenticado no guard
+ * 3. Cria identidade de autenticação
+ * 4. Inicializa ApplicationContext (tenancy, empresa, etc.)
+ * 5. Continua com a requisição
  */
 class AuthenticateAndBootstrap
 {
@@ -94,12 +94,16 @@ class AuthenticateAndBootstrap
                 ], 401);
             }
             
-            // Definir usuário autenticado (compatibilidade com código legado)
+            // Definir usuário autenticado no guard baseado no payload JWT
             $this->setAuthenticatedUserFromPayload($payload);
             
+            // Verificar se usuário foi definido corretamente no guard
             $user = auth('sanctum')->user();
             if (!$user) {
-                Log::warning('AuthenticateAndBootstrap::handle - Usuário não encontrado após autenticação JWT');
+                Log::warning('AuthenticateAndBootstrap::handle - Usuário não encontrado após autenticação JWT', [
+                    'user_id' => $payload['sub'] ?? null,
+                    'is_admin' => $payload['is_admin'] ?? false,
+                ]);
                 return response()->json([
                     'message' => 'Usuário não encontrado.',
                 ], 401);
@@ -107,6 +111,8 @@ class AuthenticateAndBootstrap
             
             Log::debug('AuthenticateAndBootstrap::handle - Usuário autenticado', [
                 'user_id' => $user->id,
+                'user_class' => get_class($user),
+                'is_admin' => $payload['is_admin'] ?? false,
             ]);
 
             // 2. Criar identidade de autenticação
@@ -169,6 +175,8 @@ class AuthenticateAndBootstrap
 
     /**
      * Definir usuário autenticado no guard baseado no payload JWT
+     * 
+     * 🔥 JWT STATELESS: Busca usuário diretamente do banco baseado no user_id do token
      */
     private function setAuthenticatedUserFromPayload(array $payload): void
     {
@@ -178,14 +186,33 @@ class AuthenticateAndBootstrap
             $tenantId = $payload['tenant_id'] ?? null;
             
             if (!$userId) {
+                Log::warning('AuthenticateAndBootstrap::setAuthenticatedUserFromPayload - user_id ausente no payload');
                 return;
             }
 
-            // Se for admin, buscar AdminUser
+            Log::debug('AuthenticateAndBootstrap::setAuthenticatedUserFromPayload - Definindo usuário', [
+                'user_id' => $userId,
+                'is_admin' => $isAdmin,
+                'tenant_id' => $tenantId,
+            ]);
+
+            // Se for admin, buscar AdminUser (sem tenancy)
             if ($isAdmin) {
+                // Garantir que não há tenancy ativo para admin
+                if (tenancy()->initialized) {
+                    tenancy()->end();
+                }
+                
                 $user = \App\Modules\Auth\Models\AdminUser::find($userId);
                 if ($user) {
                     auth()->guard('sanctum')->setUser($user);
+                    Log::debug('AuthenticateAndBootstrap::setAuthenticatedUserFromPayload - AdminUser definido', [
+                        'user_id' => $user->id,
+                    ]);
+                } else {
+                    Log::warning('AuthenticateAndBootstrap::setAuthenticatedUserFromPayload - AdminUser não encontrado', [
+                        'user_id' => $userId,
+                    ]);
                 }
                 return;
             }
@@ -195,6 +222,13 @@ class AuthenticateAndBootstrap
                 $tenant = \App\Models\Tenant::find($tenantId);
                 if ($tenant) {
                     tenancy()->initialize($tenant);
+                    Log::debug('AuthenticateAndBootstrap::setAuthenticatedUserFromPayload - Tenancy inicializado', [
+                        'tenant_id' => $tenantId,
+                    ]);
+                } else {
+                    Log::warning('AuthenticateAndBootstrap::setAuthenticatedUserFromPayload - Tenant não encontrado', [
+                        'tenant_id' => $tenantId,
+                    ]);
                 }
             }
 
@@ -202,12 +236,23 @@ class AuthenticateAndBootstrap
             $user = \App\Modules\Auth\Models\User::find($userId);
             if ($user) {
                 auth()->guard('sanctum')->setUser($user);
+                Log::debug('AuthenticateAndBootstrap::setAuthenticatedUserFromPayload - User definido', [
+                    'user_id' => $user->id,
+                ]);
+            } else {
+                Log::warning('AuthenticateAndBootstrap::setAuthenticatedUserFromPayload - User não encontrado', [
+                    'user_id' => $userId,
+                    'tenant_id' => $tenantId,
+                ]);
             }
         } catch (\Exception $e) {
-            Log::warning('AuthenticateAndBootstrap::setAuthenticatedUserFromPayload - Erro', [
+            Log::error('AuthenticateAndBootstrap::setAuthenticatedUserFromPayload - Erro', [
                 'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
             ]);
-            // Não lançar exceção - apenas logar
+            throw $e; // Lançar exceção para não continuar com usuário inválido
         }
     }
 }
