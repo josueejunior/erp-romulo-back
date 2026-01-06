@@ -139,17 +139,25 @@ class HandleCorsCustom
         try {
             \Log::debug('HandleCorsCustom - Chamando $next($request)', [
                 'path' => $request->path(),
+                'method' => $request->method(),
                 'route' => $request->route() ? $request->route()->getName() : 'NO_ROUTE',
+                'route_action' => $request->route() ? $request->route()->getActionName() : 'NO_ACTION',
             ]);
             
             // Usar set_time_limit para evitar timeout silencioso
             set_time_limit(30);
             
+            // Registrar tempo antes de chamar $next
+            $startTime = microtime(true);
+            
             $response = $next($request);
+            
+            $elapsedTime = microtime(true) - $startTime;
             
             \Log::debug('HandleCorsCustom - $next($request) retornou', [
                 'status_code' => $response ? $response->getStatusCode() : 'NULL',
                 'response_type' => $response ? get_class($response) : 'NULL',
+                'elapsed_time' => round($elapsedTime, 3) . 's',
             ]);
         } catch (\Throwable $e) {
             \Log::error('HandleCorsCustom - Exceção capturada', [
