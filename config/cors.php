@@ -8,7 +8,7 @@ return [
 
     'allowed_origins' => array_filter(
         array_map('trim', 
-            explode(',', env('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173,https://addireta.com,https://www.addireta.com,https://api.addsimp.com,http://api.addsimp.com'))
+            explode(',', env('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173,https://addireta.com,https://www.addireta.com,https://gestor.addsimp.com,https://gestor.addsimp.com/,http://gestor.addsimp.com'))
         )
     ),
 
