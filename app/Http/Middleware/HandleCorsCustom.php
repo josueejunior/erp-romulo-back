@@ -7,22 +7,16 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * 🔥 CORS Middleware - Versão Robusta e Limpa
+ * 🔥 CORS Middleware - Versão Robusta
  * 
  * Responsabilidades:
  * 1. Responder OPTIONS (preflight) imediatamente com headers CORS
- * 2. Adicionar headers CORS em todas as respostas
- * 
- * Design:
- * - Simples e rápido
- * - Logs apenas em erros ou debug
- * - Não depende de route estar resolvida
- * - Não captura exceções (deixa para o Exception Handler)
+ * 2. Adicionar headers CORS em todas as respostas (incluindo erros 500)
  */
 class HandleCorsCustom
 {
     /**
-     * Cache das configurações CORS (evita ler config múltiplas vezes)
+     * Cache das configurações CORS
      */
     private ?array $config = null;
 
@@ -31,10 +25,7 @@ class HandleCorsCustom
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // Carregar config uma vez
         $config = $this->getConfig();
-        
-        // Verificar origem
         $origin = $request->header('Origin');
         $allowedOrigin = $this->resolveAllowedOrigin($origin, $config);
         
@@ -43,10 +34,27 @@ class HandleCorsCustom
             return $this->handlePreflight($allowedOrigin, $config);
         }
         
-        // Processar requisição normal
-        $response = $next($request);
+        // 🔥 CRÍTICO: Capturar exceções para garantir CORS mesmo em erro 500
+        try {
+            $response = $next($request);
+        } catch (\Throwable $e) {
+            // Criar resposta de erro 500 COM CORS
+            $response = response()->json([
+                'message' => config('app.debug') ? $e->getMessage() : 'Erro interno do servidor',
+                'file' => config('app.debug') ? $e->getFile() : null,
+                'line' => config('app.debug') ? $e->getLine() : null,
+            ], 500);
+            
+            // Log do erro
+            \Log::error('CORS: erro 500 capturado', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'url' => $request->fullUrl(),
+            ]);
+        }
         
-        // Adicionar headers CORS na resposta
+        // Adicionar headers CORS na resposta (sempre)
         return $this->addCorsHeaders($response, $allowedOrigin, $config);
     }
 
@@ -73,12 +81,9 @@ class HandleCorsCustom
 
     /**
      * Adicionar headers CORS à resposta
-     * 
-     * Método público para ser usado pelo Exception Handler quando necessário
      */
     public function addCorsHeaders(Response $response, ?string $allowedOrigin = null, ?array $config = null): Response
     {
-        // Se não passou allowedOrigin, resolver do request
         if ($allowedOrigin === null) {
             $config = $config ?? $this->getConfig();
             $origin = request()->header('Origin');
@@ -96,7 +101,6 @@ class HandleCorsCustom
                 $response->headers->set('Access-Control-Allow-Credentials', 'true');
             }
             
-            // Exposed headers
             if (!empty($config['exposed_headers'])) {
                 $exposed = is_array($config['exposed_headers']) 
                     ? implode(', ', $config['exposed_headers']) 
@@ -110,53 +114,35 @@ class HandleCorsCustom
 
     /**
      * Resolver origem permitida
-     * 
-     * @return string|null Origem permitida ou null se não permitida
      */
     private function resolveAllowedOrigin(?string $origin, array $config): ?string
     {
         $allowedOrigins = $config['allowed_origins'];
         
-        // Se permite todas as origens
         if (in_array('*', $allowedOrigins)) {
-            // Se tem origem, usar ela; senão usar '*'
             return $origin ?: '*';
         }
         
-        // Se não tem origem no request, não adicionar CORS
         if (!$origin) {
             return null;
         }
         
-        // Verificar se origem está na lista (case-insensitive)
         $originLower = strtolower($origin);
         foreach ($allowedOrigins as $allowed) {
             if (strtolower($allowed) === $originLower) {
-                return $origin; // Retornar com case original
+                return $origin;
             }
         }
         
-        // Verificar padrões regex
         foreach ($config['allowed_origins_patterns'] as $pattern) {
             if (preg_match($pattern, $origin)) {
                 return $origin;
             }
         }
         
-        // Origem não permitida - logar apenas em debug
-        if (config('app.debug')) {
-            \Log::debug('CORS: origem não permitida', [
-                'origin' => $origin,
-                'allowed' => $allowedOrigins,
-            ]);
-        }
-        
         return null;
     }
 
-    /**
-     * Formatar métodos permitidos
-     */
     private function formatMethods(array $methods): string
     {
         if (in_array('*', $methods)) {
@@ -165,9 +151,6 @@ class HandleCorsCustom
         return implode(', ', $methods);
     }
 
-    /**
-     * Formatar headers permitidos
-     */
     private function formatHeaders(array $headers): string
     {
         if (in_array('*', $headers)) {
@@ -176,9 +159,6 @@ class HandleCorsCustom
         return implode(', ', $headers);
     }
 
-    /**
-     * Obter configuração CORS (com cache)
-     */
     private function getConfig(): array
     {
         if ($this->config === null) {
