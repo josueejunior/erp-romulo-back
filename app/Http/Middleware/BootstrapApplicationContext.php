@@ -38,7 +38,8 @@ class BootstrapApplicationContext
         ]);
 
         // Verificar se usuário está autenticado
-        $user = $request->user();
+        // 🔥 IMPORTANTE: Usar guard 'sanctum' explicitamente (mesmo guard usado por AuthenticateJWT)
+        $user = auth('sanctum')->user();
         
         if (!$user) {
             Log::warning('BootstrapApplicationContext::handle - Usuário não autenticado');

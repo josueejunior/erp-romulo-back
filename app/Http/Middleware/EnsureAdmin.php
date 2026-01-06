@@ -20,7 +20,8 @@ class EnsureAdmin
      */
     public function handle(Request $request, Closure $next): Response
     {
-        $user = $request->user();
+        // 🔥 IMPORTANTE: Usar guard 'sanctum' explicitamente (mesmo guard usado por AuthenticateJWT)
+        $user = auth('sanctum')->user();
 
         if (!$user) {
             return response()->json([
