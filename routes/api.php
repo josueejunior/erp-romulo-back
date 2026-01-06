@@ -115,9 +115,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/cupons/{codigo}/validar', [\App\Modules\Assinatura\Controllers\CupomController::class, 'validar']);
 
         Route::prefix('payments')->group(function () {
-            // 🔥 DEBUG: Adicionar middleware diretamente na rota para garantir execução
-            Route::post('/processar-assinatura', [ApiPaymentController::class, 'processarAssinatura'])
-                ->middleware(\App\Http\Middleware\EnsureEmpresaAtivaContext::class);
+            Route::post('/processar-assinatura', [ApiPaymentController::class, 'processarAssinatura']);
         });
         
         // Notificações (não precisa de assinatura ativa)
