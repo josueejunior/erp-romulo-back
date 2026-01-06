@@ -84,7 +84,9 @@ Route::prefix('v1')->group(function () {
     // Rate limiting: 120 requisições por minuto, 1000 por hora
     // Rotas de criação/edição têm rate limiting adicional
     // Rotas autenticadas: aqui sim aplicamos contexto (empresa/tenant) após auth
-    Route::middleware(['auth:sanctum', \App\Http\Middleware\SetAuthContext::class, \App\Http\Middleware\InitializeTenancyByRequestData::class, 'empresa.context', 'throttle:120,1'])->group(function () {
+    // 🔥 CORREÇÃO: Removido InitializeTenancyByRequestData - EnsureEmpresaAtivaContext já faz o bootstrap completo
+    // O bootstrap() do ApplicationContext já inicializa o tenancy, então não precisamos do InitializeTenancyByRequestData
+    Route::middleware(['auth:sanctum', \App\Http\Middleware\SetAuthContext::class, 'empresa.context', 'throttle:120,1'])->group(function () {
         // Rotas que NÃO precisam de assinatura (exceções)
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::get('/auth/user', [AuthController::class, 'user']);
@@ -113,9 +115,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/cupons/{codigo}/validar', [\App\Modules\Assinatura\Controllers\CupomController::class, 'validar']);
 
         Route::prefix('payments')->group(function () {
-            // Teste: middleware direto na rota para debug
-            Route::post('/processar-assinatura', [ApiPaymentController::class, 'processarAssinatura'])
-                ->middleware(\App\Http\Middleware\InitializeTenancyByRequestData::class);
+            Route::post('/processar-assinatura', [ApiPaymentController::class, 'processarAssinatura']);
         });
         
         // Notificações (não precisa de assinatura ativa)
