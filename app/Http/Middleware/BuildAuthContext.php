@@ -68,12 +68,32 @@ class BuildAuthContext
         ]);
 
         Log::debug('BuildAuthContext::handle - Chamando $next($request)');
-        $response = $next($request);
-        Log::debug('BuildAuthContext::handle - $next($request) retornou', [
-            'status' => method_exists($response, 'getStatusCode') ? $response->getStatusCode() : null,
-        ]);
-
-        return $response;
+        
+        // 🔥 LOG: Verificar middlewares da rota antes de chamar $next
+        $route = $request->route();
+        if ($route) {
+            $middlewares = $route->gatherMiddleware();
+            error_log('BuildAuthContext::handle - Middlewares da rota: ' . json_encode($middlewares));
+            Log::debug('BuildAuthContext::handle - Middlewares da rota', [
+                'middlewares' => $middlewares,
+            ]);
+        }
+        
+        try {
+            $response = $next($request);
+            Log::debug('BuildAuthContext::handle - $next($request) retornou', [
+                'status' => method_exists($response, 'getStatusCode') ? $response->getStatusCode() : null,
+            ]);
+            return $response;
+        } catch (\Exception $e) {
+            Log::error('BuildAuthContext::handle - Erro ao chamar $next($request)', [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            throw $e;
+        }
     }
 }
 
