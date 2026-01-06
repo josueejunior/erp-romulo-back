@@ -45,6 +45,15 @@ class HandleApiErrors
             $startTime = microtime(true);
             
             error_log('HandleApiErrors::handle - CHAMANDO $next($request) AGORA');
+            error_log('HandleApiErrors::handle - Route action: ' . ($request->route() ? $request->route()->getActionName() : 'NO_ACTION'));
+            
+            // 🔥 LOG: Verificar se AuthenticateAndBootstrap está na lista de middlewares
+            $route = $request->route();
+            if ($route) {
+                $middlewares = $route->gatherMiddleware();
+                error_log('HandleApiErrors::handle - Middlewares da rota: ' . json_encode($middlewares));
+            }
+            
             $response = $next($request);
             error_log('HandleApiErrors::handle - $next($request) RETORNOU');
             

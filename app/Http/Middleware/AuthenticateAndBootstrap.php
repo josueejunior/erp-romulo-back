@@ -35,6 +35,14 @@ class AuthenticateAndBootstrap
         ApplicationContextContract $context,
         JWTService $jwtService
     ) {
+        // 🔥 LOG CRÍTICO: Se este log não aparecer, há problema na injeção de dependências
+        error_log('AuthenticateAndBootstrap::__construct - CONSTRUTOR EXECUTADO (error_log)');
+        Log::emergency('AuthenticateAndBootstrap::__construct - CONSTRUTOR EXECUTADO (EMERGENCY)', [
+            'authIdentityService' => get_class($authIdentityService),
+            'context' => get_class($context),
+            'jwtService' => get_class($jwtService),
+        ]);
+        
         $this->authIdentityService = $authIdentityService;
         $this->context = $context;
         $this->jwtService = $jwtService;
@@ -42,18 +50,24 @@ class AuthenticateAndBootstrap
 
     public function handle(Request $request, Closure $next): Response
     {
-        $startTime = microtime(true);
+        // 🔥 LOG IMEDIATO: Antes de qualquer coisa
+        error_log('AuthenticateAndBootstrap::handle - ✅ INÍCIO (error_log) - PRIMEIRO LOG');
         
-        // 🔥 LOG CRÍTICO: Se este log não aparecer, o middleware não está sendo executado
-        error_log('AuthenticateAndBootstrap::handle - ✅ INÍCIO (error_log)');
-        Log::emergency('AuthenticateAndBootstrap::handle - ✅ INÍCIO (EMERGENCY)', [
-            'path' => $request->path(),
-            'method' => $request->method(),
-            'url' => $request->fullUrl(),
-            'route' => $request->route() ? $request->route()->getName() : 'NO_ROUTE',
-        ]);
-
         try {
+            $startTime = microtime(true);
+            
+            // 🔥 LOG CRÍTICO: Se este log não aparecer, o middleware não está sendo executado
+            Log::emergency('AuthenticateAndBootstrap::handle - ✅ INÍCIO (EMERGENCY)', [
+                'path' => $request->path(),
+                'method' => $request->method(),
+                'url' => $request->fullUrl(),
+                'route' => $request->route() ? $request->route()->getName() : 'NO_ROUTE',
+                'has_jwt_service' => isset($this->jwtService),
+                'has_auth_service' => isset($this->authIdentityService),
+                'has_context' => isset($this->context),
+            ]);
+            
+            error_log('AuthenticateAndBootstrap::handle - Após Log::emergency');
             // 🔥 JWT STATELESS: Validar token JWT em vez de Sanctum
             Log::debug('AuthenticateAndBootstrap::handle - Validando token JWT');
             $token = $request->bearerToken();
