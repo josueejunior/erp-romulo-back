@@ -35,7 +35,12 @@ class AuthController extends Controller
         private LogoutUseCase $logoutUseCase,
         private GetUserUseCase $getUserUseCase,
         private BuscarAdminUserPorEmailUseCase $buscarAdminUserPorEmailUseCase,
-    ) {}
+    ) {
+        // 🔥 LOG CRÍTICO: Se este log aparecer, significa que o controller foi instanciado
+        \Log::info('AuthController::__construct - ✅ Controller instanciado', [
+            'memory_usage' => memory_get_usage(true),
+        ]);
+    }
 
     /**
      * Login do usuário

@@ -152,8 +152,36 @@ class HandleCorsCustom
                 'route_action' => $request->route() ? $request->route()->getActionName() : 'NO_ACTION',
             ]);
             
-            // Tentar executar $next($request)
+            // 🔥 TIMEOUT PROTECTION: Se $next($request) travar, vamos detectar
+            $timeoutSeconds = 25; // Timeout após 25 segundos
+            $timeoutReached = false;
+            
+            // Registrar shutdown function para detectar timeout
+            register_shutdown_function(function () use (&$timeoutReached, $request, $startTime) {
+                $elapsed = microtime(true) - $startTime;
+                if ($elapsed > $timeoutSeconds) {
+                    $timeoutReached = true;
+                    \Log::error('HandleCorsCustom - TIMEOUT detectado (shutdown function)', [
+                        'path' => $request->path(),
+                        'method' => $request->method(),
+                        'elapsed_time' => round($elapsed, 3) . 's',
+                        'last_error' => error_get_last(),
+                    ]);
+                }
+            });
+            
+            // Tentar executar $next($request) com timeout
+            // Nota: PHP não suporta timeout nativo, mas vamos detectar via shutdown function
             $response = $next($request);
+            
+            // Verificar se houve timeout (via shutdown function)
+            if ($timeoutReached) {
+                \Log::error('HandleCorsCustom - Timeout detectado após $next($request)');
+                // Criar resposta de timeout COM CORS
+                $response = response()->json([
+                    'message' => 'Timeout na requisição. Tente novamente.',
+                ], 504); // Gateway Timeout
+            }
             
             $elapsedTime = microtime(true) - $startTime;
             

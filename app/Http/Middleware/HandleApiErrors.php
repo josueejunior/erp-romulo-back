@@ -19,12 +19,14 @@ class HandleApiErrors
      */
     public function handle(Request $request, Closure $next): Response
     {
-        \Log::info('HandleApiErrors::handle - Iniciando', [
+        // 🔥 LOG CRÍTICO: Se este log não aparecer, significa que a requisição não chegou aqui
+        \Log::info('HandleApiErrors::handle - ✅ MIDDLEWARE EXECUTADO', [
             'url' => $request->fullUrl(),
             'method' => $request->method(),
             'path' => $request->path(),
             'route' => $request->route() ? $request->route()->getName() : 'NO_ROUTE',
             'route_action' => $request->route() ? $request->route()->getActionName() : 'NO_ACTION',
+            'memory_usage' => memory_get_usage(true),
         ]);
         
         try {
