@@ -6,7 +6,7 @@ use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
-use App\Services\ApplicationContext;
+use App\Contracts\ApplicationContextContract;
 use App\Domain\Shared\ValueObjects\TenantContext;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -24,10 +24,19 @@ use Symfony\Component\HttpFoundation\Response;
  * - InitializeTenancyByRequestData
  * - EnsureEmpresaAtivaContext
  */
+/**
+ * Middleware unificado para inicializar todo o contexto da aplicação
+ * 
+ * 🔥 REFATORADO: Este middleware agora usa ApplicationContextContract
+ * e chama bootstrap() ao invés de initialize().
+ * 
+ * @deprecated Este middleware está sendo substituído pelos middlewares thin.
+ * Considere usar EnsureEmpresaAtivaContext + InitializeTenancyByRequestData
+ */
 class InitializeApplicationContext
 {
     public function __construct(
-        private ApplicationContext $context
+        private ApplicationContextContract $context
     ) {}
 
     public function handle(Request $request, Closure $next): Response
@@ -60,36 +69,28 @@ class InitializeApplicationContext
             return $next($request);
         }
         
-        // Determinar tenant_id
-        $tenantId = $this->resolveTenantId($request, $user, $tenantIdFromHeader);
+        // Inicializar ApplicationContext via bootstrap (método principal)
+        // O bootstrap() já resolve tenant_id, inicializa tenancy e resolve empresa_id
+        // Não precisamos fazer isso manualmente aqui
+        $this->context->bootstrap($request);
+        
+        // Verificar se o bootstrap foi bem-sucedido
+        if (!$this->context->isInitialized()) {
+            Log::error('InitializeApplicationContext - Bootstrap falhou');
+            return response()->json([
+                'message' => 'Erro ao inicializar contexto da aplicação.'
+            ], 500);
+        }
+        
+        // Obter tenant_id do contexto (já resolvido pelo bootstrap)
+        $tenantId = $this->context->getTenantIdOrNull();
         
         if (!$tenantId) {
-            Log::error('InitializeApplicationContext - Tenant não identificado');
+            Log::error('InitializeApplicationContext - Tenant não identificado após bootstrap');
             return response()->json([
                 'message' => 'Tenant não identificado. Envie o header X-Tenant-ID.'
             ], 400);
         }
-        
-        // Inicializar tenancy (se ainda não inicializado)
-        if (!tenancy()->tenant || tenancy()->tenant->id !== $tenantId) {
-            $tenant = \App\Models\Tenant::find($tenantId);
-            
-            if (!$tenant) {
-                return response()->json([
-                    'message' => 'Tenant não encontrado.',
-                    'tenant_id' => $tenantId
-                ], 404);
-            }
-            
-            tenancy()->initialize($tenant);
-            
-            Log::debug('InitializeApplicationContext - Tenancy inicializado', [
-                'tenant_id' => $tenant->id
-            ]);
-        }
-        
-        // Inicializar ApplicationContext
-        $this->context->initialize($user, $tenantId, $empresaIdFromHeader);
         
         // Sincronizar com TenantContext (compatibilidade DDD)
         $empresaId = $this->context->getEmpresaIdOrNull();

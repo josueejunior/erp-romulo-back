@@ -25,3 +25,4 @@ class CalculoPrecoDireto implements CalculoPrecoStrategy
 }
 
 
+

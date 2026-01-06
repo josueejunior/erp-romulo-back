@@ -4,10 +4,19 @@ namespace App\Application\Assinatura\UseCases;
 
 use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
 use App\Domain\Plano\Repositories\PlanoRepositoryInterface;
+use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
 use App\Modules\Assinatura\Models\Assinatura;
 use App\Domain\Exceptions\DomainException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+
+/**
+ * Use Case para Upgrade/Downgrade de Planos
+ * 
+ * Calcula pro-rata (valor proporcional) ao trocar de plano
+ * 
+ * 🔥 ARQUITETURA LIMPA: Usa TenantRepository em vez de Eloquent direto
+ */
 
 /**
  * Use Case para Upgrade/Downgrade de Planos
@@ -19,6 +28,7 @@ class TrocarPlanoAssinaturaUseCase
     public function __construct(
         private AssinaturaRepositoryInterface $assinaturaRepository,
         private PlanoRepositoryInterface $planoRepository,
+        private TenantRepositoryInterface $tenantRepository,
     ) {}
 
     /**
@@ -114,10 +124,10 @@ class TrocarPlanoAssinaturaUseCase
                 'observacoes' => "Criada por upgrade/downgrade. Crédito aplicado: R$ {$creditoProporcional}. Valor cobrado: R$ {$valorCobrar}",
             ]);
 
-            // Atualizar tenant
-            $tenant = \App\Models\Tenant::find($tenantId);
-            if ($tenant) {
-                $tenant->update([
+            // Atualizar tenant usando repository
+            $tenantModel = $this->tenantRepository->buscarModeloPorId($tenantId);
+            if ($tenantModel) {
+                $tenantModel->update([
                     'plano_atual_id' => $novoPlanoId,
                     'assinatura_atual_id' => $novaAssinatura->id,
                 ]);

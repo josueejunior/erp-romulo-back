@@ -5,6 +5,8 @@ namespace App\Modules\Notification\Services;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\DocumentoHabilitacao\Repositories\DocumentoHabilitacaoRepositoryInterface;
 use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
+use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
+use App\Services\AdminTenancyRunner;
 use Carbon\Carbon;
 
 /**
@@ -16,6 +18,8 @@ class NotificationService
         private ProcessoRepositoryInterface $processoRepository,
         private DocumentoHabilitacaoRepositoryInterface $documentoRepository,
         private AssinaturaRepositoryInterface $assinaturaRepository,
+        private TenantRepositoryInterface $tenantRepository,
+        private AdminTenancyRunner $adminTenancyRunner,
     ) {}
 
     /**
@@ -226,13 +230,28 @@ class NotificationService
 
     /**
      * Obter notificações relacionadas a assinatura
+     * 
+     * 🔥 ARQUITETURA LIMPA: Usa AdminTenancyRunner para isolar lógica de tenancy
      */
     private function obterNotificacoesAssinatura(int $tenantId): array
     {
         $notificacoes = [];
         
         try {
-            $assinatura = $this->assinaturaRepository->buscarAssinaturaAtual($tenantId);
+            // Buscar tenant Domain Entity
+            $tenantDomain = $this->tenantRepository->buscarPorId($tenantId);
+            if (!$tenantDomain) {
+                \Log::warning('NotificationService::obterNotificacoesAssinatura() - Tenant não encontrado', [
+                    'tenant_id' => $tenantId,
+                ]);
+                return [];
+            }
+
+            // 🔥 ARQUITETURA LIMPA: AdminTenancyRunner isola toda lógica de tenancy
+            $assinatura = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($tenantId) {
+                // Buscar assinatura (o tenancy já está inicializado pelo AdminTenancyRunner)
+                return $this->assinaturaRepository->buscarAssinaturaAtual($tenantId);
+            });
             
             if (!$assinatura) {
                 return [
@@ -294,10 +313,15 @@ class NotificationService
                 ];
             }
         } catch (\Exception $e) {
-            // Ignorar erros ao buscar assinatura
+            \Log::warning('NotificationService::obterNotificacoesAssinatura() - Erro ao buscar assinatura', [
+                'tenant_id' => $tenantId,
+                'error' => $e->getMessage(),
+            ]);
+            // AdminTenancyRunner já garantiu finalização do tenancy no finally
         }
 
         return $notificacoes;
     }
 }
+
 

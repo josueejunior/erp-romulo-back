@@ -34,9 +34,16 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // Registrar ApplicationContext como singleton (único ponto de verdade para contexto)
+        // 🔥 PROTEÇÃO ARQUITETURAL: Registrar ApplicationContext via interface
+        // Isso garante que todos dependam do contrato, não da implementação
+        $this->app->singleton(
+            \App\Contracts\ApplicationContextContract::class,
+            \App\Services\ApplicationContext::class
+        );
+        
+        // Registrar também a classe concreta para compatibilidade (deprecated)
         $this->app->singleton(\App\Services\ApplicationContext::class, function ($app) {
-            return new \App\Services\ApplicationContext();
+            return $app->make(\App\Contracts\ApplicationContextContract::class);
         });
         
         // Registrar modelo customizado do Sanctum para usar timestamps em português

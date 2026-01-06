@@ -47,13 +47,50 @@ class AssinaturaRepository implements AssinaturaRepositoryInterface
     }
 
     /**
-     * Buscar assinatura atual do tenant
+     * Buscar assinatura atual do tenant (DEPRECATED - usar buscarAssinaturaAtualPorUsuario)
+     * 
+     * 🔥 REGRA DE OURO: Repository NUNCA inicializa tenancy.
+     * O tenancy já deve estar pronto (inicializado pelo ApplicationContext ou pelo caller).
+     * Se não estiver → bug de fluxo, não do repo.
+     * 
+     * ⚠️ ATENÇÃO: Este método é usado apenas em casos administrativos especiais
+     * onde o caller precisa inicializar o tenancy antes de chamar.
+     * Para uso normal em requisições HTTP, use buscarAssinaturaAtualPorUsuario().
+     * 
+     * @deprecated Use buscarAssinaturaAtualPorUsuario() em vez disso
      */
-public function buscarAssinaturaAtual(int $tenantId): ?Assinatura
+    public function buscarAssinaturaAtual(int $tenantId): ?Assinatura
     {
+        \Log::debug('AssinaturaRepository::buscarAssinaturaAtual() - Iniciando busca', [
+            'tenant_id' => $tenantId,
+            'tenancy_initialized' => tenancy()->initialized,
+            'tenant_id_atual' => tenancy()->tenant?->id,
+        ]);
+
+        // 🔥 CRÍTICO: Verificar se tenancy está inicializado e é o tenant correto
+        // Se não estiver, é um bug de fluxo (caller não inicializou)
+        if (!tenancy()->initialized) {
+            \Log::error('AssinaturaRepository::buscarAssinaturaAtual() - Tenancy não inicializado', [
+                'tenant_id' => $tenantId,
+                'message' => 'Tenancy deve ser inicializado pelo caller antes de usar este método',
+            ]);
+            throw new \RuntimeException('Tenancy não inicializado. O caller deve inicializar o tenancy antes de chamar este método.');
+        }
+
+        $tenantAtual = tenancy()->tenant;
+        if (!$tenantAtual || $tenantAtual->id !== $tenantId) {
+            \Log::error('AssinaturaRepository::buscarAssinaturaAtual() - Tenant incorreto', [
+                'tenant_id_solicitado' => $tenantId,
+                'tenant_id_atual' => $tenantAtual?->id,
+                'message' => 'O tenancy deve estar inicializado com o tenant correto',
+            ]);
+            throw new \RuntimeException("Tenancy inicializado com tenant incorreto. Esperado: {$tenantId}, Atual: {$tenantAtual?->id}");
+        }
+
+        $assinatura = null;
+
         // Buscar tenant para verificar assinatura_atual_id
         $tenant = Tenant::find($tenantId);
-        
         if (!$tenant) {
             \Log::warning('AssinaturaRepository::buscarAssinaturaAtual() - Tenant não encontrado', [
                 'tenant_id' => $tenantId,
@@ -61,118 +98,72 @@ public function buscarAssinaturaAtual(int $tenantId): ?Assinatura
             return null;
         }
 
-        $assinatura = null;
-
-        // 🔥 IMPORTANTE: Sempre garantir que o tenant correto está inicializado
-        // Se já estiver inicializado com outro tenant, reinicializar
-        $jaInicializado = tenancy()->initialized;
-        $tenantAtual = tenancy()->tenant;
-        $precisaReinicializar = !$jaInicializado || ($tenantAtual && $tenantAtual->id !== $tenantId);
-        
-        \Log::debug('AssinaturaRepository::buscarAssinaturaAtual() - Verificando tenant', [
-            'tenant_id_solicitado' => $tenantId,
-            'tenant_id_atual' => $tenantAtual?->id,
-            'ja_inicializado' => $jaInicializado,
-            'precisa_reinicializar' => $precisaReinicializar,
-        ]);
-        
-        try {
-            if ($precisaReinicializar) {
-                if ($jaInicializado) {
-                    tenancy()->end();
-                }
-                tenancy()->initialize($tenant);
-                \Log::debug('AssinaturaRepository::buscarAssinaturaAtual() - Tenant reinicializado', [
-                    'tenant_id' => $tenant->id,
+        // Se o tenant tem assinatura_atual_id, buscar por ele
+        if ($tenant->assinatura_atual_id) {
+            \Log::debug('AssinaturaRepository::buscarAssinaturaAtual() - Buscando por assinatura_atual_id', [
+                'tenant_id' => $tenantId,
+                'assinatura_atual_id' => $tenant->assinatura_atual_id,
+            ]);
+            
+            $model = AssinaturaModel::with('plano')
+                ->where('tenant_id', $tenantId)
+                ->where('id', $tenant->assinatura_atual_id)
+                ->first();
+            
+            if ($model) {
+                \Log::info('AssinaturaRepository::buscarAssinaturaAtual() - Assinatura encontrada por assinatura_atual_id', [
+                    'tenant_id' => $tenantId,
+                    'assinatura_id' => $model->id,
+                    'status' => $model->status,
                 ]);
-            }
-
-            // Se o tenant tem assinatura_atual_id, buscar por ele
-            if ($tenant->assinatura_atual_id) {
-                \Log::debug('AssinaturaRepository::buscarAssinaturaAtual() - Buscando por assinatura_atual_id', [
+                $assinatura = $this->toDomain($model);
+            } else {
+                \Log::warning('AssinaturaRepository::buscarAssinaturaAtual() - Assinatura não encontrada por assinatura_atual_id', [
                     'tenant_id' => $tenantId,
                     'assinatura_atual_id' => $tenant->assinatura_atual_id,
                 ]);
-                
-                $model = AssinaturaModel::with('plano')
-                    ->where('tenant_id', $tenantId)
-                    ->where('id', $tenant->assinatura_atual_id)
-                    ->first();
-                
-                if ($model) {
-                    \Log::info('AssinaturaRepository::buscarAssinaturaAtual() - Assinatura encontrada por assinatura_atual_id', [
-                        'tenant_id' => $tenantId,
-                        'assinatura_id' => $model->id,
-                        'status' => $model->status,
-                    ]);
-                    $assinatura = $this->toDomain($model);
-                } else {
-                    \Log::warning('AssinaturaRepository::buscarAssinaturaAtual() - Assinatura não encontrada por assinatura_atual_id', [
-                        'tenant_id' => $tenantId,
-                        'assinatura_atual_id' => $tenant->assinatura_atual_id,
-                    ]);
-                }
             }
+        }
 
-            // Se não encontrou, buscar a assinatura mais recente do tenant
-            if (!$assinatura) {
-                \Log::debug('AssinaturaRepository::buscarAssinaturaAtual() - Buscando assinatura mais recente', [
+        // Se não encontrou, buscar a assinatura mais recente do tenant
+        if (!$assinatura) {
+            \Log::debug('AssinaturaRepository::buscarAssinaturaAtual() - Buscando assinatura mais recente', [
+                'tenant_id' => $tenantId,
+            ]);
+            
+            $model = AssinaturaModel::with('plano')
+                ->where('tenant_id', $tenantId)
+                ->where('status', '!=', 'cancelada')
+                ->orderBy('data_fim', 'desc')
+                ->orderBy('criado_em', 'desc')
+                ->first();
+            
+            if ($model) {
+                \Log::info('AssinaturaRepository::buscarAssinaturaAtual() - Assinatura encontrada (mais recente)', [
                     'tenant_id' => $tenantId,
+                    'assinatura_id' => $model->id,
+                    'status' => $model->status,
+                    'data_fim' => $model->data_fim?->format('Y-m-d'),
                 ]);
                 
-                // Contar total de assinaturas para debug
-                $totalAssinaturas = AssinaturaModel::where('tenant_id', $tenantId)->count();
-                $totalNaoCanceladas = AssinaturaModel::where('tenant_id', $tenantId)
-                    ->where('status', '!=', 'cancelada')
-                    ->count();
+                $assinatura = $this->toDomain($model);
                 
-                \Log::debug('AssinaturaRepository::buscarAssinaturaAtual() - Estatísticas de assinaturas', [
-                    'tenant_id' => $tenantId,
-                    'total_assinaturas' => $totalAssinaturas,
-                    'total_nao_canceladas' => $totalNaoCanceladas,
-                ]);
-                
-                $model = AssinaturaModel::with('plano')
-                    ->where('tenant_id', $tenantId)
-                    ->where('status', '!=', 'cancelada')
-                    ->orderBy('data_fim', 'desc')
-                    ->orderBy('criado_em', 'desc')
-                    ->first();
-                
-                if ($model) {
-                    \Log::info('AssinaturaRepository::buscarAssinaturaAtual() - Assinatura encontrada (mais recente)', [
-                        'tenant_id' => $tenantId,
-                        'assinatura_id' => $model->id,
-                        'status' => $model->status,
-                        'data_fim' => $model->data_fim?->format('Y-m-d'),
+                // Se encontrou e o tenant não tinha assinatura_atual_id, atualizar
+                if (!$tenant->assinatura_atual_id) {
+                    $tenant->update([
+                        'assinatura_atual_id' => $model->id,
+                        'plano_atual_id' => $model->plano_id,
                     ]);
                     
-                    $assinatura = $this->toDomain($model);
-                    
-                    // Se encontrou e o tenant não tinha assinatura_atual_id, atualizar
-                    if (!$tenant->assinatura_atual_id) {
-                        $tenant->update([
-                            'assinatura_atual_id' => $model->id,
-                            'plano_atual_id' => $model->plano_id,
-                        ]);
-                        
-                        \Log::info('AssinaturaRepository::buscarAssinaturaAtual() - Tenant atualizado com assinatura_atual_id', [
-                            'tenant_id' => $tenantId,
-                            'assinatura_atual_id' => $model->id,
-                        ]);
-                    }
-                } else {
-                    \Log::warning('AssinaturaRepository::buscarAssinaturaAtual() - Nenhuma assinatura encontrada', [
+                    \Log::info('AssinaturaRepository::buscarAssinaturaAtual() - Tenant atualizado com assinatura_atual_id', [
                         'tenant_id' => $tenantId,
-                        'total_assinaturas' => $totalAssinaturas,
-                        'total_nao_canceladas' => $totalNaoCanceladas,
+                        'assinatura_atual_id' => $model->id,
                     ]);
                 }
-            }
-        } finally {
-            // Sempre finalizar o contexto se foi inicializado aqui
-            if (!$jaInicializado && tenancy()->initialized) {
-                tenancy()->end();
+            } else {
+                \Log::warning('AssinaturaRepository::buscarAssinaturaAtual() - Nenhuma assinatura encontrada', [
+                    'tenant_id' => $tenantId,
+                ]);
             }
         }
 
@@ -199,107 +190,55 @@ public function buscarAssinaturaAtual(int $tenantId): ?Assinatura
     /**
      * 🔥 NOVO: Buscar assinatura atual do usuário
      * A assinatura pertence ao usuário, não ao tenant
-     * Mas está salva no banco do tenant, então precisamos inicializar o tenancy correto
+     * 
+     * 🔥 REGRA DE OURO: Repository NUNCA inicializa tenancy.
+     * O tenancy já deve estar pronto (inicializado pelo ApplicationContext).
+     * Se não estiver → bug de fluxo, não do repo.
      */
     public function buscarAssinaturaAtualPorUsuario(int $userId): ?Assinatura
     {
         \Log::debug('AssinaturaRepository::buscarAssinaturaAtualPorUsuario() - Iniciando busca', [
             'user_id' => $userId,
+            'tenancy_initialized' => tenancy()->initialized,
+            'tenant_id' => tenancy()->tenant?->id,
         ]);
 
-        // 🔥 CRÍTICO: Buscar o tenant através do usuário e empresa ativa
-        $user = \App\Modules\Auth\Models\User::find($userId);
-        if (!$user) {
-            \Log::warning('AssinaturaRepository::buscarAssinaturaAtualPorUsuario() - Usuário não encontrado', [
+        // 🔥 CRÍTICO: Verificar se tenancy está inicializado
+        // Se não estiver, é um bug de fluxo (middleware não rodou)
+        if (!tenancy()->initialized) {
+            \Log::error('AssinaturaRepository::buscarAssinaturaAtualPorUsuario() - Tenancy não inicializado', [
                 'user_id' => $userId,
+                'message' => 'Tenancy deve ser inicializado pelo ApplicationContext antes de usar o repository',
             ]);
-            return null;
+            throw new \RuntimeException('Tenancy não inicializado. Verifique se o middleware está configurado corretamente.');
         }
 
-        // Se o usuário tem empresa ativa, buscar o tenant através dela
-        $tenant = null;
-        if ($user->empresa_ativa_id) {
-            // Buscar tenant através da empresa ativa do usuário
-            $allTenants = Tenant::all();
-            foreach ($allTenants as $t) {
-                try {
-                    tenancy()->initialize($t);
-                    $empresa = \App\Models\Empresa::find($user->empresa_ativa_id);
-                    if ($empresa) {
-                        $tenant = $t;
-                        tenancy()->end();
-                        break;
-                    }
-                    tenancy()->end();
-                } catch (\Exception $e) {
-                    if (tenancy()->initialized) {
-                        tenancy()->end();
-                    }
-                }
-            }
-        }
+        // Buscar assinatura mais recente do usuário (não cancelada) no banco do tenant
+        // O tenancy já está pronto, apenas buscar
+        $model = AssinaturaModel::with('plano')
+            ->where('user_id', $userId)
+            ->where('status', '!=', 'cancelada')
+            ->orderBy('data_fim', 'desc')
+            ->orderBy('criado_em', 'desc')
+            ->first();
 
-        // Se não encontrou pelo empresa_ativa_id, tentar usar o tenant atual se estiver inicializado
-        if (!$tenant && tenancy()->initialized) {
-            $tenant = tenancy()->tenant;
-        }
-
-        // Se ainda não encontrou, retornar null
-        if (!$tenant) {
-            \Log::warning('AssinaturaRepository::buscarAssinaturaAtualPorUsuario() - Nenhum tenant encontrado para o usuário', [
+        if ($model) {
+            \Log::info('AssinaturaRepository::buscarAssinaturaAtualPorUsuario() - Assinatura encontrada', [
                 'user_id' => $userId,
-                'empresa_ativa_id' => $user->empresa_ativa_id,
+                'tenant_id' => tenancy()->tenant->id,
+                'assinatura_id' => $model->id,
+                'status' => $model->status,
+                'data_fim' => $model->data_fim?->format('Y-m-d'),
             ]);
-            return null;
+            return $this->toDomain($model);
         }
 
-        // Inicializar tenancy para o tenant encontrado
-        $jaInicializado = tenancy()->initialized;
-        $tenantAtual = tenancy()->tenant;
-        $precisaReinicializar = !$jaInicializado || ($tenantAtual && $tenantAtual->id !== $tenant->id);
+        \Log::warning('AssinaturaRepository::buscarAssinaturaAtualPorUsuario() - Nenhuma assinatura encontrada', [
+            'user_id' => $userId,
+            'tenant_id' => tenancy()->tenant->id,
+        ]);
 
-        try {
-            if ($precisaReinicializar) {
-                if ($jaInicializado) {
-                    tenancy()->end();
-                }
-                tenancy()->initialize($tenant);
-                \Log::debug('AssinaturaRepository::buscarAssinaturaAtualPorUsuario() - Tenancy inicializado', [
-                    'tenant_id' => $tenant->id,
-                ]);
-            }
-
-            // Buscar assinatura mais recente do usuário (não cancelada) no banco do tenant
-            $model = AssinaturaModel::with('plano')
-                ->where('user_id', $userId)
-                ->where('status', '!=', 'cancelada')
-                ->orderBy('data_fim', 'desc')
-                ->orderBy('criado_em', 'desc')
-                ->first();
-
-            if ($model) {
-                \Log::info('AssinaturaRepository::buscarAssinaturaAtualPorUsuario() - Assinatura encontrada', [
-                    'user_id' => $userId,
-                    'tenant_id' => $tenant->id,
-                    'assinatura_id' => $model->id,
-                    'status' => $model->status,
-                    'data_fim' => $model->data_fim?->format('Y-m-d'),
-                ]);
-                return $this->toDomain($model);
-            }
-
-            \Log::warning('AssinaturaRepository::buscarAssinaturaAtualPorUsuario() - Nenhuma assinatura encontrada', [
-                'user_id' => $userId,
-                'tenant_id' => $tenant->id,
-            ]);
-
-            return null;
-        } finally {
-            // Se inicializamos o tenancy aqui, finalizar apenas se não estava inicializado antes
-            if ($precisaReinicializar && !$jaInicializado && tenancy()->initialized) {
-                tenancy()->end();
-            }
-        }
+        return null;
     }
 
     /**
@@ -340,86 +279,31 @@ public function buscarAssinaturaAtual(int $tenantId): ?Assinatura
     /**
      * Salvar assinatura (criar ou atualizar)
      * 
-     * 🔥 CRÍTICO: Garante que o tenancy está inicializado para o tenant correto
-     * antes de salvar, para que a assinatura seja criada no banco do tenant.
+     * 🔥 REGRA DE OURO: Repository NUNCA inicializa tenancy.
+     * O tenancy já deve estar pronto (inicializado pelo ApplicationContext).
+     * Se não estiver → bug de fluxo, não do repo.
      */
     public function salvar(Assinatura $assinatura): Assinatura
     {
-        // 🔥 NOVO: Assinatura pertence ao usuário, não ao tenant
-        // Mas ainda precisamos inicializar o tenancy para salvar no banco correto
-        $tenant = null;
-        $jaInicializado = tenancy()->initialized;
-        $tenantAtual = tenancy()->tenant;
-        $precisaReinicializar = false;
-        
-        // Se tenantId foi fornecido, usar ele
-        if ($assinatura->tenantId) {
-            $tenant = Tenant::find($assinatura->tenantId);
-            if (!$tenant) {
-                throw new \RuntimeException("Tenant não encontrado: {$assinatura->tenantId}");
-            }
-        } else {
-            // Se não foi fornecido, tentar buscar através do usuário
-            $user = \App\Modules\Auth\Models\User::find($assinatura->userId);
-            if ($user && $user->empresa_ativa_id) {
-                // Buscar tenant através da empresa ativa do usuário
-                $allTenants = Tenant::all();
-                foreach ($allTenants as $t) {
-                    try {
-                        tenancy()->initialize($t);
-                        $empresa = \App\Models\Empresa::find($user->empresa_ativa_id);
-                        if ($empresa) {
-                            $tenant = $t;
-                            tenancy()->end();
-                            break;
-                        }
-                        tenancy()->end();
-                    } catch (\Exception $e) {
-                        if (tenancy()->initialized) {
-                            tenancy()->end();
-                        }
-                    }
-                }
-            }
-        }
-        
-        // Se ainda não encontrou tenant, usar o atual se estiver inicializado
-        if (!$tenant && $tenantAtual) {
-            $tenant = $tenantAtual;
-        }
-        
-        // Se ainda não encontrou, tentar inicializar qualquer tenant (fallback)
-        if (!$tenant) {
-            \Log::warning('AssinaturaRepository::salvar() - Nenhum tenant encontrado, usando tenant atual se disponível', [
-                'user_id' => $assinatura->userId,
-                'tenant_id_fornecido' => $assinatura->tenantId,
-            ]);
-        }
-        
-        if ($tenant) {
-            $precisaReinicializar = !$jaInicializado || ($tenantAtual && $tenantAtual->id !== $tenant->id);
-        }
-        
-        \Log::debug('AssinaturaRepository::salvar() - Verificando tenancy', [
+        \Log::debug('AssinaturaRepository::salvar() - Iniciando salvamento', [
             'user_id' => $assinatura->userId,
             'tenant_id' => $assinatura->tenantId,
-            'tenant_id_encontrado' => $tenant?->id,
-            'tenant_id_atual' => $tenantAtual?->id,
-            'ja_inicializado' => $jaInicializado,
-            'precisa_reinicializar' => $precisaReinicializar,
             'assinatura_id' => $assinatura->id,
+            'tenancy_initialized' => tenancy()->initialized,
+            'tenant_id_atual' => tenancy()->tenant?->id,
         ]);
+
+        // 🔥 CRÍTICO: Verificar se tenancy está inicializado
+        // Se não estiver, é um bug de fluxo (middleware não rodou)
+        if (!tenancy()->initialized) {
+            \Log::error('AssinaturaRepository::salvar() - Tenancy não inicializado', [
+                'user_id' => $assinatura->userId,
+                'message' => 'Tenancy deve ser inicializado pelo ApplicationContext antes de usar o repository',
+            ]);
+            throw new \RuntimeException('Tenancy não inicializado. Verifique se o middleware está configurado corretamente.');
+        }
         
         try {
-            if ($precisaReinicializar && $tenant) {
-                if ($jaInicializado) {
-                    tenancy()->end();
-                }
-                tenancy()->initialize($tenant);
-                \Log::debug('AssinaturaRepository::salvar() - Tenancy inicializado', [
-                    'tenant_id' => $tenant->id,
-                ]);
-            }
 
             if ($assinatura->id) {
                 // Atualizar
@@ -472,11 +356,12 @@ public function buscarAssinaturaAtual(int $tenantId): ?Assinatura
             }
 
             return $this->toDomain($model->fresh());
-        } finally {
-            // Sempre finalizar o contexto se foi inicializado aqui
-            if (!$jaInicializado && tenancy()->initialized) {
-                tenancy()->end();
-            }
+        } catch (\Exception $e) {
+            \Log::error('AssinaturaRepository::salvar() - Erro ao salvar', [
+                'user_id' => $assinatura->userId,
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
         }
     }
 }

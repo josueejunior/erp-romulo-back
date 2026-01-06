@@ -81,6 +81,22 @@ class EmpresaRepository implements EmpresaRepositoryInterface
             'empresa_id' => $model->id,
             'razao_social' => $model->razao_social,
         ]);
+        
+        // 🔥 PERFORMANCE: Criar mapeamento direto empresa → tenant
+        try {
+            \App\Models\TenantEmpresa::createOrUpdateMapping($tenantId, $model->id);
+            \Log::info('EmpresaRepository::criarNoTenant() - Mapeamento criado', [
+                'tenant_id' => $tenantId,
+                'empresa_id' => $model->id,
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('EmpresaRepository::criarNoTenant() - Erro ao criar mapeamento', [
+                'tenant_id' => $tenantId,
+                'empresa_id' => $model->id,
+                'error' => $e->getMessage(),
+            ]);
+            // Não lançar exceção - mapeamento é otimização, não crítico
+        }
 
         return $this->toDomain($model);
     }

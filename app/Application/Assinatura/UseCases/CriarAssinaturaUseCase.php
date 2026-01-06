@@ -5,9 +5,9 @@ namespace App\Application\Assinatura\UseCases;
 use App\Application\Assinatura\DTOs\CriarAssinaturaDTO;
 use App\Domain\Assinatura\Entities\Assinatura;
 use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
+use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
 use App\Domain\Exceptions\DomainException;
 use App\Modules\Assinatura\Models\Plano;
-use App\Models\Tenant;
 use App\Modules\Auth\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -15,11 +15,14 @@ use Illuminate\Support\Facades\Log;
 /**
  * Use Case: Criar Assinatura
  * Orquestra a criação de uma nova assinatura seguindo regras de negócio
+ * 
+ * 🔥 ARQUITETURA LIMPA: Usa TenantRepository em vez de Eloquent direto
  */
 class CriarAssinaturaUseCase
 {
     public function __construct(
         private AssinaturaRepositoryInterface $assinaturaRepository,
+        private TenantRepositoryInterface $tenantRepository,
     ) {}
 
     /**
@@ -44,12 +47,15 @@ class CriarAssinaturaUseCase
         }
 
         // Se tenantId foi fornecido, validar que existe (opcional)
-        $tenant = null;
+        $tenantDomain = null;
+        $tenantModel = null;
         if ($dto->tenantId) {
-            $tenant = Tenant::find($dto->tenantId);
-            if (!$tenant) {
+            $tenantDomain = $this->tenantRepository->buscarPorId($dto->tenantId);
+            if (!$tenantDomain) {
                 throw new DomainException('Tenant não encontrado.');
             }
+            // Converter para Model apenas se precisar atualizar (compatibilidade)
+            $tenantModel = $this->tenantRepository->buscarModeloPorId($dto->tenantId);
         }
 
         // Criar entidade do domínio
@@ -73,8 +79,8 @@ class CriarAssinaturaUseCase
         $assinaturaSalva = $this->assinaturaRepository->salvar($assinatura);
 
         // Se tenant foi fornecido e for a primeira assinatura ou se for ativa, atualizar tenant (compatibilidade)
-        if ($tenant && (!$tenant->assinatura_atual_id || $dto->status === 'ativa')) {
-            $tenant->update([
+        if ($tenantModel && (!$tenantModel->assinatura_atual_id || $dto->status === 'ativa')) {
+            $tenantModel->update([
                 'plano_atual_id' => $plano->id,
                 'assinatura_atual_id' => $assinaturaSalva->id,
             ]);

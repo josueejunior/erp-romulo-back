@@ -33,3 +33,4 @@ class ContratoCreateRequest extends FormRequest
     }
 }
 
+

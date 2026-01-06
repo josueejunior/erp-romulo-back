@@ -36,3 +36,4 @@ class Setor extends BaseModel
     }
 }
 
+

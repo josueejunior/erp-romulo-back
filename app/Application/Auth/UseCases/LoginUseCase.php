@@ -4,8 +4,10 @@ namespace App\Application\Auth\UseCases;
 
 use App\Application\Auth\DTOs\LoginDTO;
 use App\Domain\Auth\Repositories\UserRepositoryInterface;
+use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
 use App\Domain\Shared\ValueObjects\Email;
 use App\Domain\Shared\ValueObjects\Senha;
+use App\Services\AdminTenancyRunner;
 use App\Models\Tenant;
 use App\Modules\Auth\Models\AdminUser;
 use DomainException;
@@ -13,11 +15,15 @@ use DomainException;
 /**
  * Use Case: Login de Usuário
  * Orquestra o login, mas não sabe nada de banco de dados diretamente
+ * 
+ * 🔥 ARQUITETURA LIMPA: Usa AdminTenancyRunner para isolar lógica de tenancy
  */
 class LoginUseCase
 {
     public function __construct(
         private UserRepositoryInterface $userRepository,
+        private TenantRepositoryInterface $tenantRepository,
+        private AdminTenancyRunner $adminTenancyRunner,
     ) {}
 
     /**
@@ -32,7 +38,13 @@ class LoginUseCase
         // Se tenant_id não foi fornecido, tentar detectar automaticamente
         $tenant = null;
         if ($dto->tenantId) {
-            $tenant = Tenant::find($dto->tenantId);
+            // 🔥 ARQUITETURA LIMPA: Usar TenantRepository em vez de Eloquent direto
+            $tenantDomain = $this->tenantRepository->buscarPorId($dto->tenantId);
+            if (!$tenantDomain) {
+                throw new DomainException('Tenant não encontrado.');
+            }
+            // Converter para Model (necessário para tenancy()->initialize())
+            $tenant = $this->tenantRepository->buscarModeloPorId($dto->tenantId);
             if (!$tenant) {
                 throw new DomainException('Tenant não encontrado.');
             }
@@ -130,35 +142,33 @@ class LoginUseCase
     /**
      * Buscar tenant automaticamente pelo email do usuário
      * Itera por todos os tenants procurando o usuário
+     * 
+     * 🔥 ARQUITETURA LIMPA: Usa AdminTenancyRunner para isolar lógica de tenancy
      */
     private function buscarTenantPorEmail(string $email): ?Tenant
     {
-        // Buscar em todos os tenants
-        $tenants = Tenant::all();
+        // Buscar todos os tenants usando repository (Domain, não Eloquent)
+        $tenantsPaginator = $this->tenantRepository->buscarComFiltros([
+            'per_page' => 1000, // Buscar todos
+        ]);
         
-        foreach ($tenants as $tenant) {
+        foreach ($tenantsPaginator->items() as $tenantDomain) {
             try {
-                // Inicializar contexto do tenant
-                tenancy()->initialize($tenant);
-                
-                try {
+                // 🔥 ARQUITETURA LIMPA: AdminTenancyRunner isola toda lógica de tenancy
+                $user = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($email) {
                     // Tentar buscar usuário neste tenant
-                    $user = $this->userRepository->buscarPorEmail($email);
-                    if ($user) {
-                        return $tenant; // Usuário encontrado neste tenant
-                    }
-                } finally {
-                    // Sempre finalizar contexto
-                    if (tenancy()->initialized) {
-                        tenancy()->end();
-                    }
+                    return $this->userRepository->buscarPorEmail($email);
+                });
+                
+                if ($user) {
+                    // Converter Domain Entity para Model (necessário para tenancy()->initialize())
+                    $tenantModel = $this->tenantRepository->buscarModeloPorId($tenantDomain->id);
+                    return $tenantModel; // Usuário encontrado neste tenant
                 }
             } catch (\Exception $e) {
                 // Se houver erro ao acessar o tenant, continuar para o próximo
-                \Log::warning("Erro ao buscar usuário no tenant {$tenant->id}: " . $e->getMessage());
-                if (tenancy()->initialized) {
-                    tenancy()->end();
-                }
+                \Log::warning("Erro ao buscar usuário no tenant {$tenantDomain->id}: " . $e->getMessage());
+                // AdminTenancyRunner já garantiu finalização do tenancy no finally
                 continue;
             }
         }
@@ -172,35 +182,33 @@ class LoginUseCase
      * 
      * 🔥 CRÍTICO: Garante que o tenant retornado seja o correto da empresa ativa,
      * não apenas onde o usuário foi encontrado
+     * 
+     * 🔥 ARQUITETURA LIMPA: Usa AdminTenancyRunner para isolar lógica de tenancy
      */
     private function buscarTenantPorEmpresa(int $empresaId): ?Tenant
     {
-        // Buscar em todos os tenants
-        $tenants = Tenant::all();
+        // Buscar todos os tenants usando repository (Domain, não Eloquent)
+        $tenantsPaginator = $this->tenantRepository->buscarComFiltros([
+            'per_page' => 1000, // Buscar todos
+        ]);
         
-        foreach ($tenants as $tenant) {
+        foreach ($tenantsPaginator->items() as $tenantDomain) {
             try {
-                // Inicializar contexto do tenant
-                tenancy()->initialize($tenant);
-                
-                try {
+                // 🔥 ARQUITETURA LIMPA: AdminTenancyRunner isola toda lógica de tenancy
+                $empresa = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($empresaId) {
                     // Tentar buscar empresa neste tenant
-                    $empresa = \App\Models\Empresa::find($empresaId);
-                    if ($empresa) {
-                        return $tenant; // Empresa encontrada neste tenant
-                    }
-                } finally {
-                    // Sempre finalizar contexto
-                    if (tenancy()->initialized) {
-                        tenancy()->end();
-                    }
+                    return \App\Models\Empresa::find($empresaId);
+                });
+                
+                if ($empresa) {
+                    // Converter Domain Entity para Model (necessário para tenancy()->initialize())
+                    $tenantModel = $this->tenantRepository->buscarModeloPorId($tenantDomain->id);
+                    return $tenantModel; // Empresa encontrada neste tenant
                 }
             } catch (\Exception $e) {
                 // Se houver erro ao acessar o tenant, continuar para o próximo
-                \Log::debug("Erro ao buscar empresa no tenant {$tenant->id}: " . $e->getMessage());
-                if (tenancy()->initialized) {
-                    tenancy()->end();
-                }
+                \Log::debug("Erro ao buscar empresa no tenant {$tenantDomain->id}: " . $e->getMessage());
+                // AdminTenancyRunner já garantiu finalização do tenancy no finally
                 continue;
             }
         }

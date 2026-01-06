@@ -64,3 +64,4 @@ A assinatura agora pertence ao **Usuário** em vez do **Tenant**. Isso permite q
 3. Testar criação de assinatura
 4. Testar verificação de assinatura no middleware
 
+

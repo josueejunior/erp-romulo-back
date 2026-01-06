@@ -20,18 +20,29 @@ use MercadoPago\MercadoPagoClient;
  */
 class MercadoPagoGateway implements PaymentProviderInterface
 {
-    private string $accessToken;
-    private bool $isSandbox;
-    private PaymentClient $paymentClient;
+    private ?string $accessToken = null;
+    private ?bool $isSandbox = null;
+    private ?PaymentClient $paymentClient = null;
+    private bool $initialized = false;
 
-    public function __construct()
+    /**
+     * Inicializar o gateway (lazy loading)
+     * Só inicializa quando realmente for usado
+     */
+    private function initialize(): void
     {
-        $this->accessToken = config('services.mercadopago.access_token');
+        if ($this->initialized) {
+            return;
+        }
+
+        $accessToken = config('services.mercadopago.access_token');
         $this->isSandbox = config('services.mercadopago.sandbox', true);
 
-        if (empty($this->accessToken)) {
+        if (empty($accessToken)) {
             throw new DomainException('Mercado Pago access token não configurado. Configure MP_ACCESS_TOKEN no arquivo .env');
         }
+        
+        $this->accessToken = $accessToken;
 
         // Validar formato do token
         $tokenPrefix = $this->isSandbox ? 'TEST-' : 'APP_USR-';
@@ -48,6 +59,8 @@ class MercadoPagoGateway implements PaymentProviderInterface
         
         // Criar cliente de pagamento
         $this->paymentClient = new PaymentClient();
+        
+        $this->initialized = true;
     }
 
     /**
@@ -55,6 +68,8 @@ class MercadoPagoGateway implements PaymentProviderInterface
      */
     public function processPayment(PaymentRequest $request, string $idempotencyKey): PaymentResult
     {
+        $this->initialize();
+        
         try {
             // Detectar método de pagamento
             $isPix = $request->paymentMethodId === 'pix';
@@ -291,6 +306,8 @@ class MercadoPagoGateway implements PaymentProviderInterface
      */
     public function getPaymentStatus(string $externalId): PaymentResult
     {
+        $this->initialize();
+        
         try {
             $payment = $this->paymentClient->get($externalId);
 

@@ -25,3 +25,4 @@ interface PaymentLogRepositoryInterface
     public function criarOuAtualizar(array $dados): \App\Models\PaymentLog;
 }
 
+

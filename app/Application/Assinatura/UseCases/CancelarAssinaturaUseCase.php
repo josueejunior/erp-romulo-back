@@ -3,6 +3,7 @@
 namespace App\Application\Assinatura\UseCases;
 
 use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
+use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
 use App\Domain\Exceptions\NotFoundException;
 use App\Domain\Exceptions\DomainException;
 use Illuminate\Support\Facades\Log;
@@ -10,11 +11,14 @@ use Carbon\Carbon;
 
 /**
  * Use Case: Cancelar Assinatura
+ * 
+ * 🔥 ARQUITETURA LIMPA: Usa TenantRepository em vez de Eloquent direto
  */
 class CancelarAssinaturaUseCase
 {
     public function __construct(
         private AssinaturaRepositoryInterface $assinaturaRepository,
+        private TenantRepositoryInterface $tenantRepository,
     ) {}
 
     /**
@@ -58,9 +62,9 @@ class CancelarAssinaturaUseCase
         ]);
 
         // Se era a assinatura atual do tenant, limpar referência
-        $tenant = \App\Models\Tenant::find($tenantId);
-        if ($tenant && $tenant->assinatura_atual_id === $assinaturaId) {
-            $tenant->update([
+        $tenantModel = $this->tenantRepository->buscarModeloPorId($tenantId);
+        if ($tenantModel && $tenantModel->assinatura_atual_id === $assinaturaId) {
+            $tenantModel->update([
                 'assinatura_atual_id' => null,
                 'plano_atual_id' => null,
             ]);
@@ -79,4 +83,5 @@ class CancelarAssinaturaUseCase
         return $assinaturaModel->fresh();
     }
 }
+
 

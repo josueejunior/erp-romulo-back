@@ -6,17 +6,22 @@ use App\Application\Auth\DTOs\RegisterDTO;
 use App\Application\Auth\UseCases\CriarUsuarioUseCase;
 use App\Application\Auth\DTOs\CriarUsuarioDTO;
 use App\Domain\Shared\ValueObjects\TenantContext;
-use App\Models\Tenant;
+use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
+use App\Services\AdminTenancyRunner;
 use DomainException;
 
 /**
  * Use Case: Registro de Usuário
  * Reutiliza CriarUsuarioUseCase mas adiciona criação de token
+ * 
+ * 🔥 ARQUITETURA LIMPA: Usa TenantRepository e AdminTenancyRunner
  */
 class RegisterUseCase
 {
     public function __construct(
         private CriarUsuarioUseCase $criarUsuarioUseCase,
+        private TenantRepositoryInterface $tenantRepository,
+        private AdminTenancyRunner $adminTenancyRunner,
     ) {}
 
     /**
@@ -25,15 +30,21 @@ class RegisterUseCase
      */
     public function executar(RegisterDTO $dto): array
     {
-        // Buscar tenant
-        $tenant = Tenant::find($dto->tenantId);
+        // Buscar tenant usando repository (Domain, não Eloquent)
+        $tenantDomain = $this->tenantRepository->buscarPorId($dto->tenantId);
         
-        if (!$tenant) {
+        if (!$tenantDomain) {
+            throw new DomainException('Tenant não encontrado.');
+        }
+
+        // Converter Domain Entity para Model (necessário para algumas operações)
+        $tenantModel = $this->tenantRepository->buscarModeloPorId($tenantDomain->id);
+        if (!$tenantModel) {
             throw new DomainException('Tenant não encontrado.');
         }
 
         // Criar TenantContext
-        $context = TenantContext::create($tenant->id);
+        $context = TenantContext::create($tenantDomain->id);
 
         // Criar DTO para CriarUsuarioUseCase
         $criarUsuarioDTO = new CriarUsuarioDTO(
@@ -48,31 +59,24 @@ class RegisterUseCase
         // Executar criação de usuário
         $user = $this->criarUsuarioUseCase->executar($criarUsuarioDTO, $context);
 
-        // Buscar empresa ativa
+        // Buscar empresa ativa e criar token usando AdminTenancyRunner
         $empresaAtiva = null;
-        if ($user->empresaAtivaId) {
-            // Buscar empresa através do repository (precisa estar no contexto do tenant)
-            tenancy()->initialize($tenant);
-            try {
+        $token = null;
+
+        // 🔥 ARQUITETURA LIMPA: AdminTenancyRunner isola toda lógica de tenancy
+        $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($user, $tenantDomain, &$empresaAtiva, &$token) {
+            // Buscar empresa ativa através do repository
+            if ($user->empresaAtivaId) {
                 $empresaRepository = app(\App\Domain\Empresa\Repositories\EmpresaRepositoryInterface::class);
                 $empresaAtiva = $empresaRepository->buscarPorId($user->empresaAtivaId);
-            } finally {
-                if (tenancy()->initialized) {
-                    tenancy()->end();
-                }
             }
-        }
 
-        // Criar token (infraestrutura - Sanctum)
-        tenancy()->initialize($tenant);
-        try {
+            // Criar token (infraestrutura - Sanctum)
             $userModel = \App\Modules\Auth\Models\User::find($user->id);
-            $token = $userModel->createToken('api-token', ['tenant_id' => $tenant->id])->plainTextToken;
-        } finally {
-            if (tenancy()->initialized) {
-                tenancy()->end();
+            if ($userModel) {
+                $token = $userModel->createToken('api-token', ['tenant_id' => $tenantDomain->id])->plainTextToken;
             }
-        }
+        });
 
         return [
             'user' => [
@@ -82,8 +86,8 @@ class RegisterUseCase
                 'empresa_ativa_id' => $user->empresaAtivaId,
             ],
             'tenant' => [
-                'id' => $tenant->id,
-                'razao_social' => $tenant->razao_social,
+                'id' => $tenantDomain->id,
+                'razao_social' => $tenantDomain->razaoSocial,
             ],
             'empresa' => $empresaAtiva ? [
                 'id' => $empresaAtiva->id,
@@ -93,6 +97,7 @@ class RegisterUseCase
         ];
     }
 }
+
 
 
 

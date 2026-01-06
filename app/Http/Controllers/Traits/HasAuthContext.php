@@ -37,24 +37,62 @@ trait HasAuthContext
 
     /**
      * Obtém ID do tenant
+     * 
+     * 🔥 REFATORADO: Prioriza ApplicationContext, mantém compatibilidade
      */
     protected function getTenantId(): ?string
     {
+        // Prioridade 1: ApplicationContext (nova arquitetura)
+        if (app()->bound(\App\Contracts\ApplicationContextContract::class)) {
+            try {
+                $context = app(\App\Contracts\ApplicationContextContract::class);
+                if ($context->isInitialized()) {
+                    $tenantId = $context->getTenantIdOrNull();
+                    if ($tenantId) {
+                        return (string) $tenantId;
+                    }
+                }
+            } catch (\Exception $e) {
+                // Continuar para fallbacks
+            }
+        }
+        
+        // Prioridade 2: IAuthIdentity (compatibilidade legado)
         $identity = $this->getAuthIdentity();
-        return $identity?->getTenantId() ?? tenancy()->tenant?->id;
+        if ($identity && $identity->getTenantId()) {
+            return $identity->getTenantId();
+        }
+        
+        // Prioridade 3: tenancy() direto
+        return tenancy()->tenant?->id;
     }
 
     /**
      * Obtém ID da empresa ativa
+     * 
+     * 🔥 REFATORADO: Prioriza ApplicationContext, mantém compatibilidade
      */
     protected function getEmpresaId(): ?int
     {
+        // Prioridade 1: ApplicationContext (nova arquitetura)
+        if (app()->bound(\App\Contracts\ApplicationContextContract::class)) {
+            try {
+                $context = app(\App\Contracts\ApplicationContextContract::class);
+                if ($context->isInitialized()) {
+                    return $context->getEmpresaIdOrNull();
+                }
+            } catch (\Exception $e) {
+                // Continuar para fallbacks
+            }
+        }
+        
+        // Prioridade 2: IAuthIdentity (compatibilidade legado)
         $identity = $this->getAuthIdentity();
         if ($identity && $identity->getEmpresaId()) {
             return $identity->getEmpresaId();
         }
         
-        // Fallback: obter do usuário autenticado
+        // Prioridade 3: Fallback direto
         $user = auth()->user();
         return $user?->empresa_ativa_id ?? null;
     }
@@ -70,24 +108,67 @@ trait HasAuthContext
 
     /**
      * Obtém objeto do tenant
+     * 
+     * 🔥 REFATORADO: Prioriza ApplicationContext, mantém compatibilidade
      */
     protected function getTenant(): ?Tenant
     {
+        // Prioridade 1: ApplicationContext (nova arquitetura)
+        if (app()->bound(\App\Contracts\ApplicationContextContract::class)) {
+            try {
+                $context = app(\App\Contracts\ApplicationContextContract::class);
+                if ($context->isInitialized()) {
+                    try {
+                        return $context->tenant();
+                    } catch (\RuntimeException $e) {
+                        // Contexto inicializado mas sem tenant (admin, etc)
+                    }
+                }
+            } catch (\Exception $e) {
+                // Continuar para fallbacks
+            }
+        }
+        
+        // Prioridade 2: IAuthIdentity (compatibilidade legado)
         $identity = $this->getAuthIdentity();
-        return $identity?->getTenant() ?? tenancy()->tenant;
+        if ($identity && $identity->getTenant()) {
+            return $identity->getTenant();
+        }
+        
+        // Prioridade 3: tenancy() direto
+        return tenancy()->tenant;
     }
 
     /**
      * Obtém objeto da empresa ativa
+     * 
+     * 🔥 REFATORADO: Prioriza ApplicationContext, mantém compatibilidade com IAuthIdentity
      */
     protected function getEmpresa(): ?Empresa
     {
+        // Prioridade 1: ApplicationContext (nova arquitetura)
+        if (app()->bound(\App\Contracts\ApplicationContextContract::class)) {
+            try {
+                $context = app(\App\Contracts\ApplicationContextContract::class);
+                if ($context->isInitialized()) {
+                    try {
+                        return $context->empresa();
+                    } catch (\RuntimeException $e) {
+                        // Contexto inicializado mas sem empresa (admin, etc)
+                    }
+                }
+            } catch (\Exception $e) {
+                // Continuar para fallbacks
+            }
+        }
+        
+        // Prioridade 2: IAuthIdentity (compatibilidade legado)
         $identity = $this->getAuthIdentity();
         if ($identity && $identity->getEmpresa()) {
             return $identity->getEmpresa();
         }
         
-        // Fallback: buscar do usuário
+        // Prioridade 3: Fallback direto (último recurso)
         $user = auth()->user();
         if ($user && $user->empresa_ativa_id) {
             return Empresa::find($user->empresa_ativa_id);
@@ -98,9 +179,29 @@ trait HasAuthContext
 
     /**
      * Obtém empresa ativa ou lança exceção
+     * 
+     * 🔥 REFATORADO: Usa ApplicationContext quando disponível
      */
     protected function getEmpresaOrFail(): Empresa
     {
+        // Prioridade 1: ApplicationContext (nova arquitetura)
+        if (app()->bound(\App\Contracts\ApplicationContextContract::class)) {
+            try {
+                $context = app(\App\Contracts\ApplicationContextContract::class);
+                if ($context->isInitialized()) {
+                    try {
+                        return $context->empresa();
+                    } catch (\RuntimeException $e) {
+                        // Contexto inicializado mas sem empresa
+                        abort(403, 'Você não tem acesso a nenhuma empresa.');
+                    }
+                }
+            } catch (\Exception $e) {
+                // Continuar para fallbacks
+            }
+        }
+        
+        // Fallback: método antigo
         $empresa = $this->getEmpresa();
         
         if (!$empresa) {
@@ -112,6 +213,8 @@ trait HasAuthContext
 
     /**
      * Alias para getEmpresaOrFail() (usado em vários controllers)
+     * 
+     * 🔥 REFATORADO: Usa ApplicationContext quando disponível
      */
     protected function getEmpresaAtivaOrFail(): Empresa
     {
@@ -173,5 +276,6 @@ trait HasAuthContext
         return $identity?->getScope() ?? 'api-v1';
     }
 }
+
 
 

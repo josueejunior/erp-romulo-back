@@ -41,8 +41,9 @@ class CriarAutorizacaoFornecimentoUseCase
             valor: $dto->valor,
             saldo: $dto->valor, // Saldo inicial = valor
             valorEmpenhado: 0.0,
-            situacao: $dto->situacao,
-            situacaoDetalhada: $dto->situacaoDetalhada,
+            // Converter enums para string (Domain Entity não conhece enums)
+            situacao: $dto->situacao?->value,
+            situacaoDetalhada: $dto->situacaoDetalhada?->value,
             vigente: $dto->vigente,
             observacoes: $dto->observacoes,
             numeroCte: $dto->numeroCte,

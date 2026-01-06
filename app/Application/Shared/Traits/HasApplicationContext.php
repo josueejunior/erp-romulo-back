@@ -2,7 +2,7 @@
 
 namespace App\Application\Shared\Traits;
 
-use App\Services\ApplicationContext;
+use App\Contracts\ApplicationContextContract;
 use App\Domain\Shared\ValueObjects\TenantContext;
 
 /**
@@ -29,9 +29,9 @@ trait HasApplicationContext
             return $empresaIdFromDto;
         }
         
-        // Prioridade 2: ApplicationContext (novo)
-        if (app()->bound(ApplicationContext::class)) {
-            $context = app(ApplicationContext::class);
+        // Prioridade 2: ApplicationContextContract (via interface)
+        if (app()->bound(ApplicationContextContract::class)) {
+            $context = app(ApplicationContextContract::class);
             if ($context->isInitialized() && $context->getEmpresaIdOrNull()) {
                 return $context->getEmpresaId();
             }
@@ -73,9 +73,9 @@ trait HasApplicationContext
      */
     protected function resolveTenantId(): int
     {
-        // Prioridade 1: ApplicationContext
-        if (app()->bound(ApplicationContext::class)) {
-            $context = app(ApplicationContext::class);
+        // Prioridade 1: ApplicationContextContract (via interface)
+        if (app()->bound(\App\Contracts\ApplicationContextContract::class)) {
+            $context = app(\App\Contracts\ApplicationContextContract::class);
             if ($context->isInitialized()) {
                 return $context->getTenantId();
             }
@@ -95,10 +95,10 @@ trait HasApplicationContext
     }
     
     /**
-     * Obter ApplicationContext completo
+     * Obter ApplicationContext completo (via interface)
      */
-    protected function getApplicationContext(): ApplicationContext
+    protected function getApplicationContext(): \App\Contracts\ApplicationContextContract
     {
-        return app(ApplicationContext::class);
+        return app(\App\Contracts\ApplicationContextContract::class);
     }
 }

@@ -3,16 +3,21 @@
 namespace App\Application\Auth\UseCases;
 
 use App\Domain\Auth\Repositories\UserRepositoryInterface;
-use App\Models\Tenant;
+use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
+use App\Services\AdminTenancyRunner;
 use Illuminate\Contracts\Auth\Authenticatable;
 
 /**
  * Use Case: Obter Dados do Usuário Autenticado
+ * 
+ * 🔥 ARQUITETURA LIMPA: Usa TenantRepository e AdminTenancyRunner
  */
 class GetUserUseCase
 {
     public function __construct(
         private UserRepositoryInterface $userRepository,
+        private TenantRepositoryInterface $tenantRepository,
+        private AdminTenancyRunner $adminTenancyRunner,
     ) {}
 
     /**
@@ -24,19 +29,24 @@ class GetUserUseCase
         // 🔥 IMPORTANTE: Priorizar tenant_id do header X-Tenant-ID (fonte de verdade)
         // O middleware já inicializou o tenant baseado no header
         // Se o tenant já está inicializado, usar ele (garante que está correto)
-        $tenant = null;
+        $tenantModel = null;
+        $tenantDomain = null;
         $tenantId = null;
         
         // Prioridade 1: Usar tenant já inicializado pelo middleware (mais confiável)
         if (tenancy()->initialized && tenancy()->tenant) {
-            $tenant = tenancy()->tenant;
-            $tenantId = $tenant->id;
+            $tenantModel = tenancy()->tenant;
+            $tenantId = $tenantModel->id;
+            $tenantDomain = $this->tenantRepository->buscarPorId($tenantId);
         } else {
             // Prioridade 2: Tentar obter do header (se middleware não inicializou)
             $request = request();
             if ($request && $request->header('X-Tenant-ID')) {
                 $tenantId = (int) $request->header('X-Tenant-ID');
-                $tenant = Tenant::find($tenantId);
+                $tenantDomain = $this->tenantRepository->buscarPorId($tenantId);
+                if ($tenantDomain) {
+                    $tenantModel = $this->tenantRepository->buscarModeloPorId($tenantId);
+                }
             } else {
                 // Prioridade 3: Fallback para token (pode estar desatualizado)
                 if (method_exists($user, 'currentAccessToken') && $user->currentAccessToken()) {
@@ -44,7 +54,10 @@ class GetUserUseCase
                     $tenantId = $abilities['tenant_id'] ?? null;
                     
                     if ($tenantId) {
-                        $tenant = Tenant::find($tenantId);
+                        $tenantDomain = $this->tenantRepository->buscarPorId($tenantId);
+                        if ($tenantDomain) {
+                            $tenantModel = $this->tenantRepository->buscarModeloPorId($tenantId);
+                        }
                     }
                 }
             }
@@ -53,9 +66,9 @@ class GetUserUseCase
         // Buscar empresa ativa e lista de empresas
         $empresaAtiva = null;
         $empresasList = [];
-        if ($tenant) {
-            tenancy()->initialize($tenant);
-            try {
+        if ($tenantDomain) {
+            // 🔥 ARQUITETURA LIMPA: AdminTenancyRunner isola toda lógica de tenancy
+            $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($user, &$empresaAtiva, &$empresasList) {
                 // Buscar todas as empresas do usuário
                 $empresas = $this->userRepository->buscarEmpresas($user->id);
                 
@@ -85,11 +98,7 @@ class GetUserUseCase
                     // Se não tem empresa ativa, usar primeira empresa
                     $empresaAtiva = !empty($empresas) ? $empresas[0] : null;
                 }
-            } finally {
-                if (tenancy()->initialized) {
-                    tenancy()->end();
-                }
-            }
+            });
         }
 
         return [
@@ -101,10 +110,10 @@ class GetUserUseCase
                 'foto_perfil' => method_exists($user, 'foto_perfil') ? $user->foto_perfil : null,
                 'empresas_list' => $empresasList, // Lista de empresas para o seletor
             ],
-            'tenant' => $tenant ? [
-                'id' => $tenant->id,
-                'razao_social' => $tenant->razao_social,
-                'cnpj' => $tenant->cnpj ?? null,
+            'tenant' => $tenantDomain ? [
+                'id' => $tenantDomain->id,
+                'razao_social' => $tenantDomain->razaoSocial,
+                'cnpj' => $tenantDomain->cnpj ?? null,
             ] : null,
             'empresa' => $empresaAtiva ? [
                 'id' => $empresaAtiva->id,

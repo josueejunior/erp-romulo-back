@@ -193,6 +193,22 @@ class TenantService
 
                 // Criar empresa dentro do tenant
                 $empresa = $this->createEmpresa($validated);
+                
+                // 🔥 PERFORMANCE: Criar mapeamento direto empresa → tenant
+                try {
+                    \App\Models\TenantEmpresa::createOrUpdateMapping($tenant->id, $empresa->id);
+                    Log::info('TenantService::createTenantWithEmpresa() - Mapeamento criado', [
+                        'tenant_id' => $tenant->id,
+                        'empresa_id' => $empresa->id,
+                    ]);
+                } catch (\Exception $e) {
+                    Log::error('TenantService::createTenantWithEmpresa() - Erro ao criar mapeamento', [
+                        'tenant_id' => $tenant->id,
+                        'empresa_id' => $empresa->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                    // Não lançar exceção - mapeamento é otimização, não crítico
+                }
 
                 // Se dados do admin foram fornecidos, criar usuário administrador
                 if (!empty($validated['admin_name']) && 

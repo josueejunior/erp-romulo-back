@@ -5,9 +5,7 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
-use App\Application\Assinatura\UseCases\VerificarAssinaturaAtivaUseCase;
-use App\Services\ApplicationContext;
-use Illuminate\Support\Facades\Auth;
+use App\Contracts\ApplicationContextContract;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -26,89 +24,39 @@ use Illuminate\Support\Facades\Log;
  * - Esta empresa pertence a este Tenant?
  * - Este Tenant possui uma assinatura active ou trialing?
  */
+/**
+ * Middleware thin para validar assinatura ativa
+ * 
+ * 🔥 REFATORADO: Este middleware agora é apenas um proxy.
+ * Toda a lógica está centralizada no ApplicationContext.
+ */
 class CheckSubscription
 {
     public function __construct(
-        private VerificarAssinaturaAtivaUseCase $verificarAssinaturaAtivaUseCase,
-        private ApplicationContext $context,
+        private ApplicationContextContract $context,
     ) {}
 
     /**
      * Handle an incoming request.
      * 
-     * Fluxo de validação:
-     * 1. Garante que o usuário está autenticado (fail-fast)
-     * 2. Obtém tenant_id do contexto (já inicializado pelo middleware anterior)
-     * 3. Busca assinatura ativa do tenant
-     * 4. Valida status da assinatura (active, trialing, ou grace period)
-     * 5. Se válida, permite acesso; se não, retorna 403
+     * 🔥 THIN MIDDLEWARE: Apenas chama o ApplicationContext
+     * Toda a lógica está centralizada no ApplicationContext.
      *
      * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // 1. Garante que o usuário está autenticado (fail-fast)
-        if (!Auth::check()) {
-            Log::warning('CheckSubscription - Usuário não autenticado', [
-                'url' => $request->url(),
-            ]);
-            
-            return response()->json([
-                'message' => 'Não autenticado',
-                'code' => 'UNAUTHENTICATED'
-            ], 401);
+        // Garantir que o contexto foi inicializado
+        if (!$this->context->isInitialized()) {
+            $this->context->bootstrap($request);
         }
-
-        $user = Auth::user();
         
-        // 🔥 NOVO: Validar assinatura do USUÁRIO, não do tenant
-        // A assinatura pertence ao usuário, que pode ter acesso a múltiplas empresas/tenants
+        // Verificar assinatura
+        $resultado = $this->context->validateAssinatura();
         
-        // 2. Validar se o tenant/empresa pertence ao usuário (opcional, mas recomendado)
-        $tenantId = $this->context->getTenantIdOrNull();
-        $empresaId = $this->context->getEmpresaIdOrNull();
-        
-        // Se empresaId foi fornecido, validar que o usuário tem acesso a ela
-        if ($empresaId && $user->empresa_ativa_id !== $empresaId) {
-            // Verificar se o usuário tem acesso a esta empresa
-            $temAcesso = $user->empresas()->where('empresas.id', $empresaId)->exists();
-            if (!$temAcesso) {
-                Log::warning('CheckSubscription - Usuário não tem acesso à empresa', [
-                    'user_id' => $user->id,
-                    'empresa_id' => $empresaId,
-                    'empresa_ativa_id' => $user->empresa_ativa_id,
-                ]);
-                
-                return response()->json([
-                    'message' => 'Você não tem acesso a esta empresa.',
-                    'code' => 'COMPANY_ACCESS_DENIED'
-                ], 403);
-            }
-        }
-
-        // 3. Busca assinatura ativa do USUÁRIO
-        Log::info('CheckSubscription - Validando assinatura do usuário', [
-            'user_id' => $user->id,
-            'tenant_id' => $tenantId,
-            'empresa_id' => $empresaId,
-        ]);
-
-        // Verificar assinatura usando Use Case DDD (por userId)
-        $resultado = $this->verificarAssinaturaAtivaUseCase->executar($user->id);
-        
-        Log::info('CheckSubscription - Resultado da verificação', [
-            'user_id' => $user->id,
-            'tenant_id' => $tenantId,
-            'pode_acessar' => $resultado['pode_acessar'] ?? false,
-            'code' => $resultado['code'] ?? null,
-        ]);
-
-        // 4. Valida status da assinatura
         if (!$resultado['pode_acessar']) {
             Log::warning('CheckSubscription - Acesso negado', [
-                'user_id' => $user->id,
-                'tenant_id' => $tenantId,
-                'empresa_id' => $empresaId,
+                'user_id' => $this->context->getUser()?->id,
                 'code' => $resultado['code'] ?? null,
                 'message' => $resultado['message'] ?? null,
             ]);
@@ -122,7 +70,7 @@ class CheckSubscription
             ], 403);
         }
 
-        // 5. Se pode acessar mas tem warning (grace period), adicionar headers
+        // Se pode acessar mas tem warning (grace period), adicionar headers
         if (isset($resultado['warning']) && $resultado['warning']) {
             return $next($request)->withHeaders([
                 'X-Subscription-Warning' => 'true',

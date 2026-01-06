@@ -52,3 +52,4 @@ class TenantCreateRequest extends FormRequest
     }
 }
 
+

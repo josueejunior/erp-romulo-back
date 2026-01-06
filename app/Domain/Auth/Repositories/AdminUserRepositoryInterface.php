@@ -25,3 +25,4 @@ interface AdminUserRepositoryInterface
     public function buscarPorId(int $id): ?\App\Modules\Auth\Models\AdminUser;
 }
 
+

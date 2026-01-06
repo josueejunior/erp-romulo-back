@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Contracts\IAuthIdentity;
+use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
 use App\Models\Tenant;
 use App\Models\Empresa;
 use App\Modules\Auth\Models\User;
@@ -12,9 +13,15 @@ use Illuminate\Support\Facades\Auth;
 
 /**
  * Service para criar e gerenciar identidade de autenticação
+ * 
+ * 🔥 ARQUITETURA LIMPA: Usa TenantRepository para buscar tenants
  */
 class AuthIdentityService
 {
+    public function __construct(
+        private TenantRepositoryInterface $tenantRepository,
+    ) {}
+
     /**
      * Criar identidade a partir da requisição
      */
@@ -33,7 +40,7 @@ class AuthIdentityService
 
         // Usuário do tenant
         if ($user instanceof User) {
-            return new TenantAuthIdentity($user, $request, $scope);
+            return new TenantAuthIdentity($user, $request, $scope, $this->tenantRepository);
         }
 
         return new NullAuthIdentity($scope);
@@ -57,7 +64,7 @@ class AuthIdentityService
         }
 
         if ($user instanceof User) {
-            return new TenantAuthIdentity($user, $request, $scope);
+            return new TenantAuthIdentity($user, $request, $scope, $this->tenantRepository);
         }
 
         return new NullAuthIdentity($scope);
@@ -66,6 +73,8 @@ class AuthIdentityService
 
 /**
  * Implementação para usuário do tenant
+ * 
+ * 🔥 ARQUITETURA LIMPA: Usa TenantRepository para buscar tenant
  */
 class TenantAuthIdentity implements IAuthIdentity
 {
@@ -74,8 +83,12 @@ class TenantAuthIdentity implements IAuthIdentity
     protected ?Empresa $empresa = null;
     protected string $scope;
 
-    public function __construct(User $user, Request $request, string $scope = 'api-v1')
-    {
+    public function __construct(
+        User $user, 
+        Request $request, 
+        string $scope = 'api-v1',
+        ?TenantRepositoryInterface $tenantRepository = null
+    ) {
         $this->user = $user;
         $this->scope = $scope;
         
@@ -85,10 +98,20 @@ class TenantAuthIdentity implements IAuthIdentity
             ?? null;
 
         if ($tenantId) {
-            $this->tenant = Tenant::find($tenantId);
+            // 🔥 ARQUITETURA LIMPA: Usar TenantRepository em vez de Eloquent direto
+            if ($tenantRepository) {
+                $tenantDomain = $tenantRepository->buscarPorId($tenantId);
+                if ($tenantDomain) {
+                    $this->tenant = $tenantRepository->buscarModeloPorId($tenantId);
+                }
+            } else {
+                // Fallback para compatibilidade (não recomendado)
+                $this->tenant = Tenant::find($tenantId);
+            }
         }
 
-        // Obter empresa ativa
+        // Obter empresa ativa (mantém Eloquent direto porque precisa do relacionamento)
+        // Isso é aceitável porque é infraestrutura de autenticação e precisa do modelo
         if ($this->user->empresa_ativa_id) {
             $this->empresa = Empresa::find($this->user->empresa_ativa_id);
         } else {

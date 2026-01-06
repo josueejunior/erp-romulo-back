@@ -11,6 +11,8 @@ use App\Application\Auth\Presenters\UserPresenter;
 use App\Domain\Auth\Repositories\UserRepositoryInterface;
 use App\Domain\Auth\Repositories\UserReadRepositoryInterface;
 use App\Domain\Shared\ValueObjects\TenantContext;
+use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
+use App\Services\AdminTenancyRunner;
 use App\Http\Responses\ApiResponse;
 use App\Models\Tenant;
 use App\Models\Empresa;
@@ -23,6 +25,8 @@ use DomainException;
  * Controller Admin para gerenciar usuários das empresas
  * Controller FINO - apenas recebe request e devolve response
  * Toda lógica está nos Use Cases
+ * 
+ * 🔥 ARQUITETURA LIMPA: Usa AdminTenancyRunner para isolar lógica de tenancy
  */
 class AdminUserController extends Controller
 {
@@ -31,6 +35,8 @@ class AdminUserController extends Controller
         private AtualizarUsuarioUseCase $atualizarUsuarioUseCase,
         private UserRepositoryInterface $userRepository,
         private UserReadRepositoryInterface $userReadRepository,
+        private TenantRepositoryInterface $tenantRepository,
+        private AdminTenancyRunner $adminTenancyRunner,
     ) {}
 
     /**
@@ -44,22 +50,31 @@ class AdminUserController extends Controller
         try {
             \Log::info('AdminUserController::indexGlobal - Listando usuários de todos os tenants');
             
-            // Buscar todos os tenants ativos
-            $allTenants = Tenant::where('status', 'ativa')
-                ->orWhereNull('status')
-                ->get();
+            // Buscar todos os tenants ativos usando repository (Domain, não Eloquent)
+            $tenantsPaginator = $this->tenantRepository->buscarComFiltros([
+                'status' => 'ativa',
+                'per_page' => 1000, // Buscar todos para admin
+            ]);
             
             $allUsers = [];
             
-            foreach ($allTenants as $tenantModel) {
+            // 🔥 ARQUITETURA LIMPA: AdminTenancyRunner isola toda lógica de tenancy
+            foreach ($tenantsPaginator->items() as $tenantDomain) {
                 try {
-                    // Inicializar tenancy para este tenant
-                    tenancy()->initialize($tenantModel);
+                    $resultado = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($tenantDomain) {
+                        // Buscar usuários com suas empresas (dentro do contexto do tenant)
+                        $users = \App\Modules\Auth\Models\User::with(['empresas', 'roles'])
+                            ->withTrashed() // Incluir inativos
+                            ->get();
+                        
+                        return [
+                            'users' => $users,
+                            'tenant' => $tenantDomain,
+                        ];
+                    });
                     
-                    // Buscar usuários com suas empresas
-                    $users = \App\Modules\Auth\Models\User::with(['empresas', 'roles'])
-                        ->withTrashed() // Incluir inativos
-                        ->get();
+                    $users = $resultado['users'];
+                    $tenantDomain = $resultado['tenant'];
                     
                     foreach ($users as $user) {
                         // Verificar se usuário já existe na lista (por email)
@@ -72,13 +87,13 @@ class AdminUserController extends Controller
                         }
                         
                         // Preparar dados das empresas com tenant_id
-                        $empresasComTenant = $user->empresas->map(function ($empresa) use ($tenantModel) {
+                        $empresasComTenant = $user->empresas->map(function ($empresa) use ($tenantDomain) {
                             return [
                                 'id' => $empresa->id,
                                 'razao_social' => $empresa->razao_social,
                                 'cnpj' => $empresa->cnpj,
-                                'tenant_id' => $tenantModel->id,
-                                'tenant_razao_social' => $tenantModel->razao_social,
+                                'tenant_id' => $tenantDomain->id,
+                                'tenant_razao_social' => $tenantDomain->razaoSocial,
                             ];
                         })->toArray();
                         
@@ -89,8 +104,8 @@ class AdminUserController extends Controller
                                 $empresasComTenant
                             );
                             $allUsers[$existingIndex]['tenants'][] = [
-                                'id' => $tenantModel->id,
-                                'razao_social' => $tenantModel->razao_social,
+                                'id' => $tenantDomain->id,
+                                'razao_social' => $tenantDomain->razaoSocial,
                             ];
                         } else {
                             // Novo usuário
@@ -103,24 +118,19 @@ class AdminUserController extends Controller
                                 'empresa_ativa_id' => $user->empresa_ativa_id,
                                 'deleted_at' => $user->deleted_at,
                                 'tenants' => [[
-                                    'id' => $tenantModel->id,
-                                    'razao_social' => $tenantModel->razao_social,
+                                    'id' => $tenantDomain->id,
+                                    'razao_social' => $tenantDomain->razaoSocial,
                                 ]],
-                                'primary_tenant_id' => $tenantModel->id, // Primeiro tenant onde foi encontrado
+                                'primary_tenant_id' => $tenantDomain->id, // Primeiro tenant onde foi encontrado
                             ];
                         }
                     }
-                    
-                    tenancy()->end();
                 } catch (\Exception $e) {
                     Log::warning('Erro ao buscar usuários do tenant', [
-                        'tenant_id' => $tenantModel->id,
+                        'tenant_id' => $tenantDomain->id,
                         'error' => $e->getMessage(),
                     ]);
-                    
-                    if (tenancy()->initialized) {
-                        tenancy()->end();
-                    }
+                    // AdminTenancyRunner já garantiu finalização do tenancy no finally
                 }
             }
             
@@ -150,10 +160,6 @@ class AdminUserController extends Controller
                 'trace' => $e->getTraceAsString(),
             ]);
             
-            if (tenancy()->initialized) {
-                tenancy()->end();
-            }
-            
             return response()->json(['message' => 'Erro ao listar usuários.'], 500);
         }
     }
@@ -168,37 +174,42 @@ class AdminUserController extends Controller
         try {
             \Log::info('AdminUserController::showGlobal - Buscando usuário', ['userId' => $userId]);
             
-            // Buscar todos os tenants ativos
-            $allTenants = Tenant::where('status', 'ativa')
-                ->orWhereNull('status')
-                ->get();
+            // Buscar todos os tenants ativos usando repository (Domain, não Eloquent)
+            $tenantsPaginator = $this->tenantRepository->buscarComFiltros([
+                'status' => 'ativa',
+                'per_page' => 1000, // Buscar todos para admin
+            ]);
             
             $userData = null;
             $todasEmpresas = [];
             $todosTenantsDoUsuario = [];
             
-            // Processar tenants em lotes para melhor performance
-            foreach ($allTenants as $tenantModel) {
+            // 🔥 ARQUITETURA LIMPA: AdminTenancyRunner isola toda lógica de tenancy
+            foreach ($tenantsPaginator->items() as $tenantDomain) {
                 try {
-                    tenancy()->initialize($tenantModel);
+                    $resultado = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($userId) {
+                        // Usar eager loading para evitar N+1 dentro do tenant
+                        // Já carrega empresas e roles em uma única query
+                        $user = \App\Modules\Auth\Models\User::with([
+                            'empresas' => function($query) {
+                                // Carregar apenas campos necessários
+                                $query->select('id', 'razao_social', 'cnpj');
+                            },
+                            'roles' => function($query) {
+                                // Carregar apenas nome das roles
+                                $query->select('id', 'name');
+                            }
+                        ])
+                        ->withTrashed()
+                        ->select('id', 'name', 'email', 'empresa_ativa_id', 'deleted_at')
+                        ->find($userId);
+                        
+                        return $user;
+                    });
                     
-                    // Usar eager loading para evitar N+1 dentro do tenant
-                    // Já carrega empresas e roles em uma única query
-                    $user = \App\Modules\Auth\Models\User::with([
-                        'empresas' => function($query) {
-                            // Carregar apenas campos necessários
-                            $query->select('id', 'razao_social', 'cnpj');
-                        },
-                        'roles' => function($query) {
-                            // Carregar apenas nome das roles
-                            $query->select('id', 'name');
-                        }
-                    ])
-                    ->withTrashed()
-                    ->select('id', 'name', 'email', 'empresa_ativa_id', 'deleted_at')
-                    ->find($userId);
-                    
-                    if ($user) {
+                    if ($resultado) {
+                        $user = $resultado;
+                        
                         // Coletar dados do usuário (usar o primeiro encontrado como base)
                         if (!$userData) {
                             $userData = [
@@ -217,28 +228,23 @@ class AdminUserController extends Controller
                                 'id' => $empresa->id,
                                 'razao_social' => $empresa->razao_social,
                                 'cnpj' => $empresa->cnpj,
-                                'tenant_id' => $tenantModel->id,
-                                'tenant_razao_social' => $tenantModel->razao_social,
+                                'tenant_id' => $tenantDomain->id,
+                                'tenant_razao_social' => $tenantDomain->razaoSocial,
                             ];
                         }
                         
                         $todosTenantsDoUsuario[] = [
-                            'id' => $tenantModel->id,
-                            'razao_social' => $tenantModel->razao_social,
+                            'id' => $tenantDomain->id,
+                            'razao_social' => $tenantDomain->razaoSocial,
                         ];
                     }
-                    
-                    tenancy()->end();
                 } catch (\Exception $e) {
                     \Log::warning('Erro ao buscar usuário no tenant', [
-                        'tenant_id' => $tenantModel->id,
+                        'tenant_id' => $tenantDomain->id,
                         'userId' => $userId,
                         'error' => $e->getMessage(),
                     ]);
-                    
-                    if (tenancy()->initialized) {
-                        tenancy()->end();
-                    }
+                    // AdminTenancyRunner já garantiu finalização do tenancy no finally
                 }
             }
             
@@ -263,10 +269,6 @@ class AdminUserController extends Controller
                 'userId' => $userId,
                 'error' => $e->getMessage(),
             ]);
-            
-            if (tenancy()->initialized) {
-                tenancy()->end();
-            }
             
             return response()->json(['message' => 'Erro ao buscar usuário.'], 500);
         }

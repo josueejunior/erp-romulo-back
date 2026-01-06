@@ -35,3 +35,4 @@ class EmpresaAtivaAlterada implements DomainEvent
     }
 }
 
+

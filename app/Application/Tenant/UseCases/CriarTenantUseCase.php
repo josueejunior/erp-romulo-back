@@ -216,7 +216,12 @@ class CriarTenantUseCase
         }
 
         // Inicializar contexto do tenant
-        tenancy()->initialize(\App\Models\Tenant::find($tenant->id));
+        // 🔥 ARQUITETURA LIMPA: Usar TenantRepository em vez de Eloquent direto
+        $tenantModel = $this->tenantRepository->buscarModeloPorId($tenant->id);
+        if (!$tenantModel) {
+            throw new DomainException('Erro ao buscar tenant criado.');
+        }
+        tenancy()->initialize($tenantModel);
 
         try {
             // Inicializar roles e permissões
