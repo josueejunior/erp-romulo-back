@@ -12,17 +12,21 @@ use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Support\Facades\Log;
 
 /**
- * 🔥 MIDDLEWARE UNIFICADO: Autenticação JWT + Bootstrap
+ * ⚠️ DEPRECATED - NÃO USAR
  * 
- * Este middleware consolida toda a lógica de autenticação JWT e inicialização
- * do contexto em um único lugar.
+ * Este middleware foi substituído por uma arquitetura mais limpa:
  * 
- * Responsabilidades:
- * 1. Valida token JWT (stateless)
- * 2. Define usuário autenticado no guard
- * 3. Cria identidade de autenticação
- * 4. Inicializa ApplicationContext (tenancy, empresa, etc.)
- * 5. Continua com a requisição
+ * CAMADA 3: AuthenticateJWT - Valida JWT e define user
+ * CAMADA 4: BuildAuthContext - Cria identidade
+ * CAMADA 5: ResolveTenantContext - Resolve tenant
+ * CAMADA 6: BootstrapApplicationContext - Bootstrap empresa
+ * 
+ * Motivo da deprecação:
+ * - Violava Single Responsibility Principle
+ * - Dificultava debugging (erros silenciosos)
+ * - Pipeline frágil (route = null)
+ * 
+ * Use a nova arquitetura em routes/api.php
  */
 class AuthenticateAndBootstrap
 {

@@ -80,14 +80,21 @@ Route::prefix('v1')->group(function () {
     Route::get('/cadastro-publico/consultar-cnpj/{cnpj}', [\App\Http\Controllers\Public\CadastroPublicoController::class, 'consultarCnpj'])
         ->middleware(['throttle:10,1']); // 10 consultas por minuto
 
-    // Rotas autenticadas
-    // Rate limiting: 200 requisições por minuto (aumentado para evitar bloqueios)
-    // Rotas de criação/edição têm rate limiting adicional
-    // Rotas autenticadas: aqui sim aplicamos contexto (empresa/tenant) após auth
-    // 🔥 JWT STATELESS: Middleware unificado com autenticação JWT
-    // Consolida JWT auth + SetAuthContext + EnsureEmpresaAtivaContext em um único middleware
-    // Sem estado, sem sessão, sem Redis - perfeito para escalabilidade horizontal
-    Route::middleware([\App\Http\Middleware\AuthenticateAndBootstrap::class, 'throttle:200,1'])->group(function () {
+    // 🔥 NOVA ARQUITETURA: Pipeline previsível e testável
+    // 
+    // CAMADA 3: AuthenticateJWT - Valida JWT e define user
+    // CAMADA 4: BuildAuthContext - Cria identidade de autenticação
+    // CAMADA 5: ResolveTenantContext - Resolve e inicializa tenant
+    // CAMADA 6: BootstrapApplicationContext - Bootstrap de empresa/assinatura
+    // 
+    // Cada middleware faz UMA coisa e falha o mais cedo possível
+    Route::middleware([
+        'jwt.auth',                    // CAMADA 3: Autenticação JWT
+        'auth.context',                // CAMADA 4: Identidade
+        'tenant.context',              // CAMADA 5: Tenancy
+        'bootstrap.context',           // CAMADA 6: Bootstrap empresa
+        'throttle:200,1'               // Rate limiting
+    ])->group(function () {
         // Rotas que NÃO precisam de assinatura (exceções)
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::get('/auth/user', [AuthController::class, 'user']);
@@ -315,9 +322,18 @@ Route::prefix('admin')->group(function () {
     Route::post('/login', [AdminAuthController::class, 'login'])
         ->middleware(['throttle:3,1', 'throttle:5,60']);
     
-    // 🔥 JWT STATELESS: Rotas admin - usar AuthenticateAndBootstrap (JWT)
-    // Middleware AuthenticateAndBootstrap valida JWT e inicializa contexto
-    Route::middleware([\App\Http\Middleware\AuthenticateAndBootstrap::class, 'admin'])->group(function () {
+    // 🔥 NOVA ARQUITETURA: Pipeline para admin
+    // 
+    // CAMADA 3: AuthenticateJWT - Valida JWT e define AdminUser
+    // CAMADA 4: BuildAuthContext - Cria identidade de autenticação
+    // CAMADA 7: EnsureAdmin - Valida se é AdminUser
+    // 
+    // Admin não precisa de tenant/empresa, então pulamos essas camadas
+    Route::middleware([
+        'jwt.auth',                    // CAMADA 3: Autenticação JWT
+        'auth.context',                // CAMADA 4: Identidade
+        'admin'                        // CAMADA 7: Validação admin
+    ])->group(function () {
         // Autenticação admin
         Route::post('/logout', [AdminAuthController::class, 'logout']);
         Route::get('/me', [AdminAuthController::class, 'me']);

@@ -13,20 +13,29 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
+            // 🔥 Nova arquitetura (em uso)
+            'jwt.auth' => \App\Http\Middleware\AuthenticateJWT::class,
+            'auth.context' => \App\Http\Middleware\BuildAuthContext::class,
+            'tenant.context' => \App\Http\Middleware\ResolveTenantContext::class,
+            'bootstrap.context' => \App\Http\Middleware\BootstrapApplicationContext::class,
+            'admin' => \App\Http\Middleware\EnsureAdmin::class,
+            
+            // Middlewares legados (deprecated - não usar)
             'empresa.ativa' => \App\Http\Middleware\EnsureEmpresaAtiva::class,
             'empresa.context' => \App\Http\Middleware\EnsureEmpresaAtivaContext::class,
             'tenancy' => \App\Http\Middleware\InitializeTenancyByRequestData::class,
             'rate.limit.redis' => \App\Http\Middleware\RateLimitRedis::class,
-            'admin' => \App\Http\Middleware\EnsureAdmin::class,
             'security.headers' => \App\Http\Middleware\SecurityHeaders::class,
-            'jwt.auth' => \App\Http\Middleware\AuthenticateJWT::class,
         ]);
         
+        // 🔥 CAMADA 1 - Infra (antes de tudo)
         // CORS DEVE ser o PRIMEIRO middleware - executar globalmente antes de tudo
         // Isso garante que requisições OPTIONS sejam processadas antes de qualquer outro middleware
         $middleware->prepend(\App\Http\Middleware\HandleCorsCustom::class);
         
-        // HandleApiErrors após CORS para rotas de API
+        // 🔥 CAMADA 2 - Error Boundary (prepend para capturar exceções)
+        // HandleApiErrors deve rodar como prepend para capturar exceções de todos os middlewares seguintes
+        // Ele é um boundary que traduz exceptions em JSON, não participa do fluxo de decisão
         $middleware->api(prepend: [
             \App\Http\Middleware\HandleApiErrors::class,
         ]);

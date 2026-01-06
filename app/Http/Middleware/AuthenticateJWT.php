@@ -9,10 +9,24 @@ use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Support\Facades\Log;
 
 /**
- * 🔥 Middleware JWT Stateless
+ * 🔥 CAMADA 3 - Autenticação (Isolada)
  * 
- * Valida token JWT e injeta dados do usuário no request.
- * Sem estado, sem sessão, sem Redis - perfeito para escalabilidade.
+ * Responsabilidade ÚNICA: Validar JWT e definir usuário no guard
+ * 
+ * ✅ Faz:
+ * - Lê token do header
+ * - Valida assinatura JWT
+ * - Valida exp/nbf
+ * - Resolve User do banco
+ * - Define auth()->setUser($user)
+ * 
+ * ❌ NUNCA faz:
+ * - Tenant (outro middleware)
+ * - Empresa (outro middleware)
+ * - Admin (outro middleware)
+ * - Subscription (outro middleware)
+ * 
+ * 🎯 Princípio: JWT não sabe o que é empresa/tenant
  */
 class AuthenticateJWT
 {
@@ -27,7 +41,7 @@ class AuthenticateJWT
             'method' => $request->method(),
         ]);
 
-        // Obter token do header Authorization
+        // 1. Obter token do header Authorization
         $token = $request->bearerToken();
 
         if (!$token) {
@@ -38,26 +52,35 @@ class AuthenticateJWT
         }
 
         try {
-            // Validar e decodificar token
+            // 2. Validar e decodificar token JWT
             Log::debug('AuthenticateJWT::handle - Validando token JWT');
             $payload = $this->jwtService->validateToken($token);
             
-            // Injetar dados do usuário no request
+            // 3. Injetar payload no request (para outros middlewares)
             $request->attributes->set('auth', $payload);
             $request->attributes->set('user_id', $payload['sub'] ?? null);
             $request->attributes->set('tenant_id', $payload['tenant_id'] ?? null);
             $request->attributes->set('empresa_id', $payload['empresa_id'] ?? null);
             $request->attributes->set('is_admin', $payload['is_admin'] ?? false);
             
-            // Definir usuário autenticado no guard (compatibilidade com código legado)
-            if (isset($payload['sub'])) {
-                // Buscar usuário e definir no guard
-                $this->setAuthenticatedUser($request, $payload);
+            // 4. Resolver e definir usuário no guard
+            $user = $this->resolveUser($payload);
+            
+            if (!$user) {
+                Log::warning('AuthenticateJWT::handle - Usuário não encontrado', [
+                    'user_id' => $payload['sub'] ?? null,
+                ]);
+                return response()->json([
+                    'message' => 'Usuário não encontrado.',
+                ], 401);
             }
             
-            Log::info('AuthenticateJWT::handle - Token válido', [
-                'user_id' => $payload['sub'] ?? null,
-                'tenant_id' => $payload['tenant_id'] ?? null,
+            // 5. Definir usuário no guard
+            auth()->guard('sanctum')->setUser($user);
+            
+            Log::info('AuthenticateJWT::handle - ✅ Usuário autenticado', [
+                'user_id' => $user->id,
+                'user_class' => get_class($user),
             ]);
 
             return $next($request);
@@ -65,6 +88,8 @@ class AuthenticateJWT
         } catch (\Exception $e) {
             Log::error('AuthenticateJWT::handle - Erro ao validar token', [
                 'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
             ]);
             
             return response()->json([
@@ -74,46 +99,45 @@ class AuthenticateJWT
     }
 
     /**
-     * Definir usuário autenticado no guard (compatibilidade)
+     * Resolver usuário do banco baseado no payload JWT
+     * 
+     * 🔥 Responsabilidade única: Buscar User ou AdminUser
+     * ❌ NÃO inicializa tenancy (isso é responsabilidade de ResolveTenantContext)
      */
-    private function setAuthenticatedUser(Request $request, array $payload): void
+    private function resolveUser(array $payload): ?\Illuminate\Contracts\Auth\Authenticatable
     {
-        try {
-            $userId = $payload['sub'] ?? null;
-            $isAdmin = $payload['is_admin'] ?? false;
-            
-            if (!$userId) {
-                return;
-            }
-
-            // Se for admin, buscar AdminUser
-            if ($isAdmin) {
-                $user = \App\Modules\Auth\Models\AdminUser::find($userId);
-                if ($user) {
-                    auth()->guard('sanctum')->setUser($user);
-                }
-                return;
-            }
-
-            // Se tiver tenant_id, inicializar tenancy primeiro
-            if (isset($payload['tenant_id'])) {
-                $tenant = \App\Models\Tenant::find($payload['tenant_id']);
-                if ($tenant) {
-                    tenancy()->initialize($tenant);
-                }
-            }
-
-            // Buscar usuário do tenant
-            $user = \App\Modules\Auth\Models\User::find($userId);
-            if ($user) {
-                auth()->guard('sanctum')->setUser($user);
-            }
-        } catch (\Exception $e) {
-            Log::warning('AuthenticateJWT::setAuthenticatedUser - Erro ao definir usuário', [
-                'error' => $e->getMessage(),
-            ]);
-            // Não lançar exceção - apenas logar o erro
+        $userId = $payload['sub'] ?? null;
+        $isAdmin = $payload['is_admin'] ?? false;
+        
+        if (!$userId) {
+            return null;
         }
+
+        // Admin: buscar AdminUser (sem tenancy)
+        if ($isAdmin) {
+            // Garantir que não há tenancy ativo para admin
+            if (tenancy()->initialized) {
+                tenancy()->end();
+            }
+            
+            $user = \App\Modules\Auth\Models\AdminUser::find($userId);
+            if ($user) {
+                Log::debug('AuthenticateJWT::resolveUser - AdminUser encontrado', [
+                    'user_id' => $user->id,
+                ]);
+            }
+            return $user;
+        }
+
+        // Usuário comum: buscar User (tenancy será inicializado por ResolveTenantContext)
+        // NÃO inicializar tenancy aqui - isso é responsabilidade de outro middleware
+        $user = \App\Modules\Auth\Models\User::find($userId);
+        if ($user) {
+            Log::debug('AuthenticateJWT::resolveUser - User encontrado', [
+                'user_id' => $user->id,
+            ]);
+        }
+        return $user;
     }
 }
 

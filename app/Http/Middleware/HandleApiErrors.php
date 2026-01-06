@@ -10,6 +10,24 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
 
+/**
+ * 🔥 CAMADA 2 - Error Boundary
+ * 
+ * Responsabilidade ÚNICA: Transformar exceptions em JSON amigável
+ * 
+ * ✅ Faz:
+ * - Captura exceções do pipeline
+ * - Traduz exceptions em JSON
+ * - Adiciona headers CORS nas respostas de erro
+ * 
+ * ❌ NUNCA faz:
+ * - Decisões de fluxo
+ * - Autenticação
+ * - Validação
+ * - Lógica de negócio
+ * 
+ * 📌 Nota: Deve rodar como prepend para capturar exceções de todos os middlewares seguintes
+ */
 class HandleApiErrors
 {
     /**
@@ -19,54 +37,8 @@ class HandleApiErrors
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // 🔥 LOG CRÍTICO: Se este log não aparecer, significa que a requisição não chegou aqui
-        \Log::info('HandleApiErrors::handle - ✅ MIDDLEWARE EXECUTADO', [
-            'url' => $request->fullUrl(),
-            'method' => $request->method(),
-            'path' => $request->path(),
-            'route' => $request->route() ? $request->route()->getName() : 'NO_ROUTE',
-            'route_action' => $request->route() ? $request->route()->getActionName() : 'NO_ACTION',
-            'memory_usage' => memory_get_usage(true),
-        ]);
-        
         try {
-            \Log::debug('HandleApiErrors::handle - Chamando $next($request)', [
-                'route' => $request->route() ? $request->route()->getName() : 'NO_ROUTE',
-            ]);
-            
-            // Log IMEDIATO antes de chamar $next
-            error_log('HandleApiErrors::handle - ANTES DE $next($request)');
-            \Log::emergency('HandleApiErrors::handle - ANTES DE $next($request)', [
-                'memory' => memory_get_usage(true),
-                'route_action' => $request->route() ? $request->route()->getActionName() : 'NO_ACTION',
-            ]);
-            
-            // Registrar tempo antes de chamar $next
-            $startTime = microtime(true);
-            
-            error_log('HandleApiErrors::handle - CHAMANDO $next($request) AGORA');
-            error_log('HandleApiErrors::handle - Route action: ' . ($request->route() ? $request->route()->getActionName() : 'NO_ACTION'));
-            
-            // 🔥 LOG: Verificar se AuthenticateAndBootstrap está na lista de middlewares
-            $route = $request->route();
-            if ($route) {
-                $middlewares = $route->gatherMiddleware();
-                error_log('HandleApiErrors::handle - Middlewares da rota: ' . json_encode($middlewares));
-            }
-            
             $response = $next($request);
-            error_log('HandleApiErrors::handle - $next($request) RETORNOU');
-            
-            $elapsedTime = microtime(true) - $startTime;
-            
-            \Log::debug('HandleApiErrors::handle - $next($request) retornou', [
-                'elapsed_time' => round($elapsedTime, 3) . 's',
-            ]);
-            
-            \Log::debug('HandleApiErrors::handle - Resposta recebida', [
-                'status' => $response->getStatusCode(),
-                'response_type' => get_class($response),
-            ]);
             
             // Log erros 5xx
             if ($response->getStatusCode() >= 500) {
