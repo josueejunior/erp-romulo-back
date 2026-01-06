@@ -29,6 +29,13 @@ return new class extends Migration
             $table->decimal('preco_recomendado', 15, 2)->nullable();
             $table->observacao('observacoes');
             $table->datetimes();
+            
+            // ⚡ Índices para performance
+            $table->index('empresa_id');
+            $table->index('processo_item_id');
+            $table->index('orcamento_id');
+            $table->index('orcamento_item_id');
+            $table->index(['empresa_id', 'orcamento_id']);
         });
     }
 
@@ -40,3 +47,4 @@ return new class extends Migration
         Schema::dropIfExists('formacao_precos');
     }
 };
+
