@@ -55,35 +55,56 @@ class AssinaturaController extends BaseApiController
 
 
     /**
-     * Retorna assinatura atual do tenant
+     * Retorna assinatura atual do USUÁRIO
      * Retorna entidade de domínio transformada via Resource
      * 
      * ✅ O QUE O CONTROLLER FAZ:
      * - Recebe request
-     * - Obtém tenant automaticamente via getTenantOrFail()
+     * - Obtém usuário autenticado
+     * - Busca tenant baseado na empresa ativa do USUÁRIO
      * - Chama Use Case para buscar assinatura
      * - Transforma entidade em DTO de resposta
      * 
      * ❌ O QUE O CONTROLLER NÃO FAZ:
      * - Não lê tenant_id diretamente do header
-     * - Não acessa Tenant diretamente
-     * - O sistema já injeta o contexto (tenant, empresa) via middleware
+     * - Não usa tenant do contexto sem validar
+     * - A validação é baseada no USUÁRIO, não no tenant/empresa do header
      * 
-     * O middleware já inicializou o tenant correto baseado no X-Tenant-ID do header.
+     * 🔥 IMPORTANTE: A assinatura é validada pelo USUÁRIO, não pelo tenant/empresa.
+     * Busca o tenant onde a empresa ativa do usuário está.
      * Permite acesso mesmo sem assinatura (retorna null) para que o frontend possa tratar.
      */
     public function atual(Request $request): JsonResponse
     {
         try {
-            // Obter tenant automaticamente (middleware já inicializou baseado no X-Tenant-ID)
-            $tenant = $this->getTenantOrFail();
+            // Obter usuário autenticado (fonte de verdade)
+            $user = $this->getUserOrFail();
+            
+            // Buscar tenant baseado na empresa ativa do USUÁRIO
+            $tenant = $this->getTenantDoUsuario($user);
+            
+            if (!$tenant) {
+                \Log::warning('AssinaturaController::atual() - Não foi possível determinar tenant do usuário', [
+                    'user_id' => $user->id,
+                    'empresa_ativa_id' => $user->empresa_ativa_id,
+                ]);
+                
+                return response()->json([
+                    'data' => null,
+                    'message' => 'Nenhuma assinatura encontrada',
+                    'code' => 'NO_SUBSCRIPTION'
+                ], 200);
+            }
 
-            \Log::info('AssinaturaController@atual - Tenant ID', ['tenant_id' => $tenant->id]);
+            \Log::info('AssinaturaController@atual - Validando assinatura do usuário', [
+                'user_id' => $user->id,
+                'empresa_ativa_id' => $user->empresa_ativa_id,
+                'tenant_id' => $tenant->id,
+            ]);
+            
             // Tentar buscar assinatura, mas não lançar erro se não encontrar
             try {
                 $assinatura = $this->buscarAssinaturaAtualUseCase->executar($tenant->id);
-
-               
                 
                 // Transformar entidade do domínio em DTO de resposta
                 $responseDTO = $this->assinaturaResource->toResponse($assinatura);
@@ -103,6 +124,97 @@ class AssinaturaController extends BaseApiController
             return $this->handleException($e, 'Erro ao buscar assinatura atual');
         }
     }
+    
+    /**
+     * Busca o tenant correto baseado no USUÁRIO autenticado
+     * 
+     * 🔥 CRÍTICO: A validação de assinatura é baseada no USUÁRIO, não no tenant/empresa do header.
+     * 
+     * @param \Illuminate\Contracts\Auth\Authenticatable $user
+     * @return \App\Models\Tenant|null
+     */
+    protected function getTenantDoUsuario($user): ?\App\Models\Tenant
+    {
+        try {
+            // Obter empresa ativa do usuário (fonte de verdade)
+            $empresaAtivaId = $user->empresa_ativa_id;
+            if (!$empresaAtivaId) {
+                \Log::debug('AssinaturaController::getTenantDoUsuario() - Usuário não tem empresa ativa', [
+                    'user_id' => $user->id,
+                ]);
+                return null;
+            }
+
+            // Prioridade 1: Verificar se empresa existe no tenant atual (otimização)
+            $tenantAtual = tenancy()->tenant;
+            if ($tenantAtual && tenancy()->initialized) {
+                try {
+                    $empresaNoTenantAtual = \App\Models\Empresa::find($empresaAtivaId);
+                    if ($empresaNoTenantAtual) {
+                        \Log::info('AssinaturaController::getTenantDoUsuario() - Empresa do usuário encontrada no tenant atual', [
+                            'user_id' => $user->id,
+                            'empresa_id' => $empresaAtivaId,
+                            'tenant_id' => $tenantAtual->id,
+                        ]);
+                        return $tenantAtual;
+                    }
+                } catch (\Exception $e) {
+                    \Log::debug('AssinaturaController::getTenantDoUsuario() - Erro ao buscar no tenant atual', [
+                        'tenant_id' => $tenantAtual->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            // Prioridade 2: Buscar empresa em outros tenants
+            $allTenants = \App\Models\Tenant::all();
+            foreach ($allTenants as $tenant) {
+                // Pular o tenant atual (já verificamos)
+                if ($tenantAtual && $tenant->id === $tenantAtual->id) {
+                    continue;
+                }
+                
+                try {
+                    tenancy()->initialize($tenant);
+                    $empresa = \App\Models\Empresa::find($empresaAtivaId);
+                    
+                    if ($empresa) {
+                        // Encontrou a empresa neste tenant - este é o tenant correto do usuário
+                        tenancy()->end();
+                        
+                        \Log::info('AssinaturaController::getTenantDoUsuario() - Tenant encontrado para o usuário', [
+                            'user_id' => $user->id,
+                            'empresa_id' => $empresaAtivaId,
+                            'tenant_id_encontrado' => $tenant->id,
+                            'tenant_razao_social' => $tenant->razao_social,
+                        ]);
+                        
+                        return $tenant;
+                    }
+                    
+                    tenancy()->end();
+                } catch (\Exception $e) {
+                    tenancy()->end();
+                    \Log::debug('AssinaturaController::getTenantDoUsuario() - Erro ao buscar no tenant', [
+                        'tenant_id' => $tenant->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::error('AssinaturaController::getTenantDoUsuario() - Erro ao buscar tenant do usuário', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+        
+        \Log::warning('AssinaturaController::getTenantDoUsuario() - Não foi possível encontrar tenant para o usuário', [
+            'user_id' => $user->id,
+            'empresa_ativa_id' => $user->empresa_ativa_id ?? null,
+        ]);
+        
+        return null;
+    }
 
     /**
      * Retorna status da assinatura com limites utilizados
@@ -110,24 +222,48 @@ class AssinaturaController extends BaseApiController
      * 
      * ✅ O QUE O CONTROLLER FAZ:
      * - Recebe request
-     * - Obtém tenant automaticamente via getTenantOrFail()
+     * - Obtém usuário autenticado
+     * - Busca tenant baseado na empresa ativa do USUÁRIO
      * - Obtém empresa automaticamente via getEmpresaAtivaOrFail()
      * - Chama Use Case para obter status
      * - Retorna dados de status e limites
      * 
      * ❌ O QUE O CONTROLLER NÃO FAZ:
      * - Não lê tenant_id diretamente do header
-     * - Não acessa Tenant diretamente
-     * - O sistema já injeta o contexto (tenant, empresa) via middleware
+     * - Não usa tenant do contexto sem validar
+     * - A validação é baseada no USUÁRIO, não no tenant/empresa do header
      * 
-     * O middleware já inicializou o tenant correto baseado no X-Tenant-ID do header.
+     * 🔥 IMPORTANTE: A assinatura é validada pelo USUÁRIO, não pelo tenant/empresa.
      * Permite acesso mesmo sem assinatura (retorna null) para que o frontend possa tratar.
      */
     public function status(Request $request): JsonResponse
     {
         try {
-            // Obter tenant automaticamente (middleware já inicializou baseado no X-Tenant-ID)
-            $tenant = $this->getTenantOrFail();
+            // Obter usuário autenticado (fonte de verdade)
+            $user = $this->getUserOrFail();
+            
+            // Buscar tenant baseado na empresa ativa do USUÁRIO
+            $tenant = $this->getTenantDoUsuario($user);
+            
+            if (!$tenant) {
+                \Log::warning('AssinaturaController::status() - Não foi possível determinar tenant do usuário', [
+                    'user_id' => $user->id,
+                    'empresa_ativa_id' => $user->empresa_ativa_id,
+                ]);
+                
+                return response()->json([
+                    'data' => [
+                        'status' => null,
+                        'limite_processos' => null,
+                        'limite_usuarios' => null,
+                        'limite_armazenamento_mb' => null,
+                        'processos_utilizados' => 0,
+                        'usuarios_utilizados' => 0,
+                        'mensagem' => 'Nenhuma assinatura encontrada',
+                        'code' => 'NO_SUBSCRIPTION'
+                    ]
+                ], 200);
+            }
             
             // Obter empresa automaticamente (middleware já inicializou baseado no X-Empresa-ID)
             $empresa = $this->getEmpresaAtivaOrFail();

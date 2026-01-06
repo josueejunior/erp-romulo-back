@@ -18,39 +18,48 @@ class CheckSubscription
     /**
      * Handle an incoming request.
      * 
-     * 🔥 IMPORTANTE: Busca o tenant correto baseado na empresa ativa do usuário,
-     * não apenas o tenant do header (que pode estar desatualizado).
+     * 🔥 IMPORTANTE: Valida assinatura baseada no USUÁRIO autenticado,
+     * não no tenant ou empresa do header (que podem estar desatualizados).
+     * 
+     * Fluxo:
+     * 1. Obtém usuário autenticado
+     * 2. Obtém empresa ativa do usuário
+     * 3. Busca tenant onde essa empresa está
+     * 4. Verifica assinatura desse tenant
      *
      * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // 🔥 CRÍTICO: Buscar tenant correto baseado na empresa ativa
-        // Isso garante que mesmo se o header X-Tenant-ID estiver desatualizado,
-        // ainda busquemos a assinatura no tenant correto da empresa ativa
-        $tenant = $this->getTenantCorretoDaEmpresaAtiva($request);
+        // 🔥 CRÍTICO: Validar assinatura baseada no USUÁRIO
+        // O usuário é a fonte de verdade, não o tenant/empresa do header
+        $user = Auth::user();
+        
+        if (!$user) {
+            // Se não tem usuário autenticado, permitir acesso (outros middlewares vão tratar)
+            return $next($request);
+        }
+
+        // Buscar tenant correto baseado na empresa ativa do USUÁRIO
+        $tenant = $this->getTenantDoUsuario($user);
 
         if (!$tenant) {
-            // Se não conseguir determinar o tenant, tentar usar o do header como fallback
-            $tenantId = $request->header('X-Tenant-ID') 
-                ?? $request->input('tenant_id')
-                ?? tenancy()->tenant?->id;
-
-            if (!$tenantId) {
-                return response()->json([
-                    'message' => 'Tenant ID não fornecido.',
-                    'code' => 'TENANT_ID_REQUIRED'
-                ], 400);
-            }
-
-            $tenant = Tenant::find($tenantId);
-            if (!$tenant) {
-                return response()->json([
-                    'message' => 'Tenant não encontrado.',
-                    'code' => 'TENANT_NOT_FOUND'
-                ], 404);
-            }
+            \Log::warning('CheckSubscription - Não foi possível determinar tenant do usuário', [
+                'user_id' => $user->id,
+                'empresa_ativa_id' => $user->empresa_ativa_id,
+            ]);
+            
+            return response()->json([
+                'message' => 'Não foi possível determinar sua assinatura. Verifique se você tem uma empresa ativa.',
+                'code' => 'SUBSCRIPTION_NOT_FOUND'
+            ], 403);
         }
+
+        \Log::info('CheckSubscription - Validando assinatura do usuário', [
+            'user_id' => $user->id,
+            'empresa_ativa_id' => $user->empresa_ativa_id,
+            'tenant_id' => $tenant->id,
+        ]);
 
         // Verificar assinatura usando Use Case DDD
         $resultado = $this->verificarAssinaturaAtivaUseCase->executar($tenant->id);
@@ -79,34 +88,25 @@ class CheckSubscription
     }
 
     /**
-     * Busca o tenant correto baseado na empresa ativa do usuário
+     * Busca o tenant correto baseado no USUÁRIO autenticado
      * 
-     * 🔥 CRÍTICO: Este método garante que sempre busquemos a assinatura no tenant correto,
-     * mesmo se o header X-Tenant-ID estiver desatualizado.
+     * 🔥 CRÍTICO: A validação de assinatura é baseada no USUÁRIO, não no tenant/empresa do header.
      * 
-     * Prioridades:
-     * 1. Verificar se empresa ativa existe no tenant atual (otimização)
-     * 2. Buscar empresa em outros tenants (se não encontrou no atual)
-     * 3. Tenant do header X-Tenant-ID (fallback)
-     * 4. Tenant do contexto tenancy (último recurso)
+     * Fluxo:
+     * 1. Obtém empresa ativa do usuário (user->empresa_ativa_id)
+     * 2. Busca tenant onde essa empresa está
+     * 3. Retorna tenant para verificação de assinatura
      * 
-     * @param Request $request
+     * @param \Illuminate\Contracts\Auth\Authenticatable $user
      * @return Tenant|null
      */
-    protected function getTenantCorretoDaEmpresaAtiva(Request $request): ?Tenant
+    protected function getTenantDoUsuario($user): ?Tenant
     {
         try {
-            // Obter usuário autenticado
-            $user = Auth::user();
-            if (!$user) {
-                \Log::debug('CheckSubscription::getTenantCorretoDaEmpresaAtiva() - Usuário não autenticado');
-                return null;
-            }
-
-            // Obter empresa ativa do usuário
+            // Obter empresa ativa do usuário (fonte de verdade)
             $empresaAtivaId = $user->empresa_ativa_id;
             if (!$empresaAtivaId) {
-                \Log::debug('CheckSubscription::getTenantCorretoDaEmpresaAtiva() - Empresa ativa não definida', [
+                \Log::debug('CheckSubscription::getTenantDoUsuario() - Usuário não tem empresa ativa definida', [
                     'user_id' => $user->id,
                 ]);
                 return null;
@@ -118,21 +118,22 @@ class CheckSubscription
                 try {
                     $empresaNoTenantAtual = \App\Models\Empresa::find($empresaAtivaId);
                     if ($empresaNoTenantAtual) {
-                        \Log::debug('CheckSubscription::getTenantCorretoDaEmpresaAtiva() - Empresa encontrada no tenant atual', [
+                        \Log::info('CheckSubscription::getTenantDoUsuario() - Empresa do usuário encontrada no tenant atual', [
+                            'user_id' => $user->id,
                             'empresa_id' => $empresaAtivaId,
                             'tenant_id' => $tenantAtual->id,
                         ]);
                         return $tenantAtual;
                     }
                 } catch (\Exception $e) {
-                    \Log::debug('CheckSubscription::getTenantCorretoDaEmpresaAtiva() - Erro ao buscar no tenant atual', [
+                    \Log::debug('CheckSubscription::getTenantDoUsuario() - Erro ao buscar no tenant atual', [
                         'tenant_id' => $tenantAtual->id,
                         'error' => $e->getMessage(),
                     ]);
                 }
             }
 
-            // Prioridade 2: Buscar empresa em outros tenants (se não encontrou no atual)
+            // Prioridade 2: Buscar empresa em outros tenants
             $allTenants = Tenant::all();
             foreach ($allTenants as $tenant) {
                 // Pular o tenant atual (já verificamos)
@@ -145,14 +146,14 @@ class CheckSubscription
                     $empresa = \App\Models\Empresa::find($empresaAtivaId);
                     
                     if ($empresa) {
-                        // Encontrou a empresa neste tenant - este é o tenant correto
+                        // Encontrou a empresa neste tenant - este é o tenant correto do usuário
                         tenancy()->end();
                         
-                        \Log::info('CheckSubscription::getTenantCorretoDaEmpresaAtiva() - Tenant encontrado via empresa em outro tenant', [
+                        \Log::info('CheckSubscription::getTenantDoUsuario() - Tenant encontrado para o usuário', [
+                            'user_id' => $user->id,
                             'empresa_id' => $empresaAtivaId,
                             'tenant_id_encontrado' => $tenant->id,
                             'tenant_razao_social' => $tenant->razao_social,
-                            'tenant_atual_anterior' => $tenantAtual?->id,
                         ]);
                         
                         return $tenant;
@@ -161,34 +162,24 @@ class CheckSubscription
                     tenancy()->end();
                 } catch (\Exception $e) {
                     tenancy()->end();
-                    \Log::debug('CheckSubscription::getTenantCorretoDaEmpresaAtiva() - Erro ao buscar no tenant', [
+                    \Log::debug('CheckSubscription::getTenantDoUsuario() - Erro ao buscar no tenant', [
                         'tenant_id' => $tenant->id,
                         'error' => $e->getMessage(),
                     ]);
                 }
             }
         } catch (\Exception $e) {
-            \Log::debug('CheckSubscription::getTenantCorretoDaEmpresaAtiva() - Erro ao buscar tenant via empresa', [
+            \Log::error('CheckSubscription::getTenantDoUsuario() - Erro ao buscar tenant do usuário', [
+                'user_id' => $user->id,
                 'error' => $e->getMessage(),
             ]);
         }
         
-        // Prioridade 3: Fallback para tenant do header/contexto
-        $tenantId = $request->header('X-Tenant-ID') 
-            ?? $request->input('tenant_id')
-            ?? tenancy()->tenant?->id;
+        \Log::warning('CheckSubscription::getTenantDoUsuario() - Não foi possível encontrar tenant para o usuário', [
+            'user_id' => $user->id,
+            'empresa_ativa_id' => $user->empresa_ativa_id ?? null,
+        ]);
         
-        if ($tenantId) {
-            $tenant = Tenant::find($tenantId);
-            if ($tenant) {
-                \Log::debug('CheckSubscription::getTenantCorretoDaEmpresaAtiva() - Usando tenant do header/contexto (fallback)', [
-                    'tenant_id' => $tenant->id,
-                ]);
-                return $tenant;
-            }
-        }
-        
-        \Log::warning('CheckSubscription::getTenantCorretoDaEmpresaAtiva() - Nenhum tenant encontrado');
         return null;
     }
 }
