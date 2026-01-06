@@ -26,7 +26,7 @@ return new class extends Migration
             $table->index(['usuario_id', 'empresa_id']);
             $table->index(['empresa_id', 'tipo']);
             $table->index(['created_at']);
-            $table->index('lido');
+            // lido já tem índice (->index() na linha 20)
         });
     }
 

@@ -33,7 +33,7 @@ return new class extends Migration
             $table->timestamp(Blueprint::DELETED_AT)->nullable();
             
             // ⚡ Índices para performance
-            $table->index('cnpj');
+            // cnpj já tem índice único (->unique())
             $table->index('status');
         });
     }

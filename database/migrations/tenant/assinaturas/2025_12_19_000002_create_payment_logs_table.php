@@ -35,7 +35,7 @@ return new class extends Migration
             // ⚡ Índices para performance
             $table->index('tenant_id');
             $table->index('external_id');
-            $table->index('idempotency_key');
+            // idempotency_key já tem índice único (->unique())
             $table->index('status');
             $table->index('plano_id');
             $table->index(['tenant_id', 'status']);
