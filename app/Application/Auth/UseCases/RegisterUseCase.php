@@ -74,7 +74,13 @@ class RegisterUseCase
             // Criar token (infraestrutura - Sanctum)
             $userModel = \App\Modules\Auth\Models\User::find($user->id);
             if ($userModel) {
-                $token = $userModel->createToken('api-token', ['tenant_id' => $tenantDomain->id])->plainTextToken;
+                // 🔥 JWT STATELESS: Gerar token JWT em vez de Sanctum
+                $jwtService = app(\App\Services\JWTService::class);
+                $token = $jwtService->generateToken([
+                    'user_id' => $user->id,
+                    'tenant_id' => $tenantDomain->id,
+                    'empresa_id' => $empresaAtiva?->id,
+                ]);
             }
         });
 

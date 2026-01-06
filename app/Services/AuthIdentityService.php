@@ -195,13 +195,15 @@ class TenantAuthIdentity implements IAuthIdentity
 
     protected function getTenantIdFromToken(Request $request): ?string
     {
-        if (method_exists($this->user, 'currentAccessToken') && $this->user->currentAccessToken()) {
-            $abilities = $this->user->currentAccessToken()->abilities;
-            if (isset($abilities['tenant_id'])) {
-                return $abilities['tenant_id'];
-            }
+        // 🔥 JWT STATELESS: Obter tenant_id do payload JWT
+        if ($request->attributes->has('auth')) {
+            $payload = $request->attributes->get('auth');
+            return $payload['tenant_id'] ?? null;
         }
-        return null;
+        
+        // Fallback: tentar obter do header
+        $tenantId = $request->header('X-Tenant-ID');
+        return $tenantId ? (string) $tenantId : null;
     }
 }
 

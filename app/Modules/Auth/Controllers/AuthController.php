@@ -72,8 +72,13 @@ class AuthController extends Controller
             // Se não for admin válido, continuar para verificação de usuário comum
             // Isso previne enumeração de emails
             if ($adminUser && $isValidPassword) {
-                // Autenticar como admin
-                $token = $adminUser->createToken('admin-token', ['admin'])->plainTextToken;
+                // 🔥 JWT STATELESS: Gerar token JWT para admin
+                $jwtService = app(\App\Services\JWTService::class);
+                $token = $jwtService->generateToken([
+                    'user_id' => $adminUser->id,
+                    'is_admin' => true,
+                    'role' => 'admin',
+                ]);
                 
                 // Usar Resource para padronizar resposta
                 $authData = [

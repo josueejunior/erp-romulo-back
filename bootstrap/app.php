@@ -19,6 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'rate.limit.redis' => \App\Http\Middleware\RateLimitRedis::class,
             'admin' => \App\Http\Middleware\EnsureAdmin::class,
             'security.headers' => \App\Http\Middleware\SecurityHeaders::class,
+            'jwt.auth' => \App\Http\Middleware\AuthenticateJWT::class,
         ]);
         
         // CORS DEVE ser o PRIMEIRO middleware - executar globalmente antes de tudo

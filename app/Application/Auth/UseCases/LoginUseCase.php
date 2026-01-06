@@ -122,11 +122,18 @@ class LoginUseCase
                 }
             }
 
-            // Criar token (infraestrutura - Sanctum)
-            // Nota: Token é criado no modelo Eloquent, mas isso é aceitável pois é detalhe de infraestrutura
-            \Log::debug('LoginUseCase::executar - Criando token');
-            $userModel = \App\Modules\Auth\Models\User::find($user->id);
-            $token = $userModel->createToken('api-token', ['tenant_id' => $tenantCorreto->id])->plainTextToken;
+            // 🔥 JWT STATELESS: Gerar token JWT em vez de Sanctum
+            \Log::debug('LoginUseCase::executar - Gerando token JWT');
+            $jwtService = app(\App\Services\JWTService::class);
+            
+            $tokenPayload = [
+                'user_id' => $user->id,
+                'tenant_id' => $tenantCorreto->id,
+                'empresa_id' => $empresaAtiva?->id,
+                'role' => null, // Pode ser adicionado se necessário
+            ];
+            
+            $token = $jwtService->generateToken($tokenPayload);
 
             \Log::info('LoginUseCase::executar - Login realizado com sucesso', [
                 'user_id' => $user->id,
@@ -149,7 +156,7 @@ class LoginUseCase
                     'id' => $empresaAtiva->id,
                     'razao_social' => $empresaAtiva->razaoSocial,
                 ] : null,
-                'token' => $token,
+                'token' => $token, // JWT token stateless
             ];
         } catch (\Exception $e) {
             \Log::error('LoginUseCase::executar - Erro capturado', [

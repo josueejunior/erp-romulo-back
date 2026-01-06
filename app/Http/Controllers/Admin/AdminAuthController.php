@@ -38,7 +38,13 @@ class AdminAuthController extends Controller
                 ], 401);
             }
 
-            $token = $admin->createToken('admin-token', ['admin'])->plainTextToken;
+            // 🔥 JWT STATELESS: Gerar token JWT para admin
+            $jwtService = app(\App\Services\JWTService::class);
+            $token = $jwtService->generateToken([
+                'user_id' => $admin->id,
+                'is_admin' => true,
+                'role' => 'admin',
+            ]);
 
             return response()->json([
                 'message' => 'Login realizado com sucesso!',
@@ -70,7 +76,12 @@ class AdminAuthController extends Controller
     public function logout(Request $request)
     {
         try {
-            $request->user()->currentAccessToken()->delete();
+            // 🔥 JWT STATELESS: JWT não precisa ser deletado (stateless)
+            // O frontend apenas remove o token do storage local.
+            \Log::info('AdminAuthController::logout - Logout realizado', [
+                'user_id' => $request->user()->id,
+                'note' => 'JWT stateless - token removido apenas no frontend',
+            ]);
 
             return response()->json([
                 'message' => 'Logout realizado com sucesso!',

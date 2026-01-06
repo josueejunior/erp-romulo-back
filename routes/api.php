@@ -84,9 +84,10 @@ Route::prefix('v1')->group(function () {
     // Rate limiting: 120 requisições por minuto, 1000 por hora
     // Rotas de criação/edição têm rate limiting adicional
     // Rotas autenticadas: aqui sim aplicamos contexto (empresa/tenant) após auth
-    // 🔥 CORREÇÃO: Removido InitializeTenancyByRequestData - EnsureEmpresaAtivaContext já faz o bootstrap completo
-    // O bootstrap() do ApplicationContext já inicializa o tenancy, então não precisamos do InitializeTenancyByRequestData
-    Route::middleware(['auth:sanctum', \App\Http\Middleware\SetAuthContext::class, \App\Http\Middleware\EnsureEmpresaAtivaContext::class, 'throttle:120,1'])->group(function () {
+    // 🔥 JWT STATELESS: Middleware unificado com autenticação JWT
+    // Consolida JWT auth + SetAuthContext + EnsureEmpresaAtivaContext em um único middleware
+    // Sem estado, sem sessão, sem Redis - perfeito para escalabilidade horizontal
+    Route::middleware([\App\Http\Middleware\AuthenticateAndBootstrap::class, 'throttle:120,1'])->group(function () {
         // Rotas que NÃO precisam de assinatura (exceções)
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::get('/auth/user', [AuthController::class, 'user']);
@@ -313,8 +314,8 @@ Route::prefix('admin')->group(function () {
     Route::post('/login', [AdminAuthController::class, 'login'])
         ->middleware(['throttle:3,1', 'throttle:5,60']);
     
-    // Rotas protegidas - usar middleware 'admin' que valida no backend
-    Route::middleware(['auth:sanctum', 'admin'])->group(function () {
+    // 🔥 JWT STATELESS: Rotas admin - usar AuthenticateAndBootstrap (JWT)
+    Route::middleware([\App\Http\Middleware\AuthenticateAndBootstrap::class, 'admin'])->group(function () {
         // Autenticação admin
         Route::post('/logout', [AdminAuthController::class, 'logout']);
         Route::get('/me', [AdminAuthController::class, 'me']);

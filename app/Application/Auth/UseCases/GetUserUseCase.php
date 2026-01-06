@@ -38,30 +38,31 @@ class GetUserUseCase
             $tenantModel = tenancy()->tenant;
             $tenantId = $tenantModel->id;
             $tenantDomain = $this->tenantRepository->buscarPorId($tenantId);
-        } else {
-            // Prioridade 2: Tentar obter do header (se middleware não inicializou)
-            $request = request();
-            if ($request && $request->header('X-Tenant-ID')) {
-                $tenantId = (int) $request->header('X-Tenant-ID');
-                $tenantDomain = $this->tenantRepository->buscarPorId($tenantId);
-                if ($tenantDomain) {
-                    $tenantModel = $this->tenantRepository->buscarModeloPorId($tenantId);
-                }
             } else {
-                // Prioridade 3: Fallback para token (pode estar desatualizado)
-                if (method_exists($user, 'currentAccessToken') && $user->currentAccessToken()) {
-                    $abilities = $user->currentAccessToken()->abilities;
-                    $tenantId = $abilities['tenant_id'] ?? null;
-                    
-                    if ($tenantId) {
-                        $tenantDomain = $this->tenantRepository->buscarPorId($tenantId);
-                        if ($tenantDomain) {
-                            $tenantModel = $this->tenantRepository->buscarModeloPorId($tenantId);
+                // Prioridade 2: Tentar obter do header (se middleware não inicializou)
+                $request = request();
+                if ($request && $request->header('X-Tenant-ID')) {
+                    $tenantId = (int) $request->header('X-Tenant-ID');
+                    $tenantDomain = $this->tenantRepository->buscarPorId($tenantId);
+                    if ($tenantDomain) {
+                        $tenantModel = $this->tenantRepository->buscarModeloPorId($tenantId);
+                    }
+                } else {
+                    // 🔥 JWT STATELESS: Prioridade 3: Obter do payload JWT
+                    $request = request();
+                    if ($request && $request->attributes->has('auth')) {
+                        $payload = $request->attributes->get('auth');
+                        $tenantId = $payload['tenant_id'] ?? null;
+                        
+                        if ($tenantId) {
+                            $tenantDomain = $this->tenantRepository->buscarPorId($tenantId);
+                            if ($tenantDomain) {
+                                $tenantModel = $this->tenantRepository->buscarModeloPorId($tenantId);
+                            }
                         }
                     }
                 }
             }
-        }
 
         // Buscar empresa ativa e lista de empresas
         $empresaAtiva = null;
