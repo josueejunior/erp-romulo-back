@@ -19,13 +19,6 @@ class HandleApiErrors
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // 🔥 TESTE DEFINITIVO: Se não parar aqui, middleware não está no pipeline
-        dd('HANDLE API ERRORS CHEGOU AQUI', [
-            'url' => $request->fullUrl(),
-            'method' => $request->method(),
-            'path' => $request->path(),
-        ]);
-        
         // 🔥 LOG CRÍTICO: Se este log não aparecer, significa que a requisição não chegou aqui
         \Log::info('HandleApiErrors::handle - ✅ MIDDLEWARE EXECUTADO', [
             'url' => $request->fullUrl(),
