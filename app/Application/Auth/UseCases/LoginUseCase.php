@@ -75,10 +75,31 @@ class LoginUseCase
                 }
             }
 
+            // 🔥 CRÍTICO: Buscar tenant correto baseado na empresa ativa
+            // A empresa ativa pode estar em outro tenant que não o onde o usuário foi encontrado
+            $tenantCorreto = $tenant; // Fallback: usar tenant onde usuário foi encontrado
+            if ($empresaAtiva) {
+                $tenantCorreto = $this->buscarTenantPorEmpresa($empresaAtiva->id);
+                if (!$tenantCorreto) {
+                    // Se não encontrou, usar o tenant onde o usuário foi encontrado
+                    $tenantCorreto = $tenant;
+                    \Log::warning('LoginUseCase - Empresa ativa não encontrada em nenhum tenant, usando tenant do usuário', [
+                        'empresa_id' => $empresaAtiva->id,
+                        'tenant_id_fallback' => $tenant->id,
+                    ]);
+                } else if ($tenantCorreto->id !== $tenant->id) {
+                    \Log::info('LoginUseCase - Tenant correto encontrado baseado na empresa ativa', [
+                        'empresa_id' => $empresaAtiva->id,
+                        'tenant_id_usuario' => $tenant->id,
+                        'tenant_id_empresa' => $tenantCorreto->id,
+                    ]);
+                }
+            }
+
             // Criar token (infraestrutura - Sanctum)
             // Nota: Token é criado no modelo Eloquent, mas isso é aceitável pois é detalhe de infraestrutura
             $userModel = \App\Modules\Auth\Models\User::find($user->id);
-            $token = $userModel->createToken('api-token', ['tenant_id' => $tenant->id])->plainTextToken;
+            $token = $userModel->createToken('api-token', ['tenant_id' => $tenantCorreto->id])->plainTextToken;
 
             return [
                 'user' => [
@@ -89,8 +110,8 @@ class LoginUseCase
                     'foto_perfil' => $userModel->foto_perfil ?? null,
                 ],
                 'tenant' => [
-                    'id' => $tenant->id,
-                    'razao_social' => $tenant->razao_social,
+                    'id' => $tenantCorreto->id,
+                    'razao_social' => $tenantCorreto->razao_social,
                 ],
                 'empresa' => $empresaAtiva ? [
                     'id' => $empresaAtiva->id,
@@ -143,6 +164,48 @@ class LoginUseCase
         }
         
         return null; // Usuário não encontrado em nenhum tenant
+    }
+
+    /**
+     * Buscar tenant correto baseado na empresa ativa
+     * Itera por todos os tenants procurando a empresa
+     * 
+     * 🔥 CRÍTICO: Garante que o tenant retornado seja o correto da empresa ativa,
+     * não apenas onde o usuário foi encontrado
+     */
+    private function buscarTenantPorEmpresa(int $empresaId): ?Tenant
+    {
+        // Buscar em todos os tenants
+        $tenants = Tenant::all();
+        
+        foreach ($tenants as $tenant) {
+            try {
+                // Inicializar contexto do tenant
+                tenancy()->initialize($tenant);
+                
+                try {
+                    // Tentar buscar empresa neste tenant
+                    $empresa = \App\Models\Empresa::find($empresaId);
+                    if ($empresa) {
+                        return $tenant; // Empresa encontrada neste tenant
+                    }
+                } finally {
+                    // Sempre finalizar contexto
+                    if (tenancy()->initialized) {
+                        tenancy()->end();
+                    }
+                }
+            } catch (\Exception $e) {
+                // Se houver erro ao acessar o tenant, continuar para o próximo
+                \Log::debug("Erro ao buscar empresa no tenant {$tenant->id}: " . $e->getMessage());
+                if (tenancy()->initialized) {
+                    tenancy()->end();
+                }
+                continue;
+            }
+        }
+        
+        return null; // Empresa não encontrada em nenhum tenant
     }
 }
 
