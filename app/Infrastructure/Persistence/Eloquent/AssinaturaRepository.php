@@ -215,43 +215,95 @@ public function buscarAssinaturaAtual(int $tenantId): ?Assinatura
 
     /**
      * Salvar assinatura (criar ou atualizar)
+     * 
+     * 🔥 CRÍTICO: Garante que o tenancy está inicializado para o tenant correto
+     * antes de salvar, para que a assinatura seja criada no banco do tenant.
      */
     public function salvar(Assinatura $assinatura): Assinatura
     {
-        if ($assinatura->id) {
-            // Atualizar
-            $model = AssinaturaModel::findOrFail($assinatura->id);
-            $model->update([
-                'tenant_id' => $assinatura->tenantId,
-                'plano_id' => $assinatura->planoId,
-                'status' => $assinatura->status,
-                'data_inicio' => $assinatura->dataInicio,
-                'data_fim' => $assinatura->dataFim,
-                'data_cancelamento' => $assinatura->dataCancelamento,
-                'valor_pago' => $assinatura->valorPago,
-                'metodo_pagamento' => $assinatura->metodoPagamento,
-                'transacao_id' => $assinatura->transacaoId,
-                'dias_grace_period' => $assinatura->diasGracePeriod,
-                'observacoes' => $assinatura->observacoes,
-            ]);
-        } else {
-            // Criar
-            $model = AssinaturaModel::create([
-                'tenant_id' => $assinatura->tenantId,
-                'plano_id' => $assinatura->planoId,
-                'status' => $assinatura->status,
-                'data_inicio' => $assinatura->dataInicio ?? now(),
-                'data_fim' => $assinatura->dataFim,
-                'data_cancelamento' => $assinatura->dataCancelamento,
-                'valor_pago' => $assinatura->valorPago ?? 0,
-                'metodo_pagamento' => $assinatura->metodoPagamento ?? 'gratuito',
-                'transacao_id' => $assinatura->transacaoId,
-                'dias_grace_period' => $assinatura->diasGracePeriod ?? 7,
-                'observacoes' => $assinatura->observacoes,
-            ]);
+        // Buscar tenant
+        $tenant = Tenant::find($assinatura->tenantId);
+        if (!$tenant) {
+            throw new \RuntimeException("Tenant não encontrado: {$assinatura->tenantId}");
         }
 
-        return $this->toDomain($model->fresh());
+        // 🔥 CRÍTICO: Garantir que o tenancy está inicializado para o tenant correto
+        $jaInicializado = tenancy()->initialized;
+        $tenantAtual = tenancy()->tenant;
+        $precisaReinicializar = !$jaInicializado || ($tenantAtual && $tenantAtual->id !== $assinatura->tenantId);
+        
+        \Log::debug('AssinaturaRepository::salvar() - Verificando tenancy', [
+            'tenant_id' => $assinatura->tenantId,
+            'tenant_id_atual' => $tenantAtual?->id,
+            'ja_inicializado' => $jaInicializado,
+            'precisa_reinicializar' => $precisaReinicializar,
+            'assinatura_id' => $assinatura->id,
+        ]);
+        
+        try {
+            if ($precisaReinicializar) {
+                if ($jaInicializado) {
+                    tenancy()->end();
+                }
+                tenancy()->initialize($tenant);
+                \Log::debug('AssinaturaRepository::salvar() - Tenancy inicializado', [
+                    'tenant_id' => $tenant->id,
+                ]);
+            }
+
+            if ($assinatura->id) {
+                // Atualizar
+                $model = AssinaturaModel::findOrFail($assinatura->id);
+                $model->update([
+                    'tenant_id' => $assinatura->tenantId,
+                    'plano_id' => $assinatura->planoId,
+                    'status' => $assinatura->status,
+                    'data_inicio' => $assinatura->dataInicio,
+                    'data_fim' => $assinatura->dataFim,
+                    'data_cancelamento' => $assinatura->dataCancelamento,
+                    'valor_pago' => $assinatura->valorPago,
+                    'metodo_pagamento' => $assinatura->metodoPagamento,
+                    'transacao_id' => $assinatura->transacaoId,
+                    'dias_grace_period' => $assinatura->diasGracePeriod,
+                    'observacoes' => $assinatura->observacoes,
+                ]);
+                
+                \Log::info('AssinaturaRepository::salvar() - Assinatura atualizada', [
+                    'tenant_id' => $assinatura->tenantId,
+                    'assinatura_id' => $model->id,
+                    'status' => $model->status,
+                ]);
+            } else {
+                // Criar
+                $model = AssinaturaModel::create([
+                    'tenant_id' => $assinatura->tenantId,
+                    'plano_id' => $assinatura->planoId,
+                    'status' => $assinatura->status,
+                    'data_inicio' => $assinatura->dataInicio ?? now(),
+                    'data_fim' => $assinatura->dataFim,
+                    'data_cancelamento' => $assinatura->dataCancelamento,
+                    'valor_pago' => $assinatura->valorPago ?? 0,
+                    'metodo_pagamento' => $assinatura->metodoPagamento ?? 'gratuito',
+                    'transacao_id' => $assinatura->transacaoId,
+                    'dias_grace_period' => $assinatura->diasGracePeriod ?? 7,
+                    'observacoes' => $assinatura->observacoes,
+                ]);
+                
+                \Log::info('AssinaturaRepository::salvar() - Assinatura criada', [
+                    'tenant_id' => $assinatura->tenantId,
+                    'assinatura_id' => $model->id,
+                    'status' => $model->status,
+                    'data_fim' => $model->data_fim?->format('Y-m-d'),
+                ]);
+            }
+
+            return $this->toDomain($model->fresh());
+        } finally {
+            // Sempre finalizar o contexto se foi inicializado aqui
+            if (!$jaInicializado && tenancy()->initialized) {
+                tenancy()->end();
+            }
+        }
     }
 }
 
