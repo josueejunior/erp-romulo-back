@@ -205,6 +205,8 @@ class AssinaturaController extends BaseApiController
             // 🔥 CRÍTICO: Buscar tenant correto baseado na empresa ativa
             // Isso garante que mesmo se o header X-Tenant-ID estiver desatualizado,
             // ainda buscaremos a assinatura no tenant correto da empresa ativa
+
+            dd($tenant->id);
             $tenant = $this->getTenantCorretoDaEmpresaAtiva();
 
            
