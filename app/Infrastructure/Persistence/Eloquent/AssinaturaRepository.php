@@ -88,18 +88,49 @@ public function buscarAssinaturaAtual(int $tenantId): ?Assinatura
 
             // Se o tenant tem assinatura_atual_id, buscar por ele
             if ($tenant->assinatura_atual_id) {
+                \Log::debug('AssinaturaRepository::buscarAssinaturaAtual() - Buscando por assinatura_atual_id', [
+                    'tenant_id' => $tenantId,
+                    'assinatura_atual_id' => $tenant->assinatura_atual_id,
+                ]);
+                
                 $model = AssinaturaModel::with('plano')
                     ->where('tenant_id', $tenantId)
                     ->where('id', $tenant->assinatura_atual_id)
                     ->first();
                 
                 if ($model) {
+                    \Log::info('AssinaturaRepository::buscarAssinaturaAtual() - Assinatura encontrada por assinatura_atual_id', [
+                        'tenant_id' => $tenantId,
+                        'assinatura_id' => $model->id,
+                        'status' => $model->status,
+                    ]);
                     $assinatura = $this->toDomain($model);
+                } else {
+                    \Log::warning('AssinaturaRepository::buscarAssinaturaAtual() - Assinatura não encontrada por assinatura_atual_id', [
+                        'tenant_id' => $tenantId,
+                        'assinatura_atual_id' => $tenant->assinatura_atual_id,
+                    ]);
                 }
             }
 
             // Se não encontrou, buscar a assinatura mais recente do tenant
             if (!$assinatura) {
+                \Log::debug('AssinaturaRepository::buscarAssinaturaAtual() - Buscando assinatura mais recente', [
+                    'tenant_id' => $tenantId,
+                ]);
+                
+                // Contar total de assinaturas para debug
+                $totalAssinaturas = AssinaturaModel::where('tenant_id', $tenantId)->count();
+                $totalNaoCanceladas = AssinaturaModel::where('tenant_id', $tenantId)
+                    ->where('status', '!=', 'cancelada')
+                    ->count();
+                
+                \Log::debug('AssinaturaRepository::buscarAssinaturaAtual() - Estatísticas de assinaturas', [
+                    'tenant_id' => $tenantId,
+                    'total_assinaturas' => $totalAssinaturas,
+                    'total_nao_canceladas' => $totalNaoCanceladas,
+                ]);
+                
                 $model = AssinaturaModel::with('plano')
                     ->where('tenant_id', $tenantId)
                     ->where('status', '!=', 'cancelada')
@@ -108,6 +139,13 @@ public function buscarAssinaturaAtual(int $tenantId): ?Assinatura
                     ->first();
                 
                 if ($model) {
+                    \Log::info('AssinaturaRepository::buscarAssinaturaAtual() - Assinatura encontrada (mais recente)', [
+                        'tenant_id' => $tenantId,
+                        'assinatura_id' => $model->id,
+                        'status' => $model->status,
+                        'data_fim' => $model->data_fim?->format('Y-m-d'),
+                    ]);
+                    
                     $assinatura = $this->toDomain($model);
                     
                     // Se encontrou e o tenant não tinha assinatura_atual_id, atualizar
@@ -116,7 +154,18 @@ public function buscarAssinaturaAtual(int $tenantId): ?Assinatura
                             'assinatura_atual_id' => $model->id,
                             'plano_atual_id' => $model->plano_id,
                         ]);
+                        
+                        \Log::info('AssinaturaRepository::buscarAssinaturaAtual() - Tenant atualizado com assinatura_atual_id', [
+                            'tenant_id' => $tenantId,
+                            'assinatura_atual_id' => $model->id,
+                        ]);
                     }
+                } else {
+                    \Log::warning('AssinaturaRepository::buscarAssinaturaAtual() - Nenhuma assinatura encontrada', [
+                        'tenant_id' => $tenantId,
+                        'total_assinaturas' => $totalAssinaturas,
+                        'total_nao_canceladas' => $totalNaoCanceladas,
+                    ]);
                 }
             }
         } finally {

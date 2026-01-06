@@ -26,9 +26,26 @@ class VerificarAssinaturaAtivaUseCase
     public function executar(int $tenantId): array
     {
         try {
+            \Log::info('VerificarAssinaturaAtivaUseCase - Iniciando verificação', [
+                'tenant_id' => $tenantId,
+                'tenancy_initialized' => tenancy()->initialized,
+                'tenancy_tenant_id' => tenancy()->tenant?->id,
+            ]);
+            
             $assinaturaDomain = $this->assinaturaRepository->buscarAssinaturaAtual($tenantId);
             
+            \Log::info('VerificarAssinaturaAtivaUseCase - Resultado da busca', [
+                'tenant_id' => $tenantId,
+                'assinatura_encontrada' => $assinaturaDomain !== null,
+                'assinatura_id' => $assinaturaDomain?->id,
+                'assinatura_status' => $assinaturaDomain?->status,
+            ]);
+            
             if (!$assinaturaDomain) {
+                \Log::warning('VerificarAssinaturaAtivaUseCase - Assinatura não encontrada', [
+                    'tenant_id' => $tenantId,
+                ]);
+                
                 return [
                     'pode_acessar' => false,
                     'code' => 'NO_SUBSCRIPTION',
