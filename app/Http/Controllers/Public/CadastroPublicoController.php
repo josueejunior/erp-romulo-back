@@ -45,6 +45,7 @@ class CadastroPublicoController extends Controller
                 'estado' => 'nullable|string|max:2',
                 'cep' => 'nullable|string|max:10',
                 'telefones' => 'nullable|array',
+                'logo' => 'nullable|string|max:500',
                 
                 // Dados do usuário administrador
                 'admin_name' => 'required|string|max:255',

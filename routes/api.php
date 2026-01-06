@@ -68,6 +68,10 @@ Route::prefix('v1')->group(function () {
     Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])
         ->middleware(['throttle:5,1', 'throttle:10,60']); // 5/min, 10/hora
     
+    // Upload público (para cadastro público)
+    Route::post('/upload/image', [\App\Http\Controllers\UploadController::class, 'uploadImage'])
+        ->middleware(['throttle:10,1']); // 10 uploads por minuto
+    
     // Cadastro público (cria tenant + assinatura + usuário)
     Route::post('/cadastro-publico', [\App\Http\Controllers\Public\CadastroPublicoController::class, 'store'])
         ->middleware(['throttle:5,1', 'throttle:10,60']); // 5/min, 10/hora
