@@ -24,8 +24,8 @@ return new class extends Migration
             $table->datetimes();
             
             // ⚡ Índices para performance
-            $table->index('token');
-            $table->index('expires_at');
+            // token já tem índice único (->unique())
+            // expires_at já tem índice (->index())
         });
     }
 

@@ -30,7 +30,7 @@ return new class extends Migration
             $table->datetimes();
 
             // ⚡ Índices para performance
-            $table->index('codigo');
+            // codigo já tem índice único (->unique())
             $table->index('ativo');
             $table->index(['data_validade_inicio', 'data_validade_fim']);
         });

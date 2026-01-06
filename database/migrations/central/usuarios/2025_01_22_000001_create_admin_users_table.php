@@ -23,7 +23,7 @@ return new class extends Migration
             $table->datetimes();
             
             // ⚡ Índices para performance
-            $table->index('email');
+            // email já tem índice único (->unique())
         });
     }
 
