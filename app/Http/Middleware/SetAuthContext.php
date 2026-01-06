@@ -75,7 +75,7 @@ class SetAuthContext
         app()->instance(IAuthIdentity::class, $identity);
 
         \Log::debug('SetAuthContext::handle - Chamando $next($request)');
-        \Log::info('SetAuthContext::handle - ANTES DE $next - Próximo middleware deve ser InitializeTenancyByRequestData');
+        \Log::info('SetAuthContext::handle - ANTES DE $next - Próximo middleware deve ser EnsureEmpresaAtivaContext (empresa.context)');
         $startTime = microtime(true);
         $response = $next($request);
         $elapsedTime = microtime(true) - $startTime;

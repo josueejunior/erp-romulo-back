@@ -17,7 +17,13 @@ class EnsureEmpresaAtivaContext
 {
     public function __construct(
         private ApplicationContextContract $context
-    ) {}
+    ) {
+        // Log no construtor para verificar se está sendo instanciado
+        error_log('EnsureEmpresaAtivaContext::__construct - CONSTRUTOR EXECUTADO');
+        \Log::emergency('EnsureEmpresaAtivaContext::__construct - CONSTRUTOR EXECUTADO', [
+            'context_class' => get_class($context),
+        ]);
+    }
     
     /**
      * Handle an incoming request.

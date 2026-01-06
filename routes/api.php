@@ -86,7 +86,7 @@ Route::prefix('v1')->group(function () {
     // Rotas autenticadas: aqui sim aplicamos contexto (empresa/tenant) após auth
     // 🔥 CORREÇÃO: Removido InitializeTenancyByRequestData - EnsureEmpresaAtivaContext já faz o bootstrap completo
     // O bootstrap() do ApplicationContext já inicializa o tenancy, então não precisamos do InitializeTenancyByRequestData
-    Route::middleware(['auth:sanctum', \App\Http\Middleware\SetAuthContext::class, 'empresa.context', 'throttle:120,1'])->group(function () {
+    Route::middleware(['auth:sanctum', \App\Http\Middleware\SetAuthContext::class, \App\Http\Middleware\EnsureEmpresaAtivaContext::class, 'throttle:120,1'])->group(function () {
         // Rotas que NÃO precisam de assinatura (exceções)
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::get('/auth/user', [AuthController::class, 'user']);
