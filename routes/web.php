@@ -8,7 +8,7 @@ use App\Modules\Orgao\Controllers\OrgaoController;
 use App\Modules\Fornecedor\Controllers\FornecedorController;
 use App\Modules\Calendario\Controllers\CalendarioDisputasController;
 use App\Modules\Documento\Controllers\DocumentoHabilitacaoController;
-use App\Modules\Empresa\Controllers\EmpresaController;
+// use App\Modules\Empresa\Controllers\EmpresaController; // TODO: Criar se necessário
 use App\Modules\Contrato\Controllers\ContratoController;
 use App\Modules\AutorizacaoFornecimento\Controllers\AutorizacaoFornecimentoController;
 use App\Modules\Empenho\Controllers\EmpenhoController;
@@ -73,7 +73,7 @@ Route::middleware(['auth', 'empresa.ativa'])->group(function () {
     Route::resource('setors', SetorController::class)->except(['index', 'show']);
     Route::resource('fornecedores', FornecedorController::class);
     Route::resource('documentos-habilitacao', DocumentoHabilitacaoController::class);
-    Route::resource('empresas', EmpresaController::class);
+    // Route::resource('empresas', EmpresaController::class); // TODO: Criar EmpresaController se necessário
 
     // Execução - Contratos (scoped to processo)
     Route::get('/processos/{processo}/contratos/create', [ContratoController::class, 'create'])->name('contratos.create');
