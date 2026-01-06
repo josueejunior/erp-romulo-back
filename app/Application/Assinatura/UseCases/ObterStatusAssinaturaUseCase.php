@@ -54,6 +54,8 @@ class ObterStatusAssinaturaUseCase
             'limite_armazenamento_mb' => $assinaturaModel->plano->limite_armazenamento_mb,
             'processos_utilizados' => $processosUtilizados,
             'usuarios_utilizados' => $usuariosUtilizados,
+            'restricao_diaria' => $assinaturaModel->plano->restricao_diaria ?? true,
+            'recursos_disponiveis' => $assinaturaModel->plano->recursos_disponiveis ?? [],
             'mensagem' => $assinatura->isAtiva() ? 'Assinatura ativa' : 'Assinatura inativa',
         ];
     }

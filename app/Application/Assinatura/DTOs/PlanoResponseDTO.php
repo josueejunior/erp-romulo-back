@@ -16,6 +16,8 @@ class PlanoResponseDTO
         public readonly ?int $limiteProcessos = null,
         public readonly ?int $limiteUsuarios = null,
         public readonly ?int $limiteArmazenamentoMb = null,
+        public readonly ?bool $restricaoDiaria = true,
+        public readonly ?array $recursosDisponiveis = null,
     ) {}
 
     /**
@@ -32,6 +34,8 @@ class PlanoResponseDTO
             'limite_processos' => $this->limiteProcessos,
             'limite_usuarios' => $this->limiteUsuarios,
             'limite_armazenamento_mb' => $this->limiteArmazenamentoMb,
+            'restricao_diaria' => $this->restricaoDiaria,
+            'recursos_disponiveis' => $this->recursosDisponiveis ?? [],
         ];
     }
 }

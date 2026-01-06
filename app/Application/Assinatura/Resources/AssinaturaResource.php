@@ -40,6 +40,8 @@ class AssinaturaResource
                 limiteProcessos: $model->plano->limite_processos,
                 limiteUsuarios: $model->plano->limite_usuarios,
                 limiteArmazenamentoMb: $model->plano->limite_armazenamento_mb,
+                restricaoDiaria: $model->plano->restricao_diaria ?? true,
+                recursosDisponiveis: $model->plano->recursos_disponiveis ?? [],
             );
         }
 
