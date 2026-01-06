@@ -468,6 +468,11 @@ class ProcessoController extends Controller
                 'message' => 'Processo criado com sucesso',
                 'data' => new ProcessoResource($processo->load(['orgao', 'setor']))
             ], 201);
+        } catch (\DomainException $e) {
+            // Erro de negócio (limites de plano, etc) - retornar 400
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 400);
         } catch (\Exception $e) {
             \Log::error('Erro ao criar processo', [
                 'message' => $e->getMessage(),

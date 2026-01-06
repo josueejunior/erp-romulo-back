@@ -10,6 +10,7 @@ use App\Rules\DbTypeRule;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Validator;
+use DomainException;
 
 /**
  * Service para gerenciar processos
@@ -200,6 +201,25 @@ class ProcessoService extends BaseService
      */
     public function store(array $data): Model
     {
+        // Verificar se o tenant pode criar processo (limites de plano)
+        $tenant = tenancy()->tenant;
+        if ($tenant && !$tenant->podeCriarProcesso()) {
+            $plano = $tenant->planoAtual;
+            
+            // Verificar se é restrição diária ou limite mensal
+            if ($plano && $plano->temRestricaoDiaria()) {
+                throw new DomainException('Você já criou um processo hoje. Planos Essencial e Profissional permitem apenas 1 processo por dia.');
+            }
+            
+            // Verificar limite mensal
+            if ($plano && !$plano->temProcessosIlimitados()) {
+                $limite = $plano->limite_processos;
+                throw new DomainException("Você atingiu o limite de {$limite} processos do seu plano. Faça upgrade para continuar criando processos.");
+            }
+            
+            throw new DomainException('Você não pode criar processos no momento. Verifique sua assinatura.');
+        }
+
         // Status padrão
         if (!isset($data['status'])) {
             $data['status'] = 'participacao';
