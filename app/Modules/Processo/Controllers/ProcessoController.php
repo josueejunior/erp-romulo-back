@@ -893,4 +893,121 @@ class ProcessoController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * GET /processos/{processo}/download-edital
+     * Baixa o arquivo do edital a partir do link_edital
+     */
+    public function downloadEdital(Processo $processo)
+    {
+        try {
+            $this->assertProcessoEmpresa($processo);
+
+            if (!$processo->link_edital) {
+                return response()->json([
+                    'message' => 'Nenhum link de edital cadastrado para este processo.'
+                ], 404);
+            }
+
+            $linkEdital = $processo->link_edital;
+
+            // Verificar se é uma URL válida
+            if (!filter_var($linkEdital, FILTER_VALIDATE_URL)) {
+                return response()->json([
+                    'message' => 'Link do edital inválido.'
+                ], 400);
+            }
+
+            // Fazer requisição HTTP para baixar o arquivo
+            try {
+                // Usar file_get_contents com stream_context para baixar o arquivo
+                $context = stream_context_create([
+                    'http' => [
+                        'timeout' => 30,
+                        'method' => 'GET',
+                        'header' => [
+                            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                        ],
+                        'ignore_errors' => true,
+                    ],
+                    'ssl' => [
+                        'verify_peer' => false,
+                        'verify_peer_name' => false,
+                    ],
+                ]);
+
+                $content = @file_get_contents($linkEdital, false, $context);
+                
+                if ($content === false) {
+                    throw new \Exception('Não foi possível baixar o arquivo do edital.');
+                }
+
+                // Tentar obter headers da resposta
+                $contentType = 'application/octet-stream';
+                $fileName = 'edital.pdf'; // Nome padrão
+                
+                if (isset($http_response_header)) {
+                    foreach ($http_response_header as $header) {
+                        if (stripos($header, 'Content-Type:') === 0) {
+                            $contentType = trim(substr($header, 13));
+                        } elseif (stripos($header, 'Content-Disposition:') === 0) {
+                            $contentDisposition = trim(substr($header, 20));
+                            // Extrair nome do arquivo do header Content-Disposition
+                            if (preg_match('/filename[^;=\n]*=(([\'"]).*?\2|[^;\n]*)/', $contentDisposition, $matches)) {
+                                $fileName = trim($matches[1], '"\'');
+                            }
+                        }
+                    }
+                }
+
+                // Se não encontrou nome do arquivo no header, tentar extrair da URL
+                if ($fileName === 'edital.pdf') {
+                    $path = parse_url($linkEdital, PHP_URL_PATH);
+                    if ($path) {
+                        $fileName = basename($path) ?: 'edital.pdf';
+                    }
+                }
+
+                // Se não tiver extensão, tentar detectar pelo Content-Type
+                if (!pathinfo($fileName, PATHINFO_EXTENSION)) {
+                    if (str_contains($contentType, 'pdf')) {
+                        $fileName .= '.pdf';
+                    } elseif (str_contains($contentType, 'word') || str_contains($contentType, 'document')) {
+                        $fileName .= '.docx';
+                    } elseif (str_contains($contentType, 'html')) {
+                        $fileName .= '.html';
+                    }
+                }
+
+                // Retornar o arquivo para download
+                return response($content, 200, [
+                    'Content-Type' => $contentType,
+                    'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+                    'Content-Length' => strlen($content),
+                ]);
+
+            } catch (\Exception $e) {
+                \Log::error('Erro ao baixar arquivo do edital', [
+                    'processo_id' => $processo->id,
+                    'link_edital' => $linkEdital,
+                    'error' => $e->getMessage(),
+                ]);
+
+                return response()->json([
+                    'message' => 'Erro ao baixar arquivo do edital. O link pode estar indisponível ou inacessível.'
+                ], 500);
+            }
+
+        } catch (\Exception $e) {
+            \Log::error('Erro ao processar download do edital', [
+                'processo_id' => $processo->id ?? null,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'message' => 'Erro ao baixar arquivo do edital: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }
