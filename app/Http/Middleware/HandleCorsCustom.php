@@ -38,25 +38,32 @@ class HandleCorsCustom
         $allowAll = in_array('*', $allowedOrigins);
         
         // Verificar se a origem está permitida
-        $isAllowed = $allowAll;
-        $allowedOrigin = '*';
+        $isAllowed = false;
+        $allowedOrigin = null;
         
         if ($allowAll) {
             // Se permite todas as origens, usar a origem específica se disponível
             // Caso contrário, usar '*'
+            $isAllowed = true;
             if ($origin) {
                 $allowedOrigin = $origin;
+            } else {
+                $allowedOrigin = '*';
             }
             \Log::info('HandleCorsCustom - Permite todas as origens', [
                 'allowed_origin' => $allowedOrigin,
             ]);
         } elseif ($origin) {
-            // Verificar se está na lista de origens permitidas
-            if (in_array($origin, $allowedOrigins)) {
+            // Verificar se está na lista de origens permitidas (comparação case-insensitive)
+            $allowedOriginsNormalized = array_map('strtolower', $allowedOrigins);
+            $originNormalized = strtolower($origin);
+            
+            if (in_array($originNormalized, $allowedOriginsNormalized)) {
                 $isAllowed = true;
-                $allowedOrigin = $origin;
+                $allowedOrigin = $origin; // Usar a origem original (com case original)
                 \Log::info('HandleCorsCustom - Origem permitida na lista', [
                     'origin' => $origin,
+                    'allowed_origin' => $allowedOrigin,
                 ]);
             } else {
                 // Verificar padrões (se houver)
@@ -80,7 +87,14 @@ class HandleCorsCustom
                 }
             }
         } else {
-            \Log::info('HandleCorsCustom - Sem header Origin na requisição');
+            // Sem header Origin - permitir apenas se allowAll
+            $isAllowed = $allowAll;
+            if ($isAllowed) {
+                $allowedOrigin = '*';
+            }
+            \Log::info('HandleCorsCustom - Sem header Origin na requisição', [
+                'is_allowed' => $isAllowed,
+            ]);
         }
         
         // Se for requisição OPTIONS (preflight), responder imediatamente
@@ -137,7 +151,31 @@ class HandleCorsCustom
                 'class' => get_class($e),
                 'trace' => config('app.debug') ? $e->getTraceAsString() : null,
             ]);
-            throw $e; // Re-lançar para ser tratado pelo Exception Handler
+            
+            // Criar resposta de erro com headers CORS ANTES de relançar
+            // Isso garante que mesmo em caso de erro, os headers CORS sejam enviados
+            $errorResponse = response()->json([
+                'message' => config('app.debug') ? $e->getMessage() : 'Erro interno do servidor',
+            ], 500);
+            
+            // Adicionar headers CORS na resposta de erro
+            if ($isAllowed && $errorResponse instanceof Response) {
+                $errorResponse->headers->set('Access-Control-Allow-Origin', $allowedOrigin);
+                $errorResponse->headers->set('Access-Control-Allow-Methods', $this->getAllowedMethods());
+                $errorResponse->headers->set('Access-Control-Allow-Headers', $this->getAllowedHeaders());
+                
+                if (config('cors.supports_credentials', false) && !$allowAll) {
+                    $errorResponse->headers->set('Access-Control-Allow-Credentials', 'true');
+                }
+                
+                \Log::info('HandleCorsCustom - Headers CORS adicionados na resposta de erro', [
+                    'Access-Control-Allow-Origin' => $allowedOrigin,
+                ]);
+            }
+            
+            // Retornar resposta de erro com CORS em vez de relançar
+            // O Exception Handler também vai adicionar CORS, mas isso garante que sempre tenha
+            return $errorResponse;
         } catch (\Error $e) {
             // Capturar erros fatais do PHP (PHP 7+)
             \Log::error('HandleCorsCustom - Erro fatal capturado', [
@@ -147,9 +185,26 @@ class HandleCorsCustom
                 'class' => get_class($e),
                 'trace' => config('app.debug') ? $e->getTraceAsString() : null,
             ]);
-            throw $e;
+            
+            // Criar resposta de erro com headers CORS
+            $errorResponse = response()->json([
+                'message' => config('app.debug') ? $e->getMessage() : 'Erro interno do servidor',
+            ], 500);
+            
+            if ($isAllowed && $errorResponse instanceof Response) {
+                $errorResponse->headers->set('Access-Control-Allow-Origin', $allowedOrigin);
+                $errorResponse->headers->set('Access-Control-Allow-Methods', $this->getAllowedMethods());
+                $errorResponse->headers->set('Access-Control-Allow-Headers', $this->getAllowedHeaders());
+                
+                if (config('cors.supports_credentials', false) && !$allowAll) {
+                    $errorResponse->headers->set('Access-Control-Allow-Credentials', 'true');
+                }
+            }
+            
+            return $errorResponse;
         }
         
+        // Adicionar headers CORS na resposta normal
         if ($isAllowed && $response instanceof Response) {
             $response->headers->set('Access-Control-Allow-Origin', $allowedOrigin);
             $response->headers->set('Access-Control-Allow-Methods', $this->getAllowedMethods());
