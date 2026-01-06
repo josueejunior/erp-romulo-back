@@ -35,9 +35,9 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\SecurityHeaders::class,
         ]);
         
-        // Middleware de contexto de empresa deve rodar APÓS autenticação
-        // Usar append para rodar após todos os middlewares padrão (incluindo auth)
-        $middleware->append(\App\Http\Middleware\EnsureEmpresaAtivaContext::class);
+        // IMPORTANTE:
+        // EnsureEmpresaAtivaContext NÃO deve rodar como middleware global.
+        // Ele depende de auth/tenancy e deve ser aplicado apenas nas rotas autenticadas.
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // 🔥 ARQUITETURA LIMPA: Usar HandleCorsCustom como único responsável por CORS

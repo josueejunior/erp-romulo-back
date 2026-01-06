@@ -27,8 +27,17 @@ class EnsureEmpresaAtivaContext
      */
     public function handle(Request $request, Closure $next): Response
     {
+        \Log::debug('EnsureEmpresaAtivaContext::handle - INÍCIO', [
+            'path' => $request->path(),
+            'method' => $request->method(),
+            'auth_check' => auth('sanctum')->check(),
+        ]);
         $this->context->bootstrap($request);
-        return $next($request);
+        $response = $next($request);
+        \Log::debug('EnsureEmpresaAtivaContext::handle - FIM', [
+            'status' => method_exists($response, 'getStatusCode') ? $response->getStatusCode() : null,
+        ]);
+        return $response;
     }
 }
 
