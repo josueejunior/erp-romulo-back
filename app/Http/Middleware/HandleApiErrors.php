@@ -34,10 +34,19 @@ class HandleApiErrors
                 'route' => $request->route() ? $request->route()->getName() : 'NO_ROUTE',
             ]);
             
+            // Log IMEDIATO antes de chamar $next
+            error_log('HandleApiErrors::handle - ANTES DE $next($request)');
+            \Log::emergency('HandleApiErrors::handle - ANTES DE $next($request)', [
+                'memory' => memory_get_usage(true),
+                'route_action' => $request->route() ? $request->route()->getActionName() : 'NO_ACTION',
+            ]);
+            
             // Registrar tempo antes de chamar $next
             $startTime = microtime(true);
             
+            error_log('HandleApiErrors::handle - CHAMANDO $next($request) AGORA');
             $response = $next($request);
+            error_log('HandleApiErrors::handle - $next($request) RETORNOU');
             
             $elapsedTime = microtime(true) - $startTime;
             
