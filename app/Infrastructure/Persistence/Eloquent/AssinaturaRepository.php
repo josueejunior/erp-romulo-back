@@ -199,6 +199,7 @@ public function buscarAssinaturaAtual(int $tenantId): ?Assinatura
     /**
      * 🔥 NOVO: Buscar assinatura atual do usuário
      * A assinatura pertence ao usuário, não ao tenant
+     * Mas está salva no banco do tenant, então precisamos inicializar o tenancy correto
      */
     public function buscarAssinaturaAtualPorUsuario(int $userId): ?Assinatura
     {
@@ -206,29 +207,99 @@ public function buscarAssinaturaAtual(int $tenantId): ?Assinatura
             'user_id' => $userId,
         ]);
 
-        // Buscar assinatura mais recente do usuário (não cancelada)
-        $model = AssinaturaModel::with('plano')
-            ->where('user_id', $userId)
-            ->where('status', '!=', 'cancelada')
-            ->orderBy('data_fim', 'desc')
-            ->orderBy('criado_em', 'desc')
-            ->first();
-
-        if ($model) {
-            \Log::info('AssinaturaRepository::buscarAssinaturaAtualPorUsuario() - Assinatura encontrada', [
+        // 🔥 CRÍTICO: Buscar o tenant através do usuário e empresa ativa
+        $user = \App\Modules\Auth\Models\User::find($userId);
+        if (!$user) {
+            \Log::warning('AssinaturaRepository::buscarAssinaturaAtualPorUsuario() - Usuário não encontrado', [
                 'user_id' => $userId,
-                'assinatura_id' => $model->id,
-                'status' => $model->status,
-                'data_fim' => $model->data_fim?->format('Y-m-d'),
             ]);
-            return $this->toDomain($model);
+            return null;
         }
 
-        \Log::warning('AssinaturaRepository::buscarAssinaturaAtualPorUsuario() - Nenhuma assinatura encontrada', [
-            'user_id' => $userId,
-        ]);
+        // Se o usuário tem empresa ativa, buscar o tenant através dela
+        $tenant = null;
+        if ($user->empresa_ativa_id) {
+            // Buscar tenant através da empresa ativa do usuário
+            $allTenants = Tenant::all();
+            foreach ($allTenants as $t) {
+                try {
+                    tenancy()->initialize($t);
+                    $empresa = \App\Models\Empresa::find($user->empresa_ativa_id);
+                    if ($empresa) {
+                        $tenant = $t;
+                        tenancy()->end();
+                        break;
+                    }
+                    tenancy()->end();
+                } catch (\Exception $e) {
+                    if (tenancy()->initialized) {
+                        tenancy()->end();
+                    }
+                }
+            }
+        }
 
-        return null;
+        // Se não encontrou pelo empresa_ativa_id, tentar usar o tenant atual se estiver inicializado
+        if (!$tenant && tenancy()->initialized) {
+            $tenant = tenancy()->tenant;
+        }
+
+        // Se ainda não encontrou, retornar null
+        if (!$tenant) {
+            \Log::warning('AssinaturaRepository::buscarAssinaturaAtualPorUsuario() - Nenhum tenant encontrado para o usuário', [
+                'user_id' => $userId,
+                'empresa_ativa_id' => $user->empresa_ativa_id,
+            ]);
+            return null;
+        }
+
+        // Inicializar tenancy para o tenant encontrado
+        $jaInicializado = tenancy()->initialized;
+        $tenantAtual = tenancy()->tenant;
+        $precisaReinicializar = !$jaInicializado || ($tenantAtual && $tenantAtual->id !== $tenant->id);
+
+        try {
+            if ($precisaReinicializar) {
+                if ($jaInicializado) {
+                    tenancy()->end();
+                }
+                tenancy()->initialize($tenant);
+                \Log::debug('AssinaturaRepository::buscarAssinaturaAtualPorUsuario() - Tenancy inicializado', [
+                    'tenant_id' => $tenant->id,
+                ]);
+            }
+
+            // Buscar assinatura mais recente do usuário (não cancelada) no banco do tenant
+            $model = AssinaturaModel::with('plano')
+                ->where('user_id', $userId)
+                ->where('status', '!=', 'cancelada')
+                ->orderBy('data_fim', 'desc')
+                ->orderBy('criado_em', 'desc')
+                ->first();
+
+            if ($model) {
+                \Log::info('AssinaturaRepository::buscarAssinaturaAtualPorUsuario() - Assinatura encontrada', [
+                    'user_id' => $userId,
+                    'tenant_id' => $tenant->id,
+                    'assinatura_id' => $model->id,
+                    'status' => $model->status,
+                    'data_fim' => $model->data_fim?->format('Y-m-d'),
+                ]);
+                return $this->toDomain($model);
+            }
+
+            \Log::warning('AssinaturaRepository::buscarAssinaturaAtualPorUsuario() - Nenhuma assinatura encontrada', [
+                'user_id' => $userId,
+                'tenant_id' => $tenant->id,
+            ]);
+
+            return null;
+        } finally {
+            // Se inicializamos o tenancy aqui, finalizar apenas se não estava inicializado antes
+            if ($precisaReinicializar && !$jaInicializado && tenancy()->initialized) {
+                tenancy()->end();
+            }
+        }
     }
 
     /**
