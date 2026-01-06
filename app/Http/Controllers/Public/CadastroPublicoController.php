@@ -8,6 +8,7 @@ use App\Application\Tenant\DTOs\CriarTenantDTO;
 use App\Application\Assinatura\UseCases\CriarAssinaturaUseCase;
 use App\Application\Assinatura\DTOs\CriarAssinaturaDTO;
 use App\Domain\Exceptions\DomainException;
+use App\Services\CnpjConsultaService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
@@ -22,6 +23,7 @@ class CadastroPublicoController extends Controller
     public function __construct(
         private CriarTenantUseCase $criarTenantUseCase,
         private CriarAssinaturaUseCase $criarAssinaturaUseCase,
+        private CnpjConsultaService $cnpjConsultaService,
     ) {}
 
     /**
@@ -165,6 +167,35 @@ class CadastroPublicoController extends Controller
                 'success' => false,
             ], 500);
         }
+    }
+
+    /**
+     * Consultar CNPJ na Receita Federal (público)
+     * 
+     * Retorna dados da empresa para preenchimento automático no cadastro
+     */
+    public function consultarCnpj(Request $request)
+    {
+        $cnpj = $request->input('cnpj') ?? $request->route('cnpj');
+        
+        if (!$cnpj) {
+            return response()->json(['message' => 'CNPJ é obrigatório'], 400);
+        }
+        
+        if (!$this->cnpjConsultaService->validarCnpj($cnpj)) {
+            return response()->json(['message' => 'CNPJ inválido'], 422);
+        }
+        
+        $dados = $this->cnpjConsultaService->consultar($cnpj);
+        
+        if (!$dados) {
+            return response()->json(['message' => 'CNPJ não encontrado ou serviço indisponível'], 404);
+        }
+        
+        return response()->json([
+            'success' => true,
+            'data' => $dados,
+        ]);
     }
 }
 

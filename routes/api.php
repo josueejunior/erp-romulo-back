@@ -75,6 +75,10 @@ Route::prefix('v1')->group(function () {
     // Cadastro público (cria tenant + assinatura + usuário)
     Route::post('/cadastro-publico', [\App\Http\Controllers\Public\CadastroPublicoController::class, 'store'])
         ->middleware(['throttle:5,1', 'throttle:10,60']); // 5/min, 10/hora
+    
+    // Consulta pública de CNPJ (para cadastro público)
+    Route::get('/cadastro-publico/consultar-cnpj/{cnpj}', [\App\Http\Controllers\Public\CadastroPublicoController::class, 'consultarCnpj'])
+        ->middleware(['throttle:10,1']); // 10 consultas por minuto
 
     // Rotas autenticadas
     // Rate limiting: 120 requisições por minuto, 1000 por hora
