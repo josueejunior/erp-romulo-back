@@ -68,44 +68,74 @@ Route::middleware(['auth', 'empresa.ativa'])->group(function () {
     // Calendário
     Route::get('/calendario', [CalendarioDisputasController::class, 'index'])->name('calendario.index');
 
-    // Cadastros
-    Route::resource('orgaos', OrgaoController::class);
-    Route::resource('setors', SetorController::class)->except(['index', 'show']);
-    Route::resource('fornecedores', FornecedorController::class);
-    Route::resource('documentos-habilitacao', DocumentoHabilitacaoController::class);
+    // Cadastros (rotas web - nomes prefixados para evitar conflito com API)
+    Route::resource('orgaos', OrgaoController::class)->names([
+        'index' => 'web.orgaos.index',
+        'create' => 'web.orgaos.create',
+        'store' => 'web.orgaos.store',
+        'show' => 'web.orgaos.show',
+        'edit' => 'web.orgaos.edit',
+        'update' => 'web.orgaos.update',
+        'destroy' => 'web.orgaos.destroy',
+    ]);
+    Route::resource('setors', SetorController::class)->except(['index', 'show'])->names([
+        'create' => 'web.setors.create',
+        'store' => 'web.setors.store',
+        'edit' => 'web.setors.edit',
+        'update' => 'web.setors.update',
+        'destroy' => 'web.setors.destroy',
+    ]);
+    Route::resource('fornecedores', FornecedorController::class)->names([
+        'index' => 'web.fornecedores.index',
+        'create' => 'web.fornecedores.create',
+        'store' => 'web.fornecedores.store',
+        'show' => 'web.fornecedores.show',
+        'edit' => 'web.fornecedores.edit',
+        'update' => 'web.fornecedores.update',
+        'destroy' => 'web.fornecedores.destroy',
+    ]);
+    Route::resource('documentos-habilitacao', DocumentoHabilitacaoController::class)->names([
+        'index' => 'web.documentos-habilitacao.index',
+        'create' => 'web.documentos-habilitacao.create',
+        'store' => 'web.documentos-habilitacao.store',
+        'show' => 'web.documentos-habilitacao.show',
+        'edit' => 'web.documentos-habilitacao.edit',
+        'update' => 'web.documentos-habilitacao.update',
+        'destroy' => 'web.documentos-habilitacao.destroy',
+    ]);
     // Route::resource('empresas', EmpresaController::class); // TODO: Criar EmpresaController se necessário
 
-    // Execução - Contratos (scoped to processo)
-    Route::get('/processos/{processo}/contratos/create', [ContratoController::class, 'create'])->name('contratos.create');
-    Route::post('/processos/{processo}/contratos', [ContratoController::class, 'store'])->name('contratos.store');
-    Route::get('/processos/{processo}/contratos/{contrato}', [ContratoController::class, 'show'])->name('contratos.show');
-    Route::get('/processos/{processo}/contratos/{contrato}/edit', [ContratoController::class, 'edit'])->name('contratos.edit');
-    Route::put('/processos/{processo}/contratos/{contrato}', [ContratoController::class, 'update'])->name('contratos.update');
-    Route::delete('/processos/{processo}/contratos/{contrato}', [ContratoController::class, 'destroy'])->name('contratos.destroy');
+    // Execução - Contratos (scoped to processo) - prefixo web. para evitar conflito
+    Route::get('/processos/{processo}/contratos/create', [ContratoController::class, 'create'])->name('web.contratos.create');
+    Route::post('/processos/{processo}/contratos', [ContratoController::class, 'store'])->name('web.contratos.store');
+    Route::get('/processos/{processo}/contratos/{contrato}', [ContratoController::class, 'show'])->name('web.contratos.show');
+    Route::get('/processos/{processo}/contratos/{contrato}/edit', [ContratoController::class, 'edit'])->name('web.contratos.edit');
+    Route::put('/processos/{processo}/contratos/{contrato}', [ContratoController::class, 'update'])->name('web.contratos.update');
+    Route::delete('/processos/{processo}/contratos/{contrato}', [ContratoController::class, 'destroy'])->name('web.contratos.destroy');
     
-    // Autorizações de Fornecimento (scoped to processo)
-    Route::get('/processos/{processo}/autorizacoes-fornecimento/create', [AutorizacaoFornecimentoController::class, 'create'])->name('autorizacoes-fornecimento.create');
-    Route::post('/processos/{processo}/autorizacoes-fornecimento', [AutorizacaoFornecimentoController::class, 'store'])->name('autorizacoes-fornecimento.store');
-    Route::get('/processos/{processo}/autorizacoes-fornecimento/{autorizacaoFornecimento}', [AutorizacaoFornecimentoController::class, 'show'])->name('autorizacoes-fornecimento.show');
-    Route::get('/processos/{processo}/autorizacoes-fornecimento/{autorizacaoFornecimento}/edit', [AutorizacaoFornecimentoController::class, 'edit'])->name('autorizacoes-fornecimento.edit');
-    Route::put('/processos/{processo}/autorizacoes-fornecimento/{autorizacaoFornecimento}', [AutorizacaoFornecimentoController::class, 'update'])->name('autorizacoes-fornecimento.update');
-    Route::delete('/processos/{processo}/autorizacoes-fornecimento/{autorizacaoFornecimento}', [AutorizacaoFornecimentoController::class, 'destroy'])->name('autorizacoes-fornecimento.destroy');
+    // Autorizações de Fornecimento (scoped to processo) - prefixo web. para evitar conflito
+    Route::get('/processos/{processo}/autorizacoes-fornecimento/create', [AutorizacaoFornecimentoController::class, 'create'])->name('web.autorizacoes-fornecimento.create');
+    Route::post('/processos/{processo}/autorizacoes-fornecimento', [AutorizacaoFornecimentoController::class, 'store'])->name('web.autorizacoes-fornecimento.store');
+    Route::get('/processos/{processo}/autorizacoes-fornecimento/{autorizacaoFornecimento}', [AutorizacaoFornecimentoController::class, 'show'])->name('web.autorizacoes-fornecimento.show');
+    Route::get('/processos/{processo}/autorizacoes-fornecimento/{autorizacaoFornecimento}/edit', [AutorizacaoFornecimentoController::class, 'edit'])->name('web.autorizacoes-fornecimento.edit');
+    Route::put('/processos/{processo}/autorizacoes-fornecimento/{autorizacaoFornecimento}', [AutorizacaoFornecimentoController::class, 'update'])->name('web.autorizacoes-fornecimento.update');
+    Route::delete('/processos/{processo}/autorizacoes-fornecimento/{autorizacaoFornecimento}', [AutorizacaoFornecimentoController::class, 'destroy'])->name('web.autorizacoes-fornecimento.destroy');
     
-    // Empenhos (scoped to processo)
-    Route::get('/processos/{processo}/empenhos/create', [EmpenhoController::class, 'create'])->name('empenhos.create');
-    Route::post('/processos/{processo}/empenhos', [EmpenhoController::class, 'store'])->name('empenhos.store');
-    Route::get('/processos/{processo}/empenhos/{empenho}', [EmpenhoController::class, 'show'])->name('empenhos.show');
-    Route::get('/processos/{processo}/empenhos/{empenho}/edit', [EmpenhoController::class, 'edit'])->name('empenhos.edit');
-    Route::put('/processos/{processo}/empenhos/{empenho}', [EmpenhoController::class, 'update'])->name('empenhos.update');
-    Route::delete('/processos/{processo}/empenhos/{empenho}', [EmpenhoController::class, 'destroy'])->name('empenhos.destroy');
+    // Empenhos (scoped to processo) - prefixo web. para evitar conflito
+    Route::get('/processos/{processo}/empenhos/create', [EmpenhoController::class, 'create'])->name('web.empenhos.create');
+    Route::post('/processos/{processo}/empenhos', [EmpenhoController::class, 'store'])->name('web.empenhos.store');
+    Route::get('/processos/{processo}/empenhos/{empenho}', [EmpenhoController::class, 'show'])->name('web.empenhos.show');
+    Route::get('/processos/{processo}/empenhos/{empenho}/edit', [EmpenhoController::class, 'edit'])->name('web.empenhos.edit');
+    Route::put('/processos/{processo}/empenhos/{empenho}', [EmpenhoController::class, 'update'])->name('web.empenhos.update');
+    Route::delete('/processos/{processo}/empenhos/{empenho}', [EmpenhoController::class, 'destroy'])->name('web.empenhos.destroy');
     
-    // Notas Fiscais (scoped to processo)
-    Route::get('/processos/{processo}/notas-fiscais/create', [NotaFiscalController::class, 'create'])->name('notas-fiscais.create');
-    Route::post('/processos/{processo}/notas-fiscais', [NotaFiscalController::class, 'store'])->name('notas-fiscais.store');
-    Route::get('/processos/{processo}/notas-fiscais/{notaFiscal}', [NotaFiscalController::class, 'show'])->name('notas-fiscais.show');
-    Route::get('/processos/{processo}/notas-fiscais/{notaFiscal}/edit', [NotaFiscalController::class, 'edit'])->name('notas-fiscais.edit');
-    Route::put('/processos/{processo}/notas-fiscais/{notaFiscal}', [NotaFiscalController::class, 'update'])->name('notas-fiscais.update');
-    Route::delete('/processos/{processo}/notas-fiscais/{notaFiscal}', [NotaFiscalController::class, 'destroy'])->name('notas-fiscais.destroy');
+    // Notas Fiscais (scoped to processo) - prefixo web. para evitar conflito
+    Route::get('/processos/{processo}/notas-fiscais/create', [NotaFiscalController::class, 'create'])->name('web.notas-fiscais.create');
+    Route::post('/processos/{processo}/notas-fiscais', [NotaFiscalController::class, 'store'])->name('web.notas-fiscais.store');
+    Route::get('/processos/{processo}/notas-fiscais/{notaFiscal}', [NotaFiscalController::class, 'show'])->name('web.notas-fiscais.show');
+    Route::get('/processos/{processo}/notas-fiscais/{notaFiscal}/edit', [NotaFiscalController::class, 'edit'])->name('web.notas-fiscais.edit');
+    Route::put('/processos/{processo}/notas-fiscais/{notaFiscal}', [NotaFiscalController::class, 'update'])->name('web.notas-fiscais.update');
+    Route::delete('/processos/{processo}/notas-fiscais/{notaFiscal}', [NotaFiscalController::class, 'destroy'])->name('web.notas-fiscais.destroy');
 
     // Relatórios
     Route::get('/relatorios/financeiro', [RelatorioFinanceiroController::class, 'index'])->name('relatorios.financeiro');
