@@ -72,7 +72,7 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
             'empresa_id' => $this->empresa->id,
             'orgao_id' => $this->orgao->id,
             'status' => 'participacao',
-            'modalidade' => 'Pregão',
+            'modalidade' => 'pregao', // Valores permitidos: 'dispensa' ou 'pregao' (minúsculas)
             'numero_modalidade' => '001/2024',
             'objeto_resumido' => 'Objeto de teste para documentos',
             'data_hora_sessao_publica' => now()->addDays(30),
