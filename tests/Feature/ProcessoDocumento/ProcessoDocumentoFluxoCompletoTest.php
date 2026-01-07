@@ -54,8 +54,24 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
             'status' => 'ativa',
         ]);
         
+        // Criar banco de dados do tenant e executar migrations
+        try {
+            $this->tenant->database()->manager()->createDatabase($this->tenant);
+        } catch (\Exception $e) {
+            // Se o banco já existe, continuar
+            if (!str_contains($e->getMessage(), 'already exists')) {
+                throw $e;
+            }
+        }
+        
         // Inicializar contexto do tenant
         tenancy()->initialize($this->tenant);
+        
+        // Executar migrations do tenant
+        \Artisan::call('migrate', [
+            '--path' => 'database/migrations/tenant',
+            '--force' => true,
+        ]);
         
         // Criar empresa dentro do tenant
         $this->empresa = Empresa::create([
@@ -118,6 +134,25 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
         
         // Autenticar usuário via Sanctum (para compatibilidade)
         $this->actingAs($this->user, 'sanctum');
+    }
+    
+    /**
+     * Método auxiliar para fazer requisições autenticadas com headers
+     */
+    protected function authenticatedCall(string $method, string $uri, array $parameters = [], array $cookies = [], array $files = [], array $server = [], ?string $content = null)
+    {
+        $headers = [
+            'Authorization' => 'Bearer ' . $this->token,
+            'X-Tenant-ID' => (string) $this->tenant->id,
+            'X-Empresa-ID' => (string) $this->empresa->id,
+            'Accept' => 'application/json',
+        ];
+        
+        foreach ($headers as $key => $value) {
+            $server['HTTP_' . str_replace('-', '_', strtoupper($key))] = $value;
+        }
+        
+        return $this->call($method, $uri, $parameters, $cookies, $files, $server, $content);
     }
     
     protected function tearDown(): void
@@ -188,7 +223,7 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
         // 5. Anexar arquivo ao documento customizado
         $arquivo = UploadedFile::fake()->create('certidao.pdf', 1024);
         
-        $response = $this->call('PATCH', "/api/v1/processos/{$this->processo->id}/documentos/{$documentoCustomId}", [
+        $response = $this->authenticatedCall('PATCH', "/api/v1/processos/{$this->processo->id}/documentos/{$documentoCustomId}", [
             'status' => 'anexado',
         ], [], [
             'arquivo' => $arquivo,
@@ -218,7 +253,7 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
         // Tentar anexar arquivo muito grande
         $arquivoGrande = UploadedFile::fake()->create('documento.pdf', 11 * 1024 * 1024);
         
-        $response = $this->call('PATCH', "/api/v1/processos/{$this->processo->id}/documentos/{$processoDocumento->id}", [], [], [
+        $response = $this->authenticatedCall('PATCH', "/api/v1/processos/{$this->processo->id}/documentos/{$processoDocumento->id}", [], [], [
             'arquivo' => $arquivoGrande,
         ]);
         
@@ -244,7 +279,7 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
         // Tentar anexar arquivo com tipo não permitido
         $arquivoInvalido = UploadedFile::fake()->create('documento.exe', 100);
         
-        $response = $this->call('PATCH', "/api/v1/processos/{$this->processo->id}/documentos/{$processoDocumento->id}", [], [], [
+        $response = $this->authenticatedCall('PATCH', "/api/v1/processos/{$this->processo->id}/documentos/{$processoDocumento->id}", [], [], [
             'arquivo' => $arquivoInvalido,
         ]);
         
