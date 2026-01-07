@@ -46,20 +46,40 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
         
         Storage::fake('public');
         
-        // Criar tenant (obrigatório para multi-tenancy)
-        $this->tenant = Tenant::create([
+        // IMPORTANTE: Criar tenant e banco ANTES de qualquer transação
+        // porque CREATE DATABASE não pode ser executado dentro de uma transação
+        // O RefreshDatabase inicia uma transação, então precisamos criar o banco antes
+        
+        // Criar tenant usando conexão direta (sem transação)
+        $this->tenant = new Tenant([
             'razao_social' => 'Tenant Teste LTDA',
             'cnpj' => '12345678000190',
             'email' => 'teste@tenant.com',
             'status' => 'ativa',
         ]);
+        $this->tenant->save();
         
-        // Criar banco de dados do tenant e executar migrations
+        // Criar banco de dados do tenant usando conexão sem transação
         try {
-            $this->tenant->database()->manager()->createDatabase($this->tenant);
-        } catch (\Exception $e) {
+            $manager = $this->tenant->database()->manager();
+            $config = $manager->makeConnectionConfig($this->tenant);
+            $databaseName = $config['database'];
+            
+            // Obter configurações do banco central (usar a conexão padrão)
+            $connectionName = config('database.default');
+            $centralConfig = config("database.connections.{$connectionName}");
+            
+            // Usar conexão PostgreSQL direta (sem transação)
+            $pdo = new \PDO(
+                "pgsql:host={$centralConfig['host']};port={$centralConfig['port']}",
+                $centralConfig['username'],
+                $centralConfig['password']
+            );
+            $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+            $pdo->exec("CREATE DATABASE \"{$databaseName}\" WITH TEMPLATE=template0");
+        } catch (\PDOException $e) {
             // Se o banco já existe, continuar
-            if (!str_contains($e->getMessage(), 'already exists')) {
+            if (!str_contains($e->getMessage(), 'already exists') && !str_contains($e->getMessage(), 'duplicate')) {
                 throw $e;
             }
         }
