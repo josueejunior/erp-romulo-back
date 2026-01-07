@@ -134,6 +134,9 @@ Route::prefix('v1')->group(function () {
             // Dashboard
             Route::get('/dashboard', [ApiDashboardController::class, 'index']);
             
+            // Empenhos (listar todos - sem precisar de processo específico)
+            Route::get('/empenhos', [ApiEmpenhoController::class, 'listAll']);
+            
             // Recursos estáticos (enums, listas)
             Route::get('/unidades-medida', [ApiProcessoItemController::class, 'unidadesMedida']);
             
@@ -237,8 +240,7 @@ Route::prefix('v1')->group(function () {
                 Route::module('autorizacoes-fornecimento', ApiAutorizacaoFornecimentoController::class, 'autorizacaoFornecimento')
                     ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
                 
-                // Empenhos
-                Route::get('/empenhos', [ApiEmpenhoController::class, 'listAll']); // Listar todos os empenhos
+                // Empenhos (dentro de processo)
                 Route::module('empenhos', ApiEmpenhoController::class, 'empenho')
                     ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
                 
