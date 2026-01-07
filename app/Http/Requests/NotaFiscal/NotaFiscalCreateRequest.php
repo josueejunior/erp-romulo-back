@@ -26,7 +26,7 @@ class NotaFiscalCreateRequest extends FormRequest
             'numero_cte' => 'nullable|string|max:255',
             'data_entrega_prevista' => 'nullable|date',
             'data_entrega_realizada' => 'nullable|date',
-            'situacao_logistica' => 'nullable|string|max:255',
+            'situacao_logistica' => 'nullable|string|in:aguardando_envio,em_transito,entregue,atrasada',
             'valor' => 'nullable|numeric|min:0',
             'custo_produto' => 'nullable|numeric|min:0',
             'custo_frete' => 'nullable|numeric|min:0',
