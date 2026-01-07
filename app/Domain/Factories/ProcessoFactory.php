@@ -12,12 +12,18 @@ class ProcessoFactory
 {
     /**
      * Criar Processo a partir de array de dados
+     * 
+     * @throws \InvalidArgumentException se empresa_id não for fornecido
      */
     public static function criar(array $dados): Processo
     {
+        if (!isset($dados['empresa_id'])) {
+            throw new \InvalidArgumentException('empresa_id é obrigatório para criar um Processo');
+        }
+        
         return new Processo(
             id: $dados['id'] ?? null,
-            empresaId: $dados['empresa_id'] ?? 1,
+            empresaId: $dados['empresa_id'],
             orgaoId: $dados['orgao_id'] ?? null,
             setorId: $dados['setor_id'] ?? null,
             modalidade: $dados['modalidade'] ?? null,

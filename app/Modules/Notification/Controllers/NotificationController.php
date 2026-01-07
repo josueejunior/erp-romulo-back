@@ -3,12 +3,15 @@
 namespace App\Modules\Notification\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Traits\HasAuthContext;
 use App\Modules\Notification\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class NotificationController extends Controller
 {
+    use HasAuthContext;
+
     public function __construct(
         private NotificationService $notificationService,
     ) {}
@@ -19,7 +22,7 @@ class NotificationController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $empresa = $request->user()->empresaAtiva;
+        $empresa = $this->getEmpresa();
         
         if (!$empresa) {
             return response()->json([
@@ -27,7 +30,7 @@ class NotificationController extends Controller
             ], 400);
         }
 
-        $tenantId = tenancy()->tenant?->id;
+        $tenantId = $this->getTenantId();
         
         $notificacoes = $this->notificationService->obterNotificacoes(
             $empresa->id,
@@ -37,5 +40,6 @@ class NotificationController extends Controller
         return response()->json($notificacoes);
     }
 }
+
 
 

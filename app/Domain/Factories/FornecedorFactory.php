@@ -13,12 +13,18 @@ class FornecedorFactory
 {
     /**
      * Criar Fornecedor a partir de array de dados
+     * 
+     * @throws \InvalidArgumentException se empresa_id não for fornecido
      */
     public static function criar(array $dados): Fornecedor
     {
+        if (!isset($dados['empresa_id'])) {
+            throw new \InvalidArgumentException('empresa_id é obrigatório para criar um Fornecedor');
+        }
+        
         return new Fornecedor(
             id: $dados['id'] ?? null,
-            empresaId: $dados['empresa_id'] ?? 1,
+            empresaId: $dados['empresa_id'],
             razaoSocial: $dados['razao_social'] ?? '',
             cnpj: $dados['cnpj'] ?? null,
             nomeFantasia: $dados['nome_fantasia'] ?? null,

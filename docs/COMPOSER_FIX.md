@@ -53,3 +53,4 @@ composer show firebase/php-jwt
 - [l5-swagger no Packagist](https://packagist.org/packages/darkaonline/l5-swagger)
 - Versões disponíveis: 8.0.0-8.6.5, 9.0.0+, 10.0.0+
 
+

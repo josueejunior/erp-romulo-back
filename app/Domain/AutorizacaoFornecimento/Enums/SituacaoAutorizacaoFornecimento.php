@@ -26,3 +26,4 @@ enum SituacaoAutorizacaoFornecimento: string
     }
 }
 
+

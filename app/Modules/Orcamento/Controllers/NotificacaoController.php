@@ -3,11 +3,14 @@
 namespace App\Modules\Orcamento\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Traits\HasAuthContext;
 use App\Modules\Orcamento\Domain\Services\NotificacaoDomainService;
 use Illuminate\Http\Request;
 
 class NotificacaoController extends Controller
 {
+    use HasAuthContext;
+
     private NotificacaoDomainService $service;
 
     public function __construct(NotificacaoDomainService $service)
@@ -21,8 +24,8 @@ class NotificacaoController extends Controller
      */
     public function index(Request $request)
     {
-        $usuarioId = auth()->user()->id;
-        $empresaId = auth()->user()->empresa_id;
+        $usuarioId = $this->getUserId();
+        $empresaId = $this->getEmpresaId();
         $apenasNaoLidas = $request->query('nao_lidas', false);
 
         if ($apenasNaoLidas) {
@@ -44,7 +47,7 @@ class NotificacaoController extends Controller
      */
     public function show($id)
     {
-        $notificacao = $this->service->obterNaoLidas(auth()->user()->id, auth()->user()->empresa_id);
+        $notificacao = $this->service->obterNaoLidas($this->getUserId(), $this->getEmpresaId());
         $encontrada = array_filter($notificacao, fn($n) => $n->getId() == $id);
 
         if (empty($encontrada)) {
@@ -110,7 +113,7 @@ class NotificacaoController extends Controller
      */
     public function porProcesso($processoId)
     {
-        $empresaId = auth()->user()->empresa_id;
+        $empresaId = $this->getEmpresaId();
         $notificacoes = $this->service->obterPorProcesso($processoId, $empresaId);
 
         return response()->json([
@@ -125,8 +128,8 @@ class NotificacaoController extends Controller
      */
     public function contarNaoLidas()
     {
-        $usuarioId = auth()->user()->id;
-        $empresaId = auth()->user()->empresa_id;
+        $usuarioId = $this->getUserId();
+        $empresaId = $this->getEmpresaId();
         $total = $this->service->contarNaoLidas($usuarioId, $empresaId);
 
         return response()->json([

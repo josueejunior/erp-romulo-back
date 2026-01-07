@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
 use DomainException;
+use OpenApi\Annotations as OA;
 
 /**
  * Controller fino para autenticação de usuários (tenant)
@@ -45,6 +46,48 @@ class AuthController extends Controller
     /**
      * Login do usuário
      * Usa Form Request para validação
+     * 
+     * @OA\Post(
+     *     path="/auth/login",
+     *     summary="Autenticar usuário",
+     *     description="Realiza login e retorna token JWT para autenticação",
+     *     operationId="login",
+     *     tags={"Autenticação"},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"email", "password"},
+     *             @OA\Property(property="email", type="string", format="email", example="usuario@empresa.com"),
+     *             @OA\Property(property="password", type="string", format="password", example="senha123"),
+     *             @OA\Property(property="tenant_id", type="string", example="1", description="ID do tenant (opcional)")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Login realizado com sucesso",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Login realizado com sucesso!"),
+     *             @OA\Property(property="token", type="string", example="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."),
+     *             @OA\Property(property="user", type="object",
+     *                 @OA\Property(property="id", type="integer", example=1),
+     *                 @OA\Property(property="name", type="string", example="João Silva"),
+     *                 @OA\Property(property="email", type="string", example="usuario@empresa.com")
+     *             ),
+     *             @OA\Property(property="tenant_id", type="string", example="1")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Credenciais inválidas",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     ),
+     *     @OA\Response(
+     *         response=422,
+     *         description="Erro de validação",
+     *         @OA\JsonContent(ref="#/components/schemas/Error")
+     *     )
+     * )
      */
     public function login(LoginRequest $request)
     {

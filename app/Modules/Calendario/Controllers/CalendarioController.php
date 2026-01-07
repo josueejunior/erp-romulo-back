@@ -3,6 +3,7 @@
 namespace App\Modules\Calendario\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
+use App\Http\Controllers\Traits\HasAuthContext;
 use App\Modules\Calendario\Services\CalendarioService;
 use App\Services\RedisService;
 use Illuminate\Http\Request;
@@ -10,6 +11,8 @@ use Carbon\Carbon;
 
 class CalendarioController extends BaseApiController
 {
+    use HasAuthContext;
+
     protected CalendarioService $calendarioService;
 
     public function __construct(CalendarioService $calendarioService)
@@ -23,7 +26,7 @@ class CalendarioController extends BaseApiController
     public function disputas(Request $request)
     {
         // Verificar se o plano tem acesso a calendários
-        $tenant = tenancy()->tenant;
+        $tenant = $this->getTenant();
         if (!$tenant || !$tenant->temAcessoCalendario()) {
             return response()->json([
                 'message' => 'O calendário não está disponível no seu plano. Faça upgrade para o plano Profissional ou superior.',
@@ -40,7 +43,7 @@ class CalendarioController extends BaseApiController
             ? Carbon::parse($request->data_fim) 
             : Carbon::now()->endOfMonth();
 
-        $tenantId = tenancy()->tenant?->id;
+        $tenantId = $this->getTenantId();
         $mes = $dataInicio->month;
         $ano = $dataInicio->year;
 
@@ -76,7 +79,7 @@ class CalendarioController extends BaseApiController
     public function julgamento(Request $request)
     {
         // Verificar se o plano tem acesso a calendários
-        $tenant = tenancy()->tenant;
+        $tenant = $this->getTenant();
         if (!$tenant || !$tenant->temAcessoCalendario()) {
             return response()->json([
                 'message' => 'O calendário não está disponível no seu plano. Faça upgrade para o plano Profissional ou superior.',
@@ -107,7 +110,7 @@ class CalendarioController extends BaseApiController
     public function avisosUrgentes()
     {
         // Verificar se o plano tem acesso a calendários
-        $tenant = tenancy()->tenant;
+        $tenant = $this->getTenant();
         if (!$tenant || !$tenant->temAcessoCalendario()) {
             return response()->json([
                 'message' => 'O calendário não está disponível no seu plano. Faça upgrade para o plano Profissional ou superior.',

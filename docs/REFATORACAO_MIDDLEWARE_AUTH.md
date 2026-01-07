@@ -132,3 +132,4 @@ Se necessário fazer rollback:
 - Tempos de execução são medidos e logados
 - Compatível com a arquitetura DDD existente
 
+

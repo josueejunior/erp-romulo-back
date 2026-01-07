@@ -3,6 +3,7 @@
 namespace App\Modules\Orcamento\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Traits\HasAuthContext;
 use App\Modules\Orcamento\Domain\Services\DashboardDomainService;
 use App\Modules\Orcamento\UseCases\Dashboard\ObtenerAnalisePrecoAction;
 use App\Modules\Orcamento\UseCases\Dashboard\ObtenerDashboardCompletoAction;
@@ -12,6 +13,8 @@ use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
+    use HasAuthContext;
+
     private ObtenerMetricasDashboardAction $metricasAction;
     private ObtenerAnalisePrecoAction $analisePrecoAction;
     private ObtenerPerformanceFornecedoresAction $performanceAction;
@@ -38,7 +41,7 @@ class DashboardController extends Controller
      */
     public function index(Request $request)
     {
-        return $this->dashboardCompletoAction->execute(auth()->user()->empresa_id);
+        return $this->dashboardCompletoAction->execute($this->getEmpresaId());
     }
 
     /**
@@ -46,7 +49,7 @@ class DashboardController extends Controller
      */
     public function metricas(Request $request)
     {
-        return $this->metricasAction->execute(auth()->user()->empresa_id);
+        return $this->metricasAction->execute($this->getEmpresaId());
     }
 
     /**
@@ -54,7 +57,7 @@ class DashboardController extends Controller
      */
     public function analisePrecos(Request $request)
     {
-        return $this->analisePrecoAction->execute(auth()->user()->empresa_id);
+        return $this->analisePrecoAction->execute($this->getEmpresaId());
     }
 
     /**
@@ -62,7 +65,7 @@ class DashboardController extends Controller
      */
     public function performanceFornecedores(Request $request)
     {
-        return $this->performanceAction->execute(auth()->user()->empresa_id);
+        return $this->performanceAction->execute($this->getEmpresaId());
     }
 
     /**
@@ -70,7 +73,7 @@ class DashboardController extends Controller
      */
     public function resumoStatus(Request $request)
     {
-        $empresaId = auth()->user()->empresa_id;
+        $empresaId = $this->getEmpresaId();
         $resumo = $this->dashboardService->obterResumoStatus($empresaId);
 
         return response()->json([
@@ -84,7 +87,7 @@ class DashboardController extends Controller
      */
     public function timeline(Request $request)
     {
-        $empresaId = auth()->user()->empresa_id;
+        $empresaId = $this->getEmpresaId();
         $limit = $request->query('limit', 10);
         $timeline = $this->dashboardService->obterTimeline($empresaId, $limit);
 
@@ -99,7 +102,7 @@ class DashboardController extends Controller
      */
     public function processosMaiorGasto(Request $request)
     {
-        $empresaId = auth()->user()->empresa_id;
+        $empresaId = $this->getEmpresaId();
         $limit = $request->query('limit', 5);
         $processos = $this->dashboardService->obterProcessosMaiorGasto($empresaId, $limit);
 
@@ -114,7 +117,7 @@ class DashboardController extends Controller
      */
     public function comparacaoPeriodos(Request $request)
     {
-        $empresaId = auth()->user()->empresa_id;
+        $empresaId = $this->getEmpresaId();
         $meses = $request->query('meses', 12);
         $comparacao = $this->dashboardService->obterComparacaoPeriodos($empresaId, $meses);
 

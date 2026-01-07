@@ -3,6 +3,7 @@
 namespace App\Modules\Relatorio\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
+use App\Http\Controllers\Traits\HasAuthContext;
 use App\Modules\Processo\Models\Processo;
 use App\Modules\Custo\Models\CustoIndireto;
 use App\Modules\Relatorio\Services\FinanceiroService;
@@ -14,6 +15,8 @@ use Carbon\Carbon;
 
 class RelatorioFinanceiroController extends BaseApiController
 {
+    use HasAuthContext;
+
     protected FinanceiroService $financeiroService;
 
     public function __construct(FinanceiroService $financeiroService)
@@ -24,7 +27,7 @@ class RelatorioFinanceiroController extends BaseApiController
     public function index(Request $request)
     {
         // Verificar se o plano tem acesso a relatórios
-        $tenant = tenancy()->tenant;
+        $tenant = $this->getTenant();
         if (!$tenant || !$tenant->temAcessoRelatorios()) {
             return response()->json([
                 'message' => 'Os relatórios não estão disponíveis no seu plano. Faça upgrade para o plano Profissional ou superior.',
@@ -38,7 +41,7 @@ class RelatorioFinanceiroController extends BaseApiController
             ], 403);
         }
 
-        $tenantId = tenancy()->tenant?->id;
+        $tenantId = $this->getTenantId();
 
         // Se for gestão financeira mensal (apenas processos encerrados)
         if ($request->tipo === 'mensal' || $request->mes) {
@@ -180,7 +183,7 @@ class RelatorioFinanceiroController extends BaseApiController
     public function gestaoMensal(Request $request)
     {
         // Verificar se o plano tem acesso a relatórios
-        $tenant = tenancy()->tenant;
+        $tenant = $this->getTenant();
         if (!$tenant || !$tenant->temAcessoRelatorios()) {
             return response()->json([
                 'message' => 'Os relatórios não estão disponíveis no seu plano. Faça upgrade para o plano Profissional ou superior.',

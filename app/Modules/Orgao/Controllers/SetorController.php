@@ -3,6 +3,7 @@
 namespace App\Modules\Orgao\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
+use App\Http\Controllers\Traits\HasAuthContext;
 use App\Http\Resources\SetorResource;
 use App\Application\Setor\UseCases\CriarSetorUseCase;
 use App\Application\Setor\UseCases\AtualizarSetorUseCase;
@@ -20,6 +21,7 @@ use App\Modules\Orgao\Models\Setor as SetorModel;
 
 class SetorController extends BaseApiController
 {
+    use HasAuthContext;
     public function __construct(
         private CriarSetorUseCase $criarSetorUseCase,
         private AtualizarSetorUseCase $atualizarSetorUseCase,
@@ -42,7 +44,7 @@ class SetorController extends BaseApiController
             ], 401);
         }
 
-        $tenantId = tenancy()->tenant?->id;
+        $tenantId = $this->getTenantId();
 
         // Garantir que o TenantContext tenha empresa_id antes de chamar o use case
         try {
@@ -142,7 +144,7 @@ class SetorController extends BaseApiController
 
         // Garantir TenantContext com empresa_id antes de validar/crear
         try {
-            $tenantId = tenancy()->tenant?->id;
+            $tenantId = $this->getTenantId();
             if (!TenantContext::has() || TenantContext::get()->empresaId === null) {
                 $empresa = $this->getEmpresaAtivaOrFail();
                 if ($tenantId) {
@@ -307,7 +309,7 @@ class SetorController extends BaseApiController
      */
     protected function clearSetorCache(): void
     {
-        $tenantId = tenancy()->tenant?->id;
+        $tenantId = $this->getTenantId();
         
         if ($tenantId && RedisService::isAvailable()) {
             $pattern = "setores:{$tenantId}:*";

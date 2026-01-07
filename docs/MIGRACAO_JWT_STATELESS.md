@@ -239,3 +239,4 @@ curl -X POST https://api.addsimp.com/api/v1/payments/processar-assinatura \
 - [JWT.io](https://jwt.io/) - Documentação JWT
 - [firebase/php-jwt](https://github.com/firebase/php-jwt) - Biblioteca PHP JWT
 
+

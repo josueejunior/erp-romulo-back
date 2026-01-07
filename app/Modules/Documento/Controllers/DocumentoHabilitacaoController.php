@@ -3,6 +3,7 @@
 namespace App\Modules\Documento\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
+use App\Http\Controllers\Traits\HasAuthContext;
 use App\Modules\Documento\Models\DocumentoHabilitacao;
 use App\Modules\Documento\Services\DocumentoHabilitacaoService;
 use App\Application\DocumentoHabilitacao\UseCases\CriarDocumentoHabilitacaoUseCase;
@@ -16,6 +17,7 @@ use Illuminate\Support\Facades\Storage;
 
 class DocumentoHabilitacaoController extends BaseApiController
 {
+    use HasAuthContext;
 
     public function __construct(
         DocumentoHabilitacaoService $service,
@@ -32,7 +34,7 @@ class DocumentoHabilitacaoController extends BaseApiController
      */
     protected function ensureEmpresaContext(): void
     {
-        $tenantId = tenancy()->tenant?->id;
+        $tenantId = $this->getTenantId();
         if (!TenantContext::has() || TenantContext::get()->empresaId === null) {
             $empresa = $this->getEmpresaAtivaOrFail();
             if ($tenantId) {

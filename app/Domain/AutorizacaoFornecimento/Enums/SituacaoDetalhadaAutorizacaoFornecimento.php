@@ -29,3 +29,4 @@ enum SituacaoDetalhadaAutorizacaoFornecimento: string
     }
 }
 
+

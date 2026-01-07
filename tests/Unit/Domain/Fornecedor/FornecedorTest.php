@@ -49,5 +49,17 @@ class FornecedorTest extends TestCase
             'empresa_id' => 0,
         ]);
     }
+
+    public function test_deve_exigir_empresa_id_na_factory(): void
+    {
+        // Arrange & Act & Assert
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('empresa_id é obrigatório');
+        
+        FornecedorFactory::criar([
+            'razao_social' => 'Fornecedor Teste',
+            // empresa_id não fornecido
+        ]);
+    }
 }
 

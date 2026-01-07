@@ -3,19 +3,20 @@
 namespace App\Modules\Dashboard\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
+use App\Http\Controllers\Traits\HasAuthContext;
 use App\Modules\Dashboard\Services\DashboardService;
 use App\Services\RedisService;
 use Illuminate\Http\Request;
 
 class DashboardController extends BaseApiController
 {
+    use HasAuthContext;
 
     protected DashboardService $dashboardService;
 
     public function __construct(DashboardService $dashboardService)
     {
         $this->dashboardService = $dashboardService;
-        // Não atribuir a $this->service porque DashboardService não implementa IService
     }
 
     /**
@@ -24,7 +25,7 @@ class DashboardController extends BaseApiController
     public function index()
     {
         // Verificar se o plano tem acesso a dashboard
-        $tenant = tenancy()->tenant;
+        $tenant = $this->getTenant();
         if (!$tenant || !$tenant->temAcessoDashboard()) {
             return response()->json([
                 'message' => 'O dashboard não está disponível no seu plano. Faça upgrade para o plano Profissional ou superior.',
@@ -32,7 +33,7 @@ class DashboardController extends BaseApiController
         }
 
         $empresa = $this->getEmpresaAtivaOrFail();
-        $tenantId = tenancy()->tenant?->id;
+        $tenantId = $this->getTenantId();
         
         // Tentar obter do cache primeiro (com empresa_id no cache key)
         if ($tenantId && RedisService::isAvailable()) {
@@ -45,7 +46,6 @@ class DashboardController extends BaseApiController
 
         $data = $this->dashboardService->obterDadosDashboard($empresa->id);
 
-        
         if ($tenantId && RedisService::isAvailable()) {
             $cacheKey = "dashboard_{$tenantId}_{$empresa->id}";
             RedisService::set($cacheKey, $data, 300);  

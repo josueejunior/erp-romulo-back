@@ -3,6 +3,7 @@
 namespace App\Modules\Processo\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
+use App\Http\Controllers\Traits\HasAuthContext;
 use App\Modules\Processo\Services\SaldoService;
 use App\Services\RedisService;
 use App\Modules\Processo\Models\Processo;
@@ -10,6 +11,8 @@ use Illuminate\Http\Request;
 
 class SaldoController extends BaseApiController
 {
+    use HasAuthContext;
+
     protected SaldoService $saldoService;
 
     public function __construct(SaldoService $saldoService)
@@ -33,7 +36,7 @@ class SaldoController extends BaseApiController
             ], $e->getMessage() === 'Apenas processos em execução possuem saldo.' ? 403 : 404);
         }
 
-        $tenantId = tenancy()->tenant?->id;
+        $tenantId = $this->getTenantId();
         
         // Tentar obter do cache primeiro
         if ($tenantId && RedisService::isAvailable()) {
