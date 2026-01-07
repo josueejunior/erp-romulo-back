@@ -213,37 +213,90 @@ class Tenant extends BaseTenant implements TenantWithDatabase
 
     /**
      * Verifica se o tenant tem assinatura ativa
+     * 
+     * 🔥 IMPORTANTE: Assinatura pertence ao usuário, não ao tenant
+     * Busca a assinatura do usuário autenticado e atualiza o tenant se necessário
      */
     public function temAssinaturaAtiva(): bool
     {
-        // Garantir que o relacionamento está carregado
-        if (!$this->relationLoaded('assinaturaAtual')) {
-            $this->load('assinaturaAtual');
+        // Buscar usuário autenticado (priorizar ApplicationContext, fallback para auth())
+        $user = null;
+        if (app()->bound(\App\Contracts\ApplicationContextContract::class)) {
+            $context = app(\App\Contracts\ApplicationContextContract::class);
+            if ($context->isInitialized()) {
+                $user = $context->getUser();
+            }
         }
         
-        if (!$this->assinaturaAtual) {
-            \Log::debug('Tenant::temAssinaturaAtiva() - Assinatura não encontrada', [
+        if (!$user) {
+            $user = auth()->user();
+        }
+        
+        if (!$user) {
+            \Log::warning('Tenant::temAssinaturaAtiva() - Usuário não autenticado', [
                 'tenant_id' => $this->id,
+            ]);
+            return false;
+        }
+
+        // Buscar assinatura ativa do usuário (não do tenant)
+        $assinaturaRepository = app(\App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface::class);
+        $assinaturaDomain = $assinaturaRepository->buscarAssinaturaAtualPorUsuario($user->id);
+
+        if (!$assinaturaDomain) {
+            \Log::debug('Tenant::temAssinaturaAtiva() - Assinatura não encontrada para o usuário', [
+                'tenant_id' => $this->id,
+                'user_id' => $user->id,
                 'assinatura_atual_id' => $this->assinatura_atual_id,
             ]);
             return false;
         }
-        
-        $isAtiva = $this->assinaturaAtual->isAtiva();
-        
+
+        // Buscar modelo da assinatura para verificar status
+        $assinaturaModel = $assinaturaRepository->buscarModeloPorId($assinaturaDomain->id);
+        if (!$assinaturaModel) {
+            \Log::warning('Tenant::temAssinaturaAtiva() - Modelo de assinatura não encontrado', [
+                'tenant_id' => $this->id,
+                'user_id' => $user->id,
+                'assinatura_domain_id' => $assinaturaDomain->id,
+            ]);
+            return false;
+        }
+
+        $isAtiva = $assinaturaModel->isAtiva();
+
+        // Se a assinatura está ativa e o tenant não tem assinatura_atual_id ou tem uma diferente, atualizar
+        if ($isAtiva && ($this->assinatura_atual_id !== $assinaturaModel->id || !$this->plano_atual_id)) {
+            $this->update([
+                'assinatura_atual_id' => $assinaturaModel->id,
+                'plano_atual_id' => $assinaturaModel->plano_id,
+            ]);
+            $this->refresh();
+            
+            \Log::info('Tenant::temAssinaturaAtiva() - Tenant atualizado com assinatura do usuário', [
+                'tenant_id' => $this->id,
+                'user_id' => $user->id,
+                'assinatura_id' => $assinaturaModel->id,
+                'plano_id' => $assinaturaModel->plano_id,
+            ]);
+        }
+
         \Log::debug('Tenant::temAssinaturaAtiva() - Verificação', [
             'tenant_id' => $this->id,
-            'assinatura_id' => $this->assinaturaAtual->id,
+            'user_id' => $user->id,
+            'assinatura_id' => $assinaturaModel->id,
             'is_ativa' => $isAtiva,
-            'status' => $this->assinaturaAtual->status ?? 'N/A',
-            'data_fim' => $this->assinaturaAtual->data_fim ?? 'N/A',
+            'status' => $assinaturaModel->status ?? 'N/A',
+            'data_fim' => $assinaturaModel->data_fim ?? 'N/A',
         ]);
-        
+
         return $isAtiva;
     }
 
     /**
      * Verifica se pode criar processo (dentro do limite mensal e diário)
+     * 
+     * 🔥 IMPORTANTE: Busca o plano da assinatura do usuário autenticado
      */
     public function podeCriarProcesso(): bool
     {
@@ -260,20 +313,50 @@ class Tenant extends BaseTenant implements TenantWithDatabase
             return false;
         }
 
-        // Garantir que o relacionamento está carregado
-        if (!$this->relationLoaded('planoAtual')) {
-            $this->load('planoAtual');
+        // Buscar usuário autenticado (priorizar ApplicationContext, fallback para auth())
+        $user = null;
+        if (app()->bound(\App\Contracts\ApplicationContextContract::class)) {
+            $context = app(\App\Contracts\ApplicationContextContract::class);
+            if ($context->isInitialized()) {
+                $user = $context->getUser();
+            }
         }
-
-        $plano = $this->planoAtual;
         
-        if (!$plano) {
-            \Log::warning('Tenant::podeCriarProcesso() - Plano não encontrado', [
+        if (!$user) {
+            $user = auth()->user();
+        }
+        
+        if (!$user) {
+            \Log::warning('Tenant::podeCriarProcesso() - Usuário não autenticado', [
                 'tenant_id' => $this->id,
-                'plano_atual_id' => $this->plano_atual_id,
             ]);
             return false;
         }
+
+        // Buscar assinatura ativa do usuário para obter o plano
+        $assinaturaRepository = app(\App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface::class);
+        $assinaturaDomain = $assinaturaRepository->buscarAssinaturaAtualPorUsuario($user->id);
+        
+        if (!$assinaturaDomain) {
+            \Log::warning('Tenant::podeCriarProcesso() - Assinatura não encontrada para o usuário', [
+                'tenant_id' => $this->id,
+                'user_id' => $user->id,
+            ]);
+            return false;
+        }
+
+        // Buscar modelo da assinatura para acessar o plano
+        $assinaturaModel = $assinaturaRepository->buscarModeloPorId($assinaturaDomain->id);
+        if (!$assinaturaModel || !$assinaturaModel->plano) {
+            \Log::warning('Tenant::podeCriarProcesso() - Plano não encontrado', [
+                'tenant_id' => $this->id,
+                'user_id' => $user->id,
+                'assinatura_id' => $assinaturaDomain->id,
+            ]);
+            return false;
+        }
+
+        $plano = $assinaturaModel->plano;
 
         // Se não tem limite, pode criar (mas ainda precisa verificar restrição diária)
         $temProcessosIlimitados = $plano->temProcessosIlimitados();
