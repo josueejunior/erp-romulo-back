@@ -181,7 +181,7 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
     /**
      * Sobrescrever postJson para sempre incluir headers
      */
-    protected function postJson($uri, array $data = [], array $headers = [])
+    public function postJson($uri, array $data = [], array $headers = [])
     {
         return parent::postJson($uri, $data, array_merge($this->getAuthHeaders(), $headers));
     }
@@ -189,7 +189,7 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
     /**
      * Sobrescrever getJson para sempre incluir headers
      */
-    protected function getJson($uri, array $headers = [])
+    public function getJson($uri, array $headers = [])
     {
         return parent::getJson($uri, array_merge($this->getAuthHeaders(), $headers));
     }
@@ -197,7 +197,7 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
     /**
      * Sobrescrever patchJson para sempre incluir headers
      */
-    protected function patchJson($uri, array $data = [], array $headers = [])
+    public function patchJson($uri, array $data = [], array $headers = [])
     {
         return parent::patchJson($uri, $data, array_merge($this->getAuthHeaders(), $headers));
     }
@@ -205,7 +205,7 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
     /**
      * Sobrescrever putJson para sempre incluir headers
      */
-    protected function putJson($uri, array $data = [], array $headers = [])
+    public function putJson($uri, array $data = [], array $headers = [])
     {
         return parent::putJson($uri, $data, array_merge($this->getAuthHeaders(), $headers));
     }
@@ -213,7 +213,7 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
     /**
      * Sobrescrever deleteJson para sempre incluir headers
      */
-    protected function deleteJson($uri, array $data = [], array $headers = [])
+    public function deleteJson($uri, array $data = [], array $headers = [])
     {
         return parent::deleteJson($uri, $data, array_merge($this->getAuthHeaders(), $headers));
     }
