@@ -208,12 +208,16 @@ class EmpenhoController extends BaseApiController
      * - Não sabe se existe multi-tenant
      * - Não filtra nada por tenant_id
      */
-    public function storeWeb(EmpenhoCreateRequest $request, Processo $processo): JsonResponse
+    public function storeWeb(Request $request, Processo $processo): JsonResponse
     {
         try {
-            // Request já está validado via Form Request
+            // Validar dados usando Form Request
+            $empenhoRequest = EmpenhoCreateRequest::createFrom($request);
+            $empenhoRequest->setContainer(app());
+            $empenhoRequest->validateResolved();
+            
             // Preparar dados para DTO
-            $data = $request->validated();
+            $data = $empenhoRequest->validated();
             $data['processo_id'] = $processo->id;
             
             // Usar Use Case DDD (contém toda a lógica de negócio, incluindo tenant)
