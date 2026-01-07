@@ -8,17 +8,24 @@ use App\Modules\NotaFiscal\Models\NotaFiscal as NotaFiscalModel;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Carbon\Carbon;
 use App\Infrastructure\Persistence\Eloquent\Traits\HasModelRetrieval;
+use Illuminate\Support\Facades\Schema;
 
 class NotaFiscalRepository implements NotaFiscalRepositoryInterface
 {
     use HasModelRetrieval;
     private function toDomain(NotaFiscalModel $model): NotaFiscal
     {
+        // Verificar se a coluna processo_item_id existe antes de acessar
+        $processoItemId = null;
+        if (Schema::hasColumn('notas_fiscais', 'processo_item_id')) {
+            $processoItemId = $model->processo_item_id;
+        }
+        
         return new NotaFiscal(
             id: $model->id,
             empresaId: $model->empresa_id,
             processoId: $model->processo_id,
-            processoItemId: $model->processo_item_id,
+            processoItemId: $processoItemId,
             empenhoId: $model->empenho_id,
             contratoId: $model->contrato_id,
             autorizacaoFornecimentoId: $model->autorizacao_fornecimento_id,
@@ -46,10 +53,9 @@ class NotaFiscalRepository implements NotaFiscalRepositoryInterface
 
     private function toArray(NotaFiscal $notaFiscal): array
     {
-        return [
+        $data = [
             'empresa_id' => $notaFiscal->empresaId,
             'processo_id' => $notaFiscal->processoId,
-            'processo_item_id' => $notaFiscal->processoItemId,
             'empenho_id' => $notaFiscal->empenhoId,
             'contrato_id' => $notaFiscal->contratoId,
             'autorizacao_fornecimento_id' => $notaFiscal->autorizacaoFornecimentoId,
@@ -73,6 +79,14 @@ class NotaFiscalRepository implements NotaFiscalRepositoryInterface
             'data_pagamento' => $notaFiscal->dataPagamento?->toDateString(),
             'observacoes' => $notaFiscal->observacoes,
         ];
+        
+        // Adicionar processo_item_id apenas se a coluna existir na tabela
+        // Isso permite que o sistema funcione mesmo se a migration não foi executada
+        if (\Illuminate\Support\Facades\Schema::hasColumn('notas_fiscais', 'processo_item_id')) {
+            $data['processo_item_id'] = $notaFiscal->processoItemId;
+        }
+        
+        return $data;
     }
 
     public function criar(NotaFiscal $notaFiscal): NotaFiscal
