@@ -40,7 +40,7 @@ class CadastroPublicoController extends Controller
                 
                 // Dados da empresa (tenant)
                 'razao_social' => 'required|string|max:255',
-                'cnpj' => 'nullable|string|max:18|unique:tenants,cnpj',
+                'cnpj' => 'nullable|string|max:18',
                 'email' => 'nullable|email|max:255',
                 'endereco' => 'nullable|string|max:255',
                 'cidade' => 'nullable|string|max:255',
@@ -54,6 +54,43 @@ class CadastroPublicoController extends Controller
                 'admin_email' => 'required|email|max:255',
                 'admin_password' => 'required|string|min:8',
             ]);
+
+            // 🔥 Verificar se o email já existe (em QUALQUER tenant)
+            $emailExiste = \App\Models\User::where('email', $validated['admin_email'])->exists();
+            if ($emailExiste) {
+                Log::info('Tentativa de cadastro com email já existente', [
+                    'email' => $validated['admin_email'],
+                ]);
+                
+                return response()->json([
+                    'message' => 'Este e-mail já está cadastrado no sistema. Faça login para acessar sua conta.',
+                    'code' => 'EMAIL_EXISTS',
+                    'success' => false,
+                    'redirect_to' => '/login',
+                    'email' => $validated['admin_email'],
+                ], 409); // 409 Conflict
+            }
+
+            // 🔥 Verificar se o CNPJ já existe (se informado)
+            if (!empty($validated['cnpj'])) {
+                $cnpjLimpo = preg_replace('/\D/', '', $validated['cnpj']);
+                $cnpjExiste = \App\Models\Tenant::where('cnpj', $validated['cnpj'])
+                    ->orWhere('cnpj', $cnpjLimpo)
+                    ->exists();
+                    
+                if ($cnpjExiste) {
+                    Log::info('Tentativa de cadastro com CNPJ já existente', [
+                        'cnpj' => $validated['cnpj'],
+                    ]);
+                    
+                    return response()->json([
+                        'message' => 'Este CNPJ já está cadastrado no sistema. Se você é o responsável, faça login ou entre em contato com o suporte.',
+                        'code' => 'CNPJ_EXISTS',
+                        'success' => false,
+                        'redirect_to' => '/login',
+                    ], 409); // 409 Conflict
+                }
+            }
 
             // 1. Criar tenant com empresa e usuário admin
             $tenantDTO = CriarTenantDTO::fromArray($validated);
