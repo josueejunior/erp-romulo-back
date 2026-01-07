@@ -61,9 +61,10 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
         
         // Criar banco de dados do tenant usando conexão sem transação
         try {
-            $manager = $this->tenant->database()->manager();
-            $config = $manager->makeConnectionConfig($this->tenant);
-            $databaseName = $config['database'];
+            // Obter nome do banco usando o padrão do stancl/tenancy: prefix + tenant_id + suffix
+            $prefix = config('tenancy.database.prefix', 'tenant_');
+            $suffix = config('tenancy.database.suffix', '');
+            $databaseName = $prefix . $this->tenant->id . $suffix;
             
             // Obter configurações do banco central (usar a conexão padrão)
             $connectionName = config('database.default');
