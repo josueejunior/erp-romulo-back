@@ -74,6 +74,7 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
             'status' => 'participacao',
             'modalidade' => 'Pregão',
             'numero_modalidade' => '001/2024',
+            'objeto_resumido' => 'Objeto de teste para documentos',
         ]);
         
         // Criar documento de habilitação
