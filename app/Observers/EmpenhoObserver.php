@@ -16,17 +16,21 @@ class EmpenhoObserver
 
     public function created(Empenho $empenho)
     {
-        // Calcular prazo de entrega se não foi calculado
+        // Calcular prazo de entrega se não foi calculado (sem disparar observers)
         $this->calcularPrazoEntregaSeNecessario($empenho);
         
-        // Atualizar situação do empenho baseado em prazos
-        $empenho->atualizarSituacao();
+        // Atualizar situação do empenho baseado em prazos (sem disparar observers)
+        $empenho->withoutEvents(function () use ($empenho) {
+            $empenho->atualizarSituacao();
+        });
         
         // Atualizar documento vinculado (Contrato/AF) - muda situação para "Atendendo"
+        // Usar withoutEvents para evitar loops infinitos
         $this->atualizarDocumentoVinculado($empenho);
         
         // Atualizar saldo do processo e valores financeiros dos itens vinculados
-        $this->atualizarSaldoProcesso($empenho);
+        // Não fazer na criação pois ainda não há vínculos
+        // Os vínculos serão criados depois e atualizarão os valores
     }
     
     public function updated(Empenho $empenho)
@@ -113,17 +117,23 @@ class EmpenhoObserver
      * - Atualiza saldo do contrato/AF
      * - Muda situação para "Atendendo" quando empenho é vinculado
      *   (a situação é atualizada automaticamente no método atualizarSaldo())
+     * 
+     * Usa withoutEvents para evitar loops infinitos
      */
     protected function atualizarDocumentoVinculado(Empenho $empenho): void
     {
         if ($empenho->contrato_id && $empenho->contrato) {
-            // atualizarSaldo() já atualiza a situação automaticamente
-            $empenho->contrato->atualizarSaldo();
+            // Usar withoutEvents para evitar que ContratoObserver dispare e cause loop
+            \App\Modules\Contrato\Models\Contrato::withoutEvents(function () use ($empenho) {
+                $empenho->contrato->atualizarSaldo();
+            });
         }
         
         if ($empenho->autorizacao_fornecimento_id && $empenho->autorizacaoFornecimento) {
-            // atualizarSaldo() já atualiza a situação automaticamente
-            $empenho->autorizacaoFornecimento->atualizarSaldo();
+            // Usar withoutEvents para evitar loops
+            \App\Modules\AutorizacaoFornecimento\Models\AutorizacaoFornecimento::withoutEvents(function () use ($empenho) {
+                $empenho->autorizacaoFornecimento->atualizarSaldo();
+            });
         }
     }
 
@@ -133,6 +143,9 @@ class EmpenhoObserver
      * Efeitos automáticos:
      * - Recalcula valores financeiros dos itens que têm vínculos com este empenho
      * - O saldo do processo é calculado dinamicamente via SaldoService
+     * 
+     * Nota: Na criação do empenho, ainda não há vínculos, então esta função
+     * só faz sentido quando o empenho é atualizado ou quando há vínculos existentes.
      */
     protected function atualizarSaldoProcesso(Empenho $empenho): void
     {
@@ -141,14 +154,21 @@ class EmpenhoObserver
         }
 
         // Buscar itens que têm vínculos com este empenho
+        // Limitar a query para evitar problemas de memória
         $itensVinculados = \App\Modules\Processo\Models\ProcessoItemVinculo::where('empenho_id', $empenho->id)
             ->with('processoItem')
+            ->limit(100) // Limite de segurança
             ->get();
 
         // Recalcular valores financeiros de cada item vinculado
+        // Usar withoutEvents para evitar loops com ProcessoItemObserver
         foreach ($itensVinculados as $vinculo) {
             if ($vinculo->processoItem) {
-                $vinculo->processoItem->atualizarValoresFinanceiros();
+                // Usar saveQuietly dentro de atualizarValoresFinanceiros não é possível,
+                // então vamos usar withoutEvents no nível do modelo
+                \App\Modules\Processo\Models\ProcessoItem::withoutEvents(function () use ($vinculo) {
+                    $vinculo->processoItem->atualizarValoresFinanceiros();
+                });
             }
         }
     }

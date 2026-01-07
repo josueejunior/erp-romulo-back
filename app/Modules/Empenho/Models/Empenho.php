@@ -88,13 +88,13 @@ class Empenho extends BaseModel
     {
         if ($this->concluido) {
             $this->situacao = 'concluido';
-            $this->save();
+            $this->saveQuietly();
             return;
         }
 
         if (!$this->data_recebimento || !$this->prazo_entrega_calculado) {
             $this->situacao = 'aguardando_entrega';
-            $this->save();
+            $this->saveQuietly();
             return;
         }
 
@@ -109,7 +109,8 @@ class Empenho extends BaseModel
             $this->situacao = 'em_atendimento';
         }
 
-        $this->save();
+        // Usar saveQuietly para evitar loops infinitos com observers
+        $this->saveQuietly();
     }
 
     /**
@@ -133,7 +134,8 @@ class Empenho extends BaseModel
             if (!$this->data_entrega) {
                 $this->data_entrega = now();
             }
-            $this->save();
+            // Usar saveQuietly para evitar loops infinitos com observers
+            $this->saveQuietly();
         }
     }
 }

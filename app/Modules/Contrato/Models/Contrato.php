@@ -96,7 +96,8 @@ class Contrato extends BaseModel
             $this->vigente = false;
         }
         
-        $this->save();
+        // Usar saveQuietly para evitar loops infinitos com observers
+        $this->saveQuietly();
     }
 
     /**

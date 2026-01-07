@@ -311,7 +311,9 @@ class ProcessoItem extends BaseModel
         // Se houver necessidade de alocar custos indiretos por item, implementar aqui
         $this->lucro_liquido = $this->lucro_bruto;
 
-        $this->save();
+        // Usar saveQuietly para evitar loops infinitos quando chamado de observers
+        // O método pode ser chamado de ProcessoItemVinculoObserver, que já está dentro de um observer
+        $this->saveQuietly();
     }
 
     /**
