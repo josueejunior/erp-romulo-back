@@ -30,35 +30,15 @@ namespace App\Http\Controllers\Api;
  *     description="Autenticação via JWT Token. Use o endpoint /auth/login para obter o token."
  * )
  * 
- * @OA\Tag(
- *     name="Autenticação",
- *     description="Endpoints de autenticação e gerenciamento de sessão"
- * )
- * 
- * @OA\Tag(
- *     name="Processos",
- *     description="Gerenciamento de processos licitatórios"
- * )
- * 
- * @OA\Tag(
- *     name="Fornecedores",
- *     description="Cadastro e gerenciamento de fornecedores"
- * )
- * 
- * @OA\Tag(
- *     name="Contratos",
- *     description="Gerenciamento de contratos"
- * )
- * 
- * @OA\Tag(
- *     name="Assinaturas",
- *     description="Gerenciamento de planos e assinaturas"
- * )
- * 
- * @OA\Tag(
- *     name="Dashboard",
- *     description="Métricas e indicadores"
- * )
+ * @OA\Tag(name="Autenticação", description="Endpoints de autenticação e gerenciamento de sessão")
+ * @OA\Tag(name="Processos", description="Gerenciamento de processos licitatórios")
+ * @OA\Tag(name="Fornecedores", description="Cadastro e gerenciamento de fornecedores")
+ * @OA\Tag(name="Contratos", description="Gerenciamento de contratos")
+ * @OA\Tag(name="Assinaturas", description="Gerenciamento de planos e assinaturas")
+ * @OA\Tag(name="Dashboard", description="Métricas e indicadores")
+ * @OA\Tag(name="Órgãos", description="Gerenciamento de órgãos públicos")
+ * @OA\Tag(name="Empenhos", description="Gerenciamento de empenhos")
+ * @OA\Tag(name="Notas Fiscais", description="Gerenciamento de notas fiscais")
  * 
  * @OA\Schema(
  *     schema="Error",
@@ -75,6 +55,217 @@ namespace App\Http\Controllers\Api;
  *     @OA\Property(property="per_page", type="integer", example=15),
  *     @OA\Property(property="total", type="integer", example=100),
  *     @OA\Property(property="last_page", type="integer", example=7)
+ * )
+ * 
+ * @OA\Get(
+ *     path="/auth/user",
+ *     summary="Obter usuário autenticado",
+ *     description="Retorna os dados do usuário atualmente autenticado",
+ *     operationId="getUser",
+ *     tags={"Autenticação"},
+ *     security={{"bearerAuth":{}}},
+ *     @OA\Response(
+ *         response=200,
+ *         description="Usuário autenticado",
+ *         @OA\JsonContent(ref="#/components/schemas/User")
+ *     ),
+ *     @OA\Response(response=401, description="Não autenticado")
+ * )
+ * 
+ * @OA\Post(
+ *     path="/auth/logout",
+ *     summary="Fazer logout",
+ *     description="Invalida o token JWT atual",
+ *     operationId="logout",
+ *     tags={"Autenticação"},
+ *     security={{"bearerAuth":{}}},
+ *     @OA\Response(response=200, description="Logout realizado com sucesso"),
+ *     @OA\Response(response=401, description="Não autenticado")
+ * )
+ * 
+ * @OA\Get(
+ *     path="/processos",
+ *     summary="Listar processos",
+ *     description="Retorna lista paginada de processos licitatórios",
+ *     operationId="listProcessos",
+ *     tags={"Processos"},
+ *     security={{"bearerAuth":{}}},
+ *     @OA\Parameter(name="page", in="query", description="Número da página", @OA\Schema(type="integer", default=1)),
+ *     @OA\Parameter(name="per_page", in="query", description="Itens por página", @OA\Schema(type="integer", default=15)),
+ *     @OA\Parameter(name="status", in="query", description="Filtrar por status", @OA\Schema(type="string")),
+ *     @OA\Parameter(name="search", in="query", description="Busca por texto", @OA\Schema(type="string")),
+ *     @OA\Response(
+ *         response=200,
+ *         description="Lista de processos",
+ *         @OA\JsonContent(
+ *             @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/Processo")),
+ *             @OA\Property(property="meta", ref="#/components/schemas/Pagination")
+ *         )
+ *     ),
+ *     @OA\Response(response=401, description="Não autenticado")
+ * )
+ * 
+ * @OA\Post(
+ *     path="/processos",
+ *     summary="Criar processo",
+ *     description="Cria um novo processo licitatório",
+ *     operationId="createProcesso",
+ *     tags={"Processos"},
+ *     security={{"bearerAuth":{}}},
+ *     @OA\RequestBody(
+ *         required=true,
+ *         @OA\JsonContent(
+ *             required={"modalidade", "objeto_resumido"},
+ *             @OA\Property(property="modalidade", type="string", example="pregão"),
+ *             @OA\Property(property="numero_modalidade", type="string", example="001/2026"),
+ *             @OA\Property(property="objeto_resumido", type="string", example="Aquisição de materiais"),
+ *             @OA\Property(property="orgao_id", type="integer"),
+ *             @OA\Property(property="setor_id", type="integer"),
+ *             @OA\Property(property="portal", type="string"),
+ *             @OA\Property(property="data_hora_sessao_publica", type="string", format="date-time")
+ *         )
+ *     ),
+ *     @OA\Response(response=201, description="Processo criado", @OA\JsonContent(ref="#/components/schemas/Processo")),
+ *     @OA\Response(response=422, description="Erro de validação")
+ * )
+ * 
+ * @OA\Get(
+ *     path="/processos/{id}",
+ *     summary="Obter processo",
+ *     description="Retorna detalhes de um processo específico",
+ *     operationId="getProcesso",
+ *     tags={"Processos"},
+ *     security={{"bearerAuth":{}}},
+ *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+ *     @OA\Response(response=200, description="Detalhes do processo", @OA\JsonContent(ref="#/components/schemas/Processo")),
+ *     @OA\Response(response=404, description="Processo não encontrado")
+ * )
+ * 
+ * @OA\Get(
+ *     path="/fornecedores",
+ *     summary="Listar fornecedores",
+ *     description="Retorna lista paginada de fornecedores",
+ *     operationId="listFornecedores",
+ *     tags={"Fornecedores"},
+ *     security={{"bearerAuth":{}}},
+ *     @OA\Parameter(name="page", in="query", @OA\Schema(type="integer", default=1)),
+ *     @OA\Parameter(name="search", in="query", @OA\Schema(type="string")),
+ *     @OA\Response(
+ *         response=200,
+ *         description="Lista de fornecedores",
+ *         @OA\JsonContent(
+ *             @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/Fornecedor"))
+ *         )
+ *     )
+ * )
+ * 
+ * @OA\Post(
+ *     path="/fornecedores",
+ *     summary="Criar fornecedor",
+ *     description="Cadastra um novo fornecedor",
+ *     operationId="createFornecedor",
+ *     tags={"Fornecedores"},
+ *     security={{"bearerAuth":{}}},
+ *     @OA\RequestBody(
+ *         required=true,
+ *         @OA\JsonContent(
+ *             required={"razao_social"},
+ *             @OA\Property(property="razao_social", type="string"),
+ *             @OA\Property(property="nome_fantasia", type="string"),
+ *             @OA\Property(property="cnpj", type="string"),
+ *             @OA\Property(property="email", type="string"),
+ *             @OA\Property(property="telefone", type="string")
+ *         )
+ *     ),
+ *     @OA\Response(response=201, description="Fornecedor criado")
+ * )
+ * 
+ * @OA\Get(
+ *     path="/contratos",
+ *     summary="Listar contratos",
+ *     description="Retorna lista de contratos",
+ *     operationId="listContratos",
+ *     tags={"Contratos"},
+ *     security={{"bearerAuth":{}}},
+ *     @OA\Response(response=200, description="Lista de contratos")
+ * )
+ * 
+ * @OA\Get(
+ *     path="/dashboard",
+ *     summary="Dados do dashboard",
+ *     description="Retorna métricas e indicadores do dashboard",
+ *     operationId="getDashboard",
+ *     tags={"Dashboard"},
+ *     security={{"bearerAuth":{}}},
+ *     @OA\Response(
+ *         response=200,
+ *         description="Dados do dashboard",
+ *         @OA\JsonContent(ref="#/components/schemas/Dashboard")
+ *     )
+ * )
+ * 
+ * @OA\Get(
+ *     path="/assinaturas/atual",
+ *     summary="Assinatura atual",
+ *     description="Retorna a assinatura ativa do usuário",
+ *     operationId="getAssinaturaAtual",
+ *     tags={"Assinaturas"},
+ *     security={{"bearerAuth":{}}},
+ *     @OA\Response(response=200, description="Assinatura atual", @OA\JsonContent(ref="#/components/schemas/Assinatura")),
+ *     @OA\Response(response=404, description="Nenhuma assinatura ativa")
+ * )
+ * 
+ * @OA\Get(
+ *     path="/assinaturas/status",
+ *     summary="Status da assinatura",
+ *     description="Retorna status detalhado da assinatura",
+ *     operationId="getAssinaturaStatus",
+ *     tags={"Assinaturas"},
+ *     security={{"bearerAuth":{}}},
+ *     @OA\Response(response=200, description="Status da assinatura")
+ * )
+ * 
+ * @OA\Get(
+ *     path="/planos",
+ *     summary="Listar planos",
+ *     description="Retorna lista de planos disponíveis",
+ *     operationId="listPlanos",
+ *     tags={"Assinaturas"},
+ *     @OA\Response(
+ *         response=200,
+ *         description="Lista de planos",
+ *         @OA\JsonContent(type="array", @OA\Items(ref="#/components/schemas/Plano"))
+ *     )
+ * )
+ * 
+ * @OA\Get(
+ *     path="/orgaos",
+ *     summary="Listar órgãos",
+ *     description="Retorna lista de órgãos públicos",
+ *     operationId="listOrgaos",
+ *     tags={"Órgãos"},
+ *     security={{"bearerAuth":{}}},
+ *     @OA\Response(response=200, description="Lista de órgãos")
+ * )
+ * 
+ * @OA\Get(
+ *     path="/empenhos",
+ *     summary="Listar empenhos",
+ *     description="Retorna lista de empenhos",
+ *     operationId="listEmpenhos",
+ *     tags={"Empenhos"},
+ *     security={{"bearerAuth":{}}},
+ *     @OA\Response(response=200, description="Lista de empenhos")
+ * )
+ * 
+ * @OA\Get(
+ *     path="/notas-fiscais",
+ *     summary="Listar notas fiscais",
+ *     description="Retorna lista de notas fiscais",
+ *     operationId="listNotasFiscais",
+ *     tags={"Notas Fiscais"},
+ *     security={{"bearerAuth":{}}},
+ *     @OA\Response(response=200, description="Lista de notas fiscais")
  * )
  */
 class ApiDocumentation
