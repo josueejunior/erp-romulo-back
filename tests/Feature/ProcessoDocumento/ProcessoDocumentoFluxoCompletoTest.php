@@ -147,15 +147,21 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
             'ativo' => true,
         ]);
         
-        // Configurar headers de autenticação para todas as requisições
-        $this->withHeaders([
+        // Autenticar usuário via Sanctum (para compatibilidade)
+        $this->actingAs($this->user, 'sanctum');
+    }
+    
+    /**
+     * Obter headers de autenticação
+     */
+    protected function getAuthHeaders(): array
+    {
+        return [
             'Authorization' => 'Bearer ' . $this->token,
             'X-Tenant-ID' => (string) $this->tenant->id,
             'X-Empresa-ID' => (string) $this->empresa->id,
-        ]);
-        
-        // Autenticar usuário via Sanctum (para compatibilidade)
-        $this->actingAs($this->user, 'sanctum');
+            'Accept' => 'application/json',
+        ];
     }
     
     /**
@@ -163,18 +169,53 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
      */
     protected function authenticatedCall(string $method, string $uri, array $parameters = [], array $cookies = [], array $files = [], array $server = [], ?string $content = null)
     {
-        $headers = [
-            'Authorization' => 'Bearer ' . $this->token,
-            'X-Tenant-ID' => (string) $this->tenant->id,
-            'X-Empresa-ID' => (string) $this->empresa->id,
-            'Accept' => 'application/json',
-        ];
+        $headers = $this->getAuthHeaders();
         
         foreach ($headers as $key => $value) {
             $server['HTTP_' . str_replace('-', '_', strtoupper($key))] = $value;
         }
         
         return $this->call($method, $uri, $parameters, $cookies, $files, $server, $content);
+    }
+    
+    /**
+     * Sobrescrever postJson para sempre incluir headers
+     */
+    protected function postJson($uri, array $data = [], array $headers = [])
+    {
+        return parent::postJson($uri, $data, array_merge($this->getAuthHeaders(), $headers));
+    }
+    
+    /**
+     * Sobrescrever getJson para sempre incluir headers
+     */
+    protected function getJson($uri, array $headers = [])
+    {
+        return parent::getJson($uri, array_merge($this->getAuthHeaders(), $headers));
+    }
+    
+    /**
+     * Sobrescrever patchJson para sempre incluir headers
+     */
+    protected function patchJson($uri, array $data = [], array $headers = [])
+    {
+        return parent::patchJson($uri, $data, array_merge($this->getAuthHeaders(), $headers));
+    }
+    
+    /**
+     * Sobrescrever putJson para sempre incluir headers
+     */
+    protected function putJson($uri, array $data = [], array $headers = [])
+    {
+        return parent::putJson($uri, $data, array_merge($this->getAuthHeaders(), $headers));
+    }
+    
+    /**
+     * Sobrescrever deleteJson para sempre incluir headers
+     */
+    protected function deleteJson($uri, array $data = [], array $headers = [])
+    {
+        return parent::deleteJson($uri, $data, array_merge($this->getAuthHeaders(), $headers));
     }
     
     protected function tearDown(): void
