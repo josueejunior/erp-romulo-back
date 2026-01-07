@@ -167,6 +167,9 @@ Route::prefix('v1')->group(function () {
                 Route::get('/documentos', [ApiProcessoController::class, 'listarDocumentos']);
                 Route::post('/documentos/importar', [ApiProcessoController::class, 'importarDocumentos']);
                 Route::post('/documentos/sincronizar', [ApiProcessoController::class, 'sincronizarDocumentos']);
+                Route::post('/documentos/custom', [ApiProcessoController::class, 'criarDocumentoCustom']);
+                Route::put('/documentos/{processoDocumento}', [ApiProcessoController::class, 'atualizarDocumento']);
+                Route::get('/documentos/{processoDocumento}/download', [ApiProcessoController::class, 'downloadDocumento']);
                 Route::post('/marcar-perdido', [ApiProcessoController::class, 'marcarPerdido']);
                 Route::post('/confirmar-pagamento', [ApiProcessoController::class, 'confirmarPagamento']);
                 Route::get('/confirmacoes-pagamento', [ApiProcessoController::class, 'historicoConfirmacoes']);
