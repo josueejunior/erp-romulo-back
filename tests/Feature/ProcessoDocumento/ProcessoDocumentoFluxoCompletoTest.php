@@ -11,6 +11,8 @@ use App\Modules\Documento\Models\DocumentoHabilitacaoVersao;
 use App\Modules\Auth\Models\User;
 use App\Models\Empresa;
 use App\Models\Orgao;
+use App\Models\Tenant;
+use App\Services\JWTService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
@@ -32,9 +34,11 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
 
     private User $user;
     private Empresa $empresa;
+    private Tenant $tenant;
     private Orgao $orgao;
     private Processo $processo;
     private DocumentoHabilitacao $documentoHabilitacao;
+    private string $token;
 
     protected function setUp(): void
     {
@@ -42,7 +46,18 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
         
         Storage::fake('public');
         
-        // Criar empresa
+        // Criar tenant (obrigatório para multi-tenancy)
+        $this->tenant = Tenant::create([
+            'razao_social' => 'Tenant Teste LTDA',
+            'cnpj' => '12345678000190',
+            'email' => 'teste@tenant.com',
+            'status' => 'ativa',
+        ]);
+        
+        // Inicializar contexto do tenant
+        tenancy()->initialize($this->tenant);
+        
+        // Criar empresa dentro do tenant
         $this->empresa = Empresa::create([
             'razao_social' => 'Empresa Teste LTDA',
             'nome_fantasia' => 'Empresa Teste',
@@ -59,6 +74,14 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
             'empresa_ativa_id' => $this->empresa->id,
         ]);
         $this->user->empresas()->attach($this->empresa->id);
+        
+        // Criar token JWT
+        $jwtService = app(JWTService::class);
+        $this->token = $jwtService->generateToken([
+            'user_id' => $this->user->id,
+            'tenant_id' => $this->tenant->id,
+            'empresa_id' => $this->empresa->id,
+        ]);
         
         // Criar órgão (obrigatório para processo)
         $this->orgao = Orgao::create([
@@ -86,7 +109,14 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
             'ativo' => true,
         ]);
         
-        // Autenticar usuário
+        // Configurar headers de autenticação para todas as requisições
+        $this->withHeaders([
+            'Authorization' => 'Bearer ' . $this->token,
+            'X-Tenant-ID' => (string) $this->tenant->id,
+            'X-Empresa-ID' => (string) $this->empresa->id,
+        ]);
+        
+        // Autenticar usuário via Sanctum (para compatibilidade)
         $this->actingAs($this->user, 'sanctum');
     }
 
