@@ -16,7 +16,6 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use OpenApi\Annotations as OA;
 
@@ -75,20 +74,19 @@ class CadastroPublicoController extends Controller
             // Verificar duplicidades antes de criar
             $this->checkDuplicates($validated);
 
-            // Criar cadastro em transação
-            return DB::transaction(function () use ($validated) {
-                // 1. Criar tenant com empresa e usuário admin
-                $tenantResult = $this->createTenant($validated);
-                
-                // 2. Criar assinatura
-                $assinatura = $this->createAssinatura(
-                    $tenantResult['admin_user'],
-                    $tenantResult['tenant'],
-                    $validated
-                );
+            // 1. Criar tenant com empresa e usuário admin
+            // Nota: Não usar DB::transaction() aqui pois a criação de tenant
+            // envolve criar um novo banco de dados (operação DDL)
+            $tenantResult = $this->createTenant($validated);
+            
+            // 2. Criar assinatura
+            $assinatura = $this->createAssinatura(
+                $tenantResult['admin_user'],
+                $tenantResult['tenant'],
+                $validated
+            );
 
-                return $this->successResponse($tenantResult, $assinatura);
-            });
+            return $this->successResponse($tenantResult, $assinatura);
 
         } catch (ValidationException $e) {
             return $this->validationErrorResponse($e);
