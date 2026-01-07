@@ -58,13 +58,14 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
         
         // Criar tenant usando conexão direta (sem transação)
         // Usar DB::connection()->table() para garantir que está fora de transação
+        // A tabela tenants usa timestamps customizados (criado_em, atualizado_em)
         $tenantId = \DB::connection()->table('tenants')->insertGetId([
             'razao_social' => 'Tenant Teste LTDA',
             'cnpj' => '12345678000190',
             'email' => 'teste@tenant.com',
             'status' => 'ativa',
-            'created_at' => now(),
-            'updated_at' => now(),
+            'criado_em' => now(),
+            'atualizado_em' => now(),
         ]);
         
         // Buscar o tenant criado
