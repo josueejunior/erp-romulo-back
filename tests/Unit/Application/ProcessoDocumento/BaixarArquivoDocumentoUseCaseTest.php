@@ -164,7 +164,7 @@ class BaixarArquivoDocumentoUseCaseTest extends TestCase
         
         // Act & Assert
         $this->expectException(NotFoundException::class);
-        $this->expectExceptionMessage('Documento não encontrado ou não pertence ao processo.');
+        $this->expectExceptionMessage('Documento do processo não encontrado.');
         
         $this->useCase->executar($processoId, $empresaId, $processoDocumentoId);
     }

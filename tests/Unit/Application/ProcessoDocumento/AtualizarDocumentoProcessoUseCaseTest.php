@@ -204,7 +204,7 @@ class AtualizarDocumentoProcessoUseCaseTest extends TestCase
         $processo->id = $processoId;
         $processo->empresa_id = $empresaId;
         
-        $processoDocumento = new ProcessoDocumento();
+        $processoDocumento = Mockery::mock(ProcessoDocumento::class)->makePartial();
         $processoDocumento->id = $processoDocumentoId;
         $processoDocumento->processo_id = $processoId;
         $processoDocumento->empresa_id = $empresaId;
