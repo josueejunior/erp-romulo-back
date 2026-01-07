@@ -195,6 +195,7 @@ class ProcessoDocumentoService
         $payload = [
             'empresa_id' => $processo->empresa_id,
             'processo_id' => $processo->id,
+            'documento_habilitacao_id' => null, // ✅ Documentos customizados não têm documento_habilitacao_id
             'documento_custom' => true,
             'titulo_custom' => $data['titulo_custom'] ?? 'Documento',
             'exigido' => $data['exigido'] ?? true,
