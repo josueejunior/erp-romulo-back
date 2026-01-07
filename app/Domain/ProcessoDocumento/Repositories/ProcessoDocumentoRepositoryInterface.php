@@ -63,5 +63,10 @@ interface ProcessoDocumentoRepositoryInterface
      * Buscar modelo Eloquent por ID (compatibilidade)
      */
     public function buscarModeloPorId(int $id): ?\App\Modules\Processo\Models\ProcessoDocumento;
+
+    /**
+     * Buscar por processo e documento de habilitação
+     */
+    public function buscarPorProcessoEDocumento(int $processoId, int $documentoHabilitacaoId): ?\App\Modules\Processo\Models\ProcessoDocumento;
 }
 

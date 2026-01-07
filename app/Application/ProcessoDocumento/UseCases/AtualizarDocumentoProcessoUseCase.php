@@ -61,7 +61,7 @@ class AtualizarDocumentoProcessoUseCase
         // Buscar documento
         $procDoc = $this->processoDocumentoRepository->buscarModeloPorId($processoDocumentoId);
         if (!$procDoc || $procDoc->processo_id !== $processoId || $procDoc->empresa_id !== $empresaId) {
-            throw new NotFoundException('Documento não encontrado ou não pertence ao processo.');
+            throw new NotFoundException('Documento do processo não encontrado.');
         }
 
         // Validar versão se enviada

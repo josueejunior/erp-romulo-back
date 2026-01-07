@@ -83,6 +83,13 @@ class ProcessoDocumentoRepository implements ProcessoDocumentoRepositoryInterfac
         return ProcessoDocumentoModel::find($id);
     }
 
+    public function buscarPorProcessoEDocumento(int $processoId, int $documentoHabilitacaoId): ?ProcessoDocumentoModel
+    {
+        return ProcessoDocumentoModel::where('processo_id', $processoId)
+            ->where('documento_habilitacao_id', $documentoHabilitacaoId)
+            ->first();
+    }
+
     /**
      * Converter modelo Eloquent para entidade de domínio
      */

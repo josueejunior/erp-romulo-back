@@ -84,6 +84,11 @@ class ListarDocumentosProcessoUseCaseTest extends TestCase
             ->once()
             ->andReturn($processo);
         
+        // Mock relacionamentos
+        $processoDocumento->setRelation('documentoHabilitacao', $documentoHabilitacao);
+        $processoDocumento->setRelation('versaoDocumento', null);
+        $documentoHabilitacao->setRelation('versoes', collect([]));
+        
         $this->processoDocumentoRepositoryMock
             ->shouldReceive('listarPorProcesso')
             ->once()
@@ -94,10 +99,6 @@ class ListarDocumentosProcessoUseCaseTest extends TestCase
             ->with(10)
             ->once()
             ->andReturn($documentoHabilitacao);
-        
-        // Mock versões
-        $processoDocumento->setRelation('versoes', collect([]));
-        $processoDocumento->setRelation('versaoDocumento', null);
         
         // Act
         $resultado = $this->useCase->executar($processoId, $empresaId);
@@ -187,6 +188,10 @@ class ListarDocumentosProcessoUseCaseTest extends TestCase
             ->with($processoId)
             ->once()
             ->andReturn($processo);
+        
+        // Mock relacionamentos (documento customizado não tem documentoHabilitacao)
+        $processoDocumento->setRelation('documentoHabilitacao', null);
+        $processoDocumento->setRelation('versaoDocumento', null);
         
         $this->processoDocumentoRepositoryMock
             ->shouldReceive('listarPorProcesso')

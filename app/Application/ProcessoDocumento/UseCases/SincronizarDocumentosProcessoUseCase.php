@@ -55,10 +55,9 @@ class SincronizarDocumentosProcessoUseCase
                 }
 
                 // Buscar ou criar ProcessoDocumento
-                $processoDoc = $this->processoDocumentoRepository->buscarModeloPorId(
-                    $this->processoDocumentoRepository->existePorProcessoEDocumento($processo->id, $documentoId)
-                        ? $this->processoDocumentoRepository->buscarPorIdEProcesso($processo->id, $processo)->id
-                        : null
+                $processoDoc = $this->processoDocumentoRepository->buscarPorProcessoEDocumento(
+                    $processo->id,
+                    $documentoId
                 );
 
                 if ($processoDoc) {

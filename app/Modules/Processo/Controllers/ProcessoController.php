@@ -498,16 +498,19 @@ class ProcessoController extends BaseApiController
 
         try {
             $this->assertProcessoEmpresa($processo);
-            if (!$this->processoDocumentoService) {
-                $this->processoDocumentoService = app(\App\Modules\Processo\Services\ProcessoDocumentoService::class);
-            }
+            $empresa = $this->getEmpresaAtivaOrFail();
 
-            $importados = $this->processoDocumentoService->importarTodosDocumentosAtivos($processo);
+            $useCase = app(\App\Application\ProcessoDocumento\UseCases\ImportarDocumentosProcessoUseCase::class);
+            $importados = $useCase->executar($processo->id, $empresa->id);
 
             return response()->json([
                 'message' => "{$importados} documento(s) importado(s) com sucesso.",
                 'importados' => $importados,
             ]);
+        } catch (\App\Domain\Exceptions\NotFoundException $e) {
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 404);
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Erro ao importar documentos: ' . $e->getMessage()
@@ -534,16 +537,23 @@ class ProcessoController extends BaseApiController
             ]);
 
             $this->assertProcessoEmpresa($processo);
+            $empresa = $this->getEmpresaAtivaOrFail();
 
-            if (!$this->processoDocumentoService) {
-                $this->processoDocumentoService = app(\App\Modules\Processo\Services\ProcessoDocumentoService::class);
-            }
-
-            $this->processoDocumentoService->sincronizarDocumentos($processo, $request->documentos);
+            $dto = \App\Application\ProcessoDocumento\DTOs\SincronizarDocumentosDTO::fromArray($request->all());
+            $useCase = app(\App\Application\ProcessoDocumento\UseCases\SincronizarDocumentosProcessoUseCase::class);
+            $useCase->executar($processo->id, $empresa->id, $dto);
 
             return response()->json([
                 'message' => 'Documentos sincronizados com sucesso.',
             ]);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 400);
+        } catch (\App\Domain\Exceptions\NotFoundException $e) {
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 404);
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Erro ao sincronizar documentos: ' . $e->getMessage()
@@ -558,15 +568,18 @@ class ProcessoController extends BaseApiController
     {
         try {
             $this->assertProcessoEmpresa($processo);
-            if (!$this->processoDocumentoService) {
-                $this->processoDocumentoService = app(\App\Modules\Processo\Services\ProcessoDocumentoService::class);
-            }
+            $empresa = $this->getEmpresaAtivaOrFail();
 
-            $documentos = $this->processoDocumentoService->obterDocumentosComStatus($processo);
+            $useCase = app(\App\Application\ProcessoDocumento\UseCases\ListarDocumentosProcessoUseCase::class);
+            $documentos = $useCase->executar($processo->id, $empresa->id);
 
             return response()->json([
                 'data' => $documentos,
             ]);
+        } catch (\App\Domain\Exceptions\NotFoundException $e) {
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 404);
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Erro ao listar documentos: ' . $e->getMessage()
@@ -674,6 +687,7 @@ class ProcessoController extends BaseApiController
 
         try {
             $this->assertProcessoEmpresa($processo);
+            $empresa = $this->getEmpresaAtivaOrFail();
 
             $validated = $request->validate([
                 'exigido' => 'sometimes|boolean',
@@ -683,20 +697,18 @@ class ProcessoController extends BaseApiController
                 'versao_documento_habilitacao_id' => 'nullable|integer',
             ]);
 
-            if (!$this->processoDocumentoService) {
-                $this->processoDocumentoService = app(\App\Modules\Processo\Services\ProcessoDocumentoService::class);
-            }
-
-            $procDoc = $this->processoDocumentoService->atualizarDocumentoProcesso(
-                $processo,
+            $dto = \App\Application\ProcessoDocumento\DTOs\AtualizarDocumentoProcessoDTO::fromArray($validated);
+            $useCase = app(\App\Application\ProcessoDocumento\UseCases\AtualizarDocumentoProcessoUseCase::class);
+            $procDoc = $useCase->executar(
+                $processo->id,
+                $empresa->id,
                 $processoDocumentoId,
-                $validated,
+                $dto,
                 $request->file('arquivo')
             );
 
             return response()->json(['data' => $procDoc]);
-        } catch (\InvalidArgumentException $e) {
-            // ✅ Erros de validação de negócio (arquivo grande, tipo inválido, etc.)
+        } catch (\App\Domain\Exceptions\DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage()
             ], 400);
@@ -705,9 +717,9 @@ class ProcessoController extends BaseApiController
                 'message' => 'Erro de validação',
                 'errors' => $e->errors(),
             ], 422);
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+        } catch (\App\Domain\Exceptions\NotFoundException $e) {
             return response()->json([
-                'message' => 'Documento não encontrado'
+                'message' => $e->getMessage()
             ], 404);
         } catch (\Exception $e) {
             \Log::error('Erro ao atualizar documento do processo', [
@@ -733,6 +745,7 @@ class ProcessoController extends BaseApiController
 
         try {
             $this->assertProcessoEmpresa($processo);
+            $empresa = $this->getEmpresaAtivaOrFail();
 
             $validated = $request->validate([
                 'titulo_custom' => 'required|string|max:255',
@@ -742,19 +755,17 @@ class ProcessoController extends BaseApiController
                 'observacoes' => 'nullable|string',
             ]);
 
-            if (!$this->processoDocumentoService) {
-                $this->processoDocumentoService = app(\App\Modules\Processo\Services\ProcessoDocumentoService::class);
-            }
-
-            $procDoc = $this->processoDocumentoService->criarDocumentoCustom(
-                $processo,
-                $validated,
+            $dto = \App\Application\ProcessoDocumento\DTOs\CriarDocumentoCustomDTO::fromArray($validated);
+            $useCase = app(\App\Application\ProcessoDocumento\UseCases\CriarDocumentoCustomUseCase::class);
+            $procDoc = $useCase->executar(
+                $processo->id,
+                $empresa->id,
+                $dto,
                 $request->file('arquivo')
             );
 
             return response()->json(['data' => $procDoc], 201);
-        } catch (\InvalidArgumentException $e) {
-            // ✅ Erros de validação de negócio (arquivo grande, tipo inválido, etc.)
+        } catch (\App\Domain\Exceptions\DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage()
             ], 400);
@@ -763,6 +774,10 @@ class ProcessoController extends BaseApiController
                 'message' => 'Erro de validação',
                 'errors' => $e->errors(),
             ], 422);
+        } catch (\App\Domain\Exceptions\NotFoundException $e) {
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 404);
         } catch (\Exception $e) {
             \Log::error('Erro ao criar documento custom do processo', [
                 'processo_id' => $processo->id,
@@ -782,12 +797,11 @@ class ProcessoController extends BaseApiController
     {
         try {
             $this->assertProcessoEmpresa($processo);
+            $empresa = $this->getEmpresaAtivaOrFail();
 
-            if (!$this->processoDocumentoService) {
-                $this->processoDocumentoService = app(\App\Modules\Processo\Services\ProcessoDocumentoService::class);
-            }
-
-            $info = $this->processoDocumentoService->baixarArquivo($processo, $processoDocumentoId);
+            $useCase = app(\App\Application\ProcessoDocumento\UseCases\BaixarArquivoDocumentoUseCase::class);
+            $info = $useCase->executar($processo->id, $empresa->id, $processoDocumentoId);
+            
             if (!$info) {
                 return response()->json(['message' => 'Arquivo não encontrado para este documento.'], 404);
             }
@@ -795,6 +809,10 @@ class ProcessoController extends BaseApiController
             return Storage::disk('public')->download($info['path'], $info['nome'], [
                 'Content-Type' => $info['mime'] ?? 'application/octet-stream'
             ]);
+        } catch (\App\Domain\Exceptions\NotFoundException $e) {
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 404);
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Erro ao baixar documento: ' . $e->getMessage()

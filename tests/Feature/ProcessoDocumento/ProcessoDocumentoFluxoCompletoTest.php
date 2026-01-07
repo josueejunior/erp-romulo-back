@@ -41,25 +41,33 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
         Storage::fake('public');
         
         // Criar empresa
-        $this->empresa = Empresa::factory()->create([
+        $this->empresa = Empresa::create([
             'razao_social' => 'Empresa Teste LTDA',
+            'nome_fantasia' => 'Empresa Teste',
             'cnpj' => '12345678000190',
+            'email' => 'teste@empresa.com',
+            'status' => 'ativa',
         ]);
         
         // Criar usuário
-        $this->user = User::factory()->create([
+        $this->user = User::create([
+            'name' => 'Usuário Teste',
+            'email' => 'usuario@teste.com',
+            'password' => bcrypt('password'),
             'empresa_ativa_id' => $this->empresa->id,
         ]);
         $this->user->empresas()->attach($this->empresa->id);
         
         // Criar processo
-        $this->processo = Processo::factory()->create([
+        $this->processo = Processo::create([
             'empresa_id' => $this->empresa->id,
             'status' => 'participacao',
+            'modalidade' => 'Pregão',
+            'numero_modalidade' => '001/2024',
         ]);
         
         // Criar documento de habilitação
-        $this->documentoHabilitacao = DocumentoHabilitacao::factory()->create([
+        $this->documentoHabilitacao = DocumentoHabilitacao::create([
             'empresa_id' => $this->empresa->id,
             'tipo' => 'CNPJ',
             'numero' => '12345678000190',
@@ -143,11 +151,14 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
     public function test_deve_validar_arquivo_ao_anexar(): void
     {
         // Criar documento customizado
-        $processoDocumento = ProcessoDocumento::factory()->create([
+        $processoDocumento = ProcessoDocumento::create([
             'empresa_id' => $this->empresa->id,
             'processo_id' => $this->processo->id,
             'documento_custom' => true,
             'titulo_custom' => 'Teste',
+            'exigido' => true,
+            'disponivel_envio' => false,
+            'status' => 'pendente',
         ]);
         
         // Tentar anexar arquivo muito grande
@@ -155,6 +166,8 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
         
         $response = $this->postJson("/api/v1/processos/{$this->processo->id}/documentos/{$processoDocumento->id}", [
             'arquivo' => $arquivoGrande,
+        ], [
+            'Content-Type' => 'multipart/form-data',
         ]);
         
         $response->assertStatus(400);
@@ -166,11 +179,14 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
     public function test_deve_validar_tipo_de_arquivo(): void
     {
         // Criar documento customizado
-        $processoDocumento = ProcessoDocumento::factory()->create([
+        $processoDocumento = ProcessoDocumento::create([
             'empresa_id' => $this->empresa->id,
             'processo_id' => $this->processo->id,
             'documento_custom' => true,
             'titulo_custom' => 'Teste',
+            'exigido' => true,
+            'disponivel_envio' => false,
+            'status' => 'pendente',
         ]);
         
         // Tentar anexar arquivo com tipo não permitido
@@ -178,6 +194,8 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
         
         $response = $this->postJson("/api/v1/processos/{$this->processo->id}/documentos/{$processoDocumento->id}", [
             'arquivo' => $arquivoInvalido,
+        ], [
+            'Content-Type' => 'multipart/form-data',
         ]);
         
         $response->assertStatus(400);
@@ -211,13 +229,13 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
     public function test_deve_sincronizar_documentos_selecionados(): void
     {
         // Criar mais documentos de habilitação
-        $doc2 = DocumentoHabilitacao::factory()->create([
+        $doc2 = DocumentoHabilitacao::create([
             'empresa_id' => $this->empresa->id,
             'tipo' => 'Alvará',
             'ativo' => true,
         ]);
         
-        $doc3 = DocumentoHabilitacao::factory()->create([
+        $doc3 = DocumentoHabilitacao::create([
             'empresa_id' => $this->empresa->id,
             'tipo' => 'Licença',
             'ativo' => true,
