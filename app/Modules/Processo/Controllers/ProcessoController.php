@@ -2,7 +2,7 @@
 
 namespace App\Modules\Processo\Controllers;
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\BaseApiController;
 use App\Http\Controllers\Traits\HasAuthContext;
 use App\Modules\Processo\Services\ProcessoService;
 use App\Modules\Processo\Models\Processo;
@@ -10,6 +10,8 @@ use App\Modules\Processo\Services\ProcessoStatusService;
 use App\Modules\Processo\Services\ProcessoValidationService;
 use App\Modules\Processo\Resources\ProcessoResource;
 use App\Modules\Processo\Resources\ProcessoListResource;
+use App\Application\Processo\UseCases\ExportarProcessosUseCase;
+use App\Application\Processo\UseCases\ObterResumoProcessosUseCase;
 use App\Http\Requests\Processo\ConfirmarPagamentoRequest;
 use App\Helpers\PermissionHelper;
 use Illuminate\Http\Request;
@@ -19,14 +21,14 @@ use Illuminate\Support\Facades\Storage;
 /**
  * Controller para gerenciar processos licitatórios
  * 
- * Segue o padrão de controllers do sistema:
- * - Estende Controller (que estende RoutingController)
- * - Implementa métodos CRUD diretamente
- * - Usa HasAuthContext para acessar contexto de autenticação
- * - Injeta ProcessoService no construtor
- * - Define $storeDataCast para casting de dados
+ * Refatorado para seguir DDD rigorosamente:
+ * - Usa Use Cases para lógica de negócio
+ * - Usa Resources para transformação
+ * - Não acessa modelos Eloquent diretamente (exceto quando necessário para relacionamentos)
+ * 
+ * Nota: Ainda usa ProcessoService para alguns métodos (update, delete) que serão migrados gradualmente
  */
-class ProcessoController extends Controller
+class ProcessoController extends BaseApiController
 {
     use HasAuthContext;
 
@@ -51,9 +53,11 @@ class ProcessoController extends Controller
         ProcessoService $processoService,
         ProcessoStatusService $statusService,
         ProcessoValidationService $validationService,
+        private ExportarProcessosUseCase $exportarProcessosUseCase,
+        private ObterResumoProcessosUseCase $obterResumoProcessosUseCase,
         \App\Modules\Processo\Services\ProcessoDocumentoService $processoDocumentoService = null
     ) {
-        $this->service = $processoService; // Para RoutingController
+        $this->service = $processoService; // Para RoutingController (compatibilidade)
         $this->processoService = $processoService;
         $this->statusService = $statusService;
         $this->validationService = $validationService;
@@ -71,149 +75,55 @@ class ProcessoController extends Controller
     /**
      * GET /processos/resumo
      * Retorna resumo dos processos
+     * 
+     * ✅ Refatorado para usar Use Case
      */
     public function resumo(Request $request): JsonResponse
     {
-        $resumo = $this->processoService->obterResumo($request->all());
+        try {
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            $filtros = array_merge($request->all(), [
+                'empresa_id' => $empresa->id,
+            ]);
 
-        // O frontend espera response.data, então retornar com wrapper 'data'
-        return response()->json(['data' => $resumo]);
+            $resumo = $this->obterResumoProcessosUseCase->executar($filtros);
+
+            return response()->json(['data' => $resumo]);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao obter resumo de processos');
+        }
     }
 
     /**
      * GET /processos/exportar
-     * Exporta processos para CSV
+     * Exporta processos para CSV ou JSON
+     * 
+     * ✅ Refatorado para usar Use Case
+     * - Lógica de formatação movida para Use Case
+     * - Controller apenas recebe request e retorna response
      * 
      * Suporta parâmetros de query:
      * - formato: csv (padrão) ou json
      * - Todos os filtros de listagem normais
-     * 
-     * O middleware já inicializou o tenant correto baseado no X-Tenant-ID do header.
-     * Apenas retorna os dados dos processos da empresa ativa.
      */
     public function exportar(Request $request)
     {
-        // Obter empresa automaticamente (middleware já inicializou baseado no X-Empresa-ID)
-        $empresa = $this->getEmpresaAtivaOrFail();
-        
-        $params = $this->processoService->createListParamBag($request->all());
-        
-        // Remover paginação para exportar todos
-        $params['per_page'] = 10000; // Limite alto para exportar todos
-        
-        $processos = $this->processoService->list($params);
-        
-        // Carregar relacionamentos necessários
-        $processos->getCollection()->load([
-            'orgao',
-            'setor',
-            'itens',
-        ]);
-
-        $formato = $request->get('formato', 'csv');
-
-        if ($formato === 'json') {
-            // Retornar JSON
-            return response()->json([
-                'data' => ProcessoListResource::collection($processos->items()),
-                'meta' => [
-                    'total' => $processos->total(),
-                ],
+        try {
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Preparar filtros
+            $filtros = array_merge($request->all(), [
+                'empresa_id' => $empresa->id,
             ]);
+
+            $formato = $request->get('formato', 'csv');
+
+            // Executar Use Case
+            return $this->exportarProcessosUseCase->executar($filtros, $formato);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao exportar processos');
         }
-
-        // Exportar CSV
-        return $this->exportarCSV($processos->items());
-    }
-
-    /**
-     * Exporta processos para CSV
-     */
-    private function exportarCSV($processos)
-    {
-        $filename = 'processos_' . date('Y-m-d_His') . '.csv';
-        
-        $headers = [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
-        ];
-
-        // Adicionar BOM para UTF-8 (ajuda Excel a reconhecer corretamente)
-        $callback = function() use ($processos) {
-            $file = fopen('php://output', 'w');
-            
-            // Adicionar BOM UTF-8
-            fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
-            
-            // Cabeçalhos
-            fputcsv($file, [
-                'ID',
-                'Identificador',
-                'Número Modalidade',
-                'Modalidade',
-                'Número Processo Administrativo',
-                'Órgão',
-                'UASG',
-                'Setor',
-                'Objeto Resumido',
-                'Status',
-                'Status Label',
-                'Fase Atual',
-                'Data Sessão Pública',
-                'Próxima Data',
-                'Valor Estimado',
-                'Valor Mínimo',
-                'Valor Vencido',
-                'Resultado',
-                'Tem Alerta',
-                'Data Criação',
-                'Data Atualização',
-            ], ';');
-
-            // Dados
-            foreach ($processos as $processo) {
-                $resource = new ProcessoListResource($processo);
-                $data = $resource->toArray(request());
-                
-                $proximaData = $data['proxima_data'] 
-                    ? ($data['proxima_data']['data'] ?? '') . ' - ' . ($data['proxima_data']['tipo'] ?? '')
-                    : '';
-                
-                $alertas = $data['alertas'] ?? [];
-                $temAlerta = !empty($alertas);
-                $alertasTexto = $temAlerta 
-                    ? implode('; ', array_map(fn($a) => $a['mensagem'] ?? '', $alertas))
-                    : '';
-
-                fputcsv($file, [
-                    $data['id'] ?? '',
-                    $data['identificador'] ?? '',
-                    $data['numero_modalidade'] ?? '',
-                    $data['modalidade'] ?? '',
-                    $data['numero_processo_administrativo'] ?? '',
-                    $data['orgao']['razao_social'] ?? '',
-                    $data['orgao']['uasg'] ?? '',
-                    $data['setor']['nome'] ?? '',
-                    $data['objeto_resumido'] ?? '',
-                    $data['status'] ?? '',
-                    $data['status_label'] ?? '',
-                    $data['fase_atual'] ?? '',
-                    $data['data_sessao_publica_formatted'] ?? '',
-                    $proximaData,
-                    number_format($data['valores']['estimado'] ?? 0, 2, ',', '.'),
-                    $data['valores']['minimo'] ? number_format($data['valores']['minimo'], 2, ',', '.') : '',
-                    $data['valores']['vencido'] ? number_format($data['valores']['vencido'], 2, ',', '.') : '',
-                    $data['resultado'] ?? '',
-                    $temAlerta ? 'Sim' : 'Não',
-                    $data['created_at'] ?? '',
-                    $data['updated_at'] ?? '',
-                ], ';');
-            }
-
-            fclose($file);
-        };
-
-        return response()->stream($callback, 200, $headers);
     }
 
     /**

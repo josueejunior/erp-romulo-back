@@ -9,6 +9,7 @@ use App\Modules\Contrato\Models\Contrato;
 use App\Modules\Contrato\Services\ContratoService;
 use App\Application\Contrato\UseCases\CriarContratoUseCase;
 use App\Application\Contrato\UseCases\ListarContratosUseCase;
+use App\Application\Contrato\UseCases\ListarTodosContratosUseCase;
 use App\Application\Contrato\UseCases\BuscarContratoUseCase;
 use App\Application\Contrato\DTOs\CriarContratoDTO;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
@@ -36,14 +37,15 @@ class ContratoController extends BaseApiController
     use HasAuthContext;
 
     public function __construct(
-        ContratoService $contratoService, // Mantido para métodos específicos que ainda usam Service
+        ContratoService $contratoService, // Mantido para métodos específicos que ainda usam Service (update, delete)
         private CriarContratoUseCase $criarContratoUseCase,
         private ListarContratosUseCase $listarContratosUseCase,
+        private ListarTodosContratosUseCase $listarTodosContratosUseCase,
         private BuscarContratoUseCase $buscarContratoUseCase,
         private ProcessoRepositoryInterface $processoRepository,
         private ContratoRepositoryInterface $contratoRepository,
     ) {
-        $this->contratoService = $contratoService; // Para métodos que ainda precisam do Service
+        $this->contratoService = $contratoService; // Para métodos que ainda precisam do Service (update, delete)
     }
 
     /**
@@ -87,12 +89,12 @@ class ContratoController extends BaseApiController
      * ✅ O QUE O CONTROLLER FAZ:
      * - Recebe request com filtros
      * - Obtém empresa automaticamente via getEmpresaAtivaOrFail()
-     * - Chama Service para listar (temporário - será migrado para Use Case)
+     * - Chama Use Case para listar (refatorado)
      * 
      * ❌ O QUE O CONTROLLER NÃO FAZ:
-     * - Não lê tenant_id diretamente
-     * - Não acessa Tenant diretamente
-     * - O sistema já injeta o contexto (tenant, empresa) via middleware
+     * - Não gerencia cache (Use Case faz isso)
+     * - Não aplica filtros (Use Case faz isso)
+     * - Não calcula indicadores (Use Case faz isso)
      * 
      * O middleware já inicializou o tenant correto baseado no X-Tenant-ID do header.
      * A empresa é obtida automaticamente via getEmpresaAtivaOrFail() que prioriza header X-Empresa-ID.
@@ -104,7 +106,7 @@ class ContratoController extends BaseApiController
             $empresa = $this->getEmpresaAtivaOrFail();
             $tenantId = $this->getTenantId();
             
-            // Criar chave de cache baseada nos filtros
+            // Preparar filtros
             $filters = [
                 'busca' => $request->busca,
                 'orgao_id' => $request->orgao_id,
@@ -113,30 +115,17 @@ class ContratoController extends BaseApiController
                 'vigente' => $request->has('vigente') ? $request->boolean('vigente') : null,
                 'vencer_em' => $request->vencer_em,
                 'somente_alerta' => $request->boolean('somente_alerta'),
-                'page' => $request->page ?? 1,
             ];
-            $cacheKey = "contratos:{$tenantId}:{$empresa->id}:" . md5(json_encode($filters));
             
-            // Tentar obter do cache
-            if ($tenantId && RedisService::isAvailable()) {
-                $cached = RedisService::get($cacheKey);
-                if ($cached !== null) {
-                    return response()->json($cached);
-                }
-            }
-            
-            $response = $this->contratoService->listarTodos(
+            // Executar Use Case (gerencia cache internamente)
+            $response = $this->listarTodosContratosUseCase->executar(
                 $filters,
                 $empresa->id,
                 $request->ordenacao ?? 'data_fim',
                 $request->direcao ?? 'asc',
-                $request->per_page ?? 15
+                $request->per_page ?? 15,
+                $tenantId
             );
-
-            // Salvar no cache (5 minutos)
-            if ($tenantId && RedisService::isAvailable()) {
-                RedisService::set($cacheKey, $response, 300);
-            }
 
             return response()->json($response);
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -145,13 +134,7 @@ class ContratoController extends BaseApiController
                 'errors' => $e->errors()
             ], 422);
         } catch (\Exception $e) {
-            \Log::error('Erro ao listar contratos', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            return response()->json([
-                'message' => $e->getMessage() ?: 'Erro ao listar contratos'
-            ], 500);
+            return $this->handleException($e, 'Erro ao listar contratos');
         }
     }
 
