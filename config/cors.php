@@ -17,6 +17,8 @@ return [
                 : [
                     'https://gestor.addsimp.com',
                     'https://www.gestor.addsimp.com',
+                    'https://gestor.addsimp.com.br',
+                    'https://www.gestor.addsimp.com.br',
                 ]
         )
     ),
