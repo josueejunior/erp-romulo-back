@@ -149,6 +149,9 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
         
         // Autenticar usuário via Sanctum (para compatibilidade)
         $this->actingAs($this->user, 'sanctum');
+        
+        // Configurar headers padrão para todas as requisições
+        $this->withHeaders($this->getAuthHeaders());
     }
     
     /**
@@ -183,7 +186,8 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
      */
     public function postJson($uri, array $data = [], array $headers = [], $options = 0)
     {
-        return parent::postJson($uri, $data, array_merge($this->getAuthHeaders(), $headers), $options);
+        $mergedHeaders = array_merge($this->getAuthHeaders(), $headers);
+        return parent::postJson($uri, $data, $mergedHeaders, $options);
     }
     
     /**
@@ -191,7 +195,8 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
      */
     public function getJson($uri, array $headers = [], $options = 0)
     {
-        return parent::getJson($uri, array_merge($this->getAuthHeaders(), $headers), $options);
+        $mergedHeaders = array_merge($this->getAuthHeaders(), $headers);
+        return parent::getJson($uri, $mergedHeaders, $options);
     }
     
     /**
@@ -199,7 +204,8 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
      */
     public function patchJson($uri, array $data = [], array $headers = [], $options = 0)
     {
-        return parent::patchJson($uri, $data, array_merge($this->getAuthHeaders(), $headers), $options);
+        $mergedHeaders = array_merge($this->getAuthHeaders(), $headers);
+        return parent::patchJson($uri, $data, $mergedHeaders, $options);
     }
     
     /**
@@ -207,7 +213,8 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
      */
     public function putJson($uri, array $data = [], array $headers = [], $options = 0)
     {
-        return parent::putJson($uri, $data, array_merge($this->getAuthHeaders(), $headers), $options);
+        $mergedHeaders = array_merge($this->getAuthHeaders(), $headers);
+        return parent::putJson($uri, $data, $mergedHeaders, $options);
     }
     
     /**
@@ -215,7 +222,8 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
      */
     public function deleteJson($uri, array $data = [], array $headers = [], $options = 0)
     {
-        return parent::deleteJson($uri, $data, array_merge($this->getAuthHeaders(), $headers), $options);
+        $mergedHeaders = array_merge($this->getAuthHeaders(), $headers);
+        return parent::deleteJson($uri, $data, $mergedHeaders, $options);
     }
     
     protected function tearDown(): void
@@ -232,6 +240,13 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
     {
         // 1. Importar documentos ativos
         $response = $this->postJson("/api/v1/processos/{$this->processo->id}/documentos/importar");
+        
+        // Debug: verificar resposta se falhar
+        if ($response->status() !== 200) {
+            dump('Response status:', $response->status());
+            dump('Response body:', $response->json());
+        }
+        
         $response->assertStatus(200);
         $response->assertJsonStructure([
             'message',
