@@ -182,48 +182,18 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
     }
     
     /**
-     * Sobrescrever postJson para sempre incluir headers
+     * Sobrescrever json para sempre incluir headers de autenticação
+     * Mescla defaultHeaders (de withHeaders) + authHeaders + headers passados
      */
-    public function postJson($uri, array $data = [], array $headers = [], $options = 0)
+    public function json($method, $uri, array $data = [], array $headers = [], $options = 0)
     {
-        $mergedHeaders = array_merge($this->getAuthHeaders(), $headers);
-        return parent::postJson($uri, $data, $mergedHeaders, $options);
-    }
-    
-    /**
-     * Sobrescrever getJson para sempre incluir headers
-     */
-    public function getJson($uri, array $headers = [], $options = 0)
-    {
-        $mergedHeaders = array_merge($this->getAuthHeaders(), $headers);
-        return parent::getJson($uri, $mergedHeaders, $options);
-    }
-    
-    /**
-     * Sobrescrever patchJson para sempre incluir headers
-     */
-    public function patchJson($uri, array $data = [], array $headers = [], $options = 0)
-    {
-        $mergedHeaders = array_merge($this->getAuthHeaders(), $headers);
-        return parent::patchJson($uri, $data, $mergedHeaders, $options);
-    }
-    
-    /**
-     * Sobrescrever putJson para sempre incluir headers
-     */
-    public function putJson($uri, array $data = [], array $headers = [], $options = 0)
-    {
-        $mergedHeaders = array_merge($this->getAuthHeaders(), $headers);
-        return parent::putJson($uri, $data, $mergedHeaders, $options);
-    }
-    
-    /**
-     * Sobrescrever deleteJson para sempre incluir headers
-     */
-    public function deleteJson($uri, array $data = [], array $headers = [], $options = 0)
-    {
-        $mergedHeaders = array_merge($this->getAuthHeaders(), $headers);
-        return parent::deleteJson($uri, $data, $mergedHeaders, $options);
+        // Mesclar: defaultHeaders (de withHeaders) + authHeaders + headers passados
+        $mergedHeaders = array_merge(
+            $this->defaultHeaders ?? [],
+            $this->getAuthHeaders(),
+            $headers
+        );
+        return parent::json($method, $uri, $data, $mergedHeaders, $options);
     }
     
     protected function tearDown(): void
@@ -241,10 +211,11 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
         // 1. Importar documentos ativos
         $response = $this->postJson("/api/v1/processos/{$this->processo->id}/documentos/importar");
         
-        // Debug: verificar resposta se falhar
+        // Debug temporário
         if ($response->status() !== 200) {
-            dump('Response status:', $response->status());
-            dump('Response body:', $response->json());
+            dump('Status:', $response->status());
+            dump('Body:', $response->json());
+            dump('Headers enviados:', $this->getAuthHeaders());
         }
         
         $response->assertStatus(200);
