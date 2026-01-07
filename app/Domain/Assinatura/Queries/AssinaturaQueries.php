@@ -52,7 +52,7 @@ final class AssinaturaQueries
     {
         return AssinaturaModel::with('plano')
             ->where('user_id', $userId)
-            ->orderByDesc('created_at');
+            ->orderByDesc('criado_em');
     }
 
     /**
@@ -108,7 +108,7 @@ final class AssinaturaQueries
         return AssinaturaModel::with(['plano', 'user', 'tenant'])
             ->where('status', StatusAssinatura::ATIVA->value)
             ->whereDate('data_fim', '<', now())
-            ->whereRaw('DATE_ADD(data_fim, INTERVAL dias_grace_period DAY) >= NOW()');
+            ->whereRaw("(data_fim + (dias_grace_period || ' days')::interval) >= NOW()");
     }
 
     // ==================== BUILDERS PRIVADOS ====================
@@ -121,7 +121,7 @@ final class AssinaturaQueries
         return AssinaturaModel::with('plano')
             ->whereNotIn('status', StatusAssinatura::statusExcluidos())
             ->orderByDesc('data_fim')
-            ->orderByDesc('created_at');
+            ->orderByDesc('criado_em');
     }
 }
 

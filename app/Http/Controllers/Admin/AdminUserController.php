@@ -19,7 +19,7 @@ use App\Models\Empresa;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Controller Admin para gerenciar usuários das empresas
@@ -592,9 +592,19 @@ class AdminUserController extends Controller
                 'success' => false,
             ], 422);
         } catch (DomainException $e) {
+            // Determinar o campo de erro baseado na mensagem
+            $field = 'general';
+            $message = $e->getMessage();
+            
+            if (str_contains($message, 'senha') || str_contains($message, 'Senha')) {
+                $field = 'password';
+            } elseif (str_contains($message, 'email') || str_contains($message, 'E-mail')) {
+                $field = 'email';
+            }
+            
             return response()->json([
-                'message' => $e->getMessage(),
-                'errors' => ['email' => [$e->getMessage()]],
+                'message' => $message,
+                'errors' => [$field => [$message]],
                 'success' => false,
             ], 422);
         } catch (\Exception $e) {
