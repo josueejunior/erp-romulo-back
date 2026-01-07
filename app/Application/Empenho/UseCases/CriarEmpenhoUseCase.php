@@ -44,6 +44,16 @@ class CriarEmpenhoUseCase
             throw new DomainException('Empenhos só podem ser criados para processos em execução.');
         }
         
+        // Calcular prazo de entrega automaticamente se não fornecido
+        $prazoEntregaCalculado = $dto->prazoEntregaCalculado;
+        if (!$prazoEntregaCalculado && $dto->dataRecebimento) {
+            // Buscar modelo Eloquent para acessar prazo_entrega
+            $processoModel = \App\Modules\Processo\Models\Processo::find($processo->id);
+            if ($processoModel) {
+                $prazoEntregaCalculado = $this->calcularPrazoEntrega($processoModel, $dto->dataRecebimento);
+            }
+        }
+        
         // Usar empresaId do processo (não do DTO)
         $empenho = new Empenho(
             id: null,
@@ -54,16 +64,82 @@ class CriarEmpenhoUseCase
             numero: $dto->numero,
             data: $dto->data,
             dataRecebimento: $dto->dataRecebimento,
-            prazoEntregaCalculado: $dto->prazoEntregaCalculado,
+            prazoEntregaCalculado: $prazoEntregaCalculado,
             valor: $dto->valor,
             concluido: false,
-            situacao: $dto->situacao,
+            situacao: $dto->situacao ?? 'aguardando_entrega',
             dataEntrega: null,
             observacoes: $dto->observacoes,
             numeroCte: $dto->numeroCte,
         );
 
         return $this->empenhoRepository->criar($empenho);
+    }
+
+    /**
+     * Calcula o prazo de entrega baseado na data de recebimento e prazo do edital
+     * 
+     * O prazo é calculado somando o prazo de entrega definido no edital/processo
+     * à data de recebimento do empenho.
+     * 
+     * @param \App\Modules\Processo\Models\Processo $processo
+     * @param \Carbon\Carbon $dataRecebimento
+     * @return \Carbon\Carbon|null
+     */
+    private function calcularPrazoEntrega($processo, $dataRecebimento): ?\Carbon\Carbon
+    {
+        if (!$processo || !$processo->prazo_entrega) {
+            return null;
+        }
+
+        // Parse do prazo_entrega (pode ser "30 dias", "2 meses", etc.)
+        $prazoEntrega = $this->parsePrazoEntrega($processo->prazo_entrega);
+        if (!$prazoEntrega) {
+            return null;
+        }
+
+        // Calcular data limite: data_recebimento + prazo_entrega
+        return \Carbon\Carbon::parse($dataRecebimento)->add($prazoEntrega);
+    }
+
+    /**
+     * Faz parse do prazo de entrega do processo
+     * 
+     * Aceita formatos como:
+     * - "30 dias"
+     * - "2 meses"
+     * - "15 dias úteis"
+     * - "90 dias"
+     * 
+     * @param string $prazoEntrega
+     * @return \DateInterval|null
+     */
+    private function parsePrazoEntrega(string $prazoEntrega): ?\DateInterval
+    {
+        // Normalizar string
+        $prazoEntrega = strtolower(trim($prazoEntrega));
+        
+        // Extrair número e unidade
+        if (preg_match('/(\d+)\s*(dia|dias|mes|meses|mês|mêses|ano|anos)/', $prazoEntrega, $matches)) {
+            $quantidade = (int) $matches[1];
+            $unidade = $matches[2];
+            
+            switch ($unidade) {
+                case 'dia':
+                case 'dias':
+                    return new \DateInterval("P{$quantidade}D");
+                case 'mes':
+                case 'meses':
+                case 'mês':
+                case 'mêses':
+                    return new \DateInterval("P{$quantidade}M");
+                case 'ano':
+                case 'anos':
+                    return new \DateInterval("P{$quantidade}Y");
+            }
+        }
+        
+        return null;
     }
 }
 

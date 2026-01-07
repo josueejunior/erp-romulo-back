@@ -79,6 +79,17 @@ class Contrato extends BaseModel
         $this->valor_empenhado = $totalEmpenhos;
         $this->saldo = $this->valor_total - $totalEmpenhos;
         
+        // Atualizar situação baseada em empenhos
+        if ($totalEmpenhos == 0) {
+            $this->situacao = 'aguardando_empenho';
+        } elseif ($totalEmpenhos < $this->valor_total) {
+            $this->situacao = 'atendendo';
+        } elseif ($this->saldo <= 0) {
+            $this->situacao = 'concluido';
+        } else {
+            $this->situacao = 'atendendo';
+        }
+        
         // Atualizar vigência baseado nas datas
         $hoje = now();
         if ($this->data_fim && $hoje->isAfter($this->data_fim)) {
