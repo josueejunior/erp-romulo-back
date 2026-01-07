@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use App\Models\Tenant;
+use Illuminate\Support\Facades\File;
 
 class TenantMigrate extends Command
 {
@@ -15,7 +16,8 @@ class TenantMigrate extends Command
     protected $signature = 'tenants:migrate 
                             {--tenants=* : IDs dos tenants específicos (opcional)}
                             {--force : Forçar execução sem confirmação}
-                            {--path= : Caminho específico da migration (opcional)}';
+                            {--path= : Caminho específico da migration (opcional)}
+                            {--status : Mostrar status das migrations sem executá-las}';
 
     /**
      * The console command description.
@@ -36,7 +38,42 @@ class TenantMigrate extends Command
             return 1;
         }
 
-        $path = $this->option('path') ?: 'database/migrations/tenant';
+        $pathOption = $this->option('path');
+        
+        // Preparar parâmetros de migração
+        $migrateParams = [
+            '--force' => $this->option('force') ?: true,
+        ];
+        
+        $statusParams = [];
+        $subdirs = [];
+        
+        if ($pathOption) {
+            // Se um path customizado foi fornecido, usar ele
+            $path = str_starts_with($pathOption, '/') 
+                ? $pathOption 
+                : base_path($pathOption);
+            $migrateParams['--path'] = $path;
+            $migrateParams['--realpath'] = true;
+            $statusParams['--path'] = $path;
+            $statusParams['--realpath'] = true;
+        } else {
+            // Sem path customizado, buscar recursivamente todos os subdiretórios de tenant
+            $tenantPath = database_path('migrations/tenant');
+            
+            if (!File::exists($tenantPath)) {
+                $this->error("Diretório de migrations de tenant não encontrado: {$tenantPath}");
+                return 1;
+            }
+            
+            // Buscar todos os subdiretórios que contêm migrations
+            $subdirs = $this->getMigrationSubdirectories($tenantPath);
+            
+            if (empty($subdirs)) {
+                $this->warn("⚠️  Nenhuma migration encontrada em: {$tenantPath}");
+                return 1;
+            }
+        }
 
         foreach ($tenants as $tenant) {
             $this->info("🔄 Executando migrations no tenant: {$tenant->id} ({$tenant->razao_social})");
@@ -44,30 +81,96 @@ class TenantMigrate extends Command
             try {
                 tenancy()->initialize($tenant);
                 
-                $params = [
-                    '--path' => $path,
-                    '--force' => $this->option('force') ?: true,
-                ];
-                
-                \Artisan::call('migrate', $params);
-                
-                $output = \Artisan::output();
-                if (!empty(trim($output))) {
-                    $this->line($output);
+                if ($this->option('status')) {
+                    // Mostrar status das migrations
+                    if ($pathOption) {
+                        \Artisan::call('migrate:status', $statusParams);
+                        $output = \Artisan::output();
+                        if (!empty(trim($output))) {
+                            $this->line($output);
+                        }
+                    } else {
+                        // Para status, mostrar de cada subdiretório
+                        foreach ($subdirs as $subdir) {
+                            \Artisan::call('migrate:status', [
+                                '--path' => $subdir,
+                                '--realpath' => true,
+                            ]);
+                            $output = \Artisan::output();
+                            if (!empty(trim($output))) {
+                                $this->line($output);
+                            }
+                        }
+                    }
+                } else {
+                    // Executar migrations
+                    if ($pathOption) {
+                        // Path customizado: usar diretamente
+                        \Artisan::call('migrate', $migrateParams);
+                        $output = \Artisan::output();
+                        if (!empty(trim($output))) {
+                            $this->line($output);
+                        }
+                    } else {
+                        // Sem path: executar migrations de todos os subdiretórios encontrados
+                        // Executar para cada subdiretório - o Laravel gerencia a tabela _migrations
+                        // para evitar executar migrations já executadas
+                        foreach ($subdirs as $subdir) {
+                            \Artisan::call('migrate', [
+                                '--path' => $subdir,
+                                '--realpath' => true,
+                                '--force' => $this->option('force') ?: true,
+                            ]);
+                            $output = \Artisan::output();
+                            if (!empty(trim($output)) && trim($output) !== 'Nothing to migrate.') {
+                                $this->line($output);
+                            }
+                        }
+                    }
                 }
                 
                 tenancy()->end();
                 
-                $this->info("  ✅ Tenant {$tenant->id} concluído!");
+                if (!$this->option('status')) {
+                    $this->info("  ✅ Tenant {$tenant->id} concluído!");
+                }
             } catch (\Exception $e) {
                 tenancy()->end();
                 $this->error("  ❌ Erro no tenant {$tenant->id}: " . $e->getMessage());
-                $this->error("  Trace: " . $e->getTraceAsString());
+                if ($this->option('verbose')) {
+                    $this->error("  Trace: " . $e->getTraceAsString());
+                }
             }
         }
 
         $this->info("\n✅ Migrations concluídas para todos os tenants!");
         return 0;
+    }
+
+    /**
+     * Get all subdirectories that contain migration files
+     * Returns absolute paths that can be used with --realpath
+     */
+    protected function getMigrationSubdirectories(string $basePath): array
+    {
+        if (!File::exists($basePath)) {
+            return [];
+        }
+
+        $subdirs = [];
+        $files = File::allFiles($basePath);
+        
+        foreach ($files as $file) {
+            if ($file->getExtension() === 'php') {
+                $path = $file->getPath();
+                // Usar caminho absoluto para funcionar com --realpath
+                if (!in_array($path, $subdirs)) {
+                    $subdirs[] = $path;
+                }
+            }
+        }
+
+        return $subdirs;
     }
 
     /**
