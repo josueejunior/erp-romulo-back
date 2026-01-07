@@ -211,18 +211,59 @@ class EmpenhoController extends BaseApiController
     public function storeWeb(Request $request, Processo $processo): JsonResponse
     {
         try {
-            // Validar dados usando Form Request
-            $empenhoRequest = EmpenhoCreateRequest::createFrom($request);
-            $empenhoRequest->setContainer(app());
-            $empenhoRequest->validateResolved();
+            // Validar dados manualmente usando as regras do Form Request
+            $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+                'contrato_id' => 'nullable|integer|exists:contratos,id',
+                'autorizacao_fornecimento_id' => 'nullable|integer|exists:autorizacoes_fornecimento,id',
+                'numero' => 'nullable|string|max:255',
+                'data' => 'nullable|date',
+                'data_recebimento' => 'nullable|date',
+                'prazo_entrega_calculado' => 'nullable|date',
+                'valor' => 'nullable|numeric|min:0',
+                'situacao' => 'nullable|string',
+                'observacoes' => 'nullable|string',
+                'numero_cte' => 'nullable|string|max:255',
+            ]);
+            
+            // Adicionar logs para debug
+            Log::debug('EmpenhoController::storeWeb - Validando dados', [
+                'processo_id' => $processo->id,
+                'dados' => $request->all(),
+            ]);
+            
+            if ($validator->fails()) {
+                Log::warning('EmpenhoController::storeWeb - Validação falhou', [
+                    'errors' => $validator->errors()->toArray(),
+                ]);
+                return response()->json([
+                    'message' => 'Dados inválidos',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
             
             // Preparar dados para DTO
-            $data = $empenhoRequest->validated();
+            $data = $validator->validated();
             $data['processo_id'] = $processo->id;
+            
+            Log::debug('EmpenhoController::storeWeb - Dados validados, criando DTO', [
+                'data' => $data,
+            ]);
             
             // Usar Use Case DDD (contém toda a lógica de negócio, incluindo tenant)
             $dto = CriarEmpenhoDTO::fromArray($data);
+            
+            Log::debug('EmpenhoController::storeWeb - Executando Use Case', [
+                'dto' => [
+                    'processo_id' => $dto->processoId,
+                    'valor' => $dto->valor,
+                ],
+            ]);
+            
             $empenhoDomain = $this->criarEmpenhoUseCase->executar($dto);
+            
+            Log::debug('EmpenhoController::storeWeb - Use Case executado', [
+                'empenho_id' => $empenhoDomain->id,
+            ]);
             
             // Buscar modelo Eloquent via repository (DDD)
             $empenho = $this->empenhoRepository->buscarModeloPorId($empenhoDomain->id, [

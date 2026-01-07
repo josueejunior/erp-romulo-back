@@ -15,7 +15,7 @@ class EmpenhoCreateRequest extends FormRequest
     {
         return [
             'contrato_id' => 'nullable|integer|exists:contratos,id',
-            'autorizacao_fornecimento_id' => 'nullable|integer|exists:autorizacao_fornecimentos,id',
+            'autorizacao_fornecimento_id' => 'nullable|integer|exists:autorizacoes_fornecimento,id',
             'numero' => 'nullable|string|max:255',
             'data' => 'nullable|date',
             'data_recebimento' => 'nullable|date',
