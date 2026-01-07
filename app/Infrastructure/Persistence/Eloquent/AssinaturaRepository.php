@@ -279,9 +279,9 @@ class AssinaturaRepository implements AssinaturaRepositoryInterface
     /**
      * Salvar assinatura (criar ou atualizar)
      * 
-     * 🔥 REGRA DE OURO: Repository NUNCA inicializa tenancy.
-     * O tenancy já deve estar pronto (inicializado pelo ApplicationContext).
-     * Se não estiver → bug de fluxo, não do repo.
+     * 🔥 REGRA: Para operações normais, tenancy deve estar inicializado.
+     * EXCEÇÃO: Cadastro público - quando tenantId está explícito na entidade,
+     * permitimos criação mesmo sem tenancy inicializado.
      */
     public function salvar(Assinatura $assinatura): Assinatura
     {
@@ -293,12 +293,15 @@ class AssinaturaRepository implements AssinaturaRepositoryInterface
             'tenant_id_atual' => tenancy()->tenant?->id,
         ]);
 
-        // 🔥 CRÍTICO: Verificar se tenancy está inicializado
-        // Se não estiver, é um bug de fluxo (middleware não rodou)
-        if (!tenancy()->initialized) {
+        // Verificar tenancy - EXCETO para criação inicial (cadastro público)
+        // Se tenantId está definido explicitamente na assinatura, podemos prosseguir
+        $isNovaAssinatura = $assinatura->id === null;
+        $temTenantIdExplicito = $assinatura->tenantId !== null;
+        
+        if (!tenancy()->initialized && !($isNovaAssinatura && $temTenantIdExplicito)) {
             \Log::error('AssinaturaRepository::salvar() - Tenancy não inicializado', [
                 'user_id' => $assinatura->userId,
-                'message' => 'Tenancy deve ser inicializado pelo ApplicationContext antes de usar o repository',
+                'message' => 'Tenancy deve ser inicializado ou tenantId deve estar definido na assinatura',
             ]);
             throw new \RuntimeException('Tenancy não inicializado. Verifique se o middleware está configurado corretamente.');
         }
