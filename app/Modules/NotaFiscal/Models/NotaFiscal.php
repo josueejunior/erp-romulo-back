@@ -7,6 +7,7 @@ use App\Models\BaseModel;
 use App\Models\Traits\HasSoftDeletesWithEmpresa;
 use App\Models\Traits\BelongsToEmpresaTrait;
 use App\Modules\Processo\Models\Processo;
+use App\Modules\Processo\Models\ProcessoItem;
 use App\Modules\Empenho\Models\Empenho;
 use App\Modules\Contrato\Models\Contrato;
 use App\Modules\AutorizacaoFornecimento\Models\AutorizacaoFornecimento;
@@ -21,6 +22,7 @@ class NotaFiscal extends BaseModel
     protected $fillable = [
         'empresa_id',
         'processo_id',
+        'processo_item_id',
         'empenho_id',
         'contrato_id',
         'autorizacao_fornecimento_id',
@@ -77,6 +79,11 @@ class NotaFiscal extends BaseModel
     public function processo(): BelongsTo
     {
         return $this->belongsTo(Processo::class);
+    }
+
+    public function processoItem(): BelongsTo
+    {
+        return $this->belongsTo(ProcessoItem::class);
     }
 
     public function empenho(): BelongsTo

@@ -18,6 +18,7 @@ class NotaFiscalRepository implements NotaFiscalRepositoryInterface
             id: $model->id,
             empresaId: $model->empresa_id,
             processoId: $model->processo_id,
+            processoItemId: $model->processo_item_id,
             empenhoId: $model->empenho_id,
             contratoId: $model->contrato_id,
             autorizacaoFornecimentoId: $model->autorizacao_fornecimento_id,
@@ -48,6 +49,7 @@ class NotaFiscalRepository implements NotaFiscalRepositoryInterface
         return [
             'empresa_id' => $notaFiscal->empresaId,
             'processo_id' => $notaFiscal->processoId,
+            'processo_item_id' => $notaFiscal->processoItemId,
             'empenho_id' => $notaFiscal->empenhoId,
             'contrato_id' => $notaFiscal->contratoId,
             'autorizacao_fornecimento_id' => $notaFiscal->autorizacaoFornecimentoId,

@@ -242,11 +242,15 @@ class SaldoService
 
             $custoInicialTotal += $custoInicialItem;
 
-            // Buscar custo real do item (aproximado - notas fiscais de entrada do processo)
-            // Nota: Como NotaFiscal não tem processo_item_id direto, usamos uma aproximação
-            // O custo real por item será calculado proporcionalmente ou deixado como 0
-            // O importante é o custo real total do processo
-            $custoRealItem = 0; // Será calculado proporcionalmente se necessário
+            // Buscar custo real do item (notas fiscais de entrada vinculadas ao item)
+            $notasEntradaItem = NotaFiscal::where('processo_id', $processo->id)
+                ->where('tipo', 'entrada')
+                ->where('processo_item_id', $item->id)
+                ->get();
+
+            $custoRealItem = $notasEntradaItem->sum(function ($nf) {
+                return $nf->custo_total ?? $nf->custo_produto ?? 0;
+            });
 
             $diferencaItem = $custoRealItem - $custoInicialItem;
             $variacaoItem = $custoInicialItem > 0 

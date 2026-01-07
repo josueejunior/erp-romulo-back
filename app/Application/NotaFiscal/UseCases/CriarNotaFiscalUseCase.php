@@ -57,6 +57,7 @@ class CriarNotaFiscalUseCase
             id: null,
             empresaId: $processo->empresaId,
             processoId: $dto->processoId,
+            processoItemId: $dto->processoItemId,
             empenhoId: $dto->empenhoId,
             contratoId: $dto->contratoId,
             autorizacaoFornecimentoId: $dto->autorizacaoFornecimentoId,

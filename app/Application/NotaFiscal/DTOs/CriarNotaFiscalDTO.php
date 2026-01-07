@@ -12,6 +12,7 @@ class CriarNotaFiscalDTO
     public function __construct(
         public readonly int $empresaId,
         public readonly ?int $processoId = null,
+        public readonly ?int $processoItemId = null,
         public readonly ?int $empenhoId = null,
         public readonly ?int $contratoId = null,
         public readonly ?int $autorizacaoFornecimentoId = null,
@@ -40,6 +41,7 @@ class CriarNotaFiscalDTO
         return new self(
             empresaId: $data['empresa_id'] ?? $data['empresaId'] ?? 0,
             processoId: $data['processo_id'] ?? $data['processoId'] ?? null,
+            processoItemId: $data['processo_item_id'] ?? $data['processoItemId'] ?? null,
             empenhoId: $data['empenho_id'] ?? $data['empenhoId'] ?? null,
             contratoId: $data['contrato_id'] ?? $data['contratoId'] ?? null,
             autorizacaoFornecimentoId: $data['autorizacao_fornecimento_id'] ?? $data['autorizacaoFornecimentoId'] ?? null,
