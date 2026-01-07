@@ -212,6 +212,85 @@ class SaldoService
             }
         }
     }
+
+    /**
+     * Calcula comparativo de custos: Pré-Certame (inicial) vs Pós-Negociação (real)
+     * 
+     * Custo Inicial: Baseado nos orçamentos escolhidos durante a fase de participação
+     * Custo Real: Baseado nas notas fiscais de entrada registradas durante a execução
+     */
+    public function calcularComparativoCustos(Processo $processo): array
+    {
+        // Carregar itens com orçamentos escolhidos
+        $itens = $processo->itens()
+            ->with(['orcamentoEscolhido', 'orcamentoEscolhido.formacaoPreco'])
+            ->get();
+
+        // Calcular custo inicial (pré-certame) - baseado nos orçamentos escolhidos
+        $custoInicialTotal = 0;
+        $itensDetalhados = [];
+
+        foreach ($itens as $item) {
+            $orcamento = $item->orcamentoEscolhido;
+            $custoInicialItem = 0;
+
+            if ($orcamento) {
+                $custoProduto = $orcamento->custo_produto ?? 0;
+                $frete = ($orcamento->frete_incluido ?? false) ? 0 : ($orcamento->frete ?? 0);
+                $custoInicialItem = ($custoProduto + $frete) * ($item->quantidade ?? 0);
+            }
+
+            $custoInicialTotal += $custoInicialItem;
+
+            // Buscar custo real do item (aproximado - notas fiscais de entrada do processo)
+            // Nota: Como NotaFiscal não tem processo_item_id direto, usamos uma aproximação
+            // O custo real por item será calculado proporcionalmente ou deixado como 0
+            // O importante é o custo real total do processo
+            $custoRealItem = 0; // Será calculado proporcionalmente se necessário
+
+            $diferencaItem = $custoRealItem - $custoInicialItem;
+            $variacaoItem = $custoInicialItem > 0 
+                ? ($diferencaItem / $custoInicialItem) * 100 
+                : 0;
+
+            $itensDetalhados[] = [
+                'item_id' => $item->id,
+                'numero_item' => $item->numero_item,
+                'especificacao_tecnica' => $item->especificacao_tecnica,
+                'quantidade' => $item->quantidade,
+                'custo_inicial' => round($custoInicialItem, 2),
+                'custo_real' => round($custoRealItem, 2),
+                'diferenca' => round($diferencaItem, 2),
+                'variacao_percentual' => round($variacaoItem, 2),
+                'quantidade_notas_entrada' => $notasEntradaItem->count(),
+            ];
+        }
+
+        // Calcular custo real total (pós-negociação) - baseado nas notas fiscais de entrada
+        $notasEntrada = NotaFiscal::where('processo_id', $processo->id)
+            ->where('tipo', 'entrada')
+            ->get();
+
+        $custoRealTotal = $notasEntrada->sum(function ($nf) {
+            return $nf->custo_total ?? $nf->custo_produto ?? 0;
+        });
+
+        $diferencaTotal = $custoRealTotal - $custoInicialTotal;
+        $variacaoPercentual = $custoInicialTotal > 0 
+            ? ($diferencaTotal / $custoInicialTotal) * 100 
+            : 0;
+
+        return [
+            'resumo' => [
+                'custo_inicial' => round($custoInicialTotal, 2),
+                'custo_real' => round($custoRealTotal, 2),
+                'diferenca' => round($diferencaTotal, 2),
+                'variacao_percentual' => round($variacaoPercentual, 2),
+                'quantidade_notas_entrada' => $notasEntrada->count(),
+            ],
+            'itens' => $itensDetalhados,
+        ];
+    }
 }
 
 

@@ -81,10 +81,11 @@ class Tenant extends BaseTenant implements TenantWithDatabase
         'representante_legal_cpf',
         'representante_legal_cargo',
         'logo',
-        'plano_atual_id',
-        'assinatura_atual_id',
-        'limite_processos',
-        'limite_usuarios',
+        // 🔥 CACHE: Esses campos são apenas cache/espelho da assinatura do usuário
+        // A fonte da verdade é a assinatura do usuário (user_id na tabela assinaturas)
+        'plano_atual_id', // Cache do plano_atual_id da assinatura do usuário
+        'assinatura_atual_id', // Cache do assinatura_atual_id da assinatura do usuário
+        // ❌ REMOVIDO: limite_processos e limite_usuarios - vêm do plano, não do tenant
     ];
 
     /**
@@ -112,10 +113,9 @@ class Tenant extends BaseTenant implements TenantWithDatabase
         'representante_legal_cpf',
         'representante_legal_cargo',
         'logo',
-        'plano_atual_id',
-        'assinatura_atual_id',
-        'limite_processos',
-        'limite_usuarios',
+        // 🔥 CACHE: Esses campos são apenas cache/espelho da assinatura do usuário
+        'plano_atual_id', // Cache do plano_atual_id da assinatura do usuário
+        'assinatura_atual_id', // Cache do assinatura_atual_id da assinatura do usuário
         'criado_em',
         'atualizado_em',
     ];
@@ -143,10 +143,9 @@ class Tenant extends BaseTenant implements TenantWithDatabase
             'representante_legal_cpf',
             'representante_legal_cargo',
             'logo',
-            'plano_atual_id',
-            'assinatura_atual_id',
-            'limite_processos',
-            'limite_usuarios',
+            // 🔥 CACHE: Esses campos são apenas cache/espelho da assinatura do usuário
+            'plano_atual_id', // Cache do plano_atual_id da assinatura do usuário
+            'assinatura_atual_id', // Cache do assinatura_atual_id da assinatura do usuário
         ];
     }
 
@@ -189,6 +188,10 @@ class Tenant extends BaseTenant implements TenantWithDatabase
 
     /**
      * Relacionamento com plano atual
+     * 
+     * 🔥 IMPORTANTE: Este é apenas um CACHE/ESPELHO
+     * A fonte da verdade é a assinatura do usuário (user_id na tabela assinaturas)
+     * Este relacionamento é atualizado automaticamente quando necessário
      */
     public function planoAtual()
     {
@@ -197,6 +200,10 @@ class Tenant extends BaseTenant implements TenantWithDatabase
 
     /**
      * Relacionamento com assinatura atual
+     * 
+     * 🔥 IMPORTANTE: Este é apenas um CACHE/ESPELHO
+     * A fonte da verdade é a assinatura do usuário (user_id na tabela assinaturas)
+     * Este relacionamento é atualizado automaticamente quando necessário
      */
     public function assinaturaAtual()
     {

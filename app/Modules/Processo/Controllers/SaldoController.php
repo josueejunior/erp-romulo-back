@@ -125,6 +125,29 @@ class SaldoController extends BaseApiController
             'data' => $saldo,
         ]);
     }
+
+    /**
+     * Retorna comparativo de custos (Pré-Certame vs Pós-Negociação)
+     */
+    public function comparativoCustos(Processo $processo)
+    {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        try {
+            $this->saldoService->validarProcessoEmpresa($processo, $empresa->id);
+            $this->saldoService->validarProcessoEmExecucao($processo);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => $e->getMessage()
+            ], $e->getMessage() === 'Apenas processos em execução possuem saldo.' ? 403 : 404);
+        }
+
+        $comparativo = $this->saldoService->calcularComparativoCustos($processo);
+
+        return response()->json([
+            'data' => $comparativo,
+        ]);
+    }
 }
 
 
