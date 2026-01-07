@@ -11,6 +11,8 @@ use App\Application\Auth\UseCases\RegisterUseCase;
 use App\Application\Auth\UseCases\LogoutUseCase;
 use App\Application\Auth\UseCases\GetUserUseCase;
 use App\Application\Auth\UseCases\BuscarAdminUserPorEmailUseCase;
+use App\Application\Auth\UseCases\SolicitarResetSenhaUseCase;
+use App\Application\Auth\UseCases\RedefinirSenhaUseCase;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\RegisterRequest;
 use Illuminate\Http\Request;
@@ -36,6 +38,8 @@ class AuthController extends Controller
         private LogoutUseCase $logoutUseCase,
         private GetUserUseCase $getUserUseCase,
         private BuscarAdminUserPorEmailUseCase $buscarAdminUserPorEmailUseCase,
+        private SolicitarResetSenhaUseCase $solicitarResetSenhaUseCase,
+        private RedefinirSenhaUseCase $redefinirSenhaUseCase,
     ) {
         // 🔥 LOG CRÍTICO: Se este log aparecer, significa que o controller foi instanciado
         \Log::info('AuthController::__construct - ✅ Controller instanciado', [
@@ -291,6 +295,10 @@ class AuthController extends Controller
 
     /**
      * Solicitar redefinição de senha (Esqueci minha senha)
+     * 
+     * ✅ Refatorado para usar Use Case
+     * - Lógica de negócio movida para SolicitarResetSenhaUseCase
+     * - Controller apenas recebe request e retorna response
      */
     public function forgotPassword(Request $request)
     {
@@ -299,63 +307,12 @@ class AuthController extends Controller
                 'email' => 'required|email',
             ]);
 
-            $email = $request->email;
-            $userFound = false;
+            \Log::info('AuthController::forgotPassword - Iniciando', [
+                'email' => $request->email,
+            ]);
 
-            // 1. Tentar buscar no banco central (admin users)
-            $adminUser = \App\Modules\Auth\Models\AdminUser::where('email', $email)->first();
-            if ($adminUser) {
-                // Para admin, usar o sistema padrão do Laravel (se configurado)
-                // Por enquanto, vamos usar a mesma abordagem para todos
-                $userFound = true;
-            }
-
-            // 2. Buscar em todos os tenants (multi-tenancy)
-            if (!$userFound) {
-                $tenants = \App\Models\Tenant::all();
-                foreach ($tenants as $tenant) {
-                    try {
-                        tenancy()->initialize($tenant);
-                        $user = \App\Modules\Auth\Models\User::where('email', $email)->first();
-                        
-                        if ($user) {
-                            $userFound = true;
-                            // Gerar token (garantir que seja salvo no banco central)
-                            // O token precisa ser salvo no banco central, não no tenant
-                            tenancy()->end(); // Finalizar tenancy antes de criar token
-                            
-                            // Usar conexão central para salvar o token
-                            $token = \Illuminate\Support\Str::random(64);
-                            $hashedToken = \Illuminate\Support\Facades\Hash::make($token);
-                            
-                            // Salvar token no banco central
-                            \Illuminate\Support\Facades\DB::connection()->table('password_reset_tokens')
-                                ->updateOrInsert(
-                                    ['email' => $email],
-                                    [
-                                        'token' => $hashedToken,
-                                        'created_at' => now(),
-                                    ]
-                                );
-                            
-                            // Enviar notificação com o token
-                            $user->notify(new \App\Notifications\ResetPasswordNotification($token));
-                            break;
-                        }
-                        
-                        tenancy()->end();
-                    } catch (\Exception $e) {
-                        if (tenancy()->initialized) {
-                            tenancy()->end();
-                        }
-                        Log::warning('Erro ao buscar usuário no tenant', [
-                            'tenant_id' => $tenant->id,
-                            'email' => $email,
-                            'error' => $e->getMessage(),
-                        ]);
-                    }
-                }
-            }
+            // Executar Use Case
+            $this->solicitarResetSenhaUseCase->executar($request->email);
 
             // Sempre retornar sucesso para prevenir enumeração de emails
             // (não revelar se o email existe ou não)
@@ -386,6 +343,11 @@ class AuthController extends Controller
 
     /**
      * Redefinir senha usando token
+     * 
+     * ✅ Refatorado para usar Use Case
+     * - Lógica de negócio movida para RedefinirSenhaUseCase
+     * - Validação de senha usando Value Object Senha
+     * - Controller apenas recebe request e retorna response
      */
     public function resetPassword(Request $request)
     {
@@ -396,85 +358,12 @@ class AuthController extends Controller
                 'password' => 'required|string|min:8|confirmed',
             ]);
 
-            $email = $request->email;
-            $token = $request->token;
-            $password = $request->password;
-
-            // Verificar token no banco central
-            $passwordReset = \Illuminate\Support\Facades\DB::connection()
-                ->table('password_reset_tokens')
-                ->where('email', $email)
-                ->first();
-
-            if (!$passwordReset) {
-                return response()->json([
-                    'message' => 'Token inválido ou expirado.',
-                    'success' => false,
-                ], 400);
-            }
-
-            // Verificar se o token é válido
-            if (!Hash::check($token, $passwordReset->token)) {
-                return response()->json([
-                    'message' => 'Token inválido ou expirado.',
-                    'success' => false,
-                ], 400);
-            }
-
-            // Verificar se o token expirou (60 minutos)
-            $createdAt = \Carbon\Carbon::parse($passwordReset->created_at);
-            if ($createdAt->addMinutes(60)->isPast()) {
-                return response()->json([
-                    'message' => 'Token expirado. Solicite um novo link de redefinição.',
-                    'success' => false,
-                ], 400);
-            }
-
-            // Buscar usuário em todos os tenants
-            $tenants = \App\Models\Tenant::all();
-            $userUpdated = false;
-
-            foreach ($tenants as $tenant) {
-                try {
-                    tenancy()->initialize($tenant);
-                    $user = \App\Modules\Auth\Models\User::where('email', $email)->first();
-                    
-                    if ($user) {
-                        // Atualizar senha
-                        $user->password = Hash::make($password);
-                        $user->save();
-                        $userUpdated = true;
-                    }
-                    
-                    tenancy()->end();
-                    
-                    if ($userUpdated) {
-                        break;
-                    }
-                } catch (\Exception $e) {
-                    if (tenancy()->initialized) {
-                        tenancy()->end();
-                    }
-                    Log::warning('Erro ao atualizar senha no tenant', [
-                        'tenant_id' => $tenant->id,
-                        'email' => $email,
-                        'error' => $e->getMessage(),
-                    ]);
-                }
-            }
-
-            if (!$userUpdated) {
-                return response()->json([
-                    'message' => 'Usuário não encontrado.',
-                    'success' => false,
-                ], 404);
-            }
-
-            // Deletar token usado
-            \Illuminate\Support\Facades\DB::connection()
-                ->table('password_reset_tokens')
-                ->where('email', $email)
-                ->delete();
+            // Executar Use Case
+            $this->redefinirSenhaUseCase->executar(
+                $request->email,
+                $request->token,
+                $request->password
+            );
 
             return response()->json([
                 'message' => 'Senha redefinida com sucesso!',
@@ -487,6 +376,11 @@ class AuthController extends Controller
                 'errors' => $e->errors(),
                 'success' => false,
             ], 422);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'success' => false,
+            ], $e->getCode() ?: 400);
         } catch (\Exception $e) {
             Log::error('Erro ao redefinir senha', [
                 'error' => $e->getMessage(),
