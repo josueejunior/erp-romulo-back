@@ -190,6 +190,24 @@ class DocumentoHabilitacaoRepository implements DocumentoHabilitacaoRepositoryIn
     {
         DocumentoHabilitacaoModel::findOrFail($id)->delete();
     }
+
+    /**
+     * Buscar documentos ativos por empresa
+     */
+    public function buscarAtivosPorEmpresa(int $empresaId): \Illuminate\Support\Collection
+    {
+        return DocumentoHabilitacaoModel::where('empresa_id', $empresaId)
+            ->where('ativo', true)
+            ->get();
+    }
+
+    /**
+     * Buscar modelo Eloquent por ID (compatibilidade)
+     */
+    public function buscarModeloPorId(int $id): ?DocumentoHabilitacaoModel
+    {
+        return DocumentoHabilitacaoModel::find($id);
+    }
 }
 
 

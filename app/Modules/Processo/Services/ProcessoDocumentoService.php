@@ -114,7 +114,13 @@ class ProcessoDocumentoService
             ->get()
             ->map(function ($processoDocumento) {
                 $doc = $processoDocumento->documentoHabilitacao;
-                $versoes = $doc?->versoes()->latest('versao')->limit(5)->get();
+                
+                // ✅ CORRIGIDO: Documentos customizados não têm documento_habilitacao_id
+                // Então não tentamos carregar versões para eles
+                $versoes = ($doc && $processoDocumento->documento_habilitacao_id) 
+                    ? $doc->versoes()->latest('versao')->limit(5)->get() 
+                    : collect([]);
+                
                 return [
                     'id' => $processoDocumento->id,
                     'documento_habilitacao_id' => $processoDocumento->documento_habilitacao_id,
@@ -149,8 +155,13 @@ class ProcessoDocumentoService
             ->where('id', $processoDocumentoId)
             ->firstOrFail();
 
-        // Validar versão se enviada
+        // ✅ CORRIGIDO: Validar versão se enviada
+        // Documentos customizados não podem ter versão
         if (!empty($data['versao_documento_habilitacao_id'])) {
+            if (!$procDoc->documento_habilitacao_id) {
+                throw new \InvalidArgumentException('Documentos customizados não podem ter versão.');
+            }
+            
             DocumentoHabilitacaoVersao::where('id', $data['versao_documento_habilitacao_id'])
                 ->where('documento_habilitacao_id', $procDoc->documento_habilitacao_id)
                 ->firstOrFail();
@@ -205,11 +216,34 @@ class ProcessoDocumentoService
         ];
 
         if ($arquivo instanceof UploadedFile) {
+            // ✅ VALIDAÇÃO: Tamanho máximo (10MB)
+            $maxSize = 10 * 1024 * 1024; // 10MB
+            if ($arquivo->getSize() > $maxSize) {
+                throw new \InvalidArgumentException('Arquivo muito grande. Tamanho máximo permitido: 10MB');
+            }
+            
+            // ✅ VALIDAÇÃO: Tipos MIME permitidos
+            $mimesPermitidos = [
+                'application/pdf',
+                'image/jpeg',
+                'image/png',
+                'image/jpg',
+                'application/msword',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+                'application/vnd.ms-excel',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+            ];
+            
+            $mimeType = $arquivo->getMimeType();
+            if (!in_array($mimeType, $mimesPermitidos)) {
+                throw new \InvalidArgumentException('Tipo de arquivo não permitido. Apenas PDF, imagens (JPG/PNG) e documentos Office são aceitos.');
+            }
+            
             $fileName = time() . '_' . $arquivo->getClientOriginalName();
             $path = $arquivo->storeAs("processos/{$processo->id}/documentos", $fileName, 'public');
             $payload['nome_arquivo'] = $fileName;
             $payload['caminho_arquivo'] = $path;
-            $payload['mime'] = $arquivo->getMimeType();
+            $payload['mime'] = $mimeType;
             $payload['tamanho_bytes'] = $arquivo->getSize();
             $payload['status'] = 'anexado';
         }

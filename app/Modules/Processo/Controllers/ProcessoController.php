@@ -695,12 +695,27 @@ class ProcessoController extends BaseApiController
             );
 
             return response()->json(['data' => $procDoc]);
+        } catch (\InvalidArgumentException $e) {
+            // ✅ Erros de validação de negócio (arquivo grande, tipo inválido, etc.)
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 400);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'message' => 'Erro de validação',
                 'errors' => $e->errors(),
             ], 422);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'message' => 'Documento não encontrado'
+            ], 404);
         } catch (\Exception $e) {
+            \Log::error('Erro ao atualizar documento do processo', [
+                'processo_id' => $processo->id,
+                'documento_id' => $processoDocumentoId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
             return response()->json([
                 'message' => 'Erro ao atualizar documento: ' . $e->getMessage()
             ], 500);
@@ -738,12 +753,22 @@ class ProcessoController extends BaseApiController
             );
 
             return response()->json(['data' => $procDoc], 201);
+        } catch (\InvalidArgumentException $e) {
+            // ✅ Erros de validação de negócio (arquivo grande, tipo inválido, etc.)
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 400);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'message' => 'Erro de validação',
                 'errors' => $e->errors(),
             ], 422);
         } catch (\Exception $e) {
+            \Log::error('Erro ao criar documento custom do processo', [
+                'processo_id' => $processo->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
             return response()->json([
                 'message' => 'Erro ao criar documento: ' . $e->getMessage()
             ], 500);

@@ -40,6 +40,12 @@ interface ProcessoRepositoryInterface
      * Obter resumo de processos
      */
     public function obterResumo(array $filtros = []): array;
+
+    /**
+     * Buscar modelo Eloquent por ID (compatibilidade)
+     * @return \App\Modules\Processo\Models\Processo|null
+     */
+    public function buscarModeloPorId(int $id): ?\App\Modules\Processo\Models\Processo;
 }
 
 
