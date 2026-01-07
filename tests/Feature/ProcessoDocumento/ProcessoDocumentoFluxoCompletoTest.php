@@ -50,14 +50,32 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
         // porque CREATE DATABASE não pode ser executado dentro de uma transação
         // O RefreshDatabase inicia uma transação, então precisamos criar o banco antes
         
+        // Finalizar qualquer transação ativa antes de criar o tenant
+        // O RefreshDatabase inicia uma transação, então precisamos finalizá-la temporariamente
+        if (\DB::transactionLevel() > 0) {
+            \DB::rollBack();
+        }
+        
         // Criar tenant usando conexão direta (sem transação)
-        $this->tenant = new Tenant([
+        // Usar DB::connection()->table() para garantir que está fora de transação
+        $tenantId = \DB::connection()->table('tenants')->insertGetId([
             'razao_social' => 'Tenant Teste LTDA',
             'cnpj' => '12345678000190',
             'email' => 'teste@tenant.com',
             'status' => 'ativa',
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
-        $this->tenant->save();
+        
+        // Buscar o tenant criado
+        $this->tenant = Tenant::find($tenantId);
+        
+        if (!$this->tenant || !$this->tenant->id) {
+            throw new \RuntimeException('Falha ao criar tenant. ID retornado: ' . ($tenantId ?? 'null'));
+        }
+        
+        // Reiniciar transação para o resto do teste
+        \DB::beginTransaction();
         
         // Criar banco de dados do tenant usando conexão sem transação
         try {
@@ -65,6 +83,11 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
             $prefix = config('tenancy.database.prefix', 'tenant_');
             $suffix = config('tenancy.database.suffix', '');
             $databaseName = $prefix . $this->tenant->id . $suffix;
+            
+            // Se ainda não tiver ID, lançar exceção
+            if (!$this->tenant->id) {
+                throw new \RuntimeException('Tenant não tem ID após criação. Verifique se o tenant foi salvo corretamente.');
+            }
             
             // Obter configurações do banco central (usar a conexão padrão)
             $connectionName = config('database.default');
@@ -150,6 +173,14 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
         // Autenticar usuário via Sanctum (para compatibilidade)
         $this->actingAs($this->user, 'sanctum');
         
+        // Verificar se tenant e empresa têm IDs antes de criar token
+        if (!$this->tenant->id) {
+            throw new \RuntimeException('Tenant não tem ID após criação. Verifique se o tenant foi salvo corretamente.');
+        }
+        if (!$this->empresa->id) {
+            throw new \RuntimeException('Empresa não tem ID após criação. Verifique se a empresa foi salva corretamente.');
+        }
+        
         // Configurar headers padrão para todas as requisições
         $this->withHeaders($this->getAuthHeaders());
     }
@@ -159,10 +190,18 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
      */
     protected function getAuthHeaders(): array
     {
+        // Usar IDs diretamente (já verificados no setUp)
+        $tenantId = $this->tenant->id;
+        $empresaId = $this->empresa->id;
+        
+        if (!$tenantId || !$empresaId) {
+            throw new \RuntimeException('Tenant ou Empresa não têm ID. Tenant ID: ' . ($tenantId ?? 'null') . ', Empresa ID: ' . ($empresaId ?? 'null'));
+        }
+        
         return [
             'Authorization' => 'Bearer ' . $this->token,
-            'X-Tenant-ID' => (string) $this->tenant->id,
-            'X-Empresa-ID' => (string) $this->empresa->id,
+            'X-Tenant-ID' => (string) $tenantId,
+            'X-Empresa-ID' => (string) $empresaId,
             'Accept' => 'application/json',
         ];
     }
@@ -210,14 +249,6 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
     {
         // 1. Importar documentos ativos
         $response = $this->postJson("/api/v1/processos/{$this->processo->id}/documentos/importar");
-        
-        // Debug temporário
-        if ($response->status() !== 200) {
-            dump('Status:', $response->status());
-            dump('Body:', $response->json());
-            dump('Headers enviados:', $this->getAuthHeaders());
-        }
-        
         $response->assertStatus(200);
         $response->assertJsonStructure([
             'message',
