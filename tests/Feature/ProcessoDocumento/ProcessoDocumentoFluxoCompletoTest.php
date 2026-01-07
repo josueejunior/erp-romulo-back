@@ -119,6 +119,16 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
         // Autenticar usuário via Sanctum (para compatibilidade)
         $this->actingAs($this->user, 'sanctum');
     }
+    
+    protected function tearDown(): void
+    {
+        // Finalizar tenancy se estiver inicializado
+        if (tenancy()->initialized) {
+            tenancy()->end();
+        }
+        
+        parent::tearDown();
+    }
 
     public function test_fluxo_completo_documentos_processo(): void
     {
