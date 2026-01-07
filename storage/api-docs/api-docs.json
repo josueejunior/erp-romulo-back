@@ -1,0 +1,464 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "ERP Licitações API",
+    "description": "API RESTful para o sistema ERP de Licitações - Gestão completa de processos licitatórios",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Suporte Técnico",
+      "email": "suporte@addireta.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "/api/v1",
+      "description": "API v1"
+    }
+  ],
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "tags": ["Autenticação"],
+        "summary": "Autenticar usuário",
+        "description": "Realiza login e retorna token JWT para autenticação",
+        "operationId": "login",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "example": "usuario@empresa.com"
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password",
+                    "example": "senha123"
+                  },
+                  "tenant_id": {
+                    "type": "string",
+                    "example": "1",
+                    "description": "ID do tenant (opcional)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login realizado com sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "message": { "type": "string", "example": "Login realizado com sucesso!" },
+                    "token": { "type": "string", "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." },
+                    "user": { "$ref": "#/components/schemas/User" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Credenciais inválidas" },
+          "422": { "description": "Erro de validação" }
+        }
+      }
+    },
+    "/auth/user": {
+      "get": {
+        "tags": ["Autenticação"],
+        "summary": "Obter usuário autenticado",
+        "description": "Retorna os dados do usuário atualmente autenticado",
+        "operationId": "getUser",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Usuário autenticado",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/User" }
+              }
+            }
+          },
+          "401": { "description": "Não autenticado" }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": ["Autenticação"],
+        "summary": "Fazer logout",
+        "description": "Invalida o token JWT atual",
+        "operationId": "logout",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Logout realizado com sucesso" },
+          "401": { "description": "Não autenticado" }
+        }
+      }
+    },
+    "/processos": {
+      "get": {
+        "tags": ["Processos"],
+        "summary": "Listar processos",
+        "description": "Retorna lista paginada de processos licitatórios",
+        "operationId": "listProcessos",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "per_page", "in": "query", "schema": { "type": "integer", "default": 15 } },
+          { "name": "status", "in": "query", "schema": { "type": "string" } },
+          { "name": "search", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de processos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/Processo" } },
+                    "meta": { "$ref": "#/components/schemas/Pagination" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Não autenticado" }
+        }
+      },
+      "post": {
+        "tags": ["Processos"],
+        "summary": "Criar processo",
+        "description": "Cria um novo processo licitatório",
+        "operationId": "createProcesso",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["modalidade", "objeto_resumido"],
+                "properties": {
+                  "modalidade": { "type": "string", "example": "pregão" },
+                  "numero_modalidade": { "type": "string", "example": "001/2026" },
+                  "objeto_resumido": { "type": "string", "example": "Aquisição de materiais" },
+                  "orgao_id": { "type": "integer" },
+                  "setor_id": { "type": "integer" },
+                  "portal": { "type": "string" },
+                  "data_hora_sessao_publica": { "type": "string", "format": "date-time" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Processo criado" },
+          "422": { "description": "Erro de validação" }
+        }
+      }
+    },
+    "/processos/{id}": {
+      "get": {
+        "tags": ["Processos"],
+        "summary": "Obter processo",
+        "description": "Retorna detalhes de um processo específico",
+        "operationId": "getProcesso",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "Detalhes do processo" },
+          "404": { "description": "Processo não encontrado" }
+        }
+      },
+      "put": {
+        "tags": ["Processos"],
+        "summary": "Atualizar processo",
+        "operationId": "updateProcesso",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "Processo atualizado" },
+          "404": { "description": "Processo não encontrado" }
+        }
+      },
+      "delete": {
+        "tags": ["Processos"],
+        "summary": "Deletar processo",
+        "operationId": "deleteProcesso",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "204": { "description": "Processo removido" },
+          "404": { "description": "Processo não encontrado" }
+        }
+      }
+    },
+    "/fornecedores": {
+      "get": {
+        "tags": ["Fornecedores"],
+        "summary": "Listar fornecedores",
+        "operationId": "listFornecedores",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "search", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Lista de fornecedores" }
+        }
+      },
+      "post": {
+        "tags": ["Fornecedores"],
+        "summary": "Criar fornecedor",
+        "operationId": "createFornecedor",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["razao_social"],
+                "properties": {
+                  "razao_social": { "type": "string" },
+                  "nome_fantasia": { "type": "string" },
+                  "cnpj": { "type": "string" },
+                  "email": { "type": "string" },
+                  "telefone": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Fornecedor criado" }
+        }
+      }
+    },
+    "/fornecedores/{id}": {
+      "get": {
+        "tags": ["Fornecedores"],
+        "summary": "Obter fornecedor",
+        "operationId": "getFornecedor",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "Detalhes do fornecedor" },
+          "404": { "description": "Fornecedor não encontrado" }
+        }
+      }
+    },
+    "/contratos": {
+      "get": {
+        "tags": ["Contratos"],
+        "summary": "Listar contratos",
+        "operationId": "listContratos",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Lista de contratos" } }
+      }
+    },
+    "/dashboard": {
+      "get": {
+        "tags": ["Dashboard"],
+        "summary": "Dados do dashboard",
+        "operationId": "getDashboard",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Dados do dashboard",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Dashboard" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assinaturas/atual": {
+      "get": {
+        "tags": ["Assinaturas"],
+        "summary": "Assinatura atual",
+        "operationId": "getAssinaturaAtual",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Assinatura atual" },
+          "404": { "description": "Nenhuma assinatura ativa" }
+        }
+      }
+    },
+    "/assinaturas/status": {
+      "get": {
+        "tags": ["Assinaturas"],
+        "summary": "Status da assinatura",
+        "operationId": "getAssinaturaStatus",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Status da assinatura" } }
+      }
+    },
+    "/planos": {
+      "get": {
+        "tags": ["Assinaturas"],
+        "summary": "Listar planos",
+        "operationId": "listPlanos",
+        "responses": { "200": { "description": "Lista de planos disponíveis" } }
+      }
+    },
+    "/orgaos": {
+      "get": {
+        "tags": ["Órgãos"],
+        "summary": "Listar órgãos",
+        "operationId": "listOrgaos",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Lista de órgãos" } }
+      }
+    },
+    "/empenhos": {
+      "get": {
+        "tags": ["Empenhos"],
+        "summary": "Listar empenhos",
+        "operationId": "listEmpenhos",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Lista de empenhos" } }
+      }
+    },
+    "/notas-fiscais": {
+      "get": {
+        "tags": ["Notas Fiscais"],
+        "summary": "Listar notas fiscais",
+        "operationId": "listNotasFiscais",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Lista de notas fiscais" } }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Token JWT obtido via /auth/login"
+      }
+    },
+    "schemas": {
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "name": { "type": "string", "example": "João Silva" },
+          "email": { "type": "string", "format": "email", "example": "joao@empresa.com" },
+          "foto_perfil_url": { "type": "string", "nullable": true },
+          "role": { "type": "string", "example": "tenant_user" }
+        }
+      },
+      "Processo": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "modalidade": { "type": "string", "example": "pregão" },
+          "numero_modalidade": { "type": "string", "example": "001/2026" },
+          "objeto_resumido": { "type": "string", "example": "Aquisição de materiais" },
+          "status": { "type": "string", "enum": ["rascunho", "participacao", "julgamento_habilitacao", "execucao", "pagamento", "encerramento"] },
+          "portal": { "type": "string", "example": "ComprasNet" },
+          "data_hora_sessao_publica": { "type": "string", "format": "date-time" },
+          "empresa_id": { "type": "integer" },
+          "orgao_id": { "type": "integer" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Fornecedor": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "razao_social": { "type": "string", "example": "Fornecedor LTDA" },
+          "nome_fantasia": { "type": "string", "example": "Fornecedor" },
+          "cnpj": { "type": "string", "example": "12345678000190" },
+          "email": { "type": "string", "format": "email" },
+          "telefone": { "type": "string" },
+          "status": { "type": "string", "enum": ["ativo", "inativo", "bloqueado"] }
+        }
+      },
+      "Dashboard": {
+        "type": "object",
+        "properties": {
+          "total_processos": { "type": "integer", "example": 150 },
+          "processos_participacao": { "type": "integer", "example": 25 },
+          "processos_execucao": { "type": "integer", "example": 45 },
+          "valor_total": { "type": "number", "format": "float", "example": 1500000.00 },
+          "ultimos_processos": { "type": "array", "items": { "$ref": "#/components/schemas/Processo" } }
+        }
+      },
+      "Assinatura": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "plano_id": { "type": "integer" },
+          "status": { "type": "string", "enum": ["ativa", "expirada", "cancelada", "pendente"] },
+          "data_inicio": { "type": "string", "format": "date" },
+          "data_fim": { "type": "string", "format": "date" },
+          "plano": { "$ref": "#/components/schemas/Plano" }
+        }
+      },
+      "Plano": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "nome": { "type": "string", "example": "Plano Premium" },
+          "descricao": { "type": "string" },
+          "valor": { "type": "number", "format": "float", "example": 199.90 },
+          "periodo": { "type": "string", "enum": ["mensal", "anual"] }
+        }
+      },
+      "Pagination": {
+        "type": "object",
+        "properties": {
+          "current_page": { "type": "integer", "example": 1 },
+          "per_page": { "type": "integer", "example": 15 },
+          "total": { "type": "integer", "example": 100 },
+          "last_page": { "type": "integer", "example": 7 }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": ["message"],
+        "properties": {
+          "message": { "type": "string", "example": "Erro de validação" },
+          "errors": { "type": "object" }
+        }
+      }
+    }
+  },
+  "tags": [
+    { "name": "Autenticação", "description": "Endpoints de autenticação" },
+    { "name": "Processos", "description": "Gerenciamento de processos licitatórios" },
+    { "name": "Fornecedores", "description": "Cadastro e gerenciamento de fornecedores" },
+    { "name": "Contratos", "description": "Gerenciamento de contratos" },
+    { "name": "Assinaturas", "description": "Gerenciamento de planos e assinaturas" },
+    { "name": "Dashboard", "description": "Métricas e indicadores" },
+    { "name": "Órgãos", "description": "Gerenciamento de órgãos públicos" },
+    { "name": "Empenhos", "description": "Gerenciamento de empenhos" },
+    { "name": "Notas Fiscais", "description": "Gerenciamento de notas fiscais" }
+  ]
+}
+
