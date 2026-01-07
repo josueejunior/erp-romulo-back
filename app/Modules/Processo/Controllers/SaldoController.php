@@ -148,6 +148,36 @@ class SaldoController extends BaseApiController
             'data' => $comparativo,
         ]);
     }
+
+    /**
+     * Recalcula valores financeiros de todos os itens do processo
+     */
+    public function recalcularValoresItens(Processo $processo)
+    {
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
+        try {
+            $this->saldoService->validarProcessoEmpresa($processo, $empresa->id);
+            $this->saldoService->validarProcessoEmExecucao($processo);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => $e->getMessage()
+            ], $e->getMessage() === 'Apenas processos em execução possuem saldo.' ? 403 : 404);
+        }
+
+        $resultado = $this->saldoService->recalcularValoresFinanceirosItens($processo);
+
+        // Limpar cache de saldo após recalcular
+        $tenantId = tenancy()->tenant?->id;
+        if ($tenantId && RedisService::isAvailable()) {
+            RedisService::clearSaldo($tenantId, $processo->id);
+        }
+
+        return response()->json([
+            'message' => 'Valores financeiros recalculados com sucesso.',
+            'data' => $resultado,
+        ]);
+    }
 }
 
 

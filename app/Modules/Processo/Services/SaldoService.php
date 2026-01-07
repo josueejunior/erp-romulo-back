@@ -295,6 +295,39 @@ class SaldoService
             'itens' => $itensDetalhados,
         ];
     }
+
+    /**
+     * Recalcula valores financeiros de todos os itens do processo
+     * Útil quando o processo entra em execução ou quando há necessidade de atualizar valores
+     */
+    public function recalcularValoresFinanceirosItens(Processo $processo): array
+    {
+        $itens = $processo->itens()
+            ->whereIn('status_item', ['aceito', 'aceito_habilitado'])
+            ->get();
+
+        $itensAtualizados = [];
+        foreach ($itens as $item) {
+            $item->atualizarValoresFinanceiros();
+            $itensAtualizados[] = [
+                'item_id' => $item->id,
+                'numero_item' => $item->numero_item,
+                'valor_vencido' => $item->valor_vencido,
+                'valor_empenhado' => $item->valor_empenhado,
+                'valor_faturado' => $item->valor_faturado,
+                'valor_pago' => $item->valor_pago,
+                'saldo_aberto' => $item->saldo_aberto,
+                'lucro_bruto' => $item->lucro_bruto,
+                'lucro_liquido' => $item->lucro_liquido,
+            ];
+        }
+
+        return [
+            'processo_id' => $processo->id,
+            'itens_atualizados' => count($itensAtualizados),
+            'itens' => $itensAtualizados,
+        ];
+    }
 }
 
 

@@ -187,6 +187,7 @@ Route::prefix('v1')->group(function () {
                 Route::get('/saldo-vinculado', [ApiSaldoController::class, 'saldoVinculado']);
                 Route::get('/saldo-empenhado', [ApiSaldoController::class, 'saldoEmpenhado']);
                 Route::get('/saldo/comparativo-custos', [ApiSaldoController::class, 'comparativoCustos']);
+                Route::post('/saldo/recalcular-valores-itens', [ApiSaldoController::class, 'recalcularValoresItens']);
                 
                 // Disputa
                 Route::get('/disputa', [ApiDisputaController::class, 'show']);

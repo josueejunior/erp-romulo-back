@@ -20,7 +20,31 @@ class ProcessoObserver
      */
     public function updated(Processo $processo): void
     {
+        // Se o processo acabou de entrar em execução, recalcular valores financeiros dos itens
+        if ($processo->wasChanged('status') && $processo->status === 'execucao') {
+            $this->recalcularValoresFinanceirosItens($processo);
+        }
+        
         $this->clearCache($processo);
+    }
+    
+    /**
+     * Recalcula valores financeiros de todos os itens quando processo entra em execução
+     */
+    protected function recalcularValoresFinanceirosItens(Processo $processo): void
+    {
+        try {
+            $itens = $processo->itens()
+                ->whereIn('status_item', ['aceito', 'aceito_habilitado'])
+                ->get();
+            
+            foreach ($itens as $item) {
+                $item->atualizarValoresFinanceiros();
+            }
+        } catch (\Exception $e) {
+            // Log erro mas não interrompe o fluxo
+            \Log::warning("Erro ao recalcular valores financeiros dos itens do processo {$processo->id}: " . $e->getMessage());
+        }
     }
 
     /**
