@@ -71,8 +71,9 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
             $centralConfig = config("database.connections.{$connectionName}");
             
             // Usar conexão PostgreSQL direta (sem transação)
+            // Conectar ao banco "postgres" (banco padrão do PostgreSQL) para criar outros bancos
             $pdo = new \PDO(
-                "pgsql:host={$centralConfig['host']};port={$centralConfig['port']}",
+                "pgsql:host={$centralConfig['host']};port={$centralConfig['port']};dbname=postgres",
                 $centralConfig['username'],
                 $centralConfig['password']
             );
