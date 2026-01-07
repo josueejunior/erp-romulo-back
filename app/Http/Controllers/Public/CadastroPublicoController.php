@@ -80,13 +80,13 @@ class CadastroPublicoController extends Controller
             $tenantResult = $this->createTenant($validated);
             
             // 2. Criar assinatura
-            $assinatura = $this->createAssinatura(
+            $assinaturaResult = $this->createAssinatura(
                 $tenantResult['admin_user'],
                 $tenantResult['tenant'],
                 $validated
             );
 
-            return $this->successResponse($tenantResult, $assinatura);
+            return $this->successResponse($tenantResult, $assinaturaResult);
 
         } catch (ValidationException $e) {
             return $this->validationErrorResponse($e);
@@ -229,8 +229,10 @@ class CadastroPublicoController extends Controller
 
     /**
      * Criar assinatura para o usuário
+     * 
+     * @return array{assinatura: \App\Domain\Assinatura\Entities\Assinatura, plano: \App\Modules\Assinatura\Models\Plano, data_fim: \Carbon\Carbon}
      */
-    private function createAssinatura($adminUser, $tenant, array $validated)
+    private function createAssinatura($adminUser, $tenant, array $validated): array
     {
         $periodo = $validated['periodo'] ?? 'mensal';
         $plano = Plano::findOrFail($validated['plano_id']);
@@ -268,7 +270,13 @@ class CadastroPublicoController extends Controller
             tenantId: $tenant->id,
         );
 
-        return $this->criarAssinaturaUseCase->executar($assinaturaDTO);
+        $assinatura = $this->criarAssinaturaUseCase->executar($assinaturaDTO);
+
+        return [
+            'assinatura' => $assinatura,
+            'plano' => $plano,
+            'data_fim' => $dataFim,
+        ];
     }
 
     // ==================== RESPONSE HELPERS ====================
@@ -276,12 +284,15 @@ class CadastroPublicoController extends Controller
     /**
      * Resposta de sucesso
      */
-    private function successResponse(array $tenantResult, $assinatura): JsonResponse
+    private function successResponse(array $tenantResult, array $assinaturaResult): JsonResponse
     {
         $tenant = $tenantResult['tenant'];
         $empresa = $tenantResult['empresa'];
         $adminUser = $tenantResult['admin_user'];
-        $plano = $assinatura->plano;
+        
+        $assinatura = $assinaturaResult['assinatura'];
+        $plano = $assinaturaResult['plano'];
+        $dataFim = $assinaturaResult['data_fim'];
 
         return response()->json([
             'message' => 'Cadastro realizado com sucesso!',
@@ -308,9 +319,7 @@ class CadastroPublicoController extends Controller
                         'id' => $plano->id,
                         'nome' => $plano->nome,
                     ],
-                    'data_fim' => $assinatura->data_fim instanceof Carbon 
-                        ? $assinatura->data_fim->format('Y-m-d')
-                        : $assinatura->data_fim,
+                    'data_fim' => $dataFim->format('Y-m-d'),
                 ],
             ],
         ], 201);
