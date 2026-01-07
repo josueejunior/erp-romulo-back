@@ -268,6 +268,17 @@ class NotaFiscalController extends BaseApiController
             return response()->json(['message' => 'Nota fiscal não encontrada.'], 404);
         }
         
+        // Validar dados manualmente (mesmo padrão do store)
+        $rules = (new NotaFiscalCreateRequest())->rules();
+        $validator = Validator::make($request->all(), $rules);
+        
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Dados inválidos',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+        
         return $this->updateWeb($request, $processoModel, $notaFiscalModel);
     }
 
@@ -299,7 +310,23 @@ class NotaFiscalController extends BaseApiController
         $empresa = $this->getEmpresaAtivaOrFail();
         
         try {
-            $notaFiscal = $this->notaFiscalService->update($processo, $notaFiscal, $request->all(), $request, $empresa->id);
+            // Validar dados se não vierem já validados
+            if (!$request instanceof NotaFiscalCreateRequest) {
+                $rules = (new NotaFiscalCreateRequest())->rules();
+                $validator = Validator::make($request->all(), $rules);
+                
+                if ($validator->fails()) {
+                    return response()->json([
+                        'message' => 'Dados inválidos',
+                        'errors' => $validator->errors()
+                    ], 422);
+                }
+                $data = $validator->validated();
+            } else {
+                $data = $request->validated();
+            }
+            
+            $notaFiscal = $this->notaFiscalService->update($processo, $notaFiscal, $data, $request, $empresa->id);
             return response()->json($notaFiscal);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
