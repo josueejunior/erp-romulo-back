@@ -20,28 +20,34 @@ interface ProcessoDocumentoRepositoryInterface
 
     /**
      * Buscar documento por ID e processo (com validação de empresa)
+     * @param \App\Modules\Processo\Models\Processo|Processo $processo
      */
-    public function buscarPorIdEProcesso(int $id, Processo $processo): ?ProcessoDocumento;
+    public function buscarPorIdEProcesso(int $id, $processo): ?\App\Domain\ProcessoDocumento\Entities\ProcessoDocumento;
 
     /**
      * Listar todos os documentos de um processo
+     * @param \App\Modules\Processo\Models\Processo|Processo $processo
      */
-    public function listarPorProcesso(Processo $processo): Collection;
+    public function listarPorProcesso($processo): Collection;
 
     /**
      * Criar novo documento
+     * @return \App\Modules\Processo\Models\ProcessoDocumento
      */
-    public function criar(array $dados): ProcessoDocumento;
+    public function criar(array $dados): \App\Modules\Processo\Models\ProcessoDocumento;
 
     /**
      * Atualizar documento existente
+     * @param \App\Modules\Processo\Models\ProcessoDocumento $processoDocumento
+     * @return \App\Modules\Processo\Models\ProcessoDocumento
      */
-    public function atualizar(ProcessoDocumento $processoDocumento, array $dados): ProcessoDocumento;
+    public function atualizar(\App\Modules\Processo\Models\ProcessoDocumento $processoDocumento, array $dados): \App\Modules\Processo\Models\ProcessoDocumento;
 
     /**
      * Deletar documento
+     * @param \App\Modules\Processo\Models\ProcessoDocumento $processoDocumento
      */
-    public function deletar(ProcessoDocumento $processoDocumento): bool;
+    public function deletar(\App\Modules\Processo\Models\ProcessoDocumento $processoDocumento): bool;
 
     /**
      * Verificar se documento existe para processo e documento_habilitacao_id

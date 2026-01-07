@@ -310,11 +310,29 @@ class AtualizarDocumentoProcessoUseCaseTest extends TestCase
             ->once()
             ->andReturn($processoDocumento);
         
-        // Mock versão não encontrada
-        DocumentoHabilitacaoVersao::shouldReceive('where')
+        // Mock versão não encontrada usando DB facade
+        \Illuminate\Support\Facades\DB::shouldReceive('table')
+            ->never();
+        
+        // Usar um mock do Eloquent query builder
+        $queryBuilderMock = Mockery::mock(\Illuminate\Database\Eloquent\Builder::class);
+        $queryBuilderMock->shouldReceive('where')
+            ->with('id', 999)
+            ->once()
             ->andReturnSelf();
-        DocumentoHabilitacaoVersao::shouldReceive('first')
+        $queryBuilderMock->shouldReceive('where')
+            ->with('documento_habilitacao_id', 10)
+            ->once()
+            ->andReturnSelf();
+        $queryBuilderMock->shouldReceive('first')
+            ->once()
             ->andReturn(null);
+        
+        // Mock do modelo estático
+        DocumentoHabilitacaoVersao::shouldReceive('where')
+            ->with('id', 999)
+            ->once()
+            ->andReturn($queryBuilderMock);
         
         // Act & Assert
         $this->expectException(NotFoundException::class);

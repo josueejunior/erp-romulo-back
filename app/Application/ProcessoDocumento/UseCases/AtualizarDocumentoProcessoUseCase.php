@@ -6,7 +6,7 @@ use App\Application\ProcessoDocumento\DTOs\AtualizarDocumentoProcessoDTO;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\ProcessoDocumento\Repositories\ProcessoDocumentoRepositoryInterface;
 use App\Domain\DocumentoHabilitacao\Repositories\DocumentoHabilitacaoRepositoryInterface;
-use App\Domain\Documento\Models\DocumentoHabilitacaoVersao;
+use App\Modules\Documento\Models\DocumentoHabilitacaoVersao;
 use App\Domain\Exceptions\NotFoundException;
 use App\Domain\Exceptions\DomainException;
 use Illuminate\Http\UploadedFile;

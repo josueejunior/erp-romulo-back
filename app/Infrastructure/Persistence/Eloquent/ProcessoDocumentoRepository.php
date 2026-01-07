@@ -18,21 +18,30 @@ class ProcessoDocumentoRepository implements ProcessoDocumentoRepositoryInterfac
         return $model ? $this->toDomain($model) : null;
     }
 
-    public function buscarPorIdEProcesso(int $id, Processo $processo): ?\App\Domain\ProcessoDocumento\Entities\ProcessoDocumento
+    public function buscarPorIdEProcesso(int $id, $processo): ?\App\Domain\ProcessoDocumento\Entities\ProcessoDocumento
     {
+        $processoId = $processo instanceof \App\Domain\Processo\Entities\Processo 
+            ? $processo->id 
+            : $processo->id;
+            
         $model = ProcessoDocumentoModel::where('id', $id)
-            ->where('processo_id', $processo->id)
+            ->where('processo_id', $processoId)
             ->first();
         return $model ? $this->toDomain($model) : null;
     }
 
-    public function listarPorProcesso(Processo $processo): Collection
+    public function listarPorProcesso($processo): Collection
     {
-        $models = ProcessoDocumentoModel::where('processo_id', $processo->id)
+        $processoId = $processo instanceof \App\Domain\Processo\Entities\Processo 
+            ? $processo->id 
+            : $processo->id;
+            
+        $models = ProcessoDocumentoModel::where('processo_id', $processoId)
             ->with(['documentoHabilitacao', 'versaoDocumento'])
             ->get();
 
-        return $models->map(fn($model) => $this->toDomain($model));
+        // Retornar modelos Eloquent diretamente (para compatibilidade com Use Cases)
+        return $models;
     }
 
     public function criar(array $dados): ProcessoDocumentoModel
