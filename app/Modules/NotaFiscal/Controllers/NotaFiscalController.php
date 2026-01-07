@@ -17,6 +17,7 @@ use App\Http\Requests\NotaFiscal\NotaFiscalCreateRequest;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Validator;
 
 /**
  * Controller para gerenciamento de Notas Fiscais
@@ -142,7 +143,19 @@ class NotaFiscalController extends BaseApiController
             return response()->json(['message' => 'Processo não encontrado.'], 404);
         }
         
-        return $this->storeWeb($request, $processoModel);
+        // Validar dados manualmente (mesmo padrão do EmpenhoController)
+        $rules = (new NotaFiscalCreateRequest())->rules();
+        $validator = Validator::make($request->all(), $rules);
+        
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Dados inválidos',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+        
+        // Passar dados validados diretamente como array
+        return $this->storeWeb($validator->validated(), $processoModel);
     }
 
     /**
@@ -150,7 +163,7 @@ class NotaFiscalController extends BaseApiController
      * 
      * ✅ O QUE O CONTROLLER FAZ:
      * - Recebe request
-     * - Valida dados (via Form Request)
+     * - Valida dados (via Form Request ou array validado)
      * - Chama um Application Service
      * 
      * ❌ O QUE O CONTROLLER NÃO FAZ:
@@ -159,12 +172,11 @@ class NotaFiscalController extends BaseApiController
      * - Não sabe se existe multi-tenant
      * - Não filtra nada por tenant_id
      */
-    public function storeWeb(NotaFiscalCreateRequest $request, Processo $processo): JsonResponse
+    public function storeWeb(NotaFiscalCreateRequest|array $request, Processo $processo): JsonResponse
     {
         try {
-            // Request já está validado via Form Request
-            // Preparar dados para DTO
-            $data = $request->validated();
+            // Se for array, já está validado. Se for FormRequest, chamar validated()
+            $data = is_array($request) ? $request : $request->validated();
             $data['processo_id'] = $processo->id;
             
             // Usar Use Case DDD (contém toda a lógica de negócio, incluindo tenant)

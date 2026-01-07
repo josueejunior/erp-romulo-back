@@ -242,7 +242,10 @@ Route::prefix('v1')->group(function () {
                 
                 // Empenhos (dentro de processo)
                 Route::module('empenhos', ApiEmpenhoController::class, 'empenho')
-                    ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
+                    ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy'])
+                    ->children(function () {
+                        Route::post('/concluir', [ApiEmpenhoController::class, 'concluir']);
+                    });
                 
                 // Notas Fiscais
                 Route::module('notas-fiscais', ApiNotaFiscalController::class, 'notaFiscal')

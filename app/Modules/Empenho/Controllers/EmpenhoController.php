@@ -10,6 +10,7 @@ use App\Modules\Empenho\Services\EmpenhoService;
 use App\Application\Empenho\UseCases\CriarEmpenhoUseCase;
 use App\Application\Empenho\UseCases\ListarEmpenhosUseCase;
 use App\Application\Empenho\UseCases\BuscarEmpenhoUseCase;
+use App\Application\Empenho\UseCases\ConcluirEmpenhoUseCase;
 use App\Application\Empenho\DTOs\CriarEmpenhoDTO;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\Empenho\Repositories\EmpenhoRepositoryInterface;
@@ -42,6 +43,7 @@ class EmpenhoController extends BaseApiController
         private CriarEmpenhoUseCase $criarEmpenhoUseCase,
         private ListarEmpenhosUseCase $listarEmpenhosUseCase,
         private BuscarEmpenhoUseCase $buscarEmpenhoUseCase,
+        private ConcluirEmpenhoUseCase $concluirEmpenhoUseCase,
         private ProcessoRepositoryInterface $processoRepository,
         private EmpenhoRepositoryInterface $empenhoRepository,
     ) {
@@ -509,6 +511,69 @@ class EmpenhoController extends BaseApiController
             return response()->json([
                 'message' => $e->getMessage()
             ], 404);
+        }
+    }
+
+    /**
+     * API: Concluir empenho
+     */
+    public function concluir(Request $request): JsonResponse
+    {
+        try {
+            $processoId = $request->route()->parameter('processo');
+            $empenhoId = $request->route()->parameter('empenho');
+            
+            // Validar processo
+            $processoDomain = $this->processoRepository->buscarPorId($processoId);
+            if (!$processoDomain) {
+                return response()->json(['message' => 'Processo não encontrado'], 404);
+            }
+            
+            // Obter empresa automaticamente
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Validar que o processo pertence à empresa
+            if ($processoDomain->empresaId !== $empresa->id) {
+                return response()->json(['message' => 'Processo não encontrado'], 404);
+            }
+            
+            // Validar empenho
+            $empenhoDomain = $this->empenhoRepository->buscarPorId($empenhoId);
+            if (!$empenhoDomain) {
+                return response()->json(['message' => 'Empenho não encontrado'], 404);
+            }
+            
+            // Validar que o empenho pertence à empresa e ao processo
+            if ($empenhoDomain->empresaId !== $empresa->id) {
+                return response()->json(['message' => 'Empenho não encontrado'], 404);
+            }
+            
+            if ($empenhoDomain->processoId !== (int) $processoId) {
+                return response()->json(['message' => 'Empenho não pertence ao processo'], 404);
+            }
+            
+            // Executar Use Case
+            $empenhoConcluido = $this->concluirEmpenhoUseCase->executar($empenhoId);
+            
+            // Buscar modelo Eloquent para incluir relacionamentos
+            $empenhoModel = $this->empenhoRepository->buscarModeloPorId(
+                $empenhoConcluido->id,
+                ['processo', 'contrato', 'autorizacaoFornecimento']
+            );
+            
+            return response()->json([
+                'message' => 'Empenho concluído com sucesso',
+                'data' => $empenhoModel ? $empenhoModel->toArray() : null
+            ]);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        } catch (\Exception $e) {
+            Log::error('Erro ao concluir empenho', [
+                'processo_id' => $request->route()->parameter('processo'),
+                'empenho_id' => $request->route()->parameter('empenho'),
+                'error' => $e->getMessage(),
+            ]);
+            return $this->handleException($e, 'Erro ao concluir empenho');
         }
     }
 }
