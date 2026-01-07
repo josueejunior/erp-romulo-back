@@ -14,12 +14,15 @@ return [
             ],
             'paths' => [
                 'use_absolute_path' => env('L5_SWAGGER_USE_ABSOLUTE_PATH', false),
+                'docs' => storage_path('api-docs'),
                 'docs_json' => 'api-docs.json',
                 'docs_yaml' => 'api-docs.yaml',
                 'format_to_use_for_docs' => env('L5_FORMAT_TO_USE_FOR_DOCS', 'json'),
                 'annotations' => [
                     base_path('app'),
                 ],
+                'excludes' => [],
+                'base' => env('L5_SWAGGER_BASE_PATH', null),
             ],
         ],
     ],
@@ -38,12 +41,15 @@ return [
         ],
         'paths' => [
             'use_absolute_path' => env('L5_SWAGGER_USE_ABSOLUTE_PATH', false),
+            'docs' => storage_path('api-docs'),
             'docs_json' => 'api-docs.json',
             'docs_yaml' => 'api-docs.yaml',
             'format_to_use_for_docs' => env('L5_FORMAT_TO_USE_FOR_DOCS', 'json'),
             'annotations' => [
                 base_path('app'),
             ],
+            'excludes' => [],
+            'base' => env('L5_SWAGGER_BASE_PATH', null),
         ],
     ],
     'constants' => [
