@@ -181,41 +181,41 @@ class ProcessoDocumentoFluxoCompletoTest extends TestCase
     /**
      * Sobrescrever postJson para sempre incluir headers
      */
-    public function postJson($uri, array $data = [], array $headers = [])
+    public function postJson($uri, array $data = [], array $headers = [], $options = 0)
     {
-        return parent::postJson($uri, $data, array_merge($this->getAuthHeaders(), $headers));
+        return parent::postJson($uri, $data, array_merge($this->getAuthHeaders(), $headers), $options);
     }
     
     /**
      * Sobrescrever getJson para sempre incluir headers
      */
-    public function getJson($uri, array $headers = [])
+    public function getJson($uri, array $headers = [], $options = 0)
     {
-        return parent::getJson($uri, array_merge($this->getAuthHeaders(), $headers));
+        return parent::getJson($uri, array_merge($this->getAuthHeaders(), $headers), $options);
     }
     
     /**
      * Sobrescrever patchJson para sempre incluir headers
      */
-    public function patchJson($uri, array $data = [], array $headers = [])
+    public function patchJson($uri, array $data = [], array $headers = [], $options = 0)
     {
-        return parent::patchJson($uri, $data, array_merge($this->getAuthHeaders(), $headers));
+        return parent::patchJson($uri, $data, array_merge($this->getAuthHeaders(), $headers), $options);
     }
     
     /**
      * Sobrescrever putJson para sempre incluir headers
      */
-    public function putJson($uri, array $data = [], array $headers = [])
+    public function putJson($uri, array $data = [], array $headers = [], $options = 0)
     {
-        return parent::putJson($uri, $data, array_merge($this->getAuthHeaders(), $headers));
+        return parent::putJson($uri, $data, array_merge($this->getAuthHeaders(), $headers), $options);
     }
     
     /**
      * Sobrescrever deleteJson para sempre incluir headers
      */
-    public function deleteJson($uri, array $data = [], array $headers = [])
+    public function deleteJson($uri, array $data = [], array $headers = [], $options = 0)
     {
-        return parent::deleteJson($uri, $data, array_merge($this->getAuthHeaders(), $headers));
+        return parent::deleteJson($uri, $data, array_merge($this->getAuthHeaders(), $headers), $options);
     }
     
     protected function tearDown(): void
