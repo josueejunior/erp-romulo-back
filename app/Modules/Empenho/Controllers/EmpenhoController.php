@@ -49,6 +49,73 @@ class EmpenhoController extends BaseApiController
     }
 
     /**
+     * API: Listar todos os empenhos da empresa (sem filtro de processo)
+     */
+    public function listAll(Request $request): JsonResponse
+    {
+        try {
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Preparar filtros
+            $filtros = [
+                'empresa_id' => $empresa->id,
+            ];
+            
+            // Adicionar filtros opcionais da query string
+            if ($request->has('processo_id') && $request->processo_id) {
+                $filtros['processo_id'] = $request->processo_id;
+            }
+            
+            if ($request->has('situacao') && $request->situacao) {
+                $filtros['situacao'] = $request->situacao;
+            }
+            
+            if ($request->has('concluido') && $request->concluido !== '') {
+                $filtros['concluido'] = $request->concluido === 'true' || $request->concluido === '1';
+            }
+            
+            // Adicionar per_page aos filtros se fornecido
+            if ($request->has('per_page')) {
+                $filtros['per_page'] = $request->per_page;
+            }
+            
+            // Executar Use Case
+            $paginado = $this->listarEmpenhosUseCase->executar($filtros);
+            
+            // Transformar para resposta
+            $items = collect($paginado->items())->map(function ($empenhoDomain) {
+                // Buscar modelo Eloquent para incluir relacionamentos
+                $empenhoModel = $this->empenhoRepository->buscarModeloPorId(
+                    $empenhoDomain->id,
+                    ['processo', 'contrato', 'autorizacaoFornecimento']
+                );
+                if (!$empenhoModel) {
+                    return null;
+                }
+                
+                $empenhoArray = $empenhoModel->toArray();
+                // Garantir que processo_id está presente
+                if (!isset($empenhoArray['processo_id']) && $empenhoModel->processo) {
+                    $empenhoArray['processo_id'] = $empenhoModel->processo->id;
+                }
+                return $empenhoArray;
+            })->filter();
+            
+            return response()->json([
+                'data' => $items->values()->all(),
+                'meta' => [
+                    'current_page' => $paginado->currentPage(),
+                    'last_page' => $paginado->lastPage(),
+                    'per_page' => $paginado->perPage(),
+                    'total' => $paginado->total(),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao listar empenhos');
+        }
+    }
+
+    /**
      * API: Listar empenhos (Route::module)
      */
     public function list(Request $request)

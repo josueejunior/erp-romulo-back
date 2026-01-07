@@ -90,6 +90,17 @@ class EmpenhoRepository implements EmpenhoRepositoryInterface
             $query->where('contrato_id', $filtros['contrato_id']);
         }
 
+        if (isset($filtros['situacao'])) {
+            $query->where('situacao', $filtros['situacao']);
+        }
+
+        if (isset($filtros['concluido'])) {
+            $query->where('concluido', $filtros['concluido']);
+        }
+
+        // Carregar relacionamentos necessários
+        $query->with(['processo', 'contrato', 'autorizacaoFornecimento']);
+
         $perPage = $filtros['per_page'] ?? 15;
         $paginator = $query->orderBy('criado_em', 'desc')->paginate($perPage);
 

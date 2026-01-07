@@ -238,6 +238,7 @@ Route::prefix('v1')->group(function () {
                     ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
                 
                 // Empenhos
+                Route::get('/empenhos', [ApiEmpenhoController::class, 'listAll']); // Listar todos os empenhos
                 Route::module('empenhos', ApiEmpenhoController::class, 'empenho')
                     ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
                 
