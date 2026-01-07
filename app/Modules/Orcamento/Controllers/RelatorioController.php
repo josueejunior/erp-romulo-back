@@ -26,11 +26,11 @@ class RelatorioController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        // Verificar se o plano tem acesso a relatórios
+        // Relatórios de orçamentos estão disponíveis para todos os planos com assinatura ativa
         $tenant = tenancy()->tenant;
-        if (!$tenant || !$tenant->temAcessoRelatorios()) {
+        if (!$tenant || !$tenant->temAssinaturaAtiva()) {
             return response()->json([
-                'message' => 'Os relatórios não estão disponíveis no seu plano. Faça upgrade para o plano Profissional ou superior.',
+                'message' => 'Você precisa ter uma assinatura ativa para acessar os relatórios.',
             ], 403);
         }
 
@@ -73,11 +73,11 @@ class RelatorioController extends Controller
      */
     public function export(Request $request): mixed
     {
-        // Verificar se o plano tem acesso a relatórios
+        // Relatórios de orçamentos estão disponíveis para todos os planos com assinatura ativa
         $tenant = tenancy()->tenant;
-        if (!$tenant || !$tenant->temAcessoRelatorios()) {
+        if (!$tenant || !$tenant->temAssinaturaAtiva()) {
             return response()->json([
-                'message' => 'Os relatórios não estão disponíveis no seu plano. Faça upgrade para o plano Profissional ou superior.',
+                'message' => 'Você precisa ter uma assinatura ativa para exportar relatórios.',
             ], 403);
         }
 
@@ -118,11 +118,11 @@ class RelatorioController extends Controller
      */
     public function porFornecedor(Request $request): JsonResponse
     {
-        // Verificar se o plano tem acesso a relatórios
+        // Relatórios de orçamentos estão disponíveis para todos os planos com assinatura ativa
         $tenant = tenancy()->tenant;
-        if (!$tenant || !$tenant->temAcessoRelatorios()) {
+        if (!$tenant || !$tenant->temAssinaturaAtiva()) {
             return response()->json([
-                'message' => 'Os relatórios não estão disponíveis no seu plano. Faça upgrade para o plano Profissional ou superior.',
+                'message' => 'Você precisa ter uma assinatura ativa para acessar os relatórios.',
             ], 403);
         }
 
@@ -158,11 +158,11 @@ class RelatorioController extends Controller
      */
     public function porStatus(Request $request): JsonResponse
     {
-        // Verificar se o plano tem acesso a relatórios
+        // Relatórios de orçamentos estão disponíveis para todos os planos com assinatura ativa
         $tenant = tenancy()->tenant;
-        if (!$tenant || !$tenant->temAcessoRelatorios()) {
+        if (!$tenant || !$tenant->temAssinaturaAtiva()) {
             return response()->json([
-                'message' => 'Os relatórios não estão disponíveis no seu plano. Faça upgrade para o plano Profissional ou superior.',
+                'message' => 'Você precisa ter uma assinatura ativa para acessar os relatórios.',
             ], 403);
         }
 

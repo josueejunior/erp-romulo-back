@@ -59,7 +59,21 @@ class Assinatura extends BaseModel
      */
     public function isAtiva(): bool
     {
-        return $this->status === 'ativa' && !$this->isExpirada();
+        $statusOk = $this->status === 'ativa';
+        $naoExpirada = !$this->isExpirada();
+        $isAtiva = $statusOk && $naoExpirada;
+        
+        \Log::debug('Assinatura::isAtiva() - Verificação', [
+            'assinatura_id' => $this->id,
+            'status' => $this->status,
+            'status_ok' => $statusOk,
+            'data_fim' => $this->data_fim?->format('Y-m-d'),
+            'dias_grace_period' => $this->dias_grace_period,
+            'nao_expirada' => $naoExpirada,
+            'is_ativa' => $isAtiva,
+        ]);
+        
+        return $isAtiva;
     }
 
     /**

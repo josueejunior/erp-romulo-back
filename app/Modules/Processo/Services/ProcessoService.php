@@ -97,39 +97,37 @@ class ProcessoService extends BaseService
     {
         $builder = $this->createQueryBuilder();
 
-        // Filtros opcionais
-        if (isset($params['status'])) {
-            $builder->where('status', $params['status']);
-        }
-
-        if (isset($params['modalidade'])) {
-            $builder->where('modalidade', $params['modalidade']);
-        }
-
-        if (isset($params['orgao_id'])) {
-            $builder->where('orgao_id', $params['orgao_id']);
-        }
-
-        // Busca livre
-        if (isset($params['search']) && $params['search']) {
+        // Filtros opcionais usando when()
+        $builder->when(isset($params['status']), function ($query) use ($params) {
+            return $query->where('status', $params['status']);
+        })
+        ->when(isset($params['modalidade']), function ($query) use ($params) {
+            return $query->where('modalidade', $params['modalidade']);
+        })
+        ->when(isset($params['orgao_id']), function ($query) use ($params) {
+            return $query->where('orgao_id', $params['orgao_id']);
+        })
+        ->when(isset($params['search']) && $params['search'], function ($query) use ($params) {
             $search = $params['search'];
-            $builder->where(function($q) use ($search) {
+            return $query->where(function($q) use ($search) {
                 $q->where('numero_modalidade', 'like', "%{$search}%")
                   ->orWhere('numero_processo_administrativo', 'like', "%{$search}%")
                   ->orWhere('objeto_resumido', 'like', "%{$search}%");
             });
-        }
-        
-        // Filtro para processos com orçamentos
-        if (isset($params['somente_com_orcamento']) && ($params['somente_com_orcamento'] === true || $params['somente_com_orcamento'] === 'true' || $params['somente_com_orcamento'] === '1')) {
-            \Log::debug('ProcessoService::list() - Aplicando filtro somente_com_orcamento', [
-                'param_value' => $params['somente_com_orcamento'],
-            ]);
-            // Usar whereHas com orcamento_itens que é a tabela intermediária atual
-            $builder->whereHas('itens.orcamentoItens', function($query) {
-                // Não precisa de condição adicional, apenas verificar existência
-            });
-        }
+        })
+        ->when(
+            isset($params['somente_com_orcamento']) && 
+            ($params['somente_com_orcamento'] === true || $params['somente_com_orcamento'] === 'true' || $params['somente_com_orcamento'] === '1'),
+            function ($query) use ($params) {
+                \Log::debug('ProcessoService::list() - Aplicando filtro somente_com_orcamento', [
+                    'param_value' => $params['somente_com_orcamento'],
+                ]);
+                // Usar whereHas com orcamento_itens que é a tabela intermediária atual
+                return $query->whereHas('itens.orcamentoItens', function($q) {
+                    // Não precisa de condição adicional, apenas verificar existência
+                });
+            }
+        );
 
         // Carregar relacionamentos padrão necessários para ProcessoListResource
         $defaultWith = ['orgao', 'setor'];
@@ -203,16 +201,49 @@ class ProcessoService extends BaseService
     {
         // Verificar se o tenant pode criar processo (limites de plano)
         $tenant = tenancy()->tenant;
-        if ($tenant && !$tenant->podeCriarProcesso()) {
-            $plano = $tenant->planoAtual;
+        
+        if (!$tenant) {
+            \Log::warning('ProcessoService::store() - Tenant não encontrado', [
+                'empresa_id' => $this->getEmpresaId(),
+            ]);
+            throw new DomainException('Tenant não encontrado. Verifique sua assinatura.');
+        }
+
+        // Verificar assinatura ativa primeiro
+        if (!$tenant->temAssinaturaAtiva()) {
+            \Log::warning('ProcessoService::store() - Assinatura não está ativa', [
+                'tenant_id' => $tenant->id,
+                'assinatura_atual_id' => $tenant->assinatura_atual_id,
+            ]);
+            throw new DomainException('Você não tem uma assinatura ativa. Ative sua assinatura para criar processos.');
+        }
+
+        $plano = $tenant->planoAtual;
+        if (!$plano) {
+            \Log::warning('ProcessoService::store() - Plano não encontrado', [
+                'tenant_id' => $tenant->id,
+                'plano_atual_id' => $tenant->plano_atual_id,
+            ]);
+            throw new DomainException('Plano não encontrado. Verifique sua assinatura.');
+        }
+
+        // Verificar se pode criar processo
+        if (!$tenant->podeCriarProcesso()) {
+            \Log::info('ProcessoService::store() - Bloqueado por limite do plano', [
+                'tenant_id' => $tenant->id,
+                'plano_id' => $plano->id,
+                'plano_nome' => $plano->nome,
+                'limite_processos' => $plano->limite_processos,
+                'restricao_diaria' => $plano->temRestricaoDiaria(),
+            ]);
             
             // Verificar se é restrição diária ou limite mensal
-            if ($plano && $plano->temRestricaoDiaria()) {
+            if ($plano->temRestricaoDiaria()) {
                 throw new DomainException('Você já criou um processo hoje. Planos Essencial e Profissional permitem apenas 1 processo por dia.');
             }
             
             // Verificar limite mensal
-            if ($plano && !$plano->temProcessosIlimitados()) {
+            if (!$plano->temProcessosIlimitados()) {
                 $limite = $plano->limite_processos;
                 throw new DomainException("Você atingiu o limite de {$limite} processos do seu plano. Faça upgrade para continuar criando processos.");
             }
@@ -354,25 +385,25 @@ class ProcessoService extends BaseService
             ->where('empresa_id', $empresaId)
             ->whereNotNull('empresa_id');
 
-        // Aplicar filtros (mas não para os cálculos de stats)
+        // Aplicar filtros (mas não para os cálculos de stats) usando when()
         $queryComFiltros = clone $baseQuery;
-        if (isset($filtros['status'])) {
-            $queryComFiltros->where('status', $filtros['status']);
-        }
-        if (isset($filtros['modalidade'])) {
-            $queryComFiltros->where('modalidade', $filtros['modalidade']);
-        }
-        if (isset($filtros['orgao_id'])) {
-            $queryComFiltros->where('orgao_id', $filtros['orgao_id']);
-        }
-        if (isset($filtros['search']) && $filtros['search']) {
+        $queryComFiltros->when(isset($filtros['status']), function ($query) use ($filtros) {
+            return $query->where('status', $filtros['status']);
+        })
+        ->when(isset($filtros['modalidade']), function ($query) use ($filtros) {
+            return $query->where('modalidade', $filtros['modalidade']);
+        })
+        ->when(isset($filtros['orgao_id']), function ($query) use ($filtros) {
+            return $query->where('orgao_id', $filtros['orgao_id']);
+        })
+        ->when(isset($filtros['search']) && $filtros['search'], function ($query) use ($filtros) {
             $search = $filtros['search'];
-            $queryComFiltros->where(function($q) use ($search) {
+            return $query->where(function($q) use ($search) {
                 $q->where('numero_modalidade', 'ilike', "%{$search}%")
                   ->orWhere('numero_processo_administrativo', 'ilike', "%{$search}%")
                   ->orWhere('objeto_resumido', 'ilike', "%{$search}%");
             });
-        }
+        });
 
         // Contar por status usando repository quando possível
         $filtrosParticipacao = array_merge($filtros, ['empresa_id' => $empresaId, 'status' => 'participacao', 'per_page' => 1]);

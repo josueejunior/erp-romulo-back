@@ -216,7 +216,30 @@ class Tenant extends BaseTenant implements TenantWithDatabase
      */
     public function temAssinaturaAtiva(): bool
     {
-        return $this->assinaturaAtual && $this->assinaturaAtual->isAtiva();
+        // Garantir que o relacionamento está carregado
+        if (!$this->relationLoaded('assinaturaAtual')) {
+            $this->load('assinaturaAtual');
+        }
+        
+        if (!$this->assinaturaAtual) {
+            \Log::debug('Tenant::temAssinaturaAtiva() - Assinatura não encontrada', [
+                'tenant_id' => $this->id,
+                'assinatura_atual_id' => $this->assinatura_atual_id,
+            ]);
+            return false;
+        }
+        
+        $isAtiva = $this->assinaturaAtual->isAtiva();
+        
+        \Log::debug('Tenant::temAssinaturaAtiva() - Verificação', [
+            'tenant_id' => $this->id,
+            'assinatura_id' => $this->assinaturaAtual->id,
+            'is_ativa' => $isAtiva,
+            'status' => $this->assinaturaAtual->status ?? 'N/A',
+            'data_fim' => $this->assinaturaAtual->data_fim ?? 'N/A',
+        ]);
+        
+        return $isAtiva;
     }
 
     /**
@@ -224,13 +247,31 @@ class Tenant extends BaseTenant implements TenantWithDatabase
      */
     public function podeCriarProcesso(): bool
     {
+        \Log::debug('Tenant::podeCriarProcesso() - Iniciando verificação', [
+            'tenant_id' => $this->id,
+            'assinatura_atual_id' => $this->assinatura_atual_id,
+            'plano_atual_id' => $this->plano_atual_id,
+        ]);
+
         if (!$this->temAssinaturaAtiva()) {
+            \Log::warning('Tenant::podeCriarProcesso() - Assinatura não está ativa', [
+                'tenant_id' => $this->id,
+            ]);
             return false;
+        }
+
+        // Garantir que o relacionamento está carregado
+        if (!$this->relationLoaded('planoAtual')) {
+            $this->load('planoAtual');
         }
 
         $plano = $this->planoAtual;
         
         if (!$plano) {
+            \Log::warning('Tenant::podeCriarProcesso() - Plano não encontrado', [
+                'tenant_id' => $this->id,
+                'plano_atual_id' => $this->plano_atual_id,
+            ]);
             return false;
         }
 
@@ -355,10 +396,25 @@ class Tenant extends BaseTenant implements TenantWithDatabase
 
     /**
      * Verifica se o plano tem acesso a relatórios
+     * Relatórios básicos (orçamentos) estão disponíveis para todos os planos com assinatura ativa
+     * Relatórios avançados (financeiros) requerem plano Profissional ou superior
      */
     public function temAcessoRelatorios(): bool
     {
-        return $this->temRecurso('relatorios');
+        // Se tem assinatura ativa, permite acesso básico a relatórios
+        // Relatórios avançados podem ter verificações adicionais nos controllers
+        if (!$this->temAssinaturaAtiva()) {
+            return false;
+        }
+
+        // Se tem o recurso 'relatorios', tem acesso completo
+        if ($this->temRecurso('relatorios')) {
+            return true;
+        }
+
+        // Planos Essenciais e superiores têm acesso básico a relatórios de orçamentos
+        // Mesmo sem o recurso 'relatorios' explícito, se tem assinatura ativa, permite
+        return true;
     }
 
     /**
