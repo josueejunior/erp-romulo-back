@@ -19,11 +19,17 @@ return [
                     'https://www.gestor.addsimp.com',
                     'https://gestor.addsimp.com.br',
                     'https://www.gestor.addsimp.com.br',
+                    'http://localhost:3000',
+                    'http://localhost:5173',
                 ]
         )
     ),
 
-    'allowed_origins_patterns' => [],
+    // Padrões regex para origens permitidas
+    'allowed_origins_patterns' => [
+        '#^https?://.*\.addsimp\.com$#',
+        '#^https?://.*\.addsimp\.com\.br$#',
+    ],
 
     'allowed_headers' => ['*'],
 
