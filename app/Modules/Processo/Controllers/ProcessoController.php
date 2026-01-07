@@ -83,14 +83,30 @@ class ProcessoController extends BaseApiController
         try {
             $empresa = $this->getEmpresaAtivaOrFail();
             
-            $filtros = array_merge($request->all(), [
-                'empresa_id' => $empresa->id,
-            ]);
+            // Preparar filtros (remover vazios e mapear)
+            $filtros = array_filter($request->all(), function($value) {
+                return $value !== '' && $value !== null;
+            });
+            
+            $filtros['empresa_id'] = $empresa->id;
 
             $resumo = $this->obterResumoProcessosUseCase->executar($filtros);
 
             return response()->json(['data' => $resumo]);
+        } catch (\InvalidArgumentException $e) {
+            \Log::error('Erro de validação ao obter resumo de processos', [
+                'error' => $e->getMessage(),
+                'filtros' => $request->all(),
+            ]);
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 400);
         } catch (\Exception $e) {
+            \Log::error('Erro ao obter resumo de processos', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'filtros' => $request->all(),
+            ]);
             return $this->handleException($e, 'Erro ao obter resumo de processos');
         }
     }
