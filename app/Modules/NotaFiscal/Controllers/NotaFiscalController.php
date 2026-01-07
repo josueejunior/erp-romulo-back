@@ -310,22 +310,18 @@ class NotaFiscalController extends BaseApiController
         $empresa = $this->getEmpresaAtivaOrFail();
         
         try {
-            // Validar dados se não vierem já validados
-            if (!$request instanceof NotaFiscalCreateRequest) {
-                $rules = (new NotaFiscalCreateRequest())->rules();
-                $validator = Validator::make($request->all(), $rules);
-                
-                if ($validator->fails()) {
-                    return response()->json([
-                        'message' => 'Dados inválidos',
-                        'errors' => $validator->errors()
-                    ], 422);
-                }
-                $data = $validator->validated();
-            } else {
-                $data = $request->validated();
+            // Validar dados usando as mesmas regras do create
+            $rules = (new NotaFiscalCreateRequest())->rules();
+            $validator = Validator::make($request->all(), $rules);
+            
+            if ($validator->fails()) {
+                return response()->json([
+                    'message' => 'Dados inválidos',
+                    'errors' => $validator->errors()
+                ], 422);
             }
             
+            $data = $validator->validated();
             $notaFiscal = $this->notaFiscalService->update($processo, $notaFiscal, $data, $request, $empresa->id);
             return response()->json($notaFiscal);
         } catch (\Illuminate\Validation\ValidationException $e) {
