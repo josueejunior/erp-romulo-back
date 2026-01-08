@@ -101,10 +101,36 @@ class EmpenhoController extends BaseApiController
                 }
                 
                 $empenhoArray = $empenhoModel->toArray();
-                // Garantir que processo_id está presente
-                if (!isset($empenhoArray['processo_id']) && $empenhoModel->processo) {
-                    $empenhoArray['processo_id'] = $empenhoModel->processo->id;
+                
+                // Incluir dados do processo se existir
+                if ($empenhoModel->processo) {
+                    $empenhoArray['processo'] = [
+                        'id' => $empenhoModel->processo->id,
+                        'numero' => $empenhoModel->processo->numero ?? null,
+                        'objeto' => $empenhoModel->processo->objeto ?? null,
+                    ];
+                    // Garantir que processo_id está presente
+                    if (!isset($empenhoArray['processo_id'])) {
+                        $empenhoArray['processo_id'] = $empenhoModel->processo->id;
+                    }
                 }
+                
+                // Incluir dados do contrato se existir
+                if ($empenhoModel->contrato) {
+                    $empenhoArray['contrato'] = [
+                        'id' => $empenhoModel->contrato->id,
+                        'numero' => $empenhoModel->contrato->numero ?? null,
+                    ];
+                }
+                
+                // Incluir dados da autorização de fornecimento se existir
+                if ($empenhoModel->autorizacaoFornecimento) {
+                    $empenhoArray['autorizacao_fornecimento'] = [
+                        'id' => $empenhoModel->autorizacaoFornecimento->id,
+                        'numero' => $empenhoModel->autorizacaoFornecimento->numero ?? null,
+                    ];
+                }
+                
                 return $empenhoArray;
             })->filter();
             
@@ -169,7 +195,39 @@ class EmpenhoController extends BaseApiController
                     $empenhoDomain->id,
                     ['processo', 'contrato', 'autorizacaoFornecimento']
                 );
-                return $empenhoModel ? $empenhoModel->toArray() : null;
+                
+                if (!$empenhoModel) {
+                    return null;
+                }
+                
+                $empenhoArray = $empenhoModel->toArray();
+                
+                // Incluir dados do processo se existir
+                if ($empenhoModel->processo) {
+                    $empenhoArray['processo'] = [
+                        'id' => $empenhoModel->processo->id,
+                        'numero' => $empenhoModel->processo->numero ?? null,
+                        'objeto' => $empenhoModel->processo->objeto ?? null,
+                    ];
+                }
+                
+                // Incluir dados do contrato se existir
+                if ($empenhoModel->contrato) {
+                    $empenhoArray['contrato'] = [
+                        'id' => $empenhoModel->contrato->id,
+                        'numero' => $empenhoModel->contrato->numero ?? null,
+                    ];
+                }
+                
+                // Incluir dados da autorização de fornecimento se existir
+                if ($empenhoModel->autorizacaoFornecimento) {
+                    $empenhoArray['autorizacao_fornecimento'] = [
+                        'id' => $empenhoModel->autorizacaoFornecimento->id,
+                        'numero' => $empenhoModel->autorizacaoFornecimento->numero ?? null,
+                    ];
+                }
+                
+                return $empenhoArray;
             })->filter();
             
             return response()->json([

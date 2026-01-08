@@ -129,6 +129,11 @@ class AppServiceProvider extends ServiceProvider
         );
 
         $this->app->bind(
+            \App\Domain\Orcamento\Repositories\RelatorioOrcamentoRepositoryInterface::class,
+            \App\Infrastructure\Persistence\Eloquent\RelatorioOrcamentoRepository::class
+        );
+
+        $this->app->bind(
             \App\Domain\Orgao\Repositories\OrgaoRepositoryInterface::class,
             \App\Infrastructure\Persistence\Eloquent\OrgaoRepository::class
         );
