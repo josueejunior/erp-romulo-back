@@ -119,14 +119,14 @@ class ContratoController extends BaseApiController
             $empresa = $this->getEmpresaAtivaOrFail();
             $tenantId = $this->getTenantId();
             
-            // Preparar filtros
+            // Preparar filtros - apenas aplicar filtros booleanos se valor NÃO for vazio
             $filters = [
-                'busca' => $request->busca,
-                'orgao_id' => $request->orgao_id,
-                'srp' => $request->has('srp') ? $request->boolean('srp') : null,
-                'situacao' => $request->situacao,
-                'vigente' => $request->has('vigente') ? $request->boolean('vigente') : null,
-                'vencer_em' => $request->vencer_em,
+                'busca' => $request->filled('busca') ? $request->busca : null,
+                'orgao_id' => $request->filled('orgao_id') ? $request->orgao_id : null,
+                'srp' => $request->filled('srp') ? $request->boolean('srp') : null,
+                'situacao' => $request->filled('situacao') ? $request->situacao : null,
+                'vigente' => $request->filled('vigente') ? $request->boolean('vigente') : null,
+                'vencer_em' => $request->filled('vencer_em') ? $request->vencer_em : null,
                 'somente_alerta' => $request->boolean('somente_alerta'),
             ];
             
