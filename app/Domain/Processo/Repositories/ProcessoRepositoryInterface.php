@@ -48,6 +48,14 @@ interface ProcessoRepositoryInterface
      * @return \App\Modules\Processo\Models\Processo|null
      */
     public function buscarModeloPorId(int $id, array $with = []): ?\App\Modules\Processo\Models\Processo;
+
+    /**
+     * Buscar modelos Eloquent com filtros (para calendário e listagens especiais)
+     * @param array $filtros Filtros a aplicar (empresa_id, status, data_hora_sessao_publica_inicio, data_hora_sessao_publica_fim)
+     * @param array $with Relacionamentos para eager loading
+     * @return \Illuminate\Database\Eloquent\Collection
+     */
+    public function buscarModelosComFiltros(array $filtros = [], array $with = []): \Illuminate\Database\Eloquent\Collection;
 }
 
 

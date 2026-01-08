@@ -38,9 +38,14 @@ class CalendarioController extends BaseApiController
      */
     public function disputas(Request $request): JsonResponse
     {
+        \Log::info('CalendarioController::disputas - ✅ Método chamado (DDD)', [
+            'request_params' => $request->all(),
+        ]);
+
         // 1. Verificar acesso ao plano
         $tenant = $this->getTenant();
         if (!$tenant || !$tenant->temAcessoCalendario()) {
+            \Log::warning('CalendarioController::disputas - Acesso negado pelo plano');
             return response()->json(CalendarioPresenter::erroAcessoPlano(), 403);
         }
 
@@ -48,15 +53,27 @@ class CalendarioController extends BaseApiController
             // 2. Obter contexto
             $empresa = $this->getEmpresaAtivaOrFail();
             $tenantId = $this->getTenantId();
+            \Log::debug('CalendarioController::disputas - Contexto obtido', [
+                'empresa_id' => $empresa->id,
+                'tenant_id' => $tenantId,
+            ]);
             
             // 3. Criar DTO a partir do Request
             $dto = BuscarCalendarioDisputasDTO::fromRequest(
                 $request->all(),
                 $empresa->id
             );
+            \Log::debug('CalendarioController::disputas - DTO criado', [
+                'empresa_id' => $dto->empresaId,
+                'data_inicio' => $dto->getDataInicioFormatted(),
+                'data_fim' => $dto->getDataFimFormatted(),
+            ]);
             
             // 4. Executar Use Case
             $eventos = $this->buscarCalendarioDisputasUseCase->executar($dto, $tenantId);
+            \Log::debug('CalendarioController::disputas - Use Case executado', [
+                'total_eventos' => $eventos->count(),
+            ]);
             
             // 5. Formatar resposta via Presenter
             return response()->json(CalendarioPresenter::formatarDisputas($eventos));
@@ -81,24 +98,40 @@ class CalendarioController extends BaseApiController
      */
     public function julgamento(Request $request): JsonResponse
     {
+        \Log::info('CalendarioController::julgamento - ✅ Método chamado (DDD)', [
+            'request_params' => $request->all(),
+        ]);
+
         // 1. Verificar acesso ao plano
         $tenant = $this->getTenant();
         if (!$tenant || !$tenant->temAcessoCalendario()) {
+            \Log::warning('CalendarioController::julgamento - Acesso negado pelo plano');
             return response()->json(CalendarioPresenter::erroAcessoPlano(), 403);
         }
 
         try {
             // 2. Obter contexto
             $empresa = $this->getEmpresaAtivaOrFail();
+            \Log::debug('CalendarioController::julgamento - Empresa obtida', [
+                'empresa_id' => $empresa->id,
+            ]);
             
             // 3. Criar DTO a partir do Request
             $dto = BuscarCalendarioJulgamentoDTO::fromRequest(
                 $request->all(),
                 $empresa->id
             );
+            \Log::debug('CalendarioController::julgamento - DTO criado', [
+                'empresa_id' => $dto->empresaId,
+                'data_inicio' => $dto->getDataInicioFormatted(),
+                'data_fim' => $dto->getDataFimFormatted(),
+            ]);
             
             // 4. Executar Use Case
             $processos = $this->buscarCalendarioJulgamentoUseCase->executar($dto);
+            \Log::debug('CalendarioController::julgamento - Use Case executado', [
+                'total_processos' => $processos->count(),
+            ]);
             
             // 5. Formatar resposta via Presenter
             return response()->json(CalendarioPresenter::formatarJulgamentos($processos));
