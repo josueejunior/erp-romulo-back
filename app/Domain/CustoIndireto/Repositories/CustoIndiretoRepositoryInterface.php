@@ -9,6 +9,7 @@ interface CustoIndiretoRepositoryInterface
 {
     public function criar(CustoIndireto $custo): CustoIndireto;
     public function buscarPorId(int $id): ?CustoIndireto;
+    public function buscarModeloPorId(int $id): ?\App\Modules\Custo\Models\CustoIndireto;
     public function buscarComFiltros(array $filtros = []): LengthAwarePaginator;
     public function atualizar(CustoIndireto $custo): CustoIndireto;
     public function deletar(int $id): void;

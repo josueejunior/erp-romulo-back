@@ -244,6 +244,9 @@ class ProcessoRepository implements ProcessoRepositoryInterface
     /**
      * Buscar modelo Eloquent por ID com relacionamentos (para casos especiais)
      * Use apenas quando realmente necessário (ex: CalendarioService que precisa de relacionamentos)
+     * 
+     * ⚠️ ATENÇÃO: Este método não aplica Global Scope de empresa automaticamente.
+     * Certifique-se de validar empresa_id no Use Case ou Controller.
      */
     public function buscarModeloPorId(int $id, array $with = []): ?ProcessoModel
     {

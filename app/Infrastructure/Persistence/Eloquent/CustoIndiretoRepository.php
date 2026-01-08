@@ -54,21 +54,50 @@ class CustoIndiretoRepository implements CustoIndiretoRepositoryInterface
         // Aplicar filtro de empresa_id com isolamento
         $query = $this->aplicarFiltroEmpresa(CustoIndiretoModel::class, $filtros);
 
+        // Busca livre
+        if (isset($filtros['search']) && $filtros['search']) {
+            $search = $filtros['search'];
+            $query->where(function($q) use ($search) {
+                $q->where('descricao', 'ilike', "%{$search}%")
+                  ->orWhere('categoria', 'ilike', "%{$search}%");
+            });
+        }
+
+        // Filtro por data início
+        if (isset($filtros['data_inicio'])) {
+            $query->where('data', '>=', $filtros['data_inicio']);
+        }
+
+        // Filtro por data fim
+        if (isset($filtros['data_fim'])) {
+            $query->where('data', '<=', $filtros['data_fim']);
+        }
+
+        // Filtro por categoria
         if (isset($filtros['categoria'])) {
             $query->where('categoria', $filtros['categoria']);
         }
 
         $perPage = $filtros['per_page'] ?? 15;
-        $paginator = $query->orderBy('criado_em', 'desc')->paginate($perPage);
+        
+        // Ordenação: data desc, depois criado_em desc
+        $paginator = $query->orderBy('data', 'desc')
+            ->orderBy('criado_em', 'desc')
+            ->paginate($perPage);
 
         // Validar que todos os registros pertencem à empresa correta
-        $this->validarEmpresaIds($paginator, $filtros['empresa_id']);
+        $this->validarEmpresaIds($paginator, $filtros['empresa_id'] ?? null);
 
         $paginator->getCollection()->transform(function ($model) {
             return $this->toDomain($model);
         });
 
         return $paginator;
+    }
+    
+    public function buscarModeloPorId(int $id): ?CustoIndiretoModel
+    {
+        return CustoIndiretoModel::find($id);
     }
 
     public function atualizar(CustoIndireto $custo): CustoIndireto

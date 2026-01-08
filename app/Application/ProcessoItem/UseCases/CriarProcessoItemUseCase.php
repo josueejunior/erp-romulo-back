@@ -1,0 +1,88 @@
+<?php
+
+namespace App\Application\ProcessoItem\UseCases;
+
+use App\Application\ProcessoItem\DTOs\CriarProcessoItemDTO;
+use App\Domain\ProcessoItem\Entities\ProcessoItem;
+use App\Domain\ProcessoItem\Repositories\ProcessoItemRepositoryInterface;
+use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
+use App\Domain\Exceptions\NotFoundException;
+use App\Domain\Exceptions\ProcessoEmExecucaoException;
+use DomainException;
+
+/**
+ * Use Case: Criar Item de Processo
+ */
+class CriarProcessoItemUseCase
+{
+    public function __construct(
+        private ProcessoItemRepositoryInterface $processoItemRepository,
+        private ProcessoRepositoryInterface $processoRepository,
+    ) {}
+
+    /**
+     * Executar o caso de uso
+     */
+    public function executar(CriarProcessoItemDTO $dto): ProcessoItem
+    {
+        // Buscar processo existente
+        $processo = $this->processoRepository->buscarPorId($dto->processoId);
+        
+        if (!$processo) {
+            throw new NotFoundException('Processo', $dto->processoId);
+        }
+        
+        // Validar que o processo pertence à empresa
+        if ($processo->empresaId !== $dto->empresaId) {
+            throw new DomainException('Processo não pertence à empresa ativa.');
+        }
+        
+        // Validar regra de negócio: processo não pode estar em execução
+        if ($processo->estaEmExecucao()) {
+            throw new ProcessoEmExecucaoException('Não é possível editar itens de processos em execução.', $dto->processoId);
+        }
+        
+        // Se número do item não foi fornecido, calcular próximo número
+        $numeroItem = $dto->numeroItem;
+        if (!$numeroItem) {
+            $processoModel = $this->processoRepository->buscarModeloPorId($dto->processoId, ['itens']);
+            if ($processoModel) {
+                $ultimoItem = $processoModel->itens()->orderBy('numero_item', 'desc')->first();
+                $numeroItem = $ultimoItem ? ($ultimoItem->numero_item + 1) : 1;
+            } else {
+                $numeroItem = 1;
+            }
+        }
+        
+        // Calcular valor estimado total
+        $valorEstimadoTotal = ($dto->quantidade > 0 && $dto->valorEstimado > 0) 
+            ? round($dto->quantidade * $dto->valorEstimado, 2) 
+            : 0.0;
+        
+        // Criar entidade ProcessoItem
+        $processoItem = new ProcessoItem(
+            id: null,
+            processoId: $dto->processoId,
+            fornecedorId: $dto->fornecedorId,
+            transportadoraId: $dto->transportadoraId,
+            numeroItem: (string) $numeroItem,
+            codigoInterno: $dto->codigoInterno,
+            quantidade: $dto->quantidade,
+            unidade: $dto->unidade,
+            especificacaoTecnica: $dto->especificacaoTecnica,
+            marcaModeloReferencia: $dto->marcaModeloReferencia,
+            observacoesEdital: $dto->observacoesEdital,
+            exigeAtestado: $dto->exigeAtestado,
+            quantidadeMinimaAtestado: $dto->quantidadeMinimaAtestado,
+            quantidadeAtestadoCapTecnica: $dto->quantidadeAtestadoCapTecnica,
+            valorEstimado: $dto->valorEstimado,
+            valorEstimadoTotal: $valorEstimadoTotal,
+            statusItem: 'pendente',
+            observacoes: $dto->observacoes,
+        );
+        
+        // Persistir item
+        return $this->processoItemRepository->criar($processoItem);
+    }
+}
+

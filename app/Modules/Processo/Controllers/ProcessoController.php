@@ -12,11 +12,30 @@ use App\Modules\Processo\Resources\ProcessoResource;
 use App\Modules\Processo\Resources\ProcessoListResource;
 use App\Application\Processo\UseCases\ExportarProcessosUseCase;
 use App\Application\Processo\UseCases\ObterResumoProcessosUseCase;
+use App\Application\Processo\UseCases\CriarProcessoUseCase;
+use App\Application\Processo\UseCases\AtualizarProcessoUseCase;
+use App\Application\Processo\UseCases\ExcluirProcessoUseCase;
+use App\Application\Processo\UseCases\ListarProcessosUseCase;
+use App\Application\Processo\UseCases\BuscarProcessoUseCase;
+use App\Application\Processo\UseCases\MoverParaJulgamentoUseCase;
+use App\Application\Processo\UseCases\MarcarProcessoVencidoUseCase;
+use App\Application\Processo\UseCases\MarcarProcessoPerdidoUseCase;
+use App\Application\Processo\UseCases\ConfirmarPagamentoProcessoUseCase;
+use App\Application\Processo\UseCases\BuscarHistoricoConfirmacoesUseCase;
+use App\Application\Processo\DTOs\CriarProcessoDTO;
+use App\Application\Processo\DTOs\AtualizarProcessoDTO;
+use App\Application\Processo\DTOs\ListarProcessosDTO;
+use App\Application\Processo\Presenters\ProcessoApiPresenter;
+use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
+use App\Domain\Exceptions\NotFoundException;
+use App\Http\Requests\Processo\ProcessoCreateRequest;
+use App\Http\Requests\Processo\ProcessoUpdateRequest;
 use App\Http\Requests\Processo\ConfirmarPagamentoRequest;
 use App\Helpers\PermissionHelper;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
+use Carbon\Carbon;
 
 /**
  * Controller para gerenciar processos licitatórios
@@ -55,10 +74,22 @@ class ProcessoController extends BaseApiController
         ProcessoValidationService $validationService,
         private ExportarProcessosUseCase $exportarProcessosUseCase,
         private ObterResumoProcessosUseCase $obterResumoProcessosUseCase,
+        private CriarProcessoUseCase $criarProcessoUseCase,
+        private AtualizarProcessoUseCase $atualizarProcessoUseCase,
+        private ExcluirProcessoUseCase $excluirProcessoUseCase,
+        private ListarProcessosUseCase $listarProcessosUseCase,
+        private BuscarProcessoUseCase $buscarProcessoUseCase,
+        private MoverParaJulgamentoUseCase $moverParaJulgamentoUseCase,
+        private MarcarProcessoVencidoUseCase $marcarProcessoVencidoUseCase,
+        private MarcarProcessoPerdidoUseCase $marcarProcessoPerdidoUseCase,
+        private ConfirmarPagamentoProcessoUseCase $confirmarPagamentoProcessoUseCase,
+        private BuscarHistoricoConfirmacoesUseCase $buscarHistoricoConfirmacoesUseCase,
+        private ProcessoApiPresenter $presenter,
+        private ProcessoRepositoryInterface $processoRepository,
         \App\Modules\Processo\Services\ProcessoDocumentoService $processoDocumentoService = null
     ) {
         $this->service = $processoService; // Para RoutingController (compatibilidade)
-        $this->processoService = $processoService;
+        $this->processoService = $processoService; // Mantido para métodos específicos que ainda usam Service
         $this->statusService = $statusService;
         $this->validationService = $validationService;
         $this->processoDocumentoService = $processoDocumentoService;
@@ -70,6 +101,29 @@ class ProcessoController extends BaseApiController
         if ($processo->empresa_id !== $empresa->id) {
             abort(response()->json(['message' => 'Processo não pertence à empresa ativa'], 403));
         }
+    }
+    
+    /**
+     * Resolver processo a partir da rota (compatibilidade API e Web)
+     * 
+     * @param Request $request
+     * @return Processo|null Modelo Eloquent ou null
+     */
+    protected function resolveProcessoFromRoute(Request $request): ?Processo
+    {
+        // Tentar route binding primeiro (web routes)
+        $processo = $request->route()->parameter('processo');
+        
+        if ($processo instanceof Processo) {
+            return $processo;
+        }
+        
+        // Se for ID, buscar via repository
+        if ($processo) {
+            return $this->processoRepository->buscarModeloPorId((int) $processo);
+        }
+        
+        return null;
     }
 
     /**
@@ -145,60 +199,99 @@ class ProcessoController extends BaseApiController
     /**
      * POST /processos/{processo}/mover-julgamento
      * Move processo para status de julgamento
+     * 
+     * ✅ DDD: Usa Use Case e valida empresa
      */
-    public function moverParaJulgamento(Request $request, Processo $processo): JsonResponse
+    public function moverParaJulgamento(Request $request): JsonResponse
     {
         try {
-            $processo = $this->processoService->moverParaJulgamento($processo, $this->statusService);
+            $empresa = $this->getEmpresaAtivaOrFail();
+            $processoId = (int) $request->route()->parameter('processo');
+            
+            // Executar Use Case (retorna entidade de domínio)
+            $processoDomain = $this->moverParaJulgamentoUseCase->executar($processoId, $empresa->id);
+            
+            // Buscar modelo Eloquent para serialização
+            $processoModel = $this->processoRepository->buscarModeloPorId($processoDomain->id, ['orgao', 'setor']);
 
             return response()->json([
                 'message' => 'Processo movido para julgamento com sucesso',
-                'data' => new ProcessoResource($processo->load(['orgao', 'setor']))
+                'data' => new ProcessoResource($processoModel)
             ]);
+        } catch (NotFoundException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 400);
+            \Log::error('Erro ao mover processo para julgamento', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json(['message' => $e->getMessage()], 400);
         }
     }
 
     /**
      * POST /processos/{processo}/marcar-vencido
      * Marca processo como vencido
+     * 
+     * ✅ DDD: Usa Use Case e valida empresa
      */
-    public function marcarVencido(Request $request, Processo $processo): JsonResponse
+    public function marcarVencido(Request $request): JsonResponse
     {
         try {
-            $processo = $this->processoService->marcarVencido($processo, $this->statusService);
+            $empresa = $this->getEmpresaAtivaOrFail();
+            $processoId = (int) $request->route()->parameter('processo');
+            
+            // Executar Use Case (retorna modelo Eloquent - ainda necessário para ProcessoStatusService)
+            $processoModel = $this->marcarProcessoVencidoUseCase->executar($processoId, $empresa->id);
 
             return response()->json([
                 'message' => 'Processo marcado como vencido e movido para execução',
-                'data' => new ProcessoResource($processo->load(['orgao', 'setor']))
+                'data' => new ProcessoResource($processoModel)
             ]);
+        } catch (NotFoundException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 400);
+            \Log::error('Erro ao marcar processo como vencido', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json(['message' => $e->getMessage()], 400);
         }
     }
 
     /**
      * POST /processos/{processo}/marcar-perdido
      * Marca processo como perdido
+     * 
+     * ✅ DDD: Usa Use Case e valida empresa
      */
-    public function marcarPerdido(Request $request, Processo $processo): JsonResponse
+    public function marcarPerdido(Request $request): JsonResponse
     {
         try {
-            $processo = $this->processoService->marcarPerdido($processo, $this->statusService);
+            $empresa = $this->getEmpresaAtivaOrFail();
+            $processoId = (int) $request->route()->parameter('processo');
+            
+            // Executar Use Case (retorna modelo Eloquent - ainda necessário para ProcessoStatusService)
+            $processoModel = $this->marcarProcessoPerdidoUseCase->executar($processoId, $empresa->id);
 
             return response()->json([
                 'message' => 'Processo marcado como perdido',
-                'data' => new ProcessoResource($processo->load(['orgao', 'setor']))
+                'data' => new ProcessoResource($processoModel)
             ]);
+        } catch (NotFoundException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 400);
+            \Log::error('Erro ao marcar processo como perdido', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json(['message' => $e->getMessage()], 400);
         }
     }
 
@@ -223,74 +316,73 @@ class ProcessoController extends BaseApiController
      * POST /processos/{processo}/confirmar-pagamento
      * Confirma pagamento do processo e atualiza saldos
      * Usa Form Request para validação
+     * 
+     * ✅ DDD: Usa Use Case e valida empresa
      */
-    public function confirmarPagamento(ConfirmarPagamentoRequest $request, Processo $processo): JsonResponse
+    public function confirmarPagamento(ConfirmarPagamentoRequest $request): JsonResponse
     {
         try {
+            $empresa = $this->getEmpresaAtivaOrFail();
+            $processoId = (int) $request->route()->parameter('processo');
+            
             // Request já está validado via Form Request
             $validated = $request->validated();
+            $dataRecebimento = isset($validated['data_recebimento']) 
+                ? Carbon::parse($validated['data_recebimento']) 
+                : null;
 
-            $processo = $this->processoService->confirmarPagamento(
-                $processo,
-                $validated['data_recebimento'] ?? null
+            // Executar Use Case (retorna modelo Eloquent - necessário para itens)
+            $processoModel = $this->confirmarPagamentoProcessoUseCase->executar(
+                $processoId,
+                $empresa->id,
+                $dataRecebimento
             );
 
             return response()->json([
                 'message' => 'Pagamento confirmado e saldos atualizados com sucesso',
-                'data' => new ProcessoResource($processo)
+                'data' => new ProcessoResource($processoModel)
             ]);
+        } catch (NotFoundException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 400);
+            \Log::error('Erro ao confirmar pagamento', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json(['message' => $e->getMessage()], 400);
         }
     }
 
     /**
      * GET /processos/{processo}/confirmacoes-pagamento
      * Retorna histórico de confirmações de pagamento
+     * 
+     * ✅ DDD: Usa Use Case
      */
-    public function historicoConfirmacoes(Request $request, Processo $processo): JsonResponse
+    public function historicoConfirmacoes(Request $request): JsonResponse
     {
         try {
-            $historico = [];
+            $empresa = $this->getEmpresaAtivaOrFail();
+            $processoId = (int) $request->route()->parameter('processo');
             
-            // Se o processo já tem data de recebimento, incluir no histórico
-            if ($processo->data_recebimento_pagamento) {
-                // Calcular valores no momento da confirmação
-                $receitaTotal = 0;
-                $custosDiretos = 0;
-                
-                foreach ($processo->itens as $item) {
-                    if (in_array($item->status_item, ['aceito', 'aceito_habilitado'])) {
-                        $receitaTotal += $item->valor_pago ?? $item->valor_faturado ?? 0;
-                    }
-                }
-                
-                // Buscar custos diretos (notas fiscais de entrada)
-                $notasEntrada = \App\Modules\NotaFiscal\Models\NotaFiscal::where('processo_id', $processo->id)
-                    ->where('tipo', 'entrada')
-                    ->get();
-                
-                $custosDiretos = $notasEntrada->sum(fn($nf) => $nf->custo_total ?? 0);
-                
-                $historico[] = [
-                    'id' => 1,
-                    'data_recebimento' => $processo->data_recebimento_pagamento->format('Y-m-d'),
-                    'data_confirmacao' => $processo->updated_at->format('Y-m-d H:i:s'),
-                    'confirmado_por' => $processo->updated_by ?? null,
-                    'receita_total' => round($receitaTotal, 2),
-                    'custos_diretos' => round($custosDiretos, 2),
-                    'lucro_bruto' => round($receitaTotal - $custosDiretos, 2),
-                    'status' => 'confirmado',
-                ];
-            }
+            // Executar Use Case
+            $historico = $this->buscarHistoricoConfirmacoesUseCase->executar($processoId, $empresa->id);
             
             return response()->json([
                 'data' => $historico,
                 'total' => count($historico),
             ]);
+        } catch (NotFoundException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
+            \Log::error('Erro ao buscar histórico de confirmações', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
             return response()->json([
                 'message' => 'Erro ao buscar histórico: ' . $e->getMessage()
             ], 500);
@@ -300,20 +392,36 @@ class ProcessoController extends BaseApiController
     /**
      * GET /processos - Listar processos
      * Método chamado pelo Route::module()
+     * 
+     * ✅ DDD: Usa Use Case e DTO
      */
     public function list(Request $request): JsonResponse
     {
         try {
-            $params = $this->processoService->createListParamBag($request->all());
-            $processos = $this->processoService->list($params);
-
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Criar DTO a partir do Request
+            $dto = ListarProcessosDTO::fromRequest($request->all(), $empresa->id);
+            
+            // Executar Use Case (retorna entidades de domínio paginadas)
+            $paginado = $this->listarProcessosUseCase->executar($dto);
+            
+            // Buscar modelos Eloquent para serialização (apenas para relacionamentos)
+            $models = collect($paginado->items())->map(function ($processoDomain) {
+                return $this->processoRepository->buscarModeloPorId(
+                    $processoDomain->id,
+                    ['orgao', 'setor', 'itens', 'itens.formacoesPreco', 'documentos', 'documentos.documentoHabilitacao', 'empenhos']
+                );
+            })->filter();
+            
+            // Usar Presenter para serialização (ou Resource para manter compatibilidade)
             return response()->json([
-                'data' => ProcessoListResource::collection($processos->items()),
+                'data' => ProcessoListResource::collection($models),
                 'meta' => [
-                    'current_page' => $processos->currentPage(),
-                    'last_page' => $processos->lastPage(),
-                    'per_page' => $processos->perPage(),
-                    'total' => $processos->total(),
+                    'current_page' => $paginado->currentPage(),
+                    'last_page' => $paginado->lastPage(),
+                    'per_page' => $paginado->perPage(),
+                    'total' => $paginado->total(),
                 ]
             ]);
         } catch (\Exception $e) {
@@ -340,19 +448,44 @@ class ProcessoController extends BaseApiController
     /**
      * GET /processos/{id} - Buscar processo por ID
      * Método chamado pelo Route::module()
+     * 
+     * ✅ DDD: Usa Use Case e DTO
      */
     public function get(Request $request, int|string $id): JsonResponse
     {
-        $params = $this->processoService->createFindByIdParamBag($request->all());
-        $processo = $this->processoService->findById($id, $params);
+        try {
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Executar Use Case (retorna entidade de domínio)
+            $processoDomain = $this->buscarProcessoUseCase->executar((int) $id, $empresa->id);
+            
+            // Buscar modelo Eloquent para serialização (com relacionamentos)
+            $with = $request->get('with', ['orgao', 'setor', 'itens', 'itens.formacoesPreco', 'documentos', 'documentos.documentoHabilitacao', 'empenhos']);
+            if (is_string($with)) {
+                $with = explode(',', $with);
+            }
+            $processoModel = $this->processoRepository->buscarModeloPorId($processoDomain->id, $with);
 
-        if (!$processo) {
-            return response()->json(['message' => 'Processo não encontrado'], 404);
+            if (!$processoModel) {
+                return response()->json(['message' => 'Processo não encontrado'], 404);
+            }
+
+            return response()->json([
+                'data' => new ProcessoResource($processoModel)
+            ]);
+        } catch (NotFoundException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (\Exception $e) {
+            \Log::error('Erro ao buscar processo', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'id' => $id,
+            ]);
+            
+            return response()->json([
+                'message' => 'Erro ao buscar processo: ' . $e->getMessage()
+            ], 500);
         }
-
-        return response()->json([
-            'data' => new ProcessoResource($processo)
-        ]);
     }
 
     /**
@@ -366,33 +499,31 @@ class ProcessoController extends BaseApiController
     /**
      * POST /processos - Criar novo processo
      * Método chamado pelo Route::module()
+     * 
+     * ✅ DDD: Usa FormRequest, Use Case e DTO
      */
-    public function store(Request $request): JsonResponse
+    public function store(ProcessoCreateRequest $request): JsonResponse
     {
         try {
-            $validator = $this->processoService->validateStoreData($request->all());
+            $empresa = $this->getEmpresaAtivaOrFail();
             
-            if ($validator->fails()) {
-                $errors = $validator->errors();
-                
-                // Log detalhado dos erros de validação
-                \Log::warning('Erro de validação ao criar processo', [
-                    'errors' => $errors->toArray(),
-                    'fields' => array_keys($errors->toArray()),
-                    'data' => $request->all(),
-                ]);
-                
-                return response()->json([
-                    'message' => 'Dados inválidos',
-                    'errors' => $errors->toArray()
-                ], 422);
-            }
+            // O Request já está validado via FormRequest
+            // Criar DTO a partir dos dados validados
+            $dto = CriarProcessoDTO::fromArray(array_merge($request->validated(), ['empresa_id' => $empresa->id]));
+            
+            // Executar Use Case (retorna entidade de domínio)
+            $processoDomain = $this->criarProcessoUseCase->executar($dto);
+            
+            // Buscar modelo Eloquent para serialização
+            $processoModel = $this->processoRepository->buscarModeloPorId($processoDomain->id, ['orgao', 'setor']);
 
-            $processo = $this->processoService->store($request->all());
+            if (!$processoModel) {
+                return response()->json(['message' => 'Erro ao buscar processo criado'], 500);
+            }
 
             return response()->json([
                 'message' => 'Processo criado com sucesso',
-                'data' => new ProcessoResource($processo->load(['orgao', 'setor']))
+                'data' => new ProcessoResource($processoModel)
             ], 201);
         } catch (\DomainException $e) {
             // Erro de negócio (limites de plano, etc) - retornar 400
@@ -414,35 +545,39 @@ class ProcessoController extends BaseApiController
     /**
      * PUT /processos/{id} - Atualizar processo
      * Método chamado pelo Route::module()
+     * 
+     * ✅ DDD: Usa FormRequest, Use Case e DTO
      */
-    public function update(Request $request, int|string $id): JsonResponse
+    public function update(ProcessoUpdateRequest $request, int|string $id): JsonResponse
     {
         try {
-            $validator = $this->processoService->validateUpdateData($request->all(), $id);
+            $empresa = $this->getEmpresaAtivaOrFail();
             
-            if ($validator->fails()) {
-                $errors = $validator->errors();
-                
-                // Log detalhado dos erros de validação
-                \Log::warning('Erro de validação ao atualizar processo', [
-                    'processo_id' => $id,
-                    'errors' => $errors->toArray(),
-                    'fields' => array_keys($errors->toArray()),
-                    'data' => $request->all(),
-                ]);
-                
-                return response()->json([
-                    'message' => 'Dados inválidos',
-                    'errors' => $errors->toArray()
-                ], 422);
-            }
+            // O Request já está validado via FormRequest
+            // Criar DTO a partir dos dados validados
+            $dto = AtualizarProcessoDTO::fromArray($request->validated(), (int) $id, $empresa->id);
+            
+            // Executar Use Case (retorna entidade de domínio)
+            $processoDomain = $this->atualizarProcessoUseCase->executar($dto);
+            
+            // Buscar modelo Eloquent para serialização
+            $processoModel = $this->processoRepository->buscarModeloPorId($processoDomain->id, ['orgao', 'setor']);
 
-            $processo = $this->processoService->update($id, $request->all());
+            if (!$processoModel) {
+                return response()->json(['message' => 'Erro ao buscar processo atualizado'], 500);
+            }
 
             return response()->json([
                 'message' => 'Processo atualizado com sucesso',
-                'data' => new ProcessoResource($processo->load(['orgao', 'setor']))
+                'data' => new ProcessoResource($processoModel)
             ]);
+        } catch (NotFoundException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (\DomainException $e) {
+            // Erro de negócio (regras de domínio)
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 400);
         } catch (\Exception $e) {
             \Log::error('Erro ao atualizar processo', [
                 'message' => $e->getMessage(),
@@ -459,21 +594,29 @@ class ProcessoController extends BaseApiController
     /**
      * DELETE /processos/{id} - Excluir processo
      * Método chamado pelo Route::module()
+     * 
+     * ✅ DDD: Usa Use Case
      */
     public function destroy(Request $request, int|string $id): JsonResponse
     {
         try {
-            $deleted = $this->processoService->deleteById($id);
+            $empresa = $this->getEmpresaAtivaOrFail();
             
-            if (!$deleted) {
-                return response()->json([
-                    'message' => 'Processo não encontrado'
-                ], 404);
-            }
+            // Executar Use Case (valida propriedade e deleta)
+            $this->excluirProcessoUseCase->executar((int) $id, $empresa->id);
 
             return response()->json([
                 'message' => 'Processo excluído com sucesso'
             ]);
+        } catch (NotFoundException $e) {
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 404);
+        } catch (\DomainException $e) {
+            // Erro de negócio (regras de domínio)
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 400);
         } catch (\Exception $e) {
             \Log::error('Erro ao excluir processo', [
                 'message' => $e->getMessage(),

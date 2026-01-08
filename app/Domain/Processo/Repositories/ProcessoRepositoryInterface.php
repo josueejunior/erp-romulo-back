@@ -43,9 +43,11 @@ interface ProcessoRepositoryInterface
 
     /**
      * Buscar modelo Eloquent por ID (compatibilidade)
+     * @param int $id
+     * @param array $with Relacionamentos para eager loading
      * @return \App\Modules\Processo\Models\Processo|null
      */
-    public function buscarModeloPorId(int $id): ?\App\Modules\Processo\Models\Processo;
+    public function buscarModeloPorId(int $id, array $with = []): ?\App\Modules\Processo\Models\Processo;
 }
 
 

@@ -9,6 +9,18 @@ use App\Modules\Processo\Services\ProcessoItemService;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\ProcessoItem\Repositories\ProcessoItemRepositoryInterface;
 use App\Domain\ProcessoItem\Enums\UnidadeMedida;
+use App\Application\ProcessoItem\UseCases\CriarProcessoItemUseCase;
+use App\Application\ProcessoItem\UseCases\AtualizarProcessoItemUseCase;
+use App\Application\ProcessoItem\UseCases\ExcluirProcessoItemUseCase;
+use App\Application\ProcessoItem\UseCases\ListarProcessoItensUseCase;
+use App\Application\ProcessoItem\UseCases\BuscarProcessoItemUseCase;
+use App\Application\ProcessoItem\DTOs\CriarProcessoItemDTO;
+use App\Application\ProcessoItem\DTOs\AtualizarProcessoItemDTO;
+use App\Domain\Exceptions\NotFoundException;
+use App\Domain\Exceptions\ProcessoEmExecucaoException;
+use App\Domain\Exceptions\EntidadeNaoPertenceException;
+use App\Http\Requests\ProcessoItem\ProcessoItemCreateRequest;
+use App\Http\Requests\ProcessoItem\ProcessoItemUpdateRequest;
 use Illuminate\Http\Request;
 
 class ProcessoItemController extends BaseApiController
@@ -20,8 +32,13 @@ class ProcessoItemController extends BaseApiController
         ProcessoItemService $itemService,
         private ProcessoRepositoryInterface $processoRepository,
         private ProcessoItemRepositoryInterface $processoItemRepository,
+        private CriarProcessoItemUseCase $criarProcessoItemUseCase,
+        private AtualizarProcessoItemUseCase $atualizarProcessoItemUseCase,
+        private ExcluirProcessoItemUseCase $excluirProcessoItemUseCase,
+        private ListarProcessoItensUseCase $listarProcessoItensUseCase,
+        private BuscarProcessoItemUseCase $buscarProcessoItemUseCase,
     ) {
-        $this->itemService = $itemService;
+        $this->itemService = $itemService; // Mantido para métodos específicos que ainda usam Service
         $this->service = $itemService; // Para HasDefaultActions
     }
     
@@ -37,188 +54,222 @@ class ProcessoItemController extends BaseApiController
 
     /**
      * API: Listar itens de um processo
+     * 
+     * ✅ DDD: Usa Use Case
      */
     public function list(Request $request)
     {
-        $route = $request->route();
-        $processoId = $route->parameter('processo');
-        
-        if (!$processoId) {
-            return response()->json(['message' => 'Processo não fornecido'], 400);
-        }
-
-        $empresa = $this->getEmpresaAtivaOrFail();
-        // Buscar via repository (DDD)
-        $processo = $this->processoRepository->buscarModeloPorId($processoId);
-        if (!$processo || $processo->empresa_id !== $empresa->id) {
-            return response()->json(['message' => 'Processo não encontrado'], 404);
-        }
-
         try {
-            $this->itemService->validarProcessoEmpresa($processo, $empresa->id);
-            $itens = $this->itemService->listByProcesso($processo);
-            return response()->json($itens);
+            $route = $request->route();
+            $processoId = (int) $route->parameter('processo');
+            
+            if (!$processoId) {
+                return response()->json(['message' => 'Processo não fornecido'], 400);
+            }
+
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Executar Use Case (retorna array de entidades de domínio)
+            $itens = $this->listarProcessoItensUseCase->executar($processoId, $empresa->id);
+            
+            // Buscar modelos Eloquent para serialização
+            $models = collect($itens)->map(function ($itemDomain) {
+                return $this->processoItemRepository->buscarModeloPorId($itemDomain->id, ['fornecedor', 'transportadora']);
+            })->filter();
+            
+            return response()->json(['data' => $models]);
+        } catch (NotFoundException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 400);
+            \Log::error('Erro ao listar itens de processo', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json(['message' => $e->getMessage()], 400);
         }
     }
 
     /**
      * API: Buscar item específico
+     * 
+     * ✅ DDD: Usa Use Case
      */
     public function get(Request $request)
     {
-        $route = $request->route();
-        $itemId = $route->parameter('item');
-        
-        if (!$itemId) {
-            return response()->json(['message' => 'Item não fornecido'], 400);
-        }
+        try {
+            $route = $request->route();
+            $itemId = (int) $route->parameter('item');
+            $processoId = $route->hasParameter('processo') ? (int) $route->parameter('processo') : null;
+            
+            if (!$itemId) {
+                return response()->json(['message' => 'Item não fornecido'], 400);
+            }
 
-        $empresa = $this->getEmpresaAtivaOrFail();
-        // Buscar via repository (DDD)
-        $item = $this->processoItemRepository->buscarModeloPorId($itemId);
-        if (!$item || $item->empresa_id !== $empresa->id) {
-            return response()->json(['message' => 'Item não encontrado'], 404);
-        }
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Executar Use Case (retorna entidade de domínio)
+            $itemDomain = $this->buscarProcessoItemUseCase->executar($itemId, $processoId, $empresa->id);
+            
+            // Buscar modelo Eloquent para serialização
+            $itemModel = $this->processoItemRepository->buscarModeloPorId($itemDomain->id, ['fornecedor', 'transportadora']);
 
-        return response()->json(['data' => $item]);
+            if (!$itemModel) {
+                return response()->json(['message' => 'Erro ao buscar item'], 500);
+            }
+
+            return response()->json(['data' => $itemModel]);
+        } catch (NotFoundException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (EntidadeNaoPertenceException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        } catch (\Exception $e) {
+            \Log::error('Erro ao buscar item de processo', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
     }
 
     /**
      * API: Criar item
+     * 
+     * ✅ DDD: Usa FormRequest, Use Case e DTO
      */
-    public function store(Request $request)
+    public function store(ProcessoItemCreateRequest $request)
     {
-        $route = $request->route();
-        $processoId = $route->parameter('processo');
-        
-        if (!$processoId) {
-            return response()->json(['message' => 'Processo não fornecido'], 400);
-        }
-
-        $empresa = $this->getEmpresaAtivaOrFail();
-        // Buscar via repository (DDD)
-        $processo = $this->processoRepository->buscarModeloPorId($processoId);
-        if (!$processo || $processo->empresa_id !== $empresa->id) {
-            return response()->json(['message' => 'Processo não encontrado'], 404);
-        }
-
         try {
-            $this->itemService->validarProcessoEmpresa($processo, $empresa->id);
-            $item = $this->itemService->storeItem($processo, $request->all());
-            return response()->json(['data' => $item], 201);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            $errors = $e->errors();
+            $route = $request->route();
+            $processoId = (int) $route->parameter('processo');
             
-            // Log detalhado dos erros de validação
-            \Log::warning('Erro de validação ao criar item de processo', [
-                'processo_id' => $processoId,
-                'errors' => $errors,
-                'fields' => array_keys($errors),
-                'data' => $request->all(),
-            ]);
+            if (!$processoId) {
+                return response()->json(['message' => 'Processo não fornecido'], 400);
+            }
+
+            $empresa = $this->getEmpresaAtivaOrFail();
             
-            return response()->json([
-                'message' => 'Erro de validação',
-                'errors' => $errors
-            ], 422);
+            // O Request já está validado via FormRequest
+            // Criar DTO a partir dos dados validados
+            $dto = CriarProcessoItemDTO::fromArray($request->validated(), $processoId, $empresa->id);
+            
+            // Executar Use Case (retorna entidade de domínio)
+            $itemDomain = $this->criarProcessoItemUseCase->executar($dto);
+            
+            // Buscar modelo Eloquent para serialização
+            $itemModel = $this->processoItemRepository->buscarModeloPorId($itemDomain->id, ['fornecedor', 'transportadora']);
+
+            if (!$itemModel) {
+                return response()->json(['message' => 'Erro ao buscar item criado'], 500);
+            }
+
+            return response()->json(['data' => $itemModel], 201);
+        } catch (NotFoundException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (ProcessoEmExecucaoException $e) {
+            return response()->json(['message' => $e->getMessage()], 403);
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 400);
+            \Log::error('Erro ao criar item de processo', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json(['message' => $e->getMessage()], 500);
         }
     }
 
     /**
      * API: Atualizar item
+     * 
+     * ✅ DDD: Usa FormRequest, Use Case e DTO
      */
-    public function update(Request $request, $id)
+    public function update(ProcessoItemUpdateRequest $request, $id)
     {
-        $route = $request->route();
-        $processoId = $route->parameter('processo');
-        
-        if (!$processoId) {
-            return response()->json(['message' => 'Processo não fornecido'], 400);
-        }
-
-        $empresa = $this->getEmpresaAtivaOrFail();
-        // Buscar via repository (DDD)
-        $processo = $this->processoRepository->buscarModeloPorId($processoId);
-        if (!$processo || $processo->empresa_id !== $empresa->id) {
-            return response()->json(['message' => 'Processo não encontrado'], 404);
-        }
-        
-        // Buscar via repository (DDD)
-        $item = $this->processoItemRepository->buscarModeloPorId($id);
-        if (!$item || $item->empresa_id !== $empresa->id) {
-            return response()->json(['message' => 'Item não encontrado'], 404);
-        }
-
         try {
-            $this->itemService->validarProcessoEmpresa($processo, $empresa->id);
-            $this->itemService->validarItemEmpresa($item, $empresa->id);
-            $item = $this->itemService->updateItem($processo, $item, $request->all());
-            return response()->json(['data' => $item]);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            $errors = $e->errors();
+            $route = $request->route();
+            $processoId = (int) $route->parameter('processo');
+            $itemId = (int) $id;
             
-            // Log detalhado dos erros de validação
-            \Log::warning('Erro de validação ao atualizar item de processo', [
-                'processo_id' => $processoId,
-                'item_id' => $id,
-                'errors' => $errors,
-                'fields' => array_keys($errors),
-                'data' => $request->all(),
-            ]);
+            if (!$processoId) {
+                return response()->json(['message' => 'Processo não fornecido'], 400);
+            }
+
+            $empresa = $this->getEmpresaAtivaOrFail();
             
-            return response()->json([
-                'message' => 'Erro de validação',
-                'errors' => $errors
-            ], 422);
+            // O Request já está validado via FormRequest
+            // Criar DTO a partir dos dados validados
+            $dto = AtualizarProcessoItemDTO::fromArray($request->validated(), $itemId, $processoId, $empresa->id);
+            
+            // Executar Use Case (retorna entidade de domínio)
+            $itemDomain = $this->atualizarProcessoItemUseCase->executar($dto);
+            
+            // Buscar modelo Eloquent para serialização
+            $itemModel = $this->processoItemRepository->buscarModeloPorId($itemDomain->id, ['fornecedor', 'transportadora']);
+
+            if (!$itemModel) {
+                return response()->json(['message' => 'Erro ao buscar item atualizado'], 500);
+            }
+
+            return response()->json(['data' => $itemModel]);
+        } catch (NotFoundException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (EntidadeNaoPertenceException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        } catch (ProcessoEmExecucaoException $e) {
+            return response()->json(['message' => $e->getMessage()], 403);
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 400);
+            \Log::error('Erro ao atualizar item de processo', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'item_id' => $id,
+            ]);
+            return response()->json(['message' => $e->getMessage()], 500);
         }
     }
 
     /**
      * API: Excluir item
+     * 
+     * ✅ DDD: Usa Use Case
      */
     public function destroy(Request $request, $id)
     {
-        $route = $request->route();
-        $processoId = $route->parameter('processo');
-        
-        if (!$processoId) {
-            return response()->json(['message' => 'Processo não fornecido'], 400);
-        }
-
-        $empresa = $this->getEmpresaAtivaOrFail();
-        // Buscar via repository (DDD)
-        $processo = $this->processoRepository->buscarModeloPorId($processoId);
-        if (!$processo || $processo->empresa_id !== $empresa->id) {
-            return response()->json(['message' => 'Processo não encontrado'], 404);
-        }
-        
-        // Buscar via repository (DDD)
-        $item = $this->processoItemRepository->buscarModeloPorId($id);
-        if (!$item || $item->empresa_id !== $empresa->id) {
-            return response()->json(['message' => 'Item não encontrado'], 404);
-        }
-
         try {
-            $this->itemService->validarProcessoEmpresa($processo, $empresa->id);
-            $this->itemService->validarItemEmpresa($item, $empresa->id);
-            $this->itemService->delete($processo, $item);
+            $route = $request->route();
+            $processoId = (int) $route->parameter('processo');
+            $itemId = (int) $id;
+            
+            if (!$processoId) {
+                return response()->json(['message' => 'Processo não fornecido'], 400);
+            }
+
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Executar Use Case (valida propriedade e deleta)
+            $this->excluirProcessoItemUseCase->executar($itemId, $processoId, $empresa->id);
+
             return response()->json(null, 204);
+        } catch (NotFoundException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (EntidadeNaoPertenceException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        } catch (ProcessoEmExecucaoException $e) {
+            return response()->json(['message' => $e->getMessage()], 403);
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 400);
+            \Log::error('Erro ao excluir item de processo', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'item_id' => $id,
+            ]);
+            return response()->json(['message' => $e->getMessage()], 500);
         }
     }
 

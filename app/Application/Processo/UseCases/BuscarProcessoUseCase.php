@@ -4,12 +4,13 @@ namespace App\Application\Processo\UseCases;
 
 use App\Domain\Processo\Entities\Processo;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
+use App\Domain\Exceptions\NotFoundException;
 use DomainException;
 
 /**
- * Use Case: Mover Processo para Julgamento
+ * Use Case: Buscar Processo por ID
  */
-class MoverParaJulgamentoUseCase
+class BuscarProcessoUseCase
 {
     public function __construct(
         private ProcessoRepositoryInterface $processoRepository,
@@ -24,21 +25,15 @@ class MoverParaJulgamentoUseCase
         $processo = $this->processoRepository->buscarPorId($processoId);
         
         if (!$processo) {
-            throw new \App\Domain\Exceptions\NotFoundException('Processo', $processoId);
+            throw new NotFoundException('Processo', $processoId);
         }
         
         // Validar que o processo pertence à empresa
         if ($processo->empresaId !== $empresaId) {
             throw new DomainException('Processo não pertence à empresa ativa.');
         }
-
-        // Aplicar regra de negócio (mover para julgamento)
-        $processoAtualizado = $processo->moverParaJulgamento();
-
-        // Persistir alteração
-        return $this->processoRepository->atualizar($processoAtualizado);
+        
+        return $processo;
     }
 }
-
-
 

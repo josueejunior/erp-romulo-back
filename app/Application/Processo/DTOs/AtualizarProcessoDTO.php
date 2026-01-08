@@ -5,11 +5,12 @@ namespace App\Application\Processo\DTOs;
 use Carbon\Carbon;
 
 /**
- * DTO para criação de processo
+ * DTO para atualização de processo
  */
-class CriarProcessoDTO
+class AtualizarProcessoDTO
 {
     public function __construct(
+        public readonly int $processoId,
         public readonly int $empresaId,
         public readonly ?int $orgaoId = null,
         public readonly ?int $setorId = null,
@@ -19,7 +20,7 @@ class CriarProcessoDTO
         public readonly ?string $linkEdital = null,
         public readonly ?string $portal = null,
         public readonly ?string $numeroEdital = null,
-        public readonly bool $srp = false,
+        public readonly ?bool $srp = null,
         public readonly ?string $objetoResumido = null,
         public readonly ?Carbon $dataHoraSessaoPublica = null,
         public readonly ?Carbon $horarioSessaoPublica = null,
@@ -35,7 +36,7 @@ class CriarProcessoDTO
         public readonly ?Carbon $validadePropostaFim = null,
         public readonly ?string $tipoSelecaoFornecedor = null,
         public readonly ?string $tipoDisputa = null,
-        public readonly string $status = 'rascunho',
+        public readonly ?string $status = null,
         public readonly ?string $statusParticipacao = null,
         public readonly ?Carbon $dataRecebimentoPagamento = null,
         public readonly ?string $observacoes = null,
@@ -44,7 +45,7 @@ class CriarProcessoDTO
     /**
      * Criar DTO a partir de array (vindo do request)
      */
-    public static function fromArray(array $data): self
+    public static function fromArray(array $data, int $processoId, int $empresaId): self
     {
         // Processar tipo_selecao_fornecedor e tipo_disputa se vierem como objetos
         $tipoSelecaoFornecedor = $data['tipo_selecao_fornecedor'] ?? $data['tipoSelecaoFornecedor'] ?? null;
@@ -58,7 +59,8 @@ class CriarProcessoDTO
         }
         
         return new self(
-            empresaId: $data['empresa_id'] ?? $data['empresaId'] ?? 0,
+            processoId: $processoId,
+            empresaId: $empresaId,
             orgaoId: $data['orgao_id'] ?? $data['orgaoId'] ?? null,
             setorId: $data['setor_id'] ?? $data['setorId'] ?? null,
             modalidade: $data['modalidade'] ?? null,
@@ -67,7 +69,7 @@ class CriarProcessoDTO
             linkEdital: $data['link_edital'] ?? $data['linkEdital'] ?? null,
             portal: $data['portal'] ?? null,
             numeroEdital: $data['numero_edital'] ?? $data['numeroEdital'] ?? null,
-            srp: $data['srp'] ?? false,
+            srp: isset($data['srp']) ? (bool) $data['srp'] : null,
             objetoResumido: $data['objeto_resumido'] ?? $data['objetoResumido'] ?? null,
             dataHoraSessaoPublica: isset($data['data_hora_sessao_publica']) && $data['data_hora_sessao_publica'] ? Carbon::parse($data['data_hora_sessao_publica']) : null,
             horarioSessaoPublica: isset($data['horario_sessao_publica']) && $data['horario_sessao_publica'] ? Carbon::parse($data['horario_sessao_publica']) : null,
@@ -83,13 +85,11 @@ class CriarProcessoDTO
             validadePropostaFim: isset($data['validade_proposta_fim']) && $data['validade_proposta_fim'] ? Carbon::parse($data['validade_proposta_fim']) : null,
             tipoSelecaoFornecedor: $tipoSelecaoFornecedor,
             tipoDisputa: $tipoDisputa,
-            status: $data['status'] ?? 'rascunho',
+            status: $data['status'] ?? null,
             statusParticipacao: $data['status_participacao'] ?? $data['statusParticipacao'] ?? null,
             dataRecebimentoPagamento: isset($data['data_recebimento_pagamento']) && $data['data_recebimento_pagamento'] ? Carbon::parse($data['data_recebimento_pagamento']) : null,
             observacoes: $data['observacoes'] ?? null,
         );
     }
 }
-
-
 

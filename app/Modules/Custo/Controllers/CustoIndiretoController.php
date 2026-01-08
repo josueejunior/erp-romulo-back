@@ -5,14 +5,37 @@ namespace App\Modules\Custo\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Custo\Models\CustoIndireto;
 use App\Modules\Custo\Services\CustoIndiretoService;
+use App\Domain\CustoIndireto\Repositories\CustoIndiretoRepositoryInterface;
+use App\Application\CustoIndireto\UseCases\CriarCustoIndiretoUseCase;
+use App\Application\CustoIndireto\UseCases\AtualizarCustoIndiretoUseCase;
+use App\Application\CustoIndireto\UseCases\ExcluirCustoIndiretoUseCase;
+use App\Application\CustoIndireto\UseCases\ListarCustoIndiretosUseCase;
+use App\Application\CustoIndireto\UseCases\BuscarCustoIndiretoUseCase;
+use App\Application\CustoIndireto\UseCases\ObterResumoCustoIndiretosUseCase;
+use App\Application\CustoIndireto\DTOs\CriarCustoIndiretoDTO;
+use App\Application\CustoIndireto\DTOs\AtualizarCustoIndiretoDTO;
+use App\Application\CustoIndireto\DTOs\ListarCustoIndiretosDTO;
+use App\Domain\Exceptions\NotFoundException;
+use App\Http\Requests\CustoIndireto\CustoIndiretoCreateRequest;
+use App\Http\Requests\CustoIndireto\CustoIndiretoUpdateRequest;
+use App\Http\Controllers\Traits\HasAuthContext;
 use Illuminate\Http\Request;
 
 class CustoIndiretoController extends Controller
 {
+    use HasAuthContext;
 
-    public function __construct(CustoIndiretoService $service)
-    {
-        $this->service = $service;
+    public function __construct(
+        CustoIndiretoService $service,
+        private CriarCustoIndiretoUseCase $criarCustoIndiretoUseCase,
+        private AtualizarCustoIndiretoUseCase $atualizarCustoIndiretoUseCase,
+        private ExcluirCustoIndiretoUseCase $excluirCustoIndiretoUseCase,
+        private ListarCustoIndiretosUseCase $listarCustoIndiretosUseCase,
+        private BuscarCustoIndiretoUseCase $buscarCustoIndiretoUseCase,
+        private ObterResumoCustoIndiretosUseCase $obterResumoCustoIndiretosUseCase,
+        private CustoIndiretoRepositoryInterface $custoIndiretoRepository,
+    ) {
+        $this->service = $service; // Mantido para compatibilidade (método resumo ainda usa)
     }
 
     /**
@@ -156,58 +179,232 @@ class CustoIndiretoController extends Controller
 
     /**
      * Métodos de compatibilidade
+     * 
+     * ✅ DDD: Usa Use Case e DTO (delega para list())
      */
     public function index(Request $request)
     {
-        return $this->handleList($request);
+        return $this->list($request);
     }
 
     /**
      * Método list() para compatibilidade com Route::module()
+     * 
+     * ✅ DDD: Usa Use Case e DTO
      */
     public function list(Request $request)
     {
-        return $this->handleList($request);
+        try {
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Criar DTO a partir do Request
+            $dto = ListarCustoIndiretosDTO::fromRequest($request->all(), $empresa->id);
+            
+            // Executar Use Case (retorna entidades de domínio paginadas)
+            $paginado = $this->listarCustoIndiretosUseCase->executar($dto);
+            
+            // Buscar modelos Eloquent para serialização
+            $models = collect($paginado->items())->map(function ($custoDomain) {
+                return $this->custoIndiretoRepository->buscarModeloPorId($custoDomain->id);
+            })->filter();
+            
+            return response()->json([
+                'data' => $models,
+                'meta' => [
+                    'current_page' => $paginado->currentPage(),
+                    'last_page' => $paginado->lastPage(),
+                    'per_page' => $paginado->perPage(),
+                    'total' => $paginado->total(),
+                ]
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Erro ao listar custos indiretos', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'params' => $request->all()
+            ]);
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 400);
+        }
     }
 
     /**
      * Método get() para compatibilidade com Route::module()
+     * 
+     * ✅ DDD: Usa Use Case
      */
     public function get(Request $request)
     {
-        return $this->handleGet($request);
+        try {
+            $route = $request->route();
+            $id = $this->getRouteId($route);
+            
+            if (!$id) {
+                return response()->json(['message' => 'ID não fornecido'], 400);
+            }
+
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Executar Use Case (retorna entidade de domínio)
+            $custoDomain = $this->buscarCustoIndiretoUseCase->executar($id, $empresa->id);
+            
+            // Buscar modelo Eloquent para serialização
+            $custoModel = $this->custoIndiretoRepository->buscarModeloPorId($custoDomain->id);
+
+            if (!$custoModel) {
+                return response()->json(['message' => 'Erro ao buscar custo indireto'], 500);
+            }
+
+            return response()->json(['data' => $custoModel]);
+        } catch (NotFoundException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        } catch (\Exception $e) {
+            \Log::error('Erro ao buscar custo indireto', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json(['message' => $e->getMessage()], 400);
+        }
     }
 
-    public function store(Request $request)
+    /**
+     * ✅ DDD: Usa FormRequest, Use Case e DTO
+     */
+    public function store(CustoIndiretoCreateRequest $request)
     {
-        return $this->handleStore($request);
+        try {
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // O Request já está validado via FormRequest
+            // Criar DTO a partir dos dados validados
+            $dto = CriarCustoIndiretoDTO::fromArray($request->validated(), $empresa->id);
+            
+            // Executar Use Case (retorna entidade de domínio)
+            $custoDomain = $this->criarCustoIndiretoUseCase->executar($dto);
+            
+            // Buscar modelo Eloquent para serialização
+            $custoModel = $this->custoIndiretoRepository->buscarModeloPorId($custoDomain->id);
+
+            if (!$custoModel) {
+                return response()->json(['message' => 'Erro ao buscar custo indireto criado'], 500);
+            }
+
+            return response()->json([
+                'message' => 'Custo indireto criado com sucesso',
+                'data' => $custoModel
+            ], 201);
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        } catch (\Exception $e) {
+            \Log::error('Erro ao criar custo indireto', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
     }
 
+    /**
+     * ✅ DDD: Usa Use Case (delega para get())
+     */
     public function show($id)
     {
         $request = request();
         $request->route()->setParameter('id', $id);
-        return $this->handleGet($request);
+        return $this->get($request);
     }
 
-    public function update(Request $request, $id)
+    /**
+     * ✅ DDD: Usa FormRequest, Use Case e DTO
+     */
+    public function update(CustoIndiretoUpdateRequest $request, $id)
     {
-        return $this->handleUpdate($request, $id);
+        try {
+            $empresa = $this->getEmpresaAtivaOrFail();
+            $custoIndiretoId = (int) $id;
+            
+            // O Request já está validado via FormRequest
+            // Criar DTO a partir dos dados validados
+            $dto = AtualizarCustoIndiretoDTO::fromArray($request->validated(), $custoIndiretoId, $empresa->id);
+            
+            // Executar Use Case (retorna entidade de domínio)
+            $custoDomain = $this->atualizarCustoIndiretoUseCase->executar($dto);
+            
+            // Buscar modelo Eloquent para serialização
+            $custoModel = $this->custoIndiretoRepository->buscarModeloPorId($custoDomain->id);
+
+            if (!$custoModel) {
+                return response()->json(['message' => 'Erro ao buscar custo indireto atualizado'], 500);
+            }
+
+            return response()->json([
+                'message' => 'Custo indireto atualizado com sucesso',
+                'data' => $custoModel
+            ]);
+        } catch (NotFoundException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        } catch (\Exception $e) {
+            \Log::error('Erro ao atualizar custo indireto', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'id' => $id,
+            ]);
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
     }
 
+    /**
+     * ✅ DDD: Usa Use Case
+     */
     public function destroy($id)
     {
-        return $this->handleDestroy(request(), $id);
+        try {
+            $empresa = $this->getEmpresaAtivaOrFail();
+            $custoIndiretoId = (int) $id;
+            
+            // Executar Use Case (valida propriedade e deleta)
+            $this->excluirCustoIndiretoUseCase->executar($custoIndiretoId, $empresa->id);
+
+            return response()->json([
+                'message' => 'Custo indireto removido com sucesso'
+            ]);
+        } catch (NotFoundException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        } catch (\Exception $e) {
+            \Log::error('Erro ao excluir custo indireto', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'id' => $id,
+            ]);
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
     }
 
     /**
      * Retorna resumo de custos indiretos
+     * 
+     * ✅ DDD: Usa Use Case
      */
     public function resumo(Request $request)
     {
         try {
-            $params = $this->service->createListParamBag($request->all());
-            $resumo = $this->service->resumo($params);
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Preparar filtros
+            $filtros = array_merge($request->all(), [
+                'empresa_id' => $empresa->id,
+            ]);
+            
+            // Executar Use Case
+            $resumo = $this->obterResumoCustoIndiretosUseCase->executar($filtros);
+            
             return response()->json($resumo);
         } catch (\Exception $e) {
             \Log::error('Erro ao obter resumo de custos indiretos', [
