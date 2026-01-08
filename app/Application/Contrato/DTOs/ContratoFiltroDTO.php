@@ -28,14 +28,23 @@ class ContratoFiltroDTO
      */
     public static function fromArray(array $data): self
     {
+        // Tratar strings vazias como null
+        $busca = !empty($data['busca']) ? $data['busca'] : null;
+        $orgaoId = !empty($data['orgao_id']) ? (int) $data['orgao_id'] : null;
+        $srp = isset($data['srp']) && $data['srp'] !== '' ? filter_var($data['srp'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) : null;
+        $situacao = !empty($data['situacao']) ? $data['situacao'] : null;
+        $vigente = isset($data['vigente']) && $data['vigente'] !== '' ? filter_var($data['vigente'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) : null;
+        $vencerEm = !empty($data['vencer_em']) ? (int) $data['vencer_em'] : null;
+        $somenteAlerta = isset($data['somente_alerta']) ? filter_var($data['somente_alerta'], FILTER_VALIDATE_BOOLEAN) : false;
+
         return new self(
-            busca: $data['busca'] ?? null,
-            orgaoId: isset($data['orgao_id']) ? (int) $data['orgao_id'] : null,
-            srp: isset($data['srp']) ? (bool) $data['srp'] : null,
-            situacao: $data['situacao'] ?? null,
-            vigente: isset($data['vigente']) ? (bool) $data['vigente'] : null,
-            vencerEm: isset($data['vencer_em']) ? (int) $data['vencer_em'] : null,
-            somenteAlerta: isset($data['somente_alerta']) ? (bool) $data['somente_alerta'] : false,
+            busca: $busca,
+            orgaoId: $orgaoId,
+            srp: $srp,
+            situacao: $situacao,
+            vigente: $vigente,
+            vencerEm: $vencerEm,
+            somenteAlerta: $somenteAlerta,
         );
     }
 

@@ -57,6 +57,13 @@ class ListarTodosContratosUseCase
 
         // Aplicar filtros complexos (agora com DTO tipado)
         $query = ContratoQuery::aplicarFiltros($query, $filtroDTO, $empresaId);
+        
+        // Log para debug
+        \Log::debug('ListarTodosContratosUseCase: Query de contratos', [
+            'empresa_id' => $empresaId,
+            'sql' => $query->toSql(),
+            'bindings' => $query->getBindings(),
+        ]);
 
         // Clonar query para calcular indicadores (antes da paginação)
         $totalQuery = clone $query;
@@ -66,6 +73,12 @@ class ListarTodosContratosUseCase
 
         // Paginação
         $contratos = $query->paginate($perPage);
+        
+        \Log::debug('ListarTodosContratosUseCase: Resultado', [
+            'empresa_id' => $empresaId,
+            'total' => $contratos->total(),
+            'count' => $contratos->count(),
+        ]);
 
         // Calcular indicadores usando agregação SQL (não carrega dados em memória)
         $indicadores = ContratoIndicadoresQuery::calcular($totalQuery);
