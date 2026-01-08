@@ -19,6 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'tenant.context' => \App\Http\Middleware\ResolveTenantContext::class,
             'bootstrap.context' => \App\Http\Middleware\BootstrapApplicationContext::class,
             'admin' => \App\Http\Middleware\EnsureAdmin::class,
+            'assinatura.ativa' => \App\Http\Middleware\EnsureTenantHasActiveSubscription::class,
             
             // Middlewares legados (deprecated - não usar)
             'empresa.ativa' => \App\Http\Middleware\EnsureEmpresaAtiva::class,

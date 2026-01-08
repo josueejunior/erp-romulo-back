@@ -3,49 +3,45 @@
 namespace App\Modules\Orcamento\Domain\Services;
 
 use App\Modules\Orcamento\Domain\ValueObjects\FiltrosRelatorio;
-use App\Modules\Orcamento\Models\Orcamento;
-use App\Modules\Orcamento\Models\OrcamentoItem;
-use Illuminate\Support\Facades\DB;
+use App\Domain\Orcamento\Repositories\RelatorioOrcamentoRepositoryInterface;
+use App\Application\Orcamento\DTOs\RelatorioOrcamentosResult;
+use Illuminate\Support\Collection;
 
+/**
+ * Domain Service para relatórios de orçamentos
+ * 
+ * ✅ DDD: Apenas regras de negócio, queries delegadas ao Repository
+ */
 class RelatorioDomainService
 {
+    public function __construct(
+        private RelatorioOrcamentoRepositoryInterface $repository,
+    ) {}
+
     /**
      * Gerar relatório de orçamentos por período
+     * 
+     * ✅ DDD: Retorna Read Model ao invés de array genérico
      */
     public function relatorioOrcamentosPorPeriodo(
         int $empresaId,
         FiltrosRelatorio $filtros
-    ): array {
-        $query = Orcamento::where('empresa_id', $empresaId);
+    ): RelatorioOrcamentosResult {
+        // Repository decide COMO buscar (queries)
+        $orcamentos = $this->repository->buscarOrcamentosPorPeriodo($empresaId, $filtros);
 
-        $this->aplicarFiltros($query, $filtros);
+        // Domain Service decide O QUE calcular (regras de negócio)
+        $valorTotal = round($orcamentos->sum('valor_total'), 2);
+        $valorMedio = round($orcamentos->avg('valor_total'), 2);
 
-        $orcamentos = $query->with([
-                'fornecedor' => fn($q) => $q->withoutGlobalScopes(),
-                'processo' => fn($q) => $q->withoutGlobalScopes(),
-                'itens'
-            ])
-            ->get()
-            ->map(function ($o) {
-                return [
-                    'id' => $o->id,
-                    'data' => $o->created_at?->format('d/m/Y') ?? 'N/A',
-                    'fornecedor' => $o->fornecedor?->nome_fantasia ?? $o->fornecedor?->razao_social ?? 'N/A',
-                    'processo' => $o->processo?->numero ?? 'N/A',
-                    'valor_total' => $o->custo_total,
-                    'status' => $o->fornecedor_escolhido ? 'escolhido' : 'pendente',
-                    'total_itens' => $o->itens->count()
-                ];
-            });
-
-        return [
-            'titulo' => 'Relatório de Orçamentos por Período',
-            'filtros' => $filtros->toArray(),
-            'total_registros' => $orcamentos->count(),
-            'valor_total' => round($orcamentos->sum('valor_total'), 2),
-            'valor_medio' => round($orcamentos->avg('valor_total'), 2),
-            'dados' => $orcamentos->toArray()
-        ];
+        return new RelatorioOrcamentosResult(
+            titulo: 'Relatório de Orçamentos por Período',
+            dados: $orcamentos,
+            totalRegistros: $orcamentos->count(),
+            valorTotal: $valorTotal,
+            valorMedio: $valorMedio,
+            filtros: $filtros->toArray(),
+        );
     }
 
     /**
@@ -54,40 +50,25 @@ class RelatorioDomainService
     public function relatorioPorFornecedor(
         int $empresaId,
         FiltrosRelatorio $filtros
-    ): array {
-        $query = Orcamento::where('empresa_id', $empresaId);
-        $this->aplicarFiltros($query, $filtros);
+    ): RelatorioOrcamentosResult {
+        // Repository decide COMO buscar
+        $porFornecedor = $this->repository->buscarOrcamentosPorFornecedor($empresaId, $filtros);
 
-        $por_fornecedor = $query->select(
-            'fornecedor_id',
-            DB::raw('count(*) as total_orcamentos'),
-            DB::raw('sum(coalesce(custo_produto, 0) + coalesce(frete, 0)) as valor_total'),
-            DB::raw('avg(coalesce(custo_produto, 0) + coalesce(frete, 0)) as valor_medio'),
-            DB::raw('count(case when fornecedor_escolhido = true then 1 end) as escolhidos'),
-            DB::raw('count(case when fornecedor_escolhido = false then 1 end) as pendentes')
-        )
-        ->with(['fornecedor' => fn($q) => $q->withoutGlobalScopes()])
-        ->groupBy('fornecedor_id')
-        ->get()
-        ->map(function ($item) {
-            $total = $item->total_orcamentos ?? 1;
-            return [
-                'fornecedor' => $item->fornecedor?->nome_fantasia ?? $item->fornecedor?->razao_social ?? 'N/A',
-                'total_orcamentos' => $item->total_orcamentos,
-                'valor_total' => round($item->valor_total ?? 0, 2),
-                'valor_medio' => round($item->valor_medio ?? 0, 2),
-                'taxa_escolhidos' => round(($item->escolhidos / $total * 100), 2) . '%',
-                'taxa_pendentes' => round(($item->pendentes / $total * 100), 2) . '%'
-            ];
-        });
+        // Domain Service calcula métricas (regras de negócio)
+        $valorTotalGeral = round($porFornecedor->sum('valor_total'), 2);
 
-        return [
-            'titulo' => 'Relatório de Orçamentos por Fornecedor',
-            'filtros' => $filtros->toArray(),
-            'total_fornecedores' => $por_fornecedor->count(),
-            'valor_total_geral' => round($por_fornecedor->sum('valor_total'), 2),
-            'dados' => $por_fornecedor->toArray()
-        ];
+        return new RelatorioOrcamentosResult(
+            titulo: 'Relatório de Orçamentos por Fornecedor',
+            dados: $porFornecedor,
+            totalRegistros: $porFornecedor->count(),
+            valorTotal: $valorTotalGeral,
+            valorMedio: round($porFornecedor->avg('valor_total'), 2),
+            filtros: $filtros->toArray(),
+            resumo: [
+                'total_fornecedores' => $porFornecedor->count(),
+                'valor_total_geral' => $valorTotalGeral,
+            ],
+        );
     }
 
     /**
@@ -96,54 +77,56 @@ class RelatorioDomainService
     public function relatorioPorStatus(
         int $empresaId,
         FiltrosRelatorio $filtros
-    ): array {
-        $query = Orcamento::where('empresa_id', $empresaId);
-        $this->aplicarFiltros($query, $filtros);
+    ): RelatorioOrcamentosResult {
+        // Repository decide COMO buscar
+        $porStatus = $this->repository->buscarOrcamentosPorStatus($empresaId, $filtros);
 
-        $por_status = $query->select(
-            'fornecedor_escolhido',
-            DB::raw('count(*) as total'),
-            DB::raw('sum(coalesce(custo_produto, 0) + coalesce(frete, 0)) as valor_total'),
-            DB::raw('avg(coalesce(custo_produto, 0) + coalesce(frete, 0)) as valor_medio')
-        )
-        ->groupBy('fornecedor_escolhido')
-        ->get()
-        ->map(function ($item) {
-            return [
-                'status' => $item->fornecedor_escolhido ? 'escolhido' : 'pendente',
-                'total' => $item->total,
-                'valor_total' => round($item->valor_total ?? 0, 2),
-                'valor_medio' => round($item->valor_medio ?? 0, 2)
-            ];
-        });
+        // Domain Service calcula métricas (regras de negócio)
+        $totalGeral = $porStatus->sum('total');
+        $valorTotalGeral = round($porStatus->sum('valor_total'), 2);
 
-        return [
-            'titulo' => 'Relatório de Orçamentos por Status',
-            'filtros' => $filtros->toArray(),
-            'total_geral' => $por_status->sum('total'),
-            'valor_total_geral' => round($por_status->sum('valor_total'), 2),
-            'dados' => $por_status->toArray()
-        ];
+        return new RelatorioOrcamentosResult(
+            titulo: 'Relatório de Orçamentos por Status',
+            dados: $porStatus,
+            totalRegistros: $totalGeral,
+            valorTotal: $valorTotalGeral,
+            valorMedio: round($porStatus->avg('valor_medio'), 2),
+            filtros: $filtros->toArray(),
+            resumo: [
+                'total_geral' => $totalGeral,
+                'valor_total_geral' => $valorTotalGeral,
+            ],
+        );
     }
 
     /**
      * Gerar relatório de análise de preços
+     * 
+     * ⚠️ TODO: Migrar para Repository quando necessário
+     * Por enquanto mantido como array para compatibilidade
      */
     public function relatorioAnalisePrecos(
         int $empresaId,
         FiltrosRelatorio $filtros
     ): array {
-        $analise = OrcamentoItem::whereHas('orcamento', function ($query) use ($empresaId, $filtros) {
+        // ⚠️ Este método ainda usa Eloquent diretamente
+        // Deve ser migrado para Repository quando necessário
+        $analise = \App\Modules\Orcamento\Models\OrcamentoItem::whereHas('orcamento', function ($query) use ($empresaId, $filtros) {
             $query->where('empresa_id', $empresaId);
-            $this->aplicarFiltrosOrcamento($query, $filtros);
+            if ($filtros->getDataInicio()) {
+                $query->whereDate('created_at', '>=', $filtros->getDataInicio());
+            }
+            if ($filtros->getDataFim()) {
+                $query->whereDate('created_at', '<=', $filtros->getDataFim());
+            }
         })
         ->select(
             'processo_item_id',
-            DB::raw('min(valor_unitario) as preco_minimo'),
-            DB::raw('max(valor_unitario) as preco_maximo'),
-            DB::raw('avg(valor_unitario) as preco_medio'),
-            DB::raw('count(distinct orcamento_id) as total_cotacoes'),
-            DB::raw('stddev(valor_unitario) as desvio_padrao')
+            \Illuminate\Support\Facades\DB::raw('min(valor_unitario) as preco_minimo'),
+            \Illuminate\Support\Facades\DB::raw('max(valor_unitario) as preco_maximo'),
+            \Illuminate\Support\Facades\DB::raw('avg(valor_unitario) as preco_medio'),
+            \Illuminate\Support\Facades\DB::raw('count(distinct orcamento_id) as total_cotacoes'),
+            \Illuminate\Support\Facades\DB::raw('stddev(valor_unitario) as desvio_padrao')
         )
         ->with('processoItem')
         ->groupBy('processo_item_id')
@@ -168,20 +151,40 @@ class RelatorioDomainService
             'titulo' => 'Relatório de Análise de Preços',
             'filtros' => $filtros->toArray(),
             'total_itens' => $analise->count(),
-            'variacao_media' => $this->calcularVariacaoMedia($analise),
+            'variacao_media' => $this->calcularVariacaoMedia($analise->toArray()),
             'dados' => $analise->toArray()
         ];
     }
 
     /**
      * Gerar relatório executivo
+     * 
+     * ⚠️ TODO: Migrar para Repository quando necessário
+     * Por enquanto mantido como array para compatibilidade
      */
     public function relatorioExecutivo(
         int $empresaId,
         FiltrosRelatorio $filtros
     ): array {
-        $query = Orcamento::where('empresa_id', $empresaId);
-        $this->aplicarFiltros($query, $filtros);
+        // ⚠️ Este método ainda usa Eloquent diretamente
+        // Deve ser migrado para Repository quando necessário
+        $query = \App\Modules\Orcamento\Models\Orcamento::where('empresa_id', $empresaId);
+        
+        if ($filtros->getDataInicio()) {
+            $query->whereDate('created_at', '>=', $filtros->getDataInicio());
+        }
+        if ($filtros->getDataFim()) {
+            $query->whereDate('created_at', '<=', $filtros->getDataFim());
+        }
+        if ($filtros->getFornecedorId()) {
+            $query->where('fornecedor_id', $filtros->getFornecedorId());
+        }
+        if ($filtros->getProcessoId()) {
+            $query->where('processo_id', $filtros->getProcessoId());
+        }
+        if ($filtros->getStatus()) {
+            $query->where('fornecedor_escolhido', $filtros->getStatus() === 'escolhido');
+        }
 
         $orcamentos = $query->with('itens')->get();
 
@@ -208,37 +211,7 @@ class RelatorioDomainService
         ];
     }
 
-    // ====== MÉTODOS AUXILIARES ======
-
-    private function aplicarFiltros(&$query, FiltrosRelatorio $filtros)
-    {
-        if ($filtros->getDataInicio()) {
-            $query->whereDate('created_at', '>=', $filtros->getDataInicio());
-        }
-        if ($filtros->getDataFim()) {
-            $query->whereDate('created_at', '<=', $filtros->getDataFim());
-        }
-        if ($filtros->getFornecedorId()) {
-            $query->where('fornecedor_id', $filtros->getFornecedorId());
-        }
-        if ($filtros->getProcessoId()) {
-            $query->where('processo_id', $filtros->getProcessoId());
-        }
-        if ($filtros->getStatus()) {
-            // Mapeia 'escolhido' -> true, 'pendente' -> false
-            $query->where('fornecedor_escolhido', $filtros->getStatus() === 'escolhido');
-        }
-    }
-
-    private function aplicarFiltrosOrcamento(&$query, FiltrosRelatorio $filtros)
-    {
-        if ($filtros->getDataInicio()) {
-            $query->whereDate('created_at', '>=', $filtros->getDataInicio());
-        }
-        if ($filtros->getDataFim()) {
-            $query->whereDate('created_at', '<=', $filtros->getDataFim());
-        }
-    }
+    // ====== MÉTODOS AUXILIARES (mantidos para compatibilidade com métodos legacy) ======
 
     private function calcularVariacaoMedia(array $itens): string
     {

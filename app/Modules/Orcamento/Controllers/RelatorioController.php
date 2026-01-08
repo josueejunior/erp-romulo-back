@@ -6,57 +6,67 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\Traits\HasAuthContext;
 use App\Modules\Orcamento\Domain\Services\RelatorioDomainService;
 use App\Modules\Orcamento\Domain\ValueObjects\FiltrosRelatorio;
+use App\Application\Orcamento\Exporters\RelatorioExporterInterface;
+use App\Application\Orcamento\Exporters\RelatorioCsvExporter;
+use App\Http\Requests\Orcamento\RelatorioOrcamentoRequest;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
+/**
+ * Controller para relatórios de orçamentos
+ * 
+ * ✅ DDD Enterprise-Grade:
+ * - Middleware valida assinatura (não no controller)
+ * - FormRequest valida filtros
+ * - Domain Service retorna Read Model (não array)
+ * - Export Service formata dados (não no controller)
+ * - Repository separa queries de regras
+ */
 class RelatorioController extends Controller
 {
     use HasAuthContext;
 
-    private RelatorioDomainService $relatorioService;
-
-    public function __construct(RelatorioDomainService $relatorioService)
-    {
-        $this->relatorioService = $relatorioService;
+    public function __construct(
+        private RelatorioDomainService $relatorioService,
+        RelatorioExporterInterface $exporter = null,
+    ) {
+        // Por padrão usa CSV, mas pode ser injetado outro exportador
+        $this->exporter = $exporter ?? app(RelatorioCsvExporter::class);
     }
+    
+    private RelatorioExporterInterface $exporter;
 
     /**
      * GET /relatorios/orcamentos
      * Retorna lista de orçamentos com filtros para relatórios
+     * 
+     * ✅ DDD: Controller apenas orquestra
+     * - Middleware valida assinatura (não aqui)
+     * - FormRequest valida filtros
+     * - Domain Service retorna Read Model
      */
-    public function index(Request $request): JsonResponse
+    public function index(RelatorioOrcamentoRequest $request): JsonResponse
     {
-        // Relatórios de orçamentos estão disponíveis para todos os planos com assinatura ativa
-        $tenant = tenancy()->tenant;
-        if (!$tenant || !$tenant->temAssinaturaAtiva()) {
-            return response()->json([
-                'message' => 'Você precisa ter uma assinatura ativa para acessar os relatórios.',
-            ], 403);
-        }
-
         try {
             $empresa = $this->getEmpresaAtivaOrFail();
             
-            $filtros = FiltrosRelatorio::fromArray([
-                'data_inicio' => $request->get('data_inicio'),
-                'data_fim' => $request->get('data_fim'),
-                'status' => $request->get('status'),
-                'fornecedor_id' => $request->get('fornecedor'),
-                'processo_id' => $request->get('processo'),
-            ]);
+            // FormRequest já validou os dados
+            $filtros = FiltrosRelatorio::fromArray($request->validated());
 
+            // Domain Service retorna Read Model (não array)
             $relatorio = $this->relatorioService->relatorioOrcamentosPorPeriodo(
                 $empresa->id,
                 $filtros
             );
 
+            // Controller decide como serializar
             return response()->json([
                 'success' => true,
-                'data' => $relatorio['dados'] ?? [],
+                'data' => $relatorio->dados->toArray(),
                 'resumo' => [
-                    'total_registros' => $relatorio['total_registros'] ?? 0,
-                    'valor_total' => $relatorio['valor_total'] ?? 0,
-                    'valor_medio' => $relatorio['valor_medio'] ?? 0,
+                    'total_registros' => $relatorio->totalRegistros,
+                    'valor_total' => $relatorio->valorTotal,
+                    'valor_medio' => $relatorio->valorMedio,
                 ],
             ]);
         } catch (\Exception $e) {
@@ -70,40 +80,32 @@ class RelatorioController extends Controller
     /**
      * GET /relatorios/orcamentos/export
      * Exporta relatório em formato específico
+     * 
+     * ✅ DDD: Controller apenas decide qual exportador usar
+     * Export Service formata dados (não no controller)
      */
-    public function export(Request $request): mixed
+    public function export(RelatorioOrcamentoRequest $request): mixed
     {
-        // Relatórios de orçamentos estão disponíveis para todos os planos com assinatura ativa
-        $tenant = tenancy()->tenant;
-        if (!$tenant || !$tenant->temAssinaturaAtiva()) {
-            return response()->json([
-                'message' => 'Você precisa ter uma assinatura ativa para exportar relatórios.',
-            ], 403);
-        }
-
         try {
             $empresa = $this->getEmpresaAtivaOrFail();
             $formato = $request->get('formato', 'csv');
             
-            $filtros = FiltrosRelatorio::fromArray([
-                'data_inicio' => $request->get('data_inicio'),
-                'data_fim' => $request->get('data_fim'),
-                'status' => $request->get('status'),
-                'fornecedor_id' => $request->get('fornecedor'),
-                'processo_id' => $request->get('processo'),
-            ]);
+            // FormRequest já validou os dados
+            $filtros = FiltrosRelatorio::fromArray($request->validated());
 
+            // Domain Service retorna Read Model
             $relatorio = $this->relatorioService->relatorioOrcamentosPorPeriodo(
                 $empresa->id,
                 $filtros
             );
 
+            // Controller decide formato, Export Service formata
             if ($formato === 'json') {
-                return response()->json($relatorio);
+                return response()->json($relatorio->toArray());
             }
 
-            // Exportar CSV
-            return $this->exportarCSV($relatorio['dados'] ?? []);
+            // Export Service formata (CSV, Excel, PDF, etc.)
+            return $this->exporter->export($relatorio);
         } catch (\Exception $e) {
             \Log::error('Erro ao exportar relatório: ' . $e->getMessage(), ['exception' => $e]);
             return response()->json([
@@ -116,25 +118,15 @@ class RelatorioController extends Controller
      * GET /relatorios/orcamentos/por-fornecedor
      * Relatório agrupado por fornecedor
      */
-    public function porFornecedor(Request $request): JsonResponse
+    public function porFornecedor(RelatorioOrcamentoRequest $request): JsonResponse
     {
-        // Relatórios de orçamentos estão disponíveis para todos os planos com assinatura ativa
-        $tenant = tenancy()->tenant;
-        if (!$tenant || !$tenant->temAssinaturaAtiva()) {
-            return response()->json([
-                'message' => 'Você precisa ter uma assinatura ativa para acessar os relatórios.',
-            ], 403);
-        }
-
         try {
             $empresa = $this->getEmpresaAtivaOrFail();
             
-            $filtros = FiltrosRelatorio::fromArray([
-                'data_inicio' => $request->get('data_inicio'),
-                'data_fim' => $request->get('data_fim'),
-                'status' => $request->get('status'),
-            ]);
+            // FormRequest já validou os dados
+            $filtros = FiltrosRelatorio::fromArray($request->validated());
 
+            // Domain Service retorna Read Model
             $relatorio = $this->relatorioService->relatorioPorFornecedor(
                 $empresa->id,
                 $filtros
@@ -142,7 +134,8 @@ class RelatorioController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => $relatorio,
+                'data' => $relatorio->dados->toArray(),
+                'resumo' => $relatorio->resumo,
             ]);
         } catch (\Exception $e) {
             \Log::error('Erro ao gerar relatório por fornecedor: ' . $e->getMessage());
@@ -156,24 +149,15 @@ class RelatorioController extends Controller
      * GET /relatorios/orcamentos/por-status
      * Relatório agrupado por status
      */
-    public function porStatus(Request $request): JsonResponse
+    public function porStatus(RelatorioOrcamentoRequest $request): JsonResponse
     {
-        // Relatórios de orçamentos estão disponíveis para todos os planos com assinatura ativa
-        $tenant = tenancy()->tenant;
-        if (!$tenant || !$tenant->temAssinaturaAtiva()) {
-            return response()->json([
-                'message' => 'Você precisa ter uma assinatura ativa para acessar os relatórios.',
-            ], 403);
-        }
-
         try {
             $empresa = $this->getEmpresaAtivaOrFail();
             
-            $filtros = FiltrosRelatorio::fromArray([
-                'data_inicio' => $request->get('data_inicio'),
-                'data_fim' => $request->get('data_fim'),
-            ]);
+            // FormRequest já validou os dados
+            $filtros = FiltrosRelatorio::fromArray($request->validated());
 
+            // Domain Service retorna Read Model
             $relatorio = $this->relatorioService->relatorioPorStatus(
                 $empresa->id,
                 $filtros
@@ -181,7 +165,8 @@ class RelatorioController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => $relatorio,
+                'data' => $relatorio->dados->toArray(),
+                'resumo' => $relatorio->resumo,
             ]);
         } catch (\Exception $e) {
             \Log::error('Erro ao gerar relatório por status: ' . $e->getMessage());
@@ -189,53 +174,5 @@ class RelatorioController extends Controller
                 'message' => 'Erro ao gerar relatório: ' . $e->getMessage()
             ], 500);
         }
-    }
-
-    /**
-     * Exportar relatório em CSV
-     */
-    private function exportarCSV(array $dados): mixed
-    {
-        $filename = 'relatorio_orcamentos_' . date('Y-m-d_His') . '.csv';
-        
-        $headers = [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
-        ];
-
-        $callback = function() use ($dados) {
-            $file = fopen('php://output', 'w');
-            
-            // Adicionar BOM UTF-8
-            fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
-            
-            // Cabeçalhos
-            fputcsv($file, [
-                'ID',
-                'Data',
-                'Fornecedor',
-                'Processo',
-                'Valor Total',
-                'Status',
-                'Total de Itens',
-            ], ';');
-
-            // Dados
-            foreach ($dados as $item) {
-                fputcsv($file, [
-                    $item['id'] ?? '',
-                    $item['data'] ?? '',
-                    $item['fornecedor'] ?? '',
-                    $item['processo'] ?? '',
-                    number_format($item['valor_total'] ?? 0, 2, ',', '.'),
-                    $item['status'] ?? '',
-                    $item['total_itens'] ?? 0,
-                ], ';');
-            }
-
-            fclose($file);
-        };
-
-        return response()->stream($callback, 200, $headers);
     }
 }

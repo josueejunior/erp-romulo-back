@@ -19,8 +19,8 @@
         <h1>CATÁLOGO / FICHA TÉCNICA</h1>
         <div class="info">
             <strong>Processo:</strong> {{ $processo->identificador }}<br>
-            <strong>Órgão:</strong> {{ $processo->orgao->razao_social }}<br>
-            <strong>Setor:</strong> {{ $processo->setor->nome }}<br>
+            <strong>Órgão:</strong> {{ $processo->orgao->razao_social ?? 'Não informado' }}<br>
+            <strong>Setor:</strong> {{ $processo->setor->nome ?? 'Não informado' }}<br>
             <strong>Data de Elaboração:</strong> {{ $data_elaboracao }}
         </div>
     </div>

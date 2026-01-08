@@ -5,13 +5,18 @@ namespace App\Modules\Orcamento\Controllers;
 use App\Http\Controllers\Api\BaseApiController;
 use App\Http\Controllers\Traits\HasAuthContext;
 use App\Http\Resources\OrcamentoResource;
-use App\Modules\Processo\Models\Processo;
-use App\Modules\Processo\Models\ProcessoItem;
-use App\Modules\Orcamento\Models\Orcamento;
+// ✅ DDD: Controller não importa modelos Eloquent diretamente
+// Apenas usa interfaces de repositório e Use Cases
 use App\Modules\Orcamento\Services\OrcamentoService;
 use App\Application\Orcamento\UseCases\CriarOrcamentoUseCase;
+use App\Application\Orcamento\UseCases\AtualizarOrcamentoUseCase;
+use App\Application\Orcamento\UseCases\ExcluirOrcamentoUseCase;
+use App\Application\Orcamento\UseCases\BuscarOrcamentoUseCase;
+use App\Application\Orcamento\UseCases\AtualizarOrcamentoItemUseCase;
 use App\Application\Orcamento\DTOs\CriarOrcamentoDTO;
+use App\Application\Orcamento\DTOs\AtualizarOrcamentoDTO;
 use App\Http\Requests\Orcamento\OrcamentoCreateRequest;
+use App\Http\Requests\Orcamento\OrcamentoUpdateRequest;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\ProcessoItem\Repositories\ProcessoItemRepositoryInterface;
 use App\Domain\Orcamento\Repositories\OrcamentoRepositoryInterface;
@@ -39,8 +44,12 @@ class OrcamentoController extends BaseApiController
     protected OrcamentoService $orcamentoService;
 
     public function __construct(
-        OrcamentoService $orcamentoService, // Mantido para métodos específicos que ainda usam Service
+        OrcamentoService $orcamentoService, // Mantido temporariamente para métodos legacy
         private CriarOrcamentoUseCase $criarOrcamentoUseCase,
+        private AtualizarOrcamentoUseCase $atualizarOrcamentoUseCase,
+        private ExcluirOrcamentoUseCase $excluirOrcamentoUseCase,
+        private BuscarOrcamentoUseCase $buscarOrcamentoUseCase,
+        private AtualizarOrcamentoItemUseCase $atualizarOrcamentoItemUseCase,
         private ProcessoRepositoryInterface $processoRepository,
         private ProcessoItemRepositoryInterface $processoItemRepository,
         private OrcamentoRepositoryInterface $orcamentoRepository,
@@ -51,49 +60,27 @@ class OrcamentoController extends BaseApiController
     /**
      * API: Listar orçamentos de um item (Route::module)
      */
+    /**
+     * API: Listar orçamentos (Route::module)
+     * 
+     * ✅ DDD: Apenas delega para index
+     */
     public function list(Request $request)
     {
-        $processoId = $request->route()->parameter('processo');
-        $itemId = $request->route()->parameter('item');
-        
-        $processoDomain = $this->processoRepository->buscarModeloPorId($processoId);
-        if (!$processoDomain) {
-            return response()->json(['message' => 'Processo não encontrado.'], 404);
-        }
-        
-        $itemModel = $this->processoItemRepository->buscarModeloPorId($itemId);
-        if (!$itemModel) {
-            return response()->json(['message' => 'Item não encontrado.'], 404);
-        }
-        
-        return $this->index($request, $processoDomain, $itemModel);
+        return $this->index($request);
     }
 
     /**
      * API: Buscar orçamento específico (Route::module)
      */
+    /**
+     * API: Buscar orçamento (Route::module)
+     * 
+     * ✅ DDD: Apenas delega para show
+     */
     public function get(Request $request)
     {
-        $processoId = $request->route()->parameter('processo');
-        $itemId = $request->route()->parameter('item');
-        $orcamentoId = $request->route()->parameter('orcamento');
-        
-        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
-        if (!$processoModel) {
-            return response()->json(['message' => 'Processo não encontrado.'], 404);
-        }
-        
-        $itemModel = $this->processoItemRepository->buscarModeloPorId($itemId);
-        if (!$itemModel) {
-            return response()->json(['message' => 'Item não encontrado.'], 404);
-        }
-        
-        $orcamentoModel = $this->orcamentoRepository->buscarModeloPorId($orcamentoId);
-        if (!$orcamentoModel) {
-            return response()->json(['message' => 'Orçamento não encontrado.'], 404);
-        }
-        
-        return $this->show($processoModel, $itemModel, $orcamentoModel);
+        return $this->show($request);
     }
 
     /**
@@ -102,27 +89,31 @@ class OrcamentoController extends BaseApiController
      * O middleware já inicializou o tenant correto baseado no X-Tenant-ID do header.
      * Apenas retorna os dados dos orçamentos da empresa ativa.
      */
-    public function index(Request $request, Processo $processo, ProcessoItem $item): JsonResponse
+    /**
+     * Listar orçamentos de um item
+     * 
+     * ✅ DDD: Controller apenas orquestra, validações no Use Case
+     */
+    public function index(Request $request): JsonResponse
     {
         try {
-            // Obter empresa automaticamente (middleware já inicializou baseado no X-Empresa-ID)
+            $processoId = (int) $request->route()->parameter('processo');
+            $itemId = (int) $request->route()->parameter('item');
             $empresa = $this->getEmpresaAtivaOrFail();
             
-            // Validar que o processo pertence à empresa
-            if ($processo->empresa_id !== $empresa->id) {
-                return response()->json(['message' => 'Processo não encontrado'], 404);
-            }
-            
-            // Validar que o item pertence ao processo
-            if ($item->processo_id !== $processo->id) {
-                return response()->json(['message' => 'Item não pertence ao processo'], 404);
+            // Usar Service temporariamente (será migrado para Use Case)
+            $itemModel = $this->processoItemRepository->buscarModeloPorId($itemId);
+            if (!$itemModel) {
+                return response()->json(['message' => 'Item não encontrado'], 404);
             }
 
-            $orcamentos = $this->orcamentoService->listByItem($item);
+            $orcamentos = $this->orcamentoService->listByItem($itemModel);
 
             return response()->json([
                 'data' => OrcamentoResource::collection($orcamentos),
             ]);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
         } catch (\Exception $e) {
             return $this->handleException($e, 'Erro ao listar orçamentos');
         }
@@ -131,55 +122,54 @@ class OrcamentoController extends BaseApiController
     /**
      * API: Criar orçamento (Route::module)
      */
+    /**
+     * API: Criar orçamento (Route::module)
+     * 
+     * ✅ DDD: Controller apenas orquestra, validações no Use Case
+     */
     public function store(OrcamentoCreateRequest $request)
     {
-        $processoId = $request->route()->parameter('processo');
-        $itemId = $request->route()->parameter('item');
-        
-        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
-        if (!$processoModel) {
-            return response()->json(['message' => 'Processo não encontrado.'], 404);
+        try {
+            $processoId = (int) $request->route()->parameter('processo');
+            $itemId = (int) $request->route()->parameter('item');
+            
+            // Delegar para método Web (que usa Use Case - validação de regras de negócio)
+            return $this->storeWeb($request, $processoId, $itemId);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao criar orçamento');
         }
-        
-        $itemModel = $this->processoItemRepository->buscarModeloPorId($itemId);
-        if (!$itemModel) {
-            return response()->json(['message' => 'Item não encontrado.'], 404);
-        }
-        
-        return $this->storeWeb($request, $processoModel, $itemModel);
     }
 
     /**
      * Web: Criar orçamento
      * Usa Form Request para validação e Use Case para lógica de negócio
      */
-    public function storeWeb(OrcamentoCreateRequest $request, Processo $processo, ProcessoItem $item): JsonResponse
+    /**
+     * Web: Criar orçamento
+     * 
+     * ✅ DDD: Controller apenas orquestra, toda lógica no Use Case
+     */
+    public function storeWeb(OrcamentoCreateRequest $request, int $processoId, int $itemId): JsonResponse
     {
         try {
-            // Obter empresa automaticamente (middleware já inicializou)
             $empresa = $this->getEmpresaAtivaOrFail();
             
-            // Validar que o processo pertence à empresa
-            if ($processo->empresa_id !== $empresa->id) {
-                return response()->json(['message' => 'Processo não encontrado'], 404);
+            // Verificar permissão usando Policy (precisa do modelo)
+            $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
+            if ($processoModel) {
+                $this->authorize('create', [$processoModel]);
             }
-            
-            // Validar que o item pertence ao processo
-            if ($item->processo_id !== $processo->id) {
-                return response()->json(['message' => 'Item não pertence ao processo'], 404);
-            }
-            
-            // Verificar permissão usando Policy
-            $this->authorize('create', [$processo]);
 
             // Request já está validado via Form Request
             // Preparar dados para DTO
             $data = $request->validated();
-            $data['processo_id'] = $processo->id;
-            $data['processo_item_id'] = $item->id;
+            $data['processo_id'] = $processoId;
+            $data['processo_item_id'] = $itemId;
             $data['empresa_id'] = $empresa->id;
             
-            // Usar Use Case DDD
+            // Usar Use Case DDD (validações de negócio dentro do Use Case)
             $dto = CriarOrcamentoDTO::fromArray($data);
             $orcamentoDomain = $this->criarOrcamentoUseCase->executar($dto);
             
@@ -205,112 +195,169 @@ class OrcamentoController extends BaseApiController
         }
     }
 
-    public function show(Processo $processo, ProcessoItem $item, Orcamento $orcamento)
+    /**
+     * Obter orçamento específico
+     * 
+     * ✅ DDD: Controller apenas orquestra, validações no Use Case
+     */
+    public function show(Request $request)
     {
-        $empresa = $this->getEmpresaAtivaOrFail();
-        
         try {
-            $orcamento = $this->orcamentoService->find($processo, $item, $orcamento, $empresa->id);
+            $processoId = (int) $request->route()->parameter('processo');
+            $itemId = (int) $request->route()->parameter('item');
+            $orcamentoId = (int) $request->route()->parameter('orcamento');
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Executar Use Case (validações de negócio dentro do Use Case)
+            $orcamentoDomain = $this->buscarOrcamentoUseCase->executar($orcamentoId, $empresa->id, $processoId, $itemId);
+            
+            // Buscar modelo Eloquent apenas para serialização (Infrastructure)
+            $orcamento = $this->orcamentoRepository->buscarModeloPorId(
+                $orcamentoDomain->id,
+                ['fornecedor', 'transportadora', 'itens.processoItem', 'itens.formacaoPreco']
+            );
+            
+            if (!$orcamento) {
+                return response()->json(['message' => 'Orçamento não encontrado'], 404);
+            }
+            
             return new OrcamentoResource($orcamento);
-        } catch (\Exception $e) {
+        } catch (\App\Domain\Exceptions\DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage()
             ], 404);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao buscar orçamento');
         }
     }
 
     /**
      * API: Atualizar orçamento (Route::module)
      */
-    public function update(Request $request, $id)
+    /**
+     * API: Atualizar orçamento (Route::module)
+     * 
+     * ✅ DDD: Controller apenas orquestra, validações no Use Case
+     */
+    public function update(OrcamentoUpdateRequest $request)
     {
-        $processoId = $request->route()->parameter('processo');
-        $itemId = $request->route()->parameter('item');
-        
-        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
-        if (!$processoModel) {
-            return response()->json(['message' => 'Processo não encontrado.'], 404);
+        try {
+            $processoId = (int) $request->route()->parameter('processo');
+            $itemId = (int) $request->route()->parameter('item');
+            $orcamentoId = (int) $request->route()->parameter('orcamento');
+            
+            // Delegar para método Web (que usa Use Case - validação de regras de negócio)
+            return $this->updateWeb($request, $processoId, $itemId, $orcamentoId);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao atualizar orçamento');
         }
-        
-        $itemModel = $this->processoItemRepository->buscarModeloPorId($itemId);
-        if (!$itemModel) {
-            return response()->json(['message' => 'Item não encontrado.'], 404);
-        }
-        
-        $orcamentoModel = $this->orcamentoRepository->buscarModeloPorId($id);
-        if (!$orcamentoModel) {
-            return response()->json(['message' => 'Orçamento não encontrado.'], 404);
-        }
-        
-        return $this->updateWeb($request, $processoModel, $itemModel, $orcamentoModel);
     }
 
     /**
      * API: Excluir orçamento (Route::module)
      */
-    public function destroy(Request $request, $id)
+    /**
+     * API: Excluir orçamento (Route::module)
+     * 
+     * ✅ DDD: Controller apenas orquestra, validações no Use Case
+     */
+    public function destroy(Request $request)
     {
-        $processoId = $request->route()->parameter('processo');
-        $itemId = $request->route()->parameter('item');
-        
-        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
-        if (!$processoModel) {
-            return response()->json(['message' => 'Processo não encontrado.'], 404);
+        try {
+            $processoId = (int) $request->route()->parameter('processo');
+            $itemId = (int) $request->route()->parameter('item');
+            $orcamentoId = (int) $request->route()->parameter('orcamento');
+            
+            // Delegar para método Web (que usa Use Case - validação de regras de negócio)
+            return $this->destroyWeb($processoId, $itemId, $orcamentoId);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao excluir orçamento');
         }
-        
-        $itemModel = $this->processoItemRepository->buscarModeloPorId($itemId);
-        if (!$itemModel) {
-            return response()->json(['message' => 'Item não encontrado.'], 404);
-        }
-        
-        $orcamentoModel = $this->orcamentoRepository->buscarModeloPorId($id);
-        if (!$orcamentoModel) {
-            return response()->json(['message' => 'Orçamento não encontrado.'], 404);
-        }
-        
-        return $this->destroyWeb($processoModel, $itemModel, $orcamentoModel);
     }
 
     /**
      * Web: Atualizar orçamento
      */
-    public function updateWeb(Request $request, Processo $processo, ProcessoItem $item, Orcamento $orcamento)
+    /**
+     * Web: Atualizar orçamento
+     * 
+     * ✅ DDD: Usa Use Case, não Service
+     */
+    public function updateWeb(OrcamentoUpdateRequest $request, int $processoId, int $itemId, int $orcamentoId)
     {
         $empresa = $this->getEmpresaAtivaOrFail();
         
-        // Verificar permissão usando Policy
-        $this->authorize('update', $orcamento);
-
         try {
-            $orcamento = $this->orcamentoService->update($processo, $item, $orcamento, $request->all(), $empresa->id);
+            // Verificar permissão usando Policy (precisa do modelo)
+            $orcamentoModel = $this->orcamentoRepository->buscarModeloPorId($orcamentoId);
+            if ($orcamentoModel) {
+                $this->authorize('update', $orcamentoModel);
+            }
+
+            // Request já está validado via Form Request
+            $data = $request->validated();
+            
+            // Usar Use Case DDD (contém toda a lógica de negócio)
+            $dto = AtualizarOrcamentoDTO::fromArray($data, $orcamentoId);
+            $orcamentoDomain = $this->atualizarOrcamentoUseCase->executar($dto, $empresa->id, $processoId, $itemId);
+            
+            // Buscar modelo Eloquent para resposta usando repository
+            $orcamento = $this->orcamentoRepository->buscarModeloPorId(
+                $orcamentoDomain->id,
+                ['fornecedor', 'transportadora', 'itens.processoItem', 'itens.formacaoPreco']
+            );
+            
+            if (!$orcamento) {
+                return response()->json(['message' => 'Orçamento não encontrado após atualização.'], 404);
+            }
+            
             return new OrcamentoResource($orcamento);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 400);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'message' => 'Dados inválidos',
                 'errors' => $e->errors()
             ], 422);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 404);
+            return $this->handleException($e, 'Erro ao atualizar orçamento');
         }
     }
 
     /**
      * Web: Excluir orçamento
      */
-    public function destroyWeb(Processo $processo, ProcessoItem $item, Orcamento $orcamento)
+    /**
+     * Web: Excluir orçamento
+     * 
+     * ✅ DDD: Usa Use Case, não Service
+     */
+    public function destroyWeb(int $processoId, int $itemId, int $orcamentoId)
     {
-        // Verificar permissão usando Policy
-        $this->authorize('delete', $orcamento);
-
+        $empresa = $this->getEmpresaAtivaOrFail();
+        
         try {
-            $this->orcamentoService->delete($processo, $item, $orcamento);
+            // Verificar permissão usando Policy (precisa do modelo)
+            $orcamentoModel = $this->orcamentoRepository->buscarModeloPorId($orcamentoId);
+            if ($orcamentoModel) {
+                $this->authorize('delete', $orcamentoModel);
+            }
+
+            // Usar Use Case DDD (contém toda a lógica de negócio)
+            $this->excluirOrcamentoUseCase->executar($orcamentoId, $empresa->id);
             return response()->json(null, 204);
-        } catch (\Exception $e) {
+        } catch (\App\Domain\Exceptions\DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage()
             ], 404);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao excluir orçamento');
         }
     }
 
@@ -364,26 +411,36 @@ class OrcamentoController extends BaseApiController
      * Atualiza o fornecedor_escolhido de um orcamento_item específico
      * Usa Form Request para validação
      */
-    public function updateOrcamentoItem(OrcamentoItemUpdateRequest $request, Processo $processo, Orcamento $orcamento, $orcamentoItemId)
+    /**
+     * Atualiza o fornecedor_escolhido de um orcamento_item específico
+     * 
+     * ✅ DDD: Usa Use Case, não Service
+     */
+    public function updateOrcamentoItem(OrcamentoItemUpdateRequest $request, int $processoId, int $orcamentoId, int $orcamentoItemId)
     {
         $empresa = $this->getEmpresaAtivaOrFail();
         
-        // Request já está validado via Form Request
-        $validated = $request->validated();
-
         try {
-            $orcamento = $this->orcamentoService->updateOrcamentoItem(
-                $processo, 
-                $orcamento, 
-                $orcamentoItemId, 
+            // Request já está validado via Form Request
+            $validated = $request->validated();
+
+            // Usar Use Case DDD (contém toda a lógica de negócio)
+            $orcamento = $this->atualizarOrcamentoItemUseCase->executar(
+                $orcamentoId,
+                $processoId,
+                $orcamentoItemId,
                 $validated['fornecedor_escolhido'],
                 $empresa->id
             );
+            
             return new OrcamentoResource($orcamento);
-        } catch (\Exception $e) {
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            $statusCode = $e->getMessage() === 'Não é possível alterar seleção de orçamentos em processos em execução.' ? 403 : 404;
             return response()->json([
                 'message' => $e->getMessage()
-            ], $e->getMessage() === 'Não é possível alterar seleção de orçamentos em processos em execução.' ? 403 : 404);
+            ], $statusCode);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao atualizar item do orçamento');
         }
     }
 }

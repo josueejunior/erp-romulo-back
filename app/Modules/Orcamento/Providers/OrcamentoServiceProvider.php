@@ -11,6 +11,10 @@ use App\Modules\Orcamento\Repositories\NotificacaoRepository;
 use App\Modules\Orcamento\Domain\Services\NotificacaoDomainService;
 use App\Modules\Orcamento\Domain\Services\ExportacaoDomainService;
 use App\Modules\Orcamento\Domain\Services\RelatorioDomainService;
+use App\Domain\Orcamento\Repositories\RelatorioOrcamentoRepositoryInterface;
+use App\Infrastructure\Persistence\Eloquent\RelatorioOrcamentoRepository;
+use App\Application\Orcamento\Exporters\RelatorioExporterInterface;
+use App\Application\Orcamento\Exporters\RelatorioCsvExporter;
 
 class OrcamentoServiceProvider extends ServiceProvider
 {
@@ -42,7 +46,25 @@ class OrcamentoServiceProvider extends ServiceProvider
 
         // Exportação e Relatórios
         $this->app->singleton(ExportacaoDomainService::class, fn() => new ExportacaoDomainService());
-        $this->app->singleton(RelatorioDomainService::class, fn() => new RelatorioDomainService());
+        
+        // Repository para relatórios
+        $this->app->bind(
+            RelatorioOrcamentoRepositoryInterface::class,
+            RelatorioOrcamentoRepository::class
+        );
+        
+        // Domain Service para relatórios (usa Repository)
+        $this->app->singleton(RelatorioDomainService::class, function ($app) {
+            return new RelatorioDomainService(
+                $app->make(RelatorioOrcamentoRepositoryInterface::class)
+            );
+        });
+        
+        // Export Service (CSV por padrão)
+        $this->app->bind(
+            RelatorioExporterInterface::class,
+            RelatorioCsvExporter::class
+        );
     }
 
     public function boot()
