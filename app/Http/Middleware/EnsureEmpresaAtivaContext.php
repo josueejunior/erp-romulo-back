@@ -18,18 +18,17 @@ class EnsureEmpresaAtivaContext
     public function __construct(
         private ApplicationContextContract $context
     ) {
-        // Log no construtor para verificar se está sendo instanciado
-        error_log('EnsureEmpresaAtivaContext::__construct - CONSTRUTOR EXECUTADO');
-        \Log::emergency('EnsureEmpresaAtivaContext::__construct - CONSTRUTOR EXECUTADO', [
-            'context_class' => get_class($context),
-        ]);
+        // Construtor sem logs (evita ruído nos logs)
     }
     
     /**
      * Handle an incoming request.
      * 
-     * 🔥 THIN MIDDLEWARE: Apenas chama o ApplicationContext
+     * 🔥 THIN MIDDLEWARE: Apenas garante que o ApplicationContext está inicializado
      * Toda a lógica está centralizada no ApplicationContext.
+     * 
+     * ✅ OTIMIZAÇÃO: Verifica se já está inicializado antes de chamar bootstrap()
+     * para evitar chamadas redundantes (o bootstrap() já é idempotente, mas evita logs de warning)
      */
     public function handle(Request $request, Closure $next): Response
     {
@@ -43,13 +42,19 @@ class EnsureEmpresaAtivaContext
         ]);
         
         try {
-            \Log::debug('EnsureEmpresaAtivaContext::handle - Chamando context->bootstrap()');
-            $startTime = microtime(true);
-            $this->context->bootstrap($request);
-            $elapsedTime = microtime(true) - $startTime;
-            \Log::info('EnsureEmpresaAtivaContext::handle - context->bootstrap() concluído', [
-                'elapsed_time' => round($elapsedTime, 3) . 's',
-            ]);
+            // ✅ OTIMIZAÇÃO: Verificar se já está inicializado antes de chamar bootstrap()
+            // Isso evita chamadas redundantes e warnings nos logs
+            if (!$this->context->isInitialized()) {
+                \Log::debug('EnsureEmpresaAtivaContext::handle - Contexto não inicializado, chamando bootstrap()');
+                $startTime = microtime(true);
+                $this->context->bootstrap($request);
+                $elapsedTime = microtime(true) - $startTime;
+                \Log::info('EnsureEmpresaAtivaContext::handle - context->bootstrap() concluído', [
+                    'elapsed_time' => round($elapsedTime, 3) . 's',
+                ]);
+            } else {
+                \Log::debug('EnsureEmpresaAtivaContext::handle - Contexto já inicializado, pulando bootstrap()');
+            }
             
             \Log::debug('EnsureEmpresaAtivaContext::handle - Chamando $next($request)');
             $startTime = microtime(true);

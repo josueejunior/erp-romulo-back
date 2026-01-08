@@ -7,6 +7,16 @@ use App\Modules\Processo\Models\Processo;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
+/**
+ * @deprecated Use os Use Cases em App\Application\Calendario\UseCases ao invés deste Service
+ * 
+ * Este serviço foi substituído pela arquitetura DDD:
+ * - BuscarCalendarioDisputasUseCase
+ * - BuscarCalendarioJulgamentoUseCase
+ * - BuscarAvisosUrgentesUseCase
+ * 
+ * Mantido temporariamente para compatibilidade com código legado.
+ */
 class CalendarioService
 {
     public function __construct(
@@ -41,13 +51,25 @@ class CalendarioService
         ];
 
         // Buscar processos com data de sessão dentro do período
+        // ✅ Converter Carbon para string/DateTime para compatibilidade com Eloquent
         $filtrosComData = [
             'empresa_id' => $empresaId,
             'status' => 'participacao',
-            'data_hora_sessao_publica_inicio' => $dataInicio,
-            'data_hora_sessao_publica_fim' => $dataFim,
+            'data_hora_sessao_publica_inicio' => $dataInicio instanceof Carbon ? $dataInicio->toDateTimeString() : $dataInicio,
+            'data_hora_sessao_publica_fim' => $dataFim instanceof Carbon ? $dataFim->toDateTimeString() : $dataFim,
         ];
+        
+        \Log::debug('CalendarioService::getCalendarioDisputas - Buscando processos com data', [
+            'empresa_id' => $empresaId,
+            'data_inicio' => $filtrosComData['data_hora_sessao_publica_inicio'],
+            'data_fim' => $filtrosComData['data_hora_sessao_publica_fim'],
+        ]);
+        
         $processosComData = $this->processoRepository->buscarModelosComFiltros($filtrosComData, $with);
+        
+        \Log::debug('CalendarioService::getCalendarioDisputas - Processos com data encontrados', [
+            'count' => $processosComData->count(),
+        ]);
         
         // Buscar TODOS os processos em participação (incluindo os sem data)
         // O calendário deve mostrar processos em participação mesmo sem data definida
@@ -55,7 +77,16 @@ class CalendarioService
             'empresa_id' => $empresaId,
             'status' => 'participacao',
         ];
+        
+        \Log::debug('CalendarioService::getCalendarioDisputas - Buscando todos processos em participação', [
+            'empresa_id' => $empresaId,
+        ]);
+        
         $todosProcessosParticipacao = $this->processoRepository->buscarModelosComFiltros($filtrosSemData, $with);
+        
+        \Log::debug('CalendarioService::getCalendarioDisputas - Total processos em participação', [
+            'count' => $todosProcessosParticipacao->count(),
+        ]);
         
         // Filtrar apenas os que não têm data de sessão ou têm status especial
         $processosSemDataOuPendentes = $todosProcessosParticipacao->filter(function ($processo) {

@@ -276,11 +276,21 @@ class ProcessoRepository implements ProcessoRepositoryInterface
         }
 
         if (isset($filtros['data_hora_sessao_publica_inicio'])) {
-            $query->where('data_hora_sessao_publica', '>=', $filtros['data_hora_sessao_publica_inicio']);
+            // Converter Carbon para string se necessário
+            $dataInicio = $filtros['data_hora_sessao_publica_inicio'];
+            if ($dataInicio instanceof \Carbon\Carbon) {
+                $dataInicio = $dataInicio->toDateTimeString();
+            }
+            $query->where('data_hora_sessao_publica', '>=', $dataInicio);
         }
 
         if (isset($filtros['data_hora_sessao_publica_fim'])) {
-            $query->where('data_hora_sessao_publica', '<=', $filtros['data_hora_sessao_publica_fim']);
+            // Converter Carbon para string se necessário
+            $dataFim = $filtros['data_hora_sessao_publica_fim'];
+            if ($dataFim instanceof \Carbon\Carbon) {
+                $dataFim = $dataFim->toDateTimeString();
+            }
+            $query->where('data_hora_sessao_publica', '<=', $dataFim);
         }
 
         if (isset($filtros['status_participacao'])) {
@@ -327,7 +337,20 @@ class ProcessoRepository implements ProcessoRepositoryInterface
             $query->limit($filtros['limit']);
         }
 
-        return $query->get();
+        // Log da query para debug
+        \Log::debug('ProcessoRepository::buscarModelosComFiltros - Query SQL', [
+            'sql' => $query->toSql(),
+            'bindings' => $query->getBindings(),
+            'filtros' => $filtros,
+        ]);
+
+        $result = $query->get();
+        
+        \Log::debug('ProcessoRepository::buscarModelosComFiltros - Resultado', [
+            'count' => $result->count(),
+        ]);
+
+        return $result;
     }
 }
 

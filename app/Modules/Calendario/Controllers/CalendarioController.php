@@ -4,130 +4,151 @@ namespace App\Modules\Calendario\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
 use App\Http\Controllers\Traits\HasAuthContext;
-use App\Modules\Calendario\Services\CalendarioService;
-use App\Services\RedisService;
+use App\Application\Calendario\DTOs\BuscarCalendarioDisputasDTO;
+use App\Application\Calendario\DTOs\BuscarCalendarioJulgamentoDTO;
+use App\Application\Calendario\UseCases\BuscarCalendarioDisputasUseCase;
+use App\Application\Calendario\UseCases\BuscarCalendarioJulgamentoUseCase;
+use App\Application\Calendario\UseCases\BuscarAvisosUrgentesUseCase;
+use App\Application\Calendario\Presenters\CalendarioPresenter;
 use Illuminate\Http\Request;
-use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 
+/**
+ * Controller do Calendário
+ * 
+ * ✅ DDD: Usa Use Cases, DTOs e Presenter
+ * 
+ * Fluxo:
+ * Request → DTO → Use Case → Presenter → Response
+ */
 class CalendarioController extends BaseApiController
 {
     use HasAuthContext;
 
-    protected CalendarioService $calendarioService;
-
-    public function __construct(CalendarioService $calendarioService)
-    {
-        $this->calendarioService = $calendarioService;
-    }
+    public function __construct(
+        private BuscarCalendarioDisputasUseCase $buscarCalendarioDisputasUseCase,
+        private BuscarCalendarioJulgamentoUseCase $buscarCalendarioJulgamentoUseCase,
+        private BuscarAvisosUrgentesUseCase $buscarAvisosUrgentesUseCase,
+    ) {}
 
     /**
      * Retorna calendário de disputas
+     * 
+     * ✅ DDD: Usa Use Case e Presenter
      */
-    public function disputas(Request $request)
+    public function disputas(Request $request): JsonResponse
     {
-        // Verificar se o plano tem acesso a calendários
+        // 1. Verificar acesso ao plano
         $tenant = $this->getTenant();
         if (!$tenant || !$tenant->temAcessoCalendario()) {
+            return response()->json(CalendarioPresenter::erroAcessoPlano(), 403);
+        }
+
+        try {
+            // 2. Obter contexto
+            $empresa = $this->getEmpresaAtivaOrFail();
+            $tenantId = $this->getTenantId();
+            
+            // 3. Criar DTO a partir do Request
+            $dto = BuscarCalendarioDisputasDTO::fromRequest(
+                $request->all(),
+                $empresa->id
+            );
+            
+            // 4. Executar Use Case
+            $eventos = $this->buscarCalendarioDisputasUseCase->executar($dto, $tenantId);
+            
+            // 5. Formatar resposta via Presenter
+            return response()->json(CalendarioPresenter::formatarDisputas($eventos));
+            
+        } catch (\Exception $e) {
+            \Log::error('CalendarioController::disputas - Erro', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            
             return response()->json([
-                'message' => 'O calendário não está disponível no seu plano. Faça upgrade para o plano Profissional ou superior.',
-            ], 403);
+                'message' => 'Erro ao buscar calendário de disputas',
+                'error' => $e->getMessage(),
+            ], 500);
         }
-
-        $empresa = $this->getEmpresaAtivaOrFail();
-        
-        $dataInicio = $request->has('data_inicio') 
-            ? Carbon::parse($request->data_inicio) 
-            : Carbon::now()->startOfMonth();
-        
-        $dataFim = $request->has('data_fim') 
-            ? Carbon::parse($request->data_fim) 
-            : Carbon::now()->endOfMonth();
-
-        $tenantId = $this->getTenantId();
-        $mes = $dataInicio->month;
-        $ano = $dataInicio->year;
-
-        // Tentar obter do cache primeiro (com empresa_id no cache key)
-        if ($tenantId && RedisService::isAvailable()) {
-            $cacheKey = "calendario_{$tenantId}_{$empresa->id}_{$mes}_{$ano}";
-            $cached = RedisService::get($cacheKey);
-            if ($cached !== null) {
-                return response()->json([
-                    'data' => $cached,
-                    'total' => count($cached),
-                ]);
-            }
-        }
-
-        $calendario = $this->calendarioService->getCalendarioDisputas($dataInicio, $dataFim, $empresa->id);
-
-        // Salvar no cache se disponível (com empresa_id no cache key)
-        if ($tenantId && RedisService::isAvailable()) {
-            $cacheKey = "calendario_{$tenantId}_{$empresa->id}_{$mes}_{$ano}";
-            RedisService::set($cacheKey, $calendario->toArray(), 1800); // Cache por 30 minutos
-        }
-
-        return response()->json([
-            'data' => $calendario,
-            'total' => $calendario->count(),
-        ]);
     }
 
     /**
      * Retorna calendário de julgamento
+     * 
+     * ✅ DDD: Usa Use Case e Presenter
      */
-    public function julgamento(Request $request)
+    public function julgamento(Request $request): JsonResponse
     {
-        // Verificar se o plano tem acesso a calendários
+        // 1. Verificar acesso ao plano
         $tenant = $this->getTenant();
         if (!$tenant || !$tenant->temAcessoCalendario()) {
-            return response()->json([
-                'message' => 'O calendário não está disponível no seu plano. Faça upgrade para o plano Profissional ou superior.',
-            ], 403);
+            return response()->json(CalendarioPresenter::erroAcessoPlano(), 403);
         }
 
-        $empresa = $this->getEmpresaAtivaOrFail();
-        
-        $dataInicio = $request->has('data_inicio') 
-            ? Carbon::parse($request->data_inicio) 
-            : null;
-        
-        $dataFim = $request->has('data_fim') 
-            ? Carbon::parse($request->data_fim) 
-            : null;
-
-        $calendario = $this->calendarioService->getCalendarioJulgamento($dataInicio, $dataFim, $empresa->id);
-
-        return response()->json([
-            'data' => $calendario,
-            'total' => $calendario->count(),
-        ]);
+        try {
+            // 2. Obter contexto
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // 3. Criar DTO a partir do Request
+            $dto = BuscarCalendarioJulgamentoDTO::fromRequest(
+                $request->all(),
+                $empresa->id
+            );
+            
+            // 4. Executar Use Case
+            $processos = $this->buscarCalendarioJulgamentoUseCase->executar($dto);
+            
+            // 5. Formatar resposta via Presenter
+            return response()->json(CalendarioPresenter::formatarJulgamentos($processos));
+            
+        } catch (\Exception $e) {
+            \Log::error('CalendarioController::julgamento - Erro', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            
+            return response()->json([
+                'message' => 'Erro ao buscar calendário de julgamento',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**
      * Retorna avisos urgentes
+     * 
+     * ✅ DDD: Usa Use Case e Presenter
      */
-    public function avisosUrgentes()
+    public function avisosUrgentes(): JsonResponse
     {
-        // Verificar se o plano tem acesso a calendários
+        // 1. Verificar acesso ao plano
         $tenant = $this->getTenant();
         if (!$tenant || !$tenant->temAcessoCalendario()) {
-            return response()->json([
-                'message' => 'O calendário não está disponível no seu plano. Faça upgrade para o plano Profissional ou superior.',
-            ], 403);
+            return response()->json(CalendarioPresenter::erroAcessoPlano(), 403);
         }
 
-        $empresa = $this->getEmpresaAtivaOrFail();
-        $avisos = $this->calendarioService->getAvisosUrgentes($empresa->id);
-
-        return response()->json([
-            'data' => $avisos,
-            'total' => count($avisos),
-        ]);
+        try {
+            // 2. Obter contexto
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // 3. Executar Use Case
+            $avisos = $this->buscarAvisosUrgentesUseCase->executar($empresa->id);
+            
+            // 4. Formatar resposta via Presenter
+            return response()->json(CalendarioPresenter::formatarAvisosUrgentes($avisos));
+            
+        } catch (\Exception $e) {
+            \Log::error('CalendarioController::avisosUrgentes - Erro', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            
+            return response()->json([
+                'message' => 'Erro ao buscar avisos urgentes',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 }
-
-
-
-
-
