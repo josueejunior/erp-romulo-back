@@ -13,175 +13,211 @@ use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\ProcessoItem\Repositories\ProcessoItemRepositoryInterface;
 use App\Domain\Orcamento\Repositories\OrcamentoRepositoryInterface;
 use App\Domain\FormacaoPreco\Repositories\FormacaoPrecoRepositoryInterface;
+use App\Http\Controllers\Traits\ResolvesContext;
+use App\Domain\Exceptions\FormacaoPrecoNaoEncontradaException;
+use App\Domain\Exceptions\ProcessoEmExecucaoException;
+use App\Domain\Exceptions\EntidadeNaoPertenceException;
+use App\Domain\Exceptions\NotFoundException;
+use App\Http\Requests\FormacaoPreco\FormacaoPrecoRequest;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 
+/**
+ * Controller para gerenciamento de formação de preços
+ * 
+ * ✅ DDD Enterprise-Grade:
+ * - Usa trait para resolver contexto (elimina repetição)
+ * - Service valida vínculos e regras de negócio
+ * - Domain Exceptions específicas
+ * - Controller apenas orquestra
+ */
 class FormacaoPrecoController extends BaseApiController
 {
-
-    protected FormacaoPrecoService $formacaoPrecoService;
+    use ResolvesContext;
 
     public function __construct(
-        FormacaoPrecoService $formacaoPrecoService,
+        private FormacaoPrecoService $formacaoPrecoService,
         private ProcessoRepositoryInterface $processoRepository,
         private ProcessoItemRepositoryInterface $processoItemRepository,
         private OrcamentoRepositoryInterface $orcamentoRepository,
         private FormacaoPrecoRepositoryInterface $formacaoPrecoRepository,
     ) {
-        // BaseApiController não tem construtor, não precisa chamar parent::__construct()
-        $this->formacaoPrecoService = $formacaoPrecoService;
         $this->service = $formacaoPrecoService; // Para HasDefaultActions
     }
 
     /**
-     * API: Listar formações de preço (Route::module)
+     * API: Buscar formação de preço (Route::module)
+     * 
+     * ✅ DDD: Usa resolveContext para eliminar repetição
      */
-    public function list(Request $request)
+    public function get(Request $request): JsonResponse|FormacaoPrecoResource
     {
-        // Formação de preço é 1:1 com orçamento, então retorna apenas uma
-        return $this->get($request);
+        try {
+            [$processo, $item, $orcamento] = $this->resolveContext($request);
+            $empresaId = $this->getEmpresaAtivaOrFail()->id;
+
+            $formacaoPreco = $this->formacaoPrecoService->find($processo, $item, $orcamento, $empresaId);
+            return new FormacaoPrecoResource($formacaoPreco);
+        } catch (FormacaoPrecoNaoEncontradaException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (NotFoundException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (\Exception $e) {
+            \Log::error('Erro ao buscar formação de preço: ' . $e->getMessage(), ['exception' => $e]);
+            return response()->json(['message' => 'Erro ao buscar formação de preço'], 500);
+        }
     }
 
     /**
-     * API: Buscar formação de preço (Route::module)
+     * Web: Buscar formação de preço
      */
-    public function get(Request $request)
+    public function show(Processo $processo, ProcessoItem $item, Orcamento $orcamento): JsonResponse|FormacaoPrecoResource
     {
-        $processoId = $request->route()->parameter('processo');
-        $itemId = $request->route()->parameter('item');
-        $orcamentoId = $request->route()->parameter('orcamento');
-        
-        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
-        if (!$processoModel) {
-            return response()->json(['message' => 'Processo não encontrado.'], 404);
-        }
-        
-        $itemModel = $this->processoItemRepository->buscarModeloPorId($itemId);
-        if (!$itemModel) {
-            return response()->json(['message' => 'Item não encontrado.'], 404);
-        }
-        
-        $orcamentoModel = $this->orcamentoRepository->buscarModeloPorId($orcamentoId);
-        if (!$orcamentoModel) {
-            return response()->json(['message' => 'Orçamento não encontrado.'], 404);
-        }
-        
-        return $this->show($processoModel, $itemModel, $orcamentoModel);
-    }
-
-    public function show(Processo $processo, ProcessoItem $item, Orcamento $orcamento)
-    {
-        $empresa = $this->getEmpresaAtivaOrFail();
-        
         try {
-            $formacaoPreco = $this->formacaoPrecoService->find($processo, $item, $orcamento, $empresa->id);
+            $empresaId = $this->getEmpresaAtivaOrFail()->id;
+            $formacaoPreco = $this->formacaoPrecoService->find($processo, $item, $orcamento, $empresaId);
             return new FormacaoPrecoResource($formacaoPreco);
+        } catch (FormacaoPrecoNaoEncontradaException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 404);
+            \Log::error('Erro ao buscar formação de preço: ' . $e->getMessage(), ['exception' => $e]);
+            return response()->json(['message' => 'Erro ao buscar formação de preço'], 500);
         }
     }
 
     /**
      * API: Criar formação de preço (Route::module)
+     * 
+     * ✅ DDD: 
+     * - Usa resolveContext para eliminar repetição
+     * - FormRequest valida dados (Service assume válidos)
      */
-    public function store(Request $request)
+    public function store(FormacaoPrecoRequest $request): JsonResponse|FormacaoPrecoResource
     {
-        $processoId = $request->route()->parameter('processo');
-        $itemId = $request->route()->parameter('item');
-        $orcamentoId = $request->route()->parameter('orcamento');
-        
-        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
-        if (!$processoModel) {
-            return response()->json(['message' => 'Processo não encontrado.'], 404);
+        try {
+            [$processo, $item, $orcamento] = $this->resolveContext($request);
+            $empresaId = $this->getEmpresaAtivaOrFail()->id;
+
+            // FormRequest já validou os dados
+            $formacaoPreco = $this->formacaoPrecoService->store(
+                $processo,
+                $item,
+                $orcamento,
+                $request->validated(),
+                $empresaId
+            );
+
+            return new FormacaoPrecoResource($formacaoPreco);
+        } catch (ProcessoEmExecucaoException $e) {
+            return response()->json(['message' => $e->getMessage()], 403);
+        } catch (EntidadeNaoPertenceException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        } catch (NotFoundException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        } catch (\Exception $e) {
+            \Log::error('Erro ao criar formação de preço: ' . $e->getMessage(), ['exception' => $e]);
+            return response()->json(['message' => 'Erro ao criar formação de preço'], 500);
         }
-        
-        $itemModel = $this->processoItemRepository->buscarModeloPorId($itemId);
-        if (!$itemModel) {
-            return response()->json(['message' => 'Item não encontrado.'], 404);
-        }
-        
-        $orcamentoModel = $this->orcamentoRepository->buscarModeloPorId($orcamentoId);
-        if (!$orcamentoModel) {
-            return response()->json(['message' => 'Orçamento não encontrado.'], 404);
-        }
-        
-        return $this->storeWeb($request, $processoModel, $itemModel, $orcamentoModel);
     }
 
     /**
      * API: Atualizar formação de preço (Route::module)
+     * 
+     * ✅ DDD: 
+     * - Usa resolveContext para eliminar repetição
+     * - FormRequest valida dados (Service assume válidos)
      */
-    public function update(Request $request, $id)
+    public function update(FormacaoPrecoRequest $request, int $id): JsonResponse|FormacaoPrecoResource
     {
-        $processoId = $request->route()->parameter('processo');
-        $itemId = $request->route()->parameter('item');
-        $orcamentoId = $request->route()->parameter('orcamento');
-        
-        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
-        if (!$processoModel) {
-            return response()->json(['message' => 'Processo não encontrado.'], 404);
+        try {
+            [$processo, $item, $orcamento] = $this->resolveContext($request);
+            $empresaId = $this->getEmpresaAtivaOrFail()->id;
+
+            $formacaoPreco = $this->formacaoPrecoRepository->buscarModeloPorId($id);
+            if (!$formacaoPreco) {
+                throw new FormacaoPrecoNaoEncontradaException();
+            }
+
+            // FormRequest já validou os dados
+            $formacaoPreco = $this->formacaoPrecoService->update(
+                $processo,
+                $item,
+                $orcamento,
+                $formacaoPreco,
+                $request->validated(),
+                $empresaId
+            );
+
+            return new FormacaoPrecoResource($formacaoPreco);
+        } catch (FormacaoPrecoNaoEncontradaException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (ProcessoEmExecucaoException $e) {
+            return response()->json(['message' => $e->getMessage()], 403);
+        } catch (EntidadeNaoPertenceException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        } catch (NotFoundException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        } catch (\Exception $e) {
+            \Log::error('Erro ao atualizar formação de preço: ' . $e->getMessage(), ['exception' => $e]);
+            return response()->json(['message' => 'Erro ao atualizar formação de preço'], 500);
         }
-        
-        $itemModel = $this->processoItemRepository->buscarModeloPorId($itemId);
-        if (!$itemModel) {
-            return response()->json(['message' => 'Item não encontrado.'], 404);
-        }
-        
-        $orcamentoModel = $this->orcamentoRepository->buscarModeloPorId($orcamentoId);
-        if (!$orcamentoModel) {
-            return response()->json(['message' => 'Orçamento não encontrado.'], 404);
-        }
-        
-        $formacaoPrecoModel = $this->formacaoPrecoRepository->buscarModeloPorId($id);
-        if (!$formacaoPrecoModel) {
-            return response()->json(['message' => 'Formação de preço não encontrada.'], 404);
-        }
-        
-        return $this->updateWeb($request, $processoModel, $itemModel, $orcamentoModel, $formacaoPrecoModel);
     }
 
     /**
      * Web: Criar formação de preço
+     * 
+     * ✅ DDD: 
+     * - Service valida tudo, controller apenas orquestra
+     * - FormRequest valida dados
      */
-    public function storeWeb(Request $request, Processo $processo, ProcessoItem $item, Orcamento $orcamento)
+    public function storeWeb(FormacaoPrecoRequest $request, Processo $processo, ProcessoItem $item, Orcamento $orcamento): JsonResponse|FormacaoPrecoResource
     {
-        $empresa = $this->getEmpresaAtivaOrFail();
-        
         try {
-            $formacaoPreco = $this->formacaoPrecoService->store($processo, $item, $orcamento, $request->all(), $empresa->id);
+            $empresaId = $this->getEmpresaAtivaOrFail()->id;
+            // FormRequest já validou os dados
+            $formacaoPreco = $this->formacaoPrecoService->store($processo, $item, $orcamento, $request->validated(), $empresaId);
             return new FormacaoPrecoResource($formacaoPreco);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json([
-                'message' => 'Dados inválidos',
-                'errors' => $e->errors()
-            ], 422);
+        } catch (ProcessoEmExecucaoException $e) {
+            return response()->json(['message' => $e->getMessage()], 403);
+        } catch (EntidadeNaoPertenceException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], $e->getMessage() === 'Não é possível criar/editar formação de preço para processos em execução.' ? 403 : 404);
+            \Log::error('Erro ao criar formação de preço: ' . $e->getMessage(), ['exception' => $e]);
+            return response()->json(['message' => 'Erro ao criar formação de preço'], 500);
         }
     }
 
     /**
      * Web: Atualizar formação de preço
+     * 
+     * ✅ DDD: 
+     * - Service valida tudo, controller apenas orquestra
+     * - FormRequest valida dados
      */
-    public function updateWeb(Request $request, Processo $processo, ProcessoItem $item, Orcamento $orcamento, FormacaoPreco $formacaoPreco)
+    public function updateWeb(FormacaoPrecoRequest $request, Processo $processo, ProcessoItem $item, Orcamento $orcamento, FormacaoPreco $formacaoPreco): JsonResponse|FormacaoPrecoResource
     {
-        $empresa = $this->getEmpresaAtivaOrFail();
-        
         try {
-            $formacaoPreco = $this->formacaoPrecoService->update($processo, $item, $orcamento, $formacaoPreco, $request->all(), $empresa->id);
+            $empresaId = $this->getEmpresaAtivaOrFail()->id;
+            // FormRequest já validou os dados
+            $formacaoPreco = $this->formacaoPrecoService->update($processo, $item, $orcamento, $formacaoPreco, $request->validated(), $empresaId);
             return new FormacaoPrecoResource($formacaoPreco);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json([
-                'message' => 'Dados inválidos',
-                'errors' => $e->errors()
-            ], 422);
+        } catch (FormacaoPrecoNaoEncontradaException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (ProcessoEmExecucaoException $e) {
+            return response()->json(['message' => $e->getMessage()], 403);
+        } catch (EntidadeNaoPertenceException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], $e->getMessage() === 'Não é possível criar/editar formação de preço para processos em execução.' ? 403 : 404);
+            \Log::error('Erro ao atualizar formação de preço: ' . $e->getMessage(), ['exception' => $e]);
+            return response()->json(['message' => 'Erro ao atualizar formação de preço'], 500);
         }
     }
 }

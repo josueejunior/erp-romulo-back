@@ -110,6 +110,42 @@ class FormacaoPrecoRepository implements FormacaoPrecoRepositoryInterface
     {
         return FormacaoPrecoModel::class;
     }
+
+    /**
+     * Buscar formação de preço por contexto
+     * 
+     * ✅ DDD: Método específico para busca contextual
+     */
+    public function buscarPorContexto(int $processoId, int $itemId, ?int $orcamentoId = null): ?FormacaoPrecoModel
+    {
+        $query = FormacaoPrecoModel::where('processo_id', $processoId)
+            ->where('processo_item_id', $itemId);
+
+        if ($orcamentoId !== null) {
+            $query->where('orcamento_id', $orcamentoId);
+        } else {
+            $query->whereNull('orcamento_id');
+        }
+
+        return $query->first();
+    }
+
+    /**
+     * Buscar ou criar formação de preço
+     * 
+     * ✅ DDD: Operação atômica para salvar
+     */
+    public function buscarOuCriar(array $dados): FormacaoPrecoModel
+    {
+        return FormacaoPrecoModel::firstOrCreate(
+            [
+                'processo_id' => $dados['processo_id'],
+                'processo_item_id' => $dados['processo_item_id'],
+                'orcamento_id' => $dados['orcamento_id'] ?? null,
+            ],
+            $dados
+        );
+    }
 }
 
 

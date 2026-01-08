@@ -48,45 +48,95 @@ class NotificacaoDomainService
     }
 
     /**
-     * Obter notificações não lidas de um usuário
+     * Obter notificação por ID com validação de ownership
+     * 
+     * ✅ DDD: Valida ownership (regra de domínio)
      */
-    public function obterNaoLidas(int $usuarioId, int $empresaId): array
+    public function obterPorId(int $notificacaoId, int $usuarioId, int $empresaId): ?NotificacaoAggregate
     {
-        return $this->repository->obterPorUsuario($usuarioId, $empresaId, true);
+        $notificacao = $this->repository->obter($notificacaoId);
+        
+        if (!$notificacao) {
+            return null;
+        }
+
+        // Validar ownership (regra de domínio)
+        if ($notificacao->getUsuarioId() !== $usuarioId || $notificacao->getEmpresaId() !== $empresaId) {
+            return null;
+        }
+
+        return $notificacao;
+    }
+
+    /**
+     * Obter notificações não lidas de um usuário
+     * 
+     * ✅ DDD: Retorna Collection para melhor performance e flexibilidade
+     */
+    public function obterNaoLidas(int $usuarioId, int $empresaId): \Illuminate\Support\Collection
+    {
+        return \Illuminate\Support\Collection::make(
+            $this->repository->obterPorUsuario($usuarioId, $empresaId, true)
+        );
     }
 
     /**
      * Obter todas as notificações de um usuário
+     * 
+     * ✅ DDD: Retorna Collection para melhor performance e flexibilidade
      */
-    public function obterTodas(int $usuarioId, int $empresaId): array
+    public function obterTodas(int $usuarioId, int $empresaId): \Illuminate\Support\Collection
     {
-        return $this->repository->obterPorUsuario($usuarioId, $empresaId, false);
+        return \Illuminate\Support\Collection::make(
+            $this->repository->obterPorUsuario($usuarioId, $empresaId, false)
+        );
     }
 
     /**
      * Obter notificações de um processo
+     * 
+     * ✅ DDD: Retorna Collection
      */
-    public function obterPorProcesso(int $processoId, int $empresaId): array
+    public function obterPorProcesso(int $processoId, int $empresaId): \Illuminate\Support\Collection
     {
-        return $this->repository->obterPorProcesso($processoId, $empresaId);
+        return \Illuminate\Support\Collection::make(
+            $this->repository->obterPorProcesso($processoId, $empresaId)
+        );
     }
 
     /**
      * Marcar notificação como lida
+     * 
+     * ✅ DDD: Valida ownership antes de marcar
      */
-    public function marcarComoLida(int $notificacaoId): bool
+    public function marcarComoLida(int $notificacaoId, int $usuarioId, int $empresaId): bool
     {
-        return $this->repository->marcarComoLida($notificacaoId);
+        // Validar ownership (regra de domínio)
+        $notificacao = $this->obterPorId($notificacaoId, $usuarioId, $empresaId);
+        
+        if (!$notificacao) {
+            return false;
+        }
+
+        // Marcar como lida (regra de domínio)
+        $notificacao->marcarComoLida();
+        
+        // Persistir
+        $this->repository->salvar($notificacao);
+        
+        return true;
     }
 
     /**
      * Marcar múltiplas como lidas
+     * 
+     * ✅ DDD: Valida ownership de cada notificação
      */
-    public function marcarMultiplasComoLidas(array $notificacaoIds): int
+    public function marcarMultiplasComoLidas(array $notificacaoIds, int $usuarioId, int $empresaId): int
     {
         $total = 0;
         foreach ($notificacaoIds as $id) {
-            if ($this->repository->marcarComoLida($id)) {
+            if ($this->marcarComoLida($id, $usuarioId, $empresaId)) {
                 $total++;
             }
         }
@@ -95,9 +145,18 @@ class NotificacaoDomainService
 
     /**
      * Deletar notificação
+     * 
+     * ✅ DDD: Valida ownership antes de deletar
      */
-    public function deletar(int $notificacaoId): bool
+    public function deletar(int $notificacaoId, int $usuarioId, int $empresaId): bool
     {
+        // Validar ownership (regra de domínio)
+        $notificacao = $this->obterPorId($notificacaoId, $usuarioId, $empresaId);
+        
+        if (!$notificacao) {
+            return false;
+        }
+
         return $this->repository->deletar($notificacaoId);
     }
 
@@ -111,10 +170,12 @@ class NotificacaoDomainService
 
     /**
      * Contar notificações não lidas
+     * 
+     * ✅ DDD: Usa Collection ao invés de count() em array
      */
     public function contarNaoLidas(int $usuarioId, int $empresaId): int
     {
-        return count($this->obterNaoLidas($usuarioId, $empresaId));
+        return $this->obterNaoLidas($usuarioId, $empresaId)->count();
     }
 
     /**

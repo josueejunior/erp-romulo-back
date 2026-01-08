@@ -15,6 +15,11 @@ use App\Application\Contrato\DTOs\CriarContratoDTO;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\Contrato\Repositories\ContratoRepositoryInterface;
 use App\Http\Requests\Contrato\ContratoCreateRequest;
+use App\Http\Controllers\Traits\ResolvesContext;
+use App\Domain\Exceptions\ContratoNaoEncontradoException;
+use App\Domain\Exceptions\ContratoPossuiEmpenhosException;
+use App\Domain\Exceptions\EntidadeNaoPertenceException;
+use App\Domain\Exceptions\NotFoundException;
 use App\Services\RedisService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -32,9 +37,18 @@ use Illuminate\Validation\ValidationException;
  * - Tenant ID: Obtido automaticamente via tenancy()->tenant (middleware já inicializou)
  * - Empresa ID: Obtido automaticamente via getEmpresaAtivaOrFail() que prioriza header X-Empresa-ID
  */
+/**
+ * Controller para gerenciamento de Contratos
+ * 
+ * ✅ DDD Enterprise-Grade:
+ * - Usa trait para resolver contexto (elimina repetição)
+ * - Domain Exceptions específicas
+ * - Controller apenas orquestra
+ */
 class ContratoController extends BaseApiController
 {
     use HasAuthContext;
+    use ResolvesContext;
 
     public function __construct(
         ContratoService $contratoService, // Mantido para métodos específicos que ainda usam Service (update, delete)
@@ -50,36 +64,36 @@ class ContratoController extends BaseApiController
 
     /**
      * API: Listar contratos de um processo (Route::module)
+     * 
+     * ✅ DDD: Usa resolveProcesso para eliminar repetição
      */
-    public function list(Request $request)
+    public function list(Request $request): JsonResponse
     {
-        $processoId = $request->route()->parameter('processo');
-        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
-        if (!$processoModel) {
-            return response()->json(['message' => 'Processo não encontrado.'], 404);
+        try {
+            $processo = $this->resolveProcesso($request);
+            return $this->index($processo);
+        } catch (NotFoundException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao listar contratos');
         }
-        return $this->index($processoModel);
     }
 
     /**
      * API: Buscar contrato específico (Route::module)
+     * 
+     * ✅ DDD: Usa resolveProcessoContrato para eliminar repetição
      */
-    public function get(Request $request)
+    public function get(Request $request): JsonResponse
     {
-        $processoId = $request->route()->parameter('processo');
-        $contratoId = $request->route()->parameter('contrato');
-        
-        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
-        if (!$processoModel) {
-            return response()->json(['message' => 'Processo não encontrado.'], 404);
+        try {
+            [$processo, $contrato] = $this->resolveProcessoContrato($request);
+            return $this->show($processo, $contrato);
+        } catch (NotFoundException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao buscar contrato');
         }
-        
-        $contratoModel = $this->contratoRepository->buscarModeloPorId($contratoId);
-        if (!$contratoModel) {
-            return response()->json(['message' => 'Contrato não encontrado.'], 404);
-        }
-        
-        return $this->show($processoModel, $contratoModel);
     }
 
     /**
@@ -140,31 +154,17 @@ class ContratoController extends BaseApiController
 
     /**
      * Listar contratos de um processo
-     * Retorna entidades de domínio transformadas via Resource
      * 
-     * ✅ O QUE O CONTROLLER FAZ:
-     * - Recebe request
-     * - Obtém empresa automaticamente via getEmpresaAtivaOrFail()
-     * - Chama Use Case para listar
-     * - Transforma entidades em arrays
-     * 
-     * ❌ O QUE O CONTROLLER NÃO FAZ:
-     * - Não lê tenant_id diretamente
-     * - Não acessa Tenant diretamente
-     * - O sistema já injeta o contexto (tenant, empresa) via middleware
-     * 
-     * O middleware já inicializou o tenant correto baseado no X-Tenant-ID do header.
-     * A empresa é obtida automaticamente via getEmpresaAtivaOrFail() que prioriza header X-Empresa-ID.
+     * ✅ DDD: Controller apenas orquestra, validações no Use Case
      */
     public function index(Processo $processo): JsonResponse
     {
         try {
-            // Obter empresa automaticamente (middleware já inicializou baseado no X-Empresa-ID)
             $empresa = $this->getEmpresaAtivaOrFail();
             
-            // Validar que o processo pertence à empresa
+            // Validar que o processo pertence à empresa (regra de segurança)
             if ($processo->empresa_id !== $empresa->id) {
-                return response()->json(['message' => 'Processo não encontrado'], 404);
+                throw new EntidadeNaoPertenceException('Processo', 'empresa ativa');
             }
             
             // Preparar filtros
@@ -195,6 +195,8 @@ class ContratoController extends BaseApiController
                     'total' => $paginado->total(),
                 ],
             ]);
+        } catch (EntidadeNaoPertenceException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
         } catch (\Exception $e) {
             return $this->handleException($e, 'Erro ao listar contratos');
         }
@@ -202,16 +204,19 @@ class ContratoController extends BaseApiController
 
     /**
      * API: Criar contrato (Route::module)
+     * 
+     * ✅ DDD: Usa resolveProcesso para eliminar repetição
      */
-    public function store(Request $request)
+    public function store(ContratoCreateRequest $request): JsonResponse
     {
-        $processoId = $request->route()->parameter('processo');
-        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
-        if (!$processoModel) {
-            return response()->json(['message' => 'Processo não encontrado.'], 404);
+        try {
+            $processo = $this->resolveProcesso($request);
+            return $this->storeWeb($request, $processo);
+        } catch (NotFoundException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao criar contrato');
         }
-        
-        return $this->storeWeb($request, $processoModel);
     }
 
     /**
@@ -271,40 +276,30 @@ class ContratoController extends BaseApiController
 
     /**
      * Obter contrato específico
-     * Retorna entidade de domínio transformada
      * 
-     * ✅ O QUE O CONTROLLER FAZ:
-     * - Recebe request
-     * - Obtém empresa automaticamente via getEmpresaAtivaOrFail()
-     * - Chama Use Case para buscar
-     * - Transforma entidade em array
-     * 
-     * ❌ O QUE O CONTROLLER NÃO FAZ:
-     * - Não lê tenant_id diretamente
-     * - Não acessa Tenant diretamente
-     * - O sistema já injeta o contexto (tenant, empresa) via middleware
-     * 
-     * O middleware já inicializou o tenant correto baseado no X-Tenant-ID do header.
-     * A empresa é obtida automaticamente via getEmpresaAtivaOrFail() que prioriza header X-Empresa-ID.
+     * ✅ DDD: Controller apenas orquestra, validações no Use Case
      */
     public function show(Processo $processo, Contrato $contrato): JsonResponse
     {
         try {
-            // Obter empresa automaticamente (middleware já inicializou baseado no X-Empresa-ID)
             $empresa = $this->getEmpresaAtivaOrFail();
             
-            // Validar que o processo e contrato pertencem à empresa
+            // Validar que o processo e contrato pertencem à empresa (regra de segurança)
             if ($processo->empresa_id !== $empresa->id) {
-                return response()->json(['message' => 'Processo não encontrado'], 404);
+                throw new EntidadeNaoPertenceException('Processo', 'empresa ativa');
+            }
+            
+            if ($contrato->empresa_id !== $empresa->id) {
+                throw new ContratoNaoEncontradoException();
+            }
+            
+            // Validar que contrato pertence ao processo
+            if ($contrato->processo_id !== $processo->id) {
+                throw new EntidadeNaoPertenceException('Contrato', 'processo informado');
             }
             
             // Executar Use Case
             $contratoDomain = $this->buscarContratoUseCase->executar($contrato->id);
-            
-            // Validar que o contrato pertence à empresa ativa
-            if ($contratoDomain->empresaId !== $empresa->id) {
-                return response()->json(['message' => 'Contrato não encontrado'], 404);
-            }
             
             // Buscar modelo Eloquent para incluir relacionamentos
             $contratoModel = $this->contratoRepository->buscarModeloPorId(
@@ -313,10 +308,14 @@ class ContratoController extends BaseApiController
             );
             
             if (!$contratoModel) {
-                return response()->json(['message' => 'Contrato não encontrado'], 404);
+                throw new ContratoNaoEncontradoException();
             }
             
             return response()->json(['data' => $contratoModel->toArray()]);
+        } catch (ContratoNaoEncontradoException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (EntidadeNaoPertenceException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
         } catch (\App\Domain\Exceptions\DomainException $e) {
             return response()->json(['message' => $e->getMessage()], 404);
         } catch (\Exception $e) {
@@ -326,74 +325,60 @@ class ContratoController extends BaseApiController
 
     /**
      * API: Atualizar contrato (Route::module)
+     * 
+     * ✅ DDD: Usa resolveProcessoContrato para eliminar repetição
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, int $id): JsonResponse
     {
-        $processoId = $request->route()->parameter('processo');
-        
-        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
-        if (!$processoModel) {
-            return response()->json(['message' => 'Processo não encontrado.'], 404);
+        try {
+            [$processo, $contrato] = $this->resolveProcessoContrato($request);
+            return $this->updateWeb($request, $processo, $contrato);
+        } catch (NotFoundException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao atualizar contrato');
         }
-        
-        $contratoModel = $this->contratoRepository->buscarModeloPorId($id);
-        if (!$contratoModel) {
-            return response()->json(['message' => 'Contrato não encontrado.'], 404);
-        }
-        
-        return $this->updateWeb($request, $processoModel, $contratoModel);
     }
 
     /**
      * API: Excluir contrato (Route::module)
+     * 
+     * ✅ DDD: Usa resolveProcessoContrato para eliminar repetição
      */
-    public function destroy(Request $request, $id)
+    public function destroy(Request $request, int $id): JsonResponse
     {
-        $processoId = $request->route()->parameter('processo');
-        
-        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
-        if (!$processoModel) {
-            return response()->json(['message' => 'Processo não encontrado.'], 404);
+        try {
+            [$processo, $contrato] = $this->resolveProcessoContrato($request);
+            return $this->destroyWeb($processo, $contrato);
+        } catch (NotFoundException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao excluir contrato');
         }
-        
-        $contratoModel = $this->contratoRepository->buscarModeloPorId($id);
-        if (!$contratoModel) {
-            return response()->json(['message' => 'Contrato não encontrado.'], 404);
-        }
-        
-        return $this->destroyWeb($processoModel, $contratoModel);
     }
 
     /**
      * Web: Atualizar contrato
      * 
-     * ✅ O QUE O CONTROLLER FAZ:
-     * - Recebe request
-     * - Valida dados (via Form Request - quando implementado)
-     * - Chama Service (temporário - será migrado para Use Case)
-     * 
-     * ❌ O QUE O CONTROLLER NÃO FAZ:
-     * - Não lê tenant_id diretamente
-     * - Não acessa Tenant diretamente
-     * - O sistema já injeta o contexto (tenant, empresa) via middleware
-     * 
-     * O middleware já inicializou o tenant correto baseado no X-Tenant-ID do header.
-     * A empresa é obtida automaticamente via getEmpresaAtivaOrFail() que prioriza header X-Empresa-ID.
+     * ✅ DDD: Controller apenas orquestra, validações no Service/Use Case
      */
     public function updateWeb(Request $request, Processo $processo, Contrato $contrato): JsonResponse
     {
         try {
-            // Obter empresa automaticamente (middleware já inicializou baseado no X-Empresa-ID)
             $empresa = $this->getEmpresaAtivaOrFail();
             
-            // Validar que o processo pertence à empresa
+            // Validar que o processo pertence à empresa (regra de segurança)
             if ($processo->empresa_id !== $empresa->id) {
-                return response()->json(['message' => 'Processo não encontrado'], 404);
+                throw new EntidadeNaoPertenceException('Processo', 'empresa ativa');
             }
             
-            // Validar que o contrato pertence à empresa
+            // Validar que o contrato pertence à empresa e ao processo
             if ($contrato->empresa_id !== $empresa->id) {
-                return response()->json(['message' => 'Contrato não encontrado'], 404);
+                throw new ContratoNaoEncontradoException();
+            }
+            
+            if ($contrato->processo_id !== $processo->id) {
+                throw new EntidadeNaoPertenceException('Contrato', 'processo informado');
             }
             
             // Verificar permissão usando Policy
@@ -413,6 +398,10 @@ class ContratoController extends BaseApiController
                 'message' => 'Contrato atualizado com sucesso',
                 'data' => $contratoModel ? $contratoModel->toArray() : $contrato->toArray(),
             ]);
+        } catch (ContratoNaoEncontradoException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (EntidadeNaoPertenceException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'message' => 'Dados inválidos',
@@ -426,33 +415,25 @@ class ContratoController extends BaseApiController
     /**
      * Web: Excluir contrato
      * 
-     * ✅ O QUE O CONTROLLER FAZ:
-     * - Recebe request
-     * - Valida permissões
-     * - Chama Service (temporário - será migrado para Use Case)
-     * 
-     * ❌ O QUE O CONTROLLER NÃO FAZ:
-     * - Não lê tenant_id diretamente
-     * - Não acessa Tenant diretamente
-     * - O sistema já injeta o contexto (tenant, empresa) via middleware
-     * 
-     * O middleware já inicializou o tenant correto baseado no X-Tenant-ID do header.
-     * A empresa é obtida automaticamente via getEmpresaAtivaOrFail() que prioriza header X-Empresa-ID.
+     * ✅ DDD: Controller apenas orquestra, validações no Service/Use Case
      */
     public function destroyWeb(Processo $processo, Contrato $contrato): JsonResponse
     {
         try {
-            // Obter empresa automaticamente (middleware já inicializou baseado no X-Empresa-ID)
             $empresa = $this->getEmpresaAtivaOrFail();
             
-            // Validar que o processo pertence à empresa
+            // Validar que o processo pertence à empresa (regra de segurança)
             if ($processo->empresa_id !== $empresa->id) {
-                return response()->json(['message' => 'Processo não encontrado'], 404);
+                throw new EntidadeNaoPertenceException('Processo', 'empresa ativa');
             }
             
-            // Validar que o contrato pertence à empresa
+            // Validar que o contrato pertence à empresa e ao processo
             if ($contrato->empresa_id !== $empresa->id) {
-                return response()->json(['message' => 'Contrato não encontrado'], 404);
+                throw new ContratoNaoEncontradoException();
+            }
+            
+            if ($contrato->processo_id !== $processo->id) {
+                throw new EntidadeNaoPertenceException('Contrato', 'processo informado');
             }
             
             // Verificar permissão usando Policy
@@ -463,11 +444,16 @@ class ContratoController extends BaseApiController
             $this->contratoService->delete($processo, $contrato, $empresa->id);
             
             return response()->json(['message' => 'Contrato deletado com sucesso'], 204);
+        } catch (ContratoNaoEncontradoException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (ContratoPossuiEmpenhosException $e) {
+            return response()->json(['message' => $e->getMessage()], 403);
+        } catch (EntidadeNaoPertenceException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
         } catch (\Exception $e) {
-            $statusCode = $e->getMessage() === 'Não é possível excluir um contrato que possui empenhos vinculados.' ? 403 : 404;
-            return response()->json([
-                'message' => $e->getMessage()
-            ], $statusCode);
+            // Fallback para mensagens de string (será removido quando Service usar Domain Exceptions)
+            $statusCode = str_contains($e->getMessage(), 'empenhos vinculados') ? 403 : 404;
+            return response()->json(['message' => $e->getMessage()], $statusCode);
         }
     }
 }

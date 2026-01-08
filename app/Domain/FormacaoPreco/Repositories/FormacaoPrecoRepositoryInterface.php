@@ -13,6 +13,20 @@ interface FormacaoPrecoRepositoryInterface
     public function buscarComFiltros(array $filtros = []): LengthAwarePaginator;
     public function atualizar(FormacaoPreco $formacao): FormacaoPreco;
     public function deletar(int $id): void;
+    
+    /**
+     * Buscar formação de preço por contexto (processo, item, orçamento)
+     * 
+     * ✅ DDD: Método específico para busca contextual
+     */
+    public function buscarPorContexto(int $processoId, int $itemId, ?int $orcamentoId = null): ?\App\Modules\Orcamento\Models\FormacaoPreco;
+    
+    /**
+     * Buscar ou criar formação de preço
+     * 
+     * ✅ DDD: Operação atômica para salvar
+     */
+    public function buscarOuCriar(array $dados): \App\Modules\Orcamento\Models\FormacaoPreco;
 }
 
 
