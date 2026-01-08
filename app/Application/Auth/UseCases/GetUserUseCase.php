@@ -102,13 +102,16 @@ class GetUserUseCase
             });
         }
 
+        // Buscar modelo completo do usuário para garantir que temos todos os dados
+        $userModel = $this->userRepository->buscarModeloPorId($user->id);
+        
         return [
             'user' => [
                 'id' => $user->id,
-                'name' => method_exists($user, 'name') ? $user->name : null,
-                'email' => $user->getAuthIdentifierName() === 'email' ? $user->email : null,
-                'empresa_ativa_id' => method_exists($user, 'empresa_ativa_id') ? $user->empresa_ativa_id : null,
-                'foto_perfil' => method_exists($user, 'foto_perfil') ? $user->foto_perfil : null,
+                'name' => $userModel?->name ?? $user->name ?? null,
+                'email' => $userModel?->email ?? $user->email ?? null,
+                'empresa_ativa_id' => $userModel?->empresa_ativa_id ?? $user->empresa_ativa_id ?? null,
+                'foto_perfil' => $userModel?->foto_perfil ?? $user->foto_perfil ?? null,
                 'empresas_list' => $empresasList, // Lista de empresas para o seletor
             ],
             'tenant' => $tenantDomain ? [
