@@ -15,6 +15,8 @@ use App\Application\Empenho\UseCases\AtualizarEmpenhoUseCase;
 use App\Application\Empenho\UseCases\ExcluirEmpenhoUseCase;
 use App\Application\Empenho\DTOs\CriarEmpenhoDTO;
 use App\Application\Empenho\DTOs\AtualizarEmpenhoDTO;
+use App\Application\Empenho\DTOs\ListarEmpenhosDTO;
+use App\Application\Empenho\Presenters\EmpenhoApiPresenter;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\Empenho\Repositories\EmpenhoRepositoryInterface;
 use App\Http\Requests\Empenho\EmpenhoCreateRequest;
@@ -49,6 +51,7 @@ class EmpenhoController extends BaseApiController
         private ConcluirEmpenhoUseCase $concluirEmpenhoUseCase,
         private AtualizarEmpenhoUseCase $atualizarEmpenhoUseCase,
         private ExcluirEmpenhoUseCase $excluirEmpenhoUseCase,
+        private EmpenhoApiPresenter $presenter,
         private ProcessoRepositoryInterface $processoRepository,
         private EmpenhoRepositoryInterface $empenhoRepository,
     ) {
@@ -56,89 +59,38 @@ class EmpenhoController extends BaseApiController
     }
 
     /**
-     * API: Listar todos os empenhos da empresa (sem filtro de processo)
+     * API: Listar todos os empenhos da empresa
+     * 
+     * ✅ Arquitetura de referência:
+     * - Controller: apenas orquestra (Request → DTO → Use Case → Presenter → Response)
+     * - Use Case: recebe DTO com empresaId obrigatório
+     * - Presenter: transforma modelos em arrays (serialização isolada)
+     * - Zero lógica de negócio no Controller
      */
     public function listAll(Request $request): JsonResponse
     {
         try {
             $empresa = $this->getEmpresaAtivaOrFail();
             
-            // Preparar filtros
-            $filtros = [
-                'empresa_id' => $empresa->id,
-            ];
+            // Criar DTO a partir do Request (encapsula validação e transformação)
+            $dto = ListarEmpenhosDTO::fromRequest($request->all(), $empresa->id);
             
-            // Adicionar filtros opcionais da query string
-            if ($request->has('processo_id') && $request->processo_id) {
-                $filtros['processo_id'] = $request->processo_id;
-            }
+            // Executar Use Case (retorna entidades de domínio paginadas)
+            $paginado = $this->listarEmpenhosUseCase->executar($dto);
             
-            if ($request->has('situacao') && $request->situacao) {
-                $filtros['situacao'] = $request->situacao;
-            }
-            
-            if ($request->has('concluido') && $request->concluido !== '') {
-                $filtros['concluido'] = $request->concluido === 'true' || $request->concluido === '1';
-            }
-            
-            // Adicionar per_page aos filtros se fornecido
-            if ($request->has('per_page')) {
-                $filtros['per_page'] = $request->per_page;
-            }
-            
-            // Executar Use Case
-            $paginado = $this->listarEmpenhosUseCase->executar($filtros);
-            
-            // Transformar para resposta
-            $items = collect($paginado->items())->map(function ($empenhoDomain) {
-                // Buscar modelo Eloquent para incluir relacionamentos
-                $empenhoModel = $this->empenhoRepository->buscarModeloPorId(
+            // Buscar modelos Eloquent para serialização (apenas para relacionamentos)
+            $models = collect($paginado->items())->map(function ($empenhoDomain) {
+                return $this->empenhoRepository->buscarModeloPorId(
                     $empenhoDomain->id,
                     ['processo', 'contrato', 'autorizacaoFornecimento']
                 );
-                if (!$empenhoModel) {
-                    return null;
-                }
-                
-                $empenhoArray = $empenhoModel->toArray();
-                
-                // Incluir dados do processo se existir
-                if ($empenhoModel->processo) {
-                    $empenhoArray['processo'] = [
-                        'id' => $empenhoModel->processo->id,
-                        'numero' => $empenhoModel->processo->numero ?? null,
-                        'numero_modalidade' => $empenhoModel->processo->numero_modalidade ?? null,
-                        'objeto' => $empenhoModel->processo->objeto ?? null,
-                        'objeto_resumido' => $empenhoModel->processo->objeto_resumido ?? null,
-                        'modalidade' => $empenhoModel->processo->modalidade ?? null,
-                    ];
-                    // Garantir que processo_id está presente
-                    if (!isset($empenhoArray['processo_id'])) {
-                        $empenhoArray['processo_id'] = $empenhoModel->processo->id;
-                    }
-                }
-                
-                // Incluir dados do contrato se existir
-                if ($empenhoModel->contrato) {
-                    $empenhoArray['contrato'] = [
-                        'id' => $empenhoModel->contrato->id,
-                        'numero' => $empenhoModel->contrato->numero ?? null,
-                    ];
-                }
-                
-                // Incluir dados da autorização de fornecimento se existir
-                if ($empenhoModel->autorizacaoFornecimento) {
-                    $empenhoArray['autorizacao_fornecimento'] = [
-                        'id' => $empenhoModel->autorizacaoFornecimento->id,
-                        'numero' => $empenhoModel->autorizacaoFornecimento->numero ?? null,
-                    ];
-                }
-                
-                return $empenhoArray;
             })->filter();
             
+            // Usar Presenter para serialização (responsabilidade isolada)
+            $data = $this->presenter->presentCollection($models);
+            
             return response()->json([
-                'data' => $items->values()->all(),
+                'data' => $data,
                 'meta' => [
                     'current_page' => $paginado->currentPage(),
                     'last_page' => $paginado->lastPage(),
@@ -174,7 +126,10 @@ class EmpenhoController extends BaseApiController
     /**
      * Listar empenhos de um processo
      * 
-     * ✅ DDD: Controller não conhece Eloquent, apenas orquestra Use Cases
+     * ✅ Arquitetura de referência (mesmo padrão do listAll):
+     * - Controller: apenas orquestra
+     * - Use Case: recebe DTO com empresaId obrigatório
+     * - Presenter: serialização isolada
      */
     public function index(Request $request): JsonResponse
     {
@@ -182,88 +137,26 @@ class EmpenhoController extends BaseApiController
             $processoId = (int) $request->route()->parameter('processo');
             $empresa = $this->getEmpresaAtivaOrFail();
             
-            // Validar se o processo pertence à empresa (segurança)
-            $processo = $this->processoRepository->buscarPorId($processoId);
-            if (!$processo || $processo->empresaId !== $empresa->id) {
-                return response()->json([
-                    'message' => 'Processo não encontrado ou não pertence à empresa ativa.',
-                ], 404);
-            }
+            // Criar DTO com processo_id da rota
+            $requestData = array_merge($request->all(), ['processo_id' => $processoId]);
+            $dto = ListarEmpenhosDTO::fromRequest($requestData, $empresa->id);
             
-            // Preparar filtros - NÃO filtrar por empresa_id quando buscar por processo_id
-            // A validação acima já garante que o processo pertence à empresa
-            $filtros = [
-                'processo_id' => $processoId,
-                'per_page' => (int) ($request->get('per_page') ?? 15),
-                'page' => (int) ($request->get('page') ?? 1),
-            ];
+            // Executar Use Case
+            $paginado = $this->listarEmpenhosUseCase->executar($dto);
             
-            // Log para debug antes de executar
-            \Log::debug('EmpenhoController::index - Filtros preparados', [
-                'processo_id' => $processoId,
-                'empresa_id' => $empresa->id,
-                'processo_empresa_id' => $processo->empresaId,
-                'filtros' => $filtros,
-            ]);
-            
-            // Executar Use Case (única porta de entrada do domínio)
-            $paginado = $this->listarEmpenhosUseCase->executar($filtros);
-            
-            // Log para debug
-            \Log::debug('EmpenhoController::index - Empenhos encontrados', [
-                'processo_id' => $processoId,
-                'empresa_id' => $empresa->id,
-                'total' => $paginado->total(),
-                'items_count' => count($paginado->items()),
-            ]);
-            
-            // Transformar entidades de domínio para resposta
-            $items = collect($paginado->items())->map(function ($empenhoDomain) {
-                // Buscar modelo Eloquent apenas para serialização (Infrastructure)
-                $empenhoModel = $this->empenhoRepository->buscarModeloPorId(
+            // Buscar modelos Eloquent para serialização
+            $models = collect($paginado->items())->map(function ($empenhoDomain) {
+                return $this->empenhoRepository->buscarModeloPorId(
                     $empenhoDomain->id,
                     ['processo', 'contrato', 'autorizacaoFornecimento']
                 );
-                
-                if (!$empenhoModel) {
-                    return null;
-                }
-                
-                $empenhoArray = $empenhoModel->toArray();
-                
-                // Incluir dados do processo se existir
-                if ($empenhoModel->processo) {
-                    $empenhoArray['processo'] = [
-                        'id' => $empenhoModel->processo->id,
-                        'numero' => $empenhoModel->processo->numero ?? null,
-                        'numero_modalidade' => $empenhoModel->processo->numero_modalidade ?? null,
-                        'objeto' => $empenhoModel->processo->objeto ?? null,
-                        'objeto_resumido' => $empenhoModel->processo->objeto_resumido ?? null,
-                        'modalidade' => $empenhoModel->processo->modalidade ?? null,
-                    ];
-                }
-                
-                // Incluir dados do contrato se existir
-                if ($empenhoModel->contrato) {
-                    $empenhoArray['contrato'] = [
-                        'id' => $empenhoModel->contrato->id,
-                        'numero' => $empenhoModel->contrato->numero ?? null,
-                    ];
-                }
-                
-                // Incluir dados da autorização de fornecimento se existir
-                if ($empenhoModel->autorizacaoFornecimento) {
-                    $empenhoArray['autorizacao_fornecimento'] = [
-                        'id' => $empenhoModel->autorizacaoFornecimento->id,
-                        'numero' => $empenhoModel->autorizacaoFornecimento->numero ?? null,
-                    ];
-                }
-                
-                return $empenhoArray;
             })->filter();
             
+            // Usar Presenter para serialização
+            $data = $this->presenter->presentCollection($models);
+            
             return response()->json([
-                'data' => $items->values()->all(),
+                'data' => $data,
                 'meta' => [
                     'current_page' => $paginado->currentPage(),
                     'last_page' => $paginado->lastPage(),

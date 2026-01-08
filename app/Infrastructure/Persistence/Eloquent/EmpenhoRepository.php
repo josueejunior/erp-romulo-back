@@ -88,19 +88,19 @@ class EmpenhoRepository implements EmpenhoRepositoryInterface
         // Remover Global Scope para garantir controle explícito do filtro de empresa
         $query = EmpenhoModel::withoutGlobalScope('empresa');
 
-        // Se houver processo_id, não filtrar por empresa_id (a validação é feita no Controller)
-        // Se não houver processo_id, filtrar por empresa_id para segurança
-        if (isset($filtros['processo_id'])) {
-            // Buscar apenas por processo_id (validação de empresa feita no Controller)
-            $query->where('processo_id', $filtros['processo_id']);
-        } elseif (isset($filtros['empresa_id'])) {
-            // Se não houver processo_id, filtrar por empresa_id (obrigatório para segurança)
+        // Sempre filtrar por empresa_id se fornecido (obrigatório para segurança)
+        if (isset($filtros['empresa_id'])) {
             $query->where('empresa_id', $filtros['empresa_id']);
         } else {
-            // Se não fornecido nem processo_id nem empresa_id, logar warning
-            \Log::warning('EmpenhoRepository::buscarComFiltros() chamado sem empresa_id nem processo_id', [
+            // Se não fornecido, o Global Scope pode estar aplicando, mas é melhor ser explícito
+            \Log::warning('EmpenhoRepository::buscarComFiltros() chamado sem empresa_id', [
                 'filtros' => $filtros,
             ]);
+        }
+
+        // Filtrar por processo_id se fornecido
+        if (isset($filtros['processo_id'])) {
+            $query->where('processo_id', $filtros['processo_id']);
         }
 
         if (isset($filtros['contrato_id'])) {
