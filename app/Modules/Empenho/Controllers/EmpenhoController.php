@@ -4,14 +4,17 @@ namespace App\Modules\Empenho\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
 use App\Http\Controllers\Traits\HasAuthContext;
-use App\Modules\Processo\Models\Processo;
-use App\Modules\Empenho\Models\Empenho;
+// ✅ DDD: Controller não importa modelos Eloquent diretamente
+// Apenas usa interfaces de repositório e Use Cases
 use App\Modules\Empenho\Services\EmpenhoService;
 use App\Application\Empenho\UseCases\CriarEmpenhoUseCase;
 use App\Application\Empenho\UseCases\ListarEmpenhosUseCase;
 use App\Application\Empenho\UseCases\BuscarEmpenhoUseCase;
 use App\Application\Empenho\UseCases\ConcluirEmpenhoUseCase;
+use App\Application\Empenho\UseCases\AtualizarEmpenhoUseCase;
+use App\Application\Empenho\UseCases\ExcluirEmpenhoUseCase;
 use App\Application\Empenho\DTOs\CriarEmpenhoDTO;
+use App\Application\Empenho\DTOs\AtualizarEmpenhoDTO;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\Empenho\Repositories\EmpenhoRepositoryInterface;
 use App\Http\Requests\Empenho\EmpenhoCreateRequest;
@@ -44,6 +47,8 @@ class EmpenhoController extends BaseApiController
         private ListarEmpenhosUseCase $listarEmpenhosUseCase,
         private BuscarEmpenhoUseCase $buscarEmpenhoUseCase,
         private ConcluirEmpenhoUseCase $concluirEmpenhoUseCase,
+        private AtualizarEmpenhoUseCase $atualizarEmpenhoUseCase,
+        private ExcluirEmpenhoUseCase $excluirEmpenhoUseCase,
         private ProcessoRepositoryInterface $processoRepository,
         private EmpenhoRepositoryInterface $empenhoRepository,
     ) {
@@ -119,100 +124,47 @@ class EmpenhoController extends BaseApiController
 
     /**
      * API: Listar empenhos (Route::module)
+     * 
+     * ✅ DDD: Apenas delega para index
      */
     public function list(Request $request)
     {
-        try {
-            $processoId = $request->route()->parameter('processo');
-            $processoDomain = $this->processoRepository->buscarPorId($processoId);
-            
-            if (!$processoDomain) {
-                return response()->json(['message' => 'Processo não encontrado'], 404);
-            }
-            
-            // Buscar modelo Eloquent via repository (DDD)
-            $processo = $this->processoRepository->buscarModeloPorId($processoDomain->id);
-            if (!$processo) {
-                return response()->json(['message' => 'Processo não encontrado'], 404);
-            }
-            
-            return $this->index($processo);
-        } catch (\Exception $e) {
-            Log::error('Erro ao buscar processo para listar empenhos', [
-                'processo_id' => $request->route()->parameter('processo'),
-                'error' => $e->getMessage(),
-            ]);
-            return response()->json(['message' => 'Erro ao buscar processo: ' . $e->getMessage()], 500);
-        }
+        return $this->index($request);
     }
 
     /**
      * API: Buscar empenho (Route::module)
+     * 
+     * ✅ DDD: Apenas delega para show
      */
     public function get(Request $request)
     {
-        try {
-            $processoId = $request->route()->parameter('processo');
-            $empenhoId = $request->route()->parameter('empenho');
-            
-            $processoDomain = $this->processoRepository->buscarPorId($processoId);
-            if (!$processoDomain) {
-                return response()->json(['message' => 'Processo não encontrado'], 404);
-            }
-            
-            $empenhoDomain = $this->empenhoRepository->buscarPorId($empenhoId);
-            if (!$empenhoDomain) {
-                return response()->json(['message' => 'Empenho não encontrado'], 404);
-            }
-            
-            // Buscar modelos Eloquent via repositories (DDD)
-            $processo = $this->processoRepository->buscarModeloPorId($processoDomain->id);
-            $empenho = $this->empenhoRepository->buscarModeloPorId($empenhoDomain->id);
-            
-            if (!$processo || !$empenho) {
-                return response()->json(['message' => 'Processo ou empenho não encontrado'], 404);
-            }
-            
-            return $this->show($processo, $empenho);
-        } catch (\Exception $e) {
-            Log::error('Erro ao buscar empenho', [
-                'processo_id' => $request->route()->parameter('processo'),
-                'empenho_id' => $request->route()->parameter('empenho'),
-                'error' => $e->getMessage(),
-            ]);
-            return response()->json(['message' => 'Erro ao buscar empenho: ' . $e->getMessage()], 500);
-        }
+        return $this->show($request);
     }
 
     /**
      * Listar empenhos de um processo
      * 
-     * O middleware já inicializou o tenant correto baseado no X-Tenant-ID do header.
-     * Apenas retorna os dados dos empenhos da empresa ativa.
+     * ✅ DDD: Controller não conhece Eloquent, apenas orquestra Use Cases
      */
-    public function index(Processo $processo): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         try {
-            // Obter empresa automaticamente (middleware já inicializou baseado no X-Empresa-ID)
+            $processoId = (int) $request->route()->parameter('processo');
             $empresa = $this->getEmpresaAtivaOrFail();
-            
-            // Validar que o processo pertence à empresa
-            if ($processo->empresa_id !== $empresa->id) {
-                return response()->json(['message' => 'Processo não encontrado'], 404);
-            }
             
             // Preparar filtros
             $filtros = [
                 'empresa_id' => $empresa->id,
-                'processo_id' => $processo->id,
+                'processo_id' => $processoId,
             ];
             
-            // Executar Use Case
+            // Executar Use Case (única porta de entrada do domínio)
             $paginado = $this->listarEmpenhosUseCase->executar($filtros);
             
-            // Transformar para resposta
+            // Transformar entidades de domínio para resposta
             $items = collect($paginado->items())->map(function ($empenhoDomain) {
-                // Buscar modelo Eloquent para incluir relacionamentos
+                // Buscar modelo Eloquent apenas para serialização (Infrastructure)
                 $empenhoModel = $this->empenhoRepository->buscarModeloPorId(
                     $empenhoDomain->id,
                     ['processo', 'contrato', 'autorizacaoFornecimento']
@@ -229,6 +181,8 @@ class EmpenhoController extends BaseApiController
                     'total' => $paginado->total(),
                 ],
             ]);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
         } catch (\Exception $e) {
             return $this->handleException($e, 'Erro ao listar empenhos');
         }
@@ -237,29 +191,38 @@ class EmpenhoController extends BaseApiController
     /**
      * API: Criar empenho (Route::module)
      */
+    /**
+     * API: Criar empenho (Route::module)
+     * 
+     * ✅ DDD: Controller apenas orquestra, validações no Use Case
+     */
     public function store(Request $request)
     {
         try {
-            $processoId = $request->route()->parameter('processo');
-            $processoDomain = $this->processoRepository->buscarPorId($processoId);
+            $processoId = (int) $request->route()->parameter('processo');
             
-            if (!$processoDomain) {
-                return response()->json(['message' => 'Processo não encontrado'], 404);
+            // Validar dados (Form Request - validação de formato)
+            $rules = (new EmpenhoCreateRequest())->rules();
+            $validator = \Illuminate\Support\Facades\Validator::make($request->all(), $rules);
+            
+            if ($validator->fails()) {
+                return response()->json([
+                    'message' => 'Dados inválidos',
+                    'errors' => $validator->errors()
+                ], 422);
             }
             
-            // Buscar modelo Eloquent via repository (DDD)
-            $processo = $this->processoRepository->buscarModeloPorId($processoDomain->id);
-            if (!$processo) {
-                return response()->json(['message' => 'Processo não encontrado'], 404);
-            }
-            
-            return $this->storeWeb($request, $processo);
+            // Delegar para método Web (que usa Use Case - validação de regras de negócio)
+            return $this->storeWeb($validator->validated(), $processoId);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
         } catch (\Exception $e) {
-            Log::error('Erro ao buscar processo para criar empenho', [
+            Log::error('Erro ao criar empenho', [
                 'processo_id' => $request->route()->parameter('processo'),
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
-            return response()->json(['message' => 'Erro ao buscar processo: ' . $e->getMessage()], 500);
+            return $this->handleException($e, 'Erro ao criar empenho');
         }
     }
 
@@ -277,69 +240,26 @@ class EmpenhoController extends BaseApiController
      * - Não sabe se existe multi-tenant
      * - Não filtra nada por tenant_id
      */
-    public function storeWeb(Request $request, Processo $processo): JsonResponse
+    /**
+     * Web: Criar empenho
+     * 
+     * ✅ DDD: Controller apenas orquestra, toda lógica no Use Case
+     */
+    public function storeWeb(array $data, int $processoId): JsonResponse
     {
         try {
-            // Validar dados manualmente usando as regras do Form Request
-            $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
-                'contrato_id' => 'nullable|integer|exists:contratos,id',
-                'autorizacao_fornecimento_id' => 'nullable|integer|exists:autorizacoes_fornecimento,id',
-                'numero' => 'nullable|string|max:255',
-                'data' => 'nullable|date',
-                'data_recebimento' => 'nullable|date',
-                'prazo_entrega_calculado' => 'nullable|date',
-                'valor' => 'nullable|numeric|min:0',
-                'situacao' => 'nullable|string',
-                'observacoes' => 'nullable|string',
-                'numero_cte' => 'nullable|string|max:255',
-            ]);
-            
-            // Adicionar logs para debug
-            Log::debug('EmpenhoController::storeWeb - Validando dados', [
-                'processo_id' => $processo->id,
-                'dados' => $request->all(),
-            ]);
-            
-            if ($validator->fails()) {
-                Log::warning('EmpenhoController::storeWeb - Validação falhou', [
-                    'errors' => $validator->errors()->toArray(),
-                ]);
-                return response()->json([
-                    'message' => 'Dados inválidos',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-            
-            // Preparar dados para DTO
-            $data = $validator->validated();
-            $data['processo_id'] = $processo->id;
-            
-            Log::debug('EmpenhoController::storeWeb - Dados validados, criando DTO', [
-                'data' => $data,
-            ]);
+            // Adicionar processo_id aos dados
+            $data['processo_id'] = $processoId;
             
             // Usar Use Case DDD (contém toda a lógica de negócio, incluindo tenant)
             $dto = CriarEmpenhoDTO::fromArray($data);
-            
-            Log::debug('EmpenhoController::storeWeb - Executando Use Case', [
-                'dto' => [
-                    'processo_id' => $dto->processoId,
-                    'valor' => $dto->valor,
-                ],
-            ]);
-            
             $empenhoDomain = $this->criarEmpenhoUseCase->executar($dto);
             
-            Log::debug('EmpenhoController::storeWeb - Use Case executado', [
-                'empenho_id' => $empenhoDomain->id,
-            ]);
-            
-            // Buscar modelo Eloquent via repository (DDD)
-            $empenho = $this->empenhoRepository->buscarModeloPorId($empenhoDomain->id, [
-                'processo', 
-                'contrato', 
-                'autorizacaoFornecimento'
-            ]);
+            // Buscar modelo Eloquent para resposta usando repository
+            $empenho = $this->empenhoRepository->buscarModeloPorId(
+                $empenhoDomain->id,
+                ['processo', 'contrato', 'autorizacaoFornecimento']
+            );
             
             if (!$empenho) {
                 return response()->json(['message' => 'Empenho não encontrado após criação.'], 404);
@@ -350,9 +270,11 @@ class EmpenhoController extends BaseApiController
                 'data' => $empenho->toArray(),
             ], 201);
         } catch (\App\Domain\Exceptions\DomainException $e) {
+            $statusCode = $e->getMessage() === 'Empenhos só podem ser criados para processos em execução.' ? 403 : 
+                         ($e->getMessage() === 'Processo é obrigatório para criar empenho.' ? 400 : 400);
             return response()->json([
                 'message' => $e->getMessage(),
-            ], $e->getMessage() === 'Empenhos só podem ser criados para processos em execução.' ? 403 : 400);
+            ], $statusCode);
         } catch (\Exception $e) {
             return $this->handleException($e, 'Erro ao criar empenho');
         }
@@ -361,29 +283,25 @@ class EmpenhoController extends BaseApiController
     /**
      * Obter empenho específico
      * 
-     * O middleware já inicializou o tenant correto baseado no X-Tenant-ID do header.
-     * Apenas retorna os dados do empenho da empresa ativa.
+     * ✅ DDD: Controller não conhece Eloquent, apenas orquestra Use Cases
      */
-    public function show(Processo $processo, Empenho $empenho): JsonResponse
+    public function show(Request $request): JsonResponse
     {
         try {
-            // Obter empresa automaticamente (middleware já inicializou)
+            $processoId = (int) $request->route()->parameter('processo');
+            $empenhoId = (int) $request->route()->parameter('empenho');
             $empresa = $this->getEmpresaAtivaOrFail();
             
-            // Validar que o processo e empenho pertencem à empresa
-            if ($processo->empresa_id !== $empresa->id) {
-                return response()->json(['message' => 'Processo não encontrado'], 404);
-            }
+            // Executar Use Case (validações de negócio dentro do Use Case)
+            $empenhoDomain = $this->buscarEmpenhoUseCase->executar($empenhoId);
             
-            // Executar Use Case
-            $empenhoDomain = $this->buscarEmpenhoUseCase->executar($empenho->id);
-            
-            // Validar que o empenho pertence à empresa ativa
+            // Validar que o empenho pertence à empresa (regra de domínio - deveria estar no Use Case)
+            // Por enquanto mantemos aqui, mas idealmente o Use Case deveria receber empresaId
             if ($empenhoDomain->empresaId !== $empresa->id) {
                 return response()->json(['message' => 'Empenho não encontrado'], 404);
             }
             
-            // Buscar modelo Eloquent para incluir relacionamentos
+            // Buscar modelo Eloquent apenas para serialização (Infrastructure)
             $empenhoModel = $this->empenhoRepository->buscarModeloPorId(
                 $empenhoDomain->id,
                 ['processo', 'contrato', 'autorizacaoFornecimento']
@@ -403,169 +321,160 @@ class EmpenhoController extends BaseApiController
 
     /**
      * API: Atualizar empenho (Route::module)
+     * 
+     * ✅ DDD: Controller apenas orquestra, validações no Use Case
      */
-    public function update(Request $request, $id)
+    public function update(Request $request)
     {
         try {
-            $processoId = $request->route()->parameter('processo');
+            $processoId = (int) $request->route()->parameter('processo');
+            $empenhoId = (int) $request->route()->parameter('empenho');
             
-            $processoDomain = $this->processoRepository->buscarPorId($processoId);
-            if (!$processoDomain) {
-                return response()->json(['message' => 'Processo não encontrado'], 404);
+            // Validar dados (Form Request - validação de formato)
+            $rules = (new EmpenhoCreateRequest())->rules();
+            $validator = \Illuminate\Support\Facades\Validator::make($request->all(), $rules);
+            
+            if ($validator->fails()) {
+                return response()->json([
+                    'message' => 'Dados inválidos',
+                    'errors' => $validator->errors()
+                ], 422);
             }
             
-            $empenhoDomain = $this->empenhoRepository->buscarPorId($id);
-            if (!$empenhoDomain) {
-                return response()->json(['message' => 'Empenho não encontrado'], 404);
-            }
-            
-            // Buscar modelos Eloquent via repositories (DDD)
-            $processo = $this->processoRepository->buscarModeloPorId($processoDomain->id);
-            $empenho = $this->empenhoRepository->buscarModeloPorId($empenhoDomain->id);
-            
-            if (!$processo || !$empenho) {
-                return response()->json(['message' => 'Processo ou empenho não encontrado'], 404);
-            }
-            
-            return $this->updateWeb($request, $processo, $empenho);
+            // Delegar para método Web (que usa Use Case - validação de regras de negócio)
+            return $this->updateWeb($request, $processoId, $empenhoId);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
         } catch (\Exception $e) {
-            Log::error('Erro ao buscar processo/empenho para atualizar', [
+            Log::error('Erro ao atualizar empenho', [
                 'processo_id' => $request->route()->parameter('processo'),
-                'empenho_id' => $id,
+                'empenho_id' => $request->route()->parameter('empenho'),
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
-            return response()->json(['message' => 'Erro ao buscar processo ou empenho: ' . $e->getMessage()], 500);
+            return $this->handleException($e, 'Erro ao atualizar empenho');
         }
     }
 
     /**
      * API: Excluir empenho (Route::module)
+     * 
+     * ✅ DDD: Controller apenas orquestra, validações no Use Case
      */
-    public function destroy(Request $request, $id)
+    public function destroy(Request $request)
     {
         try {
-            $processoId = $request->route()->parameter('processo');
-            $empresa = $this->getEmpresaAtivaOrFail();
+            $processoId = (int) $request->route()->parameter('processo');
+            $empenhoId = (int) $request->route()->parameter('empenho');
             
-            // Buscar modelos Eloquent diretamente (mais confiável)
-            $processo = $this->processoRepository->buscarModeloPorId($processoId);
-            if (!$processo) {
-                return response()->json(['message' => 'Processo não encontrado'], 404);
-            }
-            
-            // Validar que o processo pertence à empresa
-            if ($processo->empresa_id !== $empresa->id) {
-                return response()->json(['message' => 'Processo não encontrado'], 404);
-            }
-            
-            // Buscar empenho diretamente pelo modelo
-            $empenho = $this->empenhoRepository->buscarModeloPorId($id);
-            if (!$empenho) {
-                return response()->json(['message' => 'Empenho não encontrado'], 404);
-            }
-            
-            // Validar que o empenho pertence ao processo e à empresa
-            if ($empenho->processo_id !== (int) $processoId) {
-                return response()->json(['message' => 'Empenho não pertence ao processo'], 404);
-            }
-            
-            if ($empenho->empresa_id !== $empresa->id) {
-                return response()->json(['message' => 'Empenho não encontrado'], 404);
-            }
-            
-            return $this->destroyWeb($processo, $empenho);
+            // Delegar para método Web (que usa Use Case - validação de regras de negócio)
+            return $this->destroyWeb($processoId, $empenhoId);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
         } catch (\Exception $e) {
-            Log::error('Erro ao buscar processo/empenho para deletar', [
+            Log::error('Erro ao excluir empenho', [
                 'processo_id' => $request->route()->parameter('processo'),
-                'empenho_id' => $id,
+                'empenho_id' => $request->route()->parameter('empenho'),
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            return response()->json(['message' => 'Erro ao buscar processo ou empenho: ' . $e->getMessage()], 500);
+            return $this->handleException($e, 'Erro ao excluir empenho');
         }
     }
 
     /**
      * Web: Atualizar empenho
+     * 
+     * ✅ DDD: Usa Use Case, não Service
      */
-    public function updateWeb(Request $request, Processo $processo, Empenho $empenho)
+    public function updateWeb(Request $request, int $processoId, int $empenhoId)
     {
         $empresa = $this->getEmpresaAtivaOrFail();
         
         try {
-            $empenho = $this->empenhoService->update($processo, $empenho, $request->all(), $empresa->id);
-            return response()->json($empenho);
+            // Validar dados usando as mesmas regras do create
+            $rules = (new EmpenhoCreateRequest())->rules();
+            $validator = \Illuminate\Support\Facades\Validator::make($request->all(), $rules);
+            
+            if ($validator->fails()) {
+                return response()->json([
+                    'message' => 'Dados inválidos',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+            
+            $data = $validator->validated();
+            
+            // Usar Use Case DDD (contém toda a lógica de negócio)
+            $dto = AtualizarEmpenhoDTO::fromArray($data, $empenhoId);
+            $empenhoDomain = $this->atualizarEmpenhoUseCase->executar($dto, $empresa->id);
+            
+            // Buscar modelo Eloquent para resposta usando repository
+            $empenhoModel = $this->empenhoRepository->buscarModeloPorId(
+                $empenhoDomain->id,
+                ['processo', 'contrato', 'autorizacaoFornecimento']
+            );
+            
+            if (!$empenhoModel) {
+                return response()->json(['message' => 'Empenho não encontrado após atualização.'], 404);
+            }
+            
+            return response()->json([
+                'message' => 'Empenho atualizado com sucesso',
+                'data' => $empenhoModel->toArray(),
+            ]);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 400);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'message' => 'Dados inválidos',
                 'errors' => $e->errors()
             ], 422);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 404);
+            return $this->handleException($e, 'Erro ao atualizar empenho');
         }
     }
 
     /**
      * Web: Excluir empenho
+     * 
+     * ✅ DDD: Usa Use Case, não Service
      */
-    public function destroyWeb(Processo $processo, Empenho $empenho)
+    public function destroyWeb(int $processoId, int $empenhoId)
     {
         $empresa = $this->getEmpresaAtivaOrFail();
         
         try {
-            $this->empenhoService->delete($processo, $empenho, $empresa->id);
+            // Usar Use Case DDD (contém toda a lógica de negócio)
+            $this->excluirEmpenhoUseCase->executar($empenhoId, $empresa->id);
             return response()->json(null, 204);
-        } catch (\Exception $e) {
+        } catch (\App\Domain\Exceptions\DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage()
             ], 404);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao excluir empenho');
         }
     }
 
     /**
      * API: Concluir empenho
+     * 
+     * ✅ DDD: Controller apenas orquestra, validações no Use Case
      */
     public function concluir(Request $request): JsonResponse
     {
         try {
-            $processoId = $request->route()->parameter('processo');
-            $empenhoId = $request->route()->parameter('empenho');
-            
-            // Validar processo
-            $processoDomain = $this->processoRepository->buscarPorId($processoId);
-            if (!$processoDomain) {
-                return response()->json(['message' => 'Processo não encontrado'], 404);
-            }
-            
-            // Obter empresa automaticamente
+            $processoId = (int) $request->route()->parameter('processo');
+            $empenhoId = (int) $request->route()->parameter('empenho');
             $empresa = $this->getEmpresaAtivaOrFail();
             
-            // Validar que o processo pertence à empresa
-            if ($processoDomain->empresaId !== $empresa->id) {
-                return response()->json(['message' => 'Processo não encontrado'], 404);
-            }
+            // Executar Use Case (validações de negócio dentro do Use Case)
+            $empenhoConcluido = $this->concluirEmpenhoUseCase->executar($empenhoId, $empresa->id, $processoId);
             
-            // Validar empenho
-            $empenhoDomain = $this->empenhoRepository->buscarPorId($empenhoId);
-            if (!$empenhoDomain) {
-                return response()->json(['message' => 'Empenho não encontrado'], 404);
-            }
-            
-            // Validar que o empenho pertence à empresa e ao processo
-            if ($empenhoDomain->empresaId !== $empresa->id) {
-                return response()->json(['message' => 'Empenho não encontrado'], 404);
-            }
-            
-            if ($empenhoDomain->processoId !== (int) $processoId) {
-                return response()->json(['message' => 'Empenho não pertence ao processo'], 404);
-            }
-            
-            // Executar Use Case
-            $empenhoConcluido = $this->concluirEmpenhoUseCase->executar($empenhoId);
-            
-            // Buscar modelo Eloquent para incluir relacionamentos
+            // Buscar modelo Eloquent apenas para serialização (Infrastructure)
             $empenhoModel = $this->empenhoRepository->buscarModeloPorId(
                 $empenhoConcluido->id,
                 ['processo', 'contrato', 'autorizacaoFornecimento']
@@ -582,6 +491,7 @@ class EmpenhoController extends BaseApiController
                 'processo_id' => $request->route()->parameter('processo'),
                 'empenho_id' => $request->route()->parameter('empenho'),
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
             return $this->handleException($e, 'Erro ao concluir empenho');
         }
