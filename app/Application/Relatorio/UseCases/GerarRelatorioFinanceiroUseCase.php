@@ -47,11 +47,8 @@ class GerarRelatorioFinanceiroUseCase
             }
         }
 
-        // Buscar processos em execução
+        // Buscar processos em execução (já com relacionamentos carregados)
         $processos = $this->query->buscarProcessosExecucao($empresaId, $dataInicio, $dataFim);
-
-        // Carregar relacionamentos necessários
-        $processos->load(['itens', 'contratos', 'empenhos', 'notasFiscais']);
 
         // Calcular totais
         $totalReceber = 0;
