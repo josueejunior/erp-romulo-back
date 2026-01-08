@@ -6,6 +6,8 @@ use App\Application\Contrato\DTOs\CriarContratoDTO;
 use App\Application\Shared\Traits\HasApplicationContext;
 use App\Domain\Contrato\Entities\Contrato;
 use App\Domain\Contrato\Repositories\ContratoRepositoryInterface;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use DomainException;
 
 /**
@@ -26,6 +28,26 @@ class CriarContratoUseCase
         // Resolver empresa_id usando o trait (fallbacks robustos)
         $empresaId = $this->resolveEmpresaId($dto->empresaId);
         
+        // Processar upload do arquivo se presente
+        $arquivoPath = $dto->arquivoContrato;
+        if ($dto->hasArquivoParaUpload()) {
+            $arquivo = $dto->arquivoUpload;
+            $nomeArquivo = time() . '_' . $arquivo->getClientOriginalName();
+            $caminhoCompleto = $arquivo->storeAs('contratos', $nomeArquivo, 'public');
+            $arquivoPath = $caminhoCompleto;
+            
+            Log::debug('CriarContratoUseCase: Arquivo uploaded', [
+                'nome' => $nomeArquivo,
+                'caminho' => $caminhoCompleto,
+            ]);
+        }
+        
+        // Mapear situacao corretamente
+        $situacao = $dto->situacao;
+        if ($situacao === 'ativo') {
+            $situacao = 'vigente';
+        }
+        
         $contrato = new Contrato(
             id: null,
             empresaId: $empresaId,
@@ -42,10 +64,10 @@ class CriarContratoUseCase
             locaisEntrega: $dto->locaisEntrega,
             prazosContrato: $dto->prazosContrato,
             regrasContrato: $dto->regrasContrato,
-            situacao: $dto->situacao,
+            situacao: $situacao,
             vigente: $dto->vigente,
             observacoes: $dto->observacoes,
-            arquivoContrato: $dto->arquivoContrato,
+            arquivoContrato: $arquivoPath,
             numeroCte: $dto->numeroCte,
         );
 

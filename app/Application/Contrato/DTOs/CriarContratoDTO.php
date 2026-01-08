@@ -3,6 +3,7 @@
 namespace App\Application\Contrato\DTOs;
 
 use Carbon\Carbon;
+use Illuminate\Http\UploadedFile;
 
 /**
  * DTO para criação de contrato
@@ -25,12 +26,25 @@ class CriarContratoDTO
         public readonly ?string $situacao = null,
         public readonly bool $vigente = true,
         public readonly ?string $observacoes = null,
-        public readonly ?string $arquivoContrato = null,
+        public readonly ?string $arquivoContrato = null, // Caminho do arquivo já salvo
+        public readonly ?UploadedFile $arquivoUpload = null, // Arquivo para upload
         public readonly ?string $numeroCte = null,
     ) {}
 
     public static function fromArray(array $data): self
     {
+        // Processar arquivo de upload se presente
+        $arquivoUpload = null;
+        $arquivoContrato = null;
+        
+        if (isset($data['arquivo_contrato'])) {
+            if ($data['arquivo_contrato'] instanceof UploadedFile) {
+                $arquivoUpload = $data['arquivo_contrato'];
+            } elseif (is_string($data['arquivo_contrato'])) {
+                $arquivoContrato = $data['arquivo_contrato'];
+            }
+        }
+        
         return new self(
             empresaId: $data['empresa_id'] ?? $data['empresaId'] ?? 0,
             processoId: $data['processo_id'] ?? $data['processoId'] ?? null,
@@ -44,12 +58,21 @@ class CriarContratoDTO
             locaisEntrega: $data['locais_entrega'] ?? $data['locaisEntrega'] ?? null,
             prazosContrato: $data['prazos_contrato'] ?? $data['prazosContrato'] ?? null,
             regrasContrato: $data['regras_contrato'] ?? $data['regrasContrato'] ?? null,
-            situacao: $data['situacao'] ?? null,
+            situacao: $data['situacao'] ?? $data['status'] ?? null, // Aceitar 'status' como alias
             vigente: $data['vigente'] ?? true,
             observacoes: $data['observacoes'] ?? null,
-            arquivoContrato: $data['arquivo_contrato'] ?? $data['arquivoContrato'] ?? null,
+            arquivoContrato: $arquivoContrato,
+            arquivoUpload: $arquivoUpload,
             numeroCte: $data['numero_cte'] ?? $data['numeroCte'] ?? null,
         );
+    }
+
+    /**
+     * Verifica se há um arquivo para upload
+     */
+    public function hasArquivoParaUpload(): bool
+    {
+        return $this->arquivoUpload instanceof UploadedFile;
     }
 }
 
