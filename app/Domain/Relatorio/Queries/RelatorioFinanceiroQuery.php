@@ -55,7 +55,7 @@ class RelatorioFinanceiroQuery
         // que dependem de relacionamentos Eloquent
         if (method_exists($this->processoRepository, 'buscarModelosComFiltros')) {
             return collect($this->processoRepository->buscarModelosComFiltros(
-                ['id' => $processosIds],
+                ['id' => $processosIds, 'empresa_id' => $empresaId],
                 ['itens', 'contratos', 'empenhos', 'notasFiscais']
             ));
         }
