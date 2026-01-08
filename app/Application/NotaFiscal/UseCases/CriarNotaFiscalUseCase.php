@@ -41,7 +41,22 @@ class CriarNotaFiscalUseCase
         
         // Validar que o processo está em execução (regra de negócio)
         if (!$processo->estaEmExecucao()) {
-            throw new DomainException('Notas fiscais só podem ser criadas para processos em execução.');
+            $statusLabel = match($processo->status) {
+                'rascunho' => 'rascunho',
+                'publicado' => 'publicado',
+                'participacao' => 'em participação',
+                'em_disputa' => 'em disputa',
+                'julgamento' => 'em julgamento',
+                'julgamento_habilitacao' => 'em julgamento de habilitação',
+                'execucao' => 'em execução',
+                'vencido' => 'vencido',
+                'perdido' => 'perdido',
+                'pagamento' => 'em pagamento',
+                'encerramento' => 'em encerramento',
+                'arquivado' => 'arquivado',
+                default => $processo->status,
+            };
+            throw new DomainException("Notas fiscais só podem ser criadas para processos em execução. O processo atual está com status: {$statusLabel}.");
         }
         
         // Validar que há pelo menos um vínculo (empenho, contrato ou autorização)

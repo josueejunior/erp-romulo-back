@@ -107,7 +107,10 @@ class EmpenhoController extends BaseApiController
                     $empenhoArray['processo'] = [
                         'id' => $empenhoModel->processo->id,
                         'numero' => $empenhoModel->processo->numero ?? null,
+                        'numero_modalidade' => $empenhoModel->processo->numero_modalidade ?? null,
                         'objeto' => $empenhoModel->processo->objeto ?? null,
+                        'objeto_resumido' => $empenhoModel->processo->objeto_resumido ?? null,
+                        'modalidade' => $empenhoModel->processo->modalidade ?? null,
                     ];
                     // Garantir que processo_id está presente
                     if (!isset($empenhoArray['processo_id'])) {
@@ -188,6 +191,14 @@ class EmpenhoController extends BaseApiController
             // Executar Use Case (única porta de entrada do domínio)
             $paginado = $this->listarEmpenhosUseCase->executar($filtros);
             
+            // Log para debug
+            \Log::debug('EmpenhoController::index - Empenhos encontrados', [
+                'processo_id' => $processoId,
+                'empresa_id' => $empresa->id,
+                'total' => $paginado->total(),
+                'items_count' => count($paginado->items()),
+            ]);
+            
             // Transformar entidades de domínio para resposta
             $items = collect($paginado->items())->map(function ($empenhoDomain) {
                 // Buscar modelo Eloquent apenas para serialização (Infrastructure)
@@ -207,7 +218,10 @@ class EmpenhoController extends BaseApiController
                     $empenhoArray['processo'] = [
                         'id' => $empenhoModel->processo->id,
                         'numero' => $empenhoModel->processo->numero ?? null,
+                        'numero_modalidade' => $empenhoModel->processo->numero_modalidade ?? null,
                         'objeto' => $empenhoModel->processo->objeto ?? null,
+                        'objeto_resumido' => $empenhoModel->processo->objeto_resumido ?? null,
+                        'modalidade' => $empenhoModel->processo->modalidade ?? null,
                     ];
                 }
                 

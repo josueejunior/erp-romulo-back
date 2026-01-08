@@ -76,10 +76,17 @@ class EmpenhoRepository implements EmpenhoRepositoryInterface
 
     public function buscarComFiltros(array $filtros = []): LengthAwarePaginator
     {
-        $query = EmpenhoModel::query();
+        // Remover Global Scope para garantir controle explícito do filtro de empresa
+        $query = EmpenhoModel::withoutGlobalScope('empresa');
 
+        // Sempre filtrar por empresa_id se fornecido (obrigatório para segurança)
         if (isset($filtros['empresa_id'])) {
             $query->where('empresa_id', $filtros['empresa_id']);
+        } else {
+            // Se não fornecido, o Global Scope pode estar aplicando, mas é melhor ser explícito
+            \Log::warning('EmpenhoRepository::buscarComFiltros() chamado sem empresa_id', [
+                'filtros' => $filtros,
+            ]);
         }
 
         if (isset($filtros['processo_id'])) {
