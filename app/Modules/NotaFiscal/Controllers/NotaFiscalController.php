@@ -49,6 +49,92 @@ class NotaFiscalController extends BaseApiController
     }
 
     /**
+     * API: Listar todas as notas fiscais da empresa (sem filtro de processo)
+     */
+    public function listAll(Request $request): JsonResponse
+    {
+        try {
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Preparar filtros
+            $filtros = [
+                'empresa_id' => $empresa->id,
+            ];
+            
+            // Adicionar filtros opcionais da query string
+            if ($request->has('processo_id') && $request->processo_id) {
+                $filtros['processo_id'] = $request->processo_id;
+            }
+            
+            if ($request->has('empenho_id') && $request->empenho_id) {
+                $filtros['empenho_id'] = $request->empenho_id;
+            }
+            
+            if ($request->has('fornecedor_id') && $request->fornecedor_id) {
+                $filtros['fornecedor_id'] = $request->fornecedor_id;
+            }
+            
+            if ($request->has('situacao') && $request->situacao) {
+                $filtros['situacao'] = $request->situacao;
+            }
+            
+            // Adicionar per_page aos filtros se fornecido
+            if ($request->has('per_page')) {
+                $filtros['per_page'] = $request->per_page;
+            }
+            
+            // Buscar modelos diretamente (mais eficiente e mantém relacionamentos)
+            $query = NotaFiscal::query();
+            
+            // Aplicar filtros
+            if (isset($filtros['empresa_id'])) {
+                $query->where('empresa_id', $filtros['empresa_id']);
+            }
+            if (isset($filtros['processo_id'])) {
+                $query->where('processo_id', $filtros['processo_id']);
+            }
+            if (isset($filtros['empenho_id'])) {
+                $query->where('empenho_id', $filtros['empenho_id']);
+            }
+            if (isset($filtros['fornecedor_id'])) {
+                $query->where('fornecedor_id', $filtros['fornecedor_id']);
+            }
+            if (isset($filtros['situacao'])) {
+                $query->where('situacao', $filtros['situacao']);
+            }
+            
+            // Carregar relacionamentos
+            $query->with(['processo', 'empenho', 'contrato', 'autorizacaoFornecimento', 'fornecedor']);
+            
+            // Paginar
+            $perPage = $filtros['per_page'] ?? 15;
+            $paginator = $query->orderBy('criado_em', 'desc')->paginate($perPage);
+            
+            // Transformar para array
+            $items = $paginator->getCollection()->map(function ($notaFiscal) {
+                $array = $notaFiscal->toArray();
+                // Garantir que processo_id está presente
+                if (!isset($array['processo_id']) && $notaFiscal->processo) {
+                    $array['processo_id'] = $notaFiscal->processo->id;
+                }
+                return $array;
+            });
+            
+            return response()->json([
+                'data' => $items->values()->all(),
+                'meta' => [
+                    'current_page' => $paginator->currentPage(),
+                    'last_page' => $paginator->lastPage(),
+                    'per_page' => $paginator->perPage(),
+                    'total' => $paginator->total(),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao listar notas fiscais');
+        }
+    }
+
+    /**
      * API: Listar notas fiscais (Route::module)
      */
     public function list(Request $request)

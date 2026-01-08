@@ -121,6 +121,17 @@ class NotaFiscalRepository implements NotaFiscalRepositoryInterface
             $query->where('contrato_id', $filtros['contrato_id']);
         }
 
+        if (isset($filtros['fornecedor_id'])) {
+            $query->where('fornecedor_id', $filtros['fornecedor_id']);
+        }
+
+        if (isset($filtros['situacao'])) {
+            $query->where('situacao', $filtros['situacao']);
+        }
+
+        // Carregar relacionamentos necessários
+        $query->with(['processo', 'empenho', 'contrato', 'autorizacaoFornecimento', 'fornecedor']);
+
         $perPage = $filtros['per_page'] ?? 15;
         $paginator = $query->orderBy('criado_em', 'desc')->paginate($perPage);
 

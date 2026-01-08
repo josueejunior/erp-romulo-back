@@ -137,6 +137,9 @@ Route::prefix('v1')->group(function () {
             // Empenhos (listar todos - sem precisar de processo específico)
             Route::get('/empenhos', [ApiEmpenhoController::class, 'listAll']);
             
+            // Notas Fiscais (listar todas - sem precisar de processo específico)
+            Route::get('/notas-fiscais', [ApiNotaFiscalController::class, 'listAll']);
+            
             // Recursos estáticos (enums, listas)
             Route::get('/unidades-medida', [ApiProcessoItemController::class, 'unidadesMedida']);
             
@@ -242,10 +245,12 @@ Route::prefix('v1')->group(function () {
                 
                 // Empenhos (dentro de processo)
                 Route::module('empenhos', ApiEmpenhoController::class, 'empenho')
-                    ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy'])
-                    ->children(function () {
-                        Route::post('/concluir', [ApiEmpenhoController::class, 'concluir']);
-                    });
+                    ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
+                
+                // Rota para concluir empenho (deve estar após o module para evitar conflito)
+                // Está dentro do grupo processos/{processo}, então o caminho é relativo
+                Route::post('empenhos/{empenho}/concluir', [ApiEmpenhoController::class, 'concluir'])
+                    ->name('empenhos.concluir');
                 
                 // Notas Fiscais
                 Route::module('notas-fiscais', ApiNotaFiscalController::class, 'notaFiscal')

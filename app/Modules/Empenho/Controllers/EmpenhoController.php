@@ -445,23 +445,32 @@ class EmpenhoController extends BaseApiController
     {
         try {
             $processoId = $request->route()->parameter('processo');
+            $empresa = $this->getEmpresaAtivaOrFail();
             
-            $processoDomain = $this->processoRepository->buscarPorId($processoId);
-            if (!$processoDomain) {
+            // Buscar modelos Eloquent diretamente (mais confiável)
+            $processo = $this->processoRepository->buscarModeloPorId($processoId);
+            if (!$processo) {
                 return response()->json(['message' => 'Processo não encontrado'], 404);
             }
             
-            $empenhoDomain = $this->empenhoRepository->buscarPorId($id);
-            if (!$empenhoDomain) {
+            // Validar que o processo pertence à empresa
+            if ($processo->empresa_id !== $empresa->id) {
+                return response()->json(['message' => 'Processo não encontrado'], 404);
+            }
+            
+            // Buscar empenho diretamente pelo modelo
+            $empenho = $this->empenhoRepository->buscarModeloPorId($id);
+            if (!$empenho) {
                 return response()->json(['message' => 'Empenho não encontrado'], 404);
             }
             
-            // Buscar modelos Eloquent via repositories (DDD)
-            $processo = $this->processoRepository->buscarModeloPorId($processoDomain->id);
-            $empenho = $this->empenhoRepository->buscarModeloPorId($empenhoDomain->id);
+            // Validar que o empenho pertence ao processo e à empresa
+            if ($empenho->processo_id !== (int) $processoId) {
+                return response()->json(['message' => 'Empenho não pertence ao processo'], 404);
+            }
             
-            if (!$processo || !$empenho) {
-                return response()->json(['message' => 'Processo ou empenho não encontrado'], 404);
+            if ($empenho->empresa_id !== $empresa->id) {
+                return response()->json(['message' => 'Empenho não encontrado'], 404);
             }
             
             return $this->destroyWeb($processo, $empenho);
@@ -470,6 +479,7 @@ class EmpenhoController extends BaseApiController
                 'processo_id' => $request->route()->parameter('processo'),
                 'empenho_id' => $id,
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
             return response()->json(['message' => 'Erro ao buscar processo ou empenho: ' . $e->getMessage()], 500);
         }
