@@ -418,12 +418,28 @@ Route::prefix('admin')->group(function () {
             Route::delete('/{cupom}', [\App\Modules\Assinatura\Controllers\CupomController::class, 'destroy']);
         });
 
+        // 🆕 Gerenciamento de afiliados
+        Route::prefix('afiliados')->group(function () {
+            Route::get('/', [\App\Modules\Afiliado\Controllers\AfiliadoController::class, 'index']);
+            Route::post('/', [\App\Modules\Afiliado\Controllers\AfiliadoController::class, 'store']);
+            Route::get('/{id}', [\App\Modules\Afiliado\Controllers\AfiliadoController::class, 'show'])->where('id', '[0-9]+');
+            Route::put('/{id}', [\App\Modules\Afiliado\Controllers\AfiliadoController::class, 'update'])->where('id', '[0-9]+');
+            Route::delete('/{id}', [\App\Modules\Afiliado\Controllers\AfiliadoController::class, 'destroy'])->where('id', '[0-9]+');
+            Route::get('/{id}/detalhes', [\App\Modules\Afiliado\Controllers\AfiliadoController::class, 'detalhes'])->where('id', '[0-9]+');
+        });
+
         // Upload de arquivos
         Route::prefix('upload')->group(function () {
             Route::post('/image', [\App\Http\Controllers\UploadController::class, 'uploadImage']);
             Route::delete('/image', [\App\Http\Controllers\UploadController::class, 'deleteImage']);
         });
     });
+});
+
+// 🆕 Rota pública para validar cupom de afiliado (usada no checkout do site)
+Route::prefix('v1')->group(function () {
+    Route::post('/cupom/validar', [\App\Modules\Afiliado\Controllers\AfiliadoController::class, 'validarCupom'])
+        ->middleware(['throttle:20,1']); // 20 validações por minuto
 });
 
 // Fallback para 404 em JSON

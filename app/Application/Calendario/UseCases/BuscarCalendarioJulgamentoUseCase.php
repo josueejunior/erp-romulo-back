@@ -110,7 +110,7 @@ final class BuscarCalendarioJulgamentoUseCase
             'orgao' => $processo->orgao?->razao_social,
             'uasg' => $processo->orgao?->uasg,
             'setor' => $processo->setor?->nome,
-            'data_hora_sessao_publica' => $processo->data_hora_sessao_publica,
+            'data_hora_sessao_publica' => $processo->data_hora_sessao_publica?->toIso8601String(), // Converter Carbon para string
             'objeto_resumido' => $processo->objeto_resumido,
             'itens_com_lembrete' => $itensComLembrete,
             'total_itens' => $processo->itens->count(),
