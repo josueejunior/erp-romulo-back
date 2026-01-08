@@ -28,14 +28,40 @@ class ContratoFiltroDTO
      */
     public static function fromArray(array $data): self
     {
-        // Tratar strings vazias como null
-        $busca = !empty($data['busca']) ? $data['busca'] : null;
-        $orgaoId = !empty($data['orgao_id']) ? (int) $data['orgao_id'] : null;
-        $srp = isset($data['srp']) && $data['srp'] !== '' ? filter_var($data['srp'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) : null;
-        $situacao = !empty($data['situacao']) ? $data['situacao'] : null;
-        $vigente = isset($data['vigente']) && $data['vigente'] !== '' ? filter_var($data['vigente'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) : null;
-        $vencerEm = !empty($data['vencer_em']) ? (int) $data['vencer_em'] : null;
-        $somenteAlerta = isset($data['somente_alerta']) ? filter_var($data['somente_alerta'], FILTER_VALIDATE_BOOLEAN) : false;
+        // Log para debug
+        \Log::debug('ContratoFiltroDTO::fromArray - dados recebidos', [
+            'data' => $data,
+            'srp_raw' => $data['srp'] ?? 'NOT_SET',
+            'srp_type' => isset($data['srp']) ? gettype($data['srp']) : 'NOT_SET',
+            'vigente_raw' => $data['vigente'] ?? 'NOT_SET',
+            'vigente_type' => isset($data['vigente']) ? gettype($data['vigente']) : 'NOT_SET',
+        ]);
+        
+        // Tratar strings vazias como null - verificação mais robusta
+        $busca = (isset($data['busca']) && $data['busca'] !== '' && $data['busca'] !== null) ? $data['busca'] : null;
+        $orgaoId = (isset($data['orgao_id']) && $data['orgao_id'] !== '' && $data['orgao_id'] !== null) ? (int) $data['orgao_id'] : null;
+        
+        // Para booleanos: string vazia, null, ou não definido = null (ignorar filtro)
+        $srp = null;
+        if (isset($data['srp']) && $data['srp'] !== '' && $data['srp'] !== null) {
+            $srp = filter_var($data['srp'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        }
+        
+        $situacao = (isset($data['situacao']) && $data['situacao'] !== '' && $data['situacao'] !== null) ? $data['situacao'] : null;
+        
+        $vigente = null;
+        if (isset($data['vigente']) && $data['vigente'] !== '' && $data['vigente'] !== null) {
+            $vigente = filter_var($data['vigente'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        }
+        
+        $vencerEm = (isset($data['vencer_em']) && $data['vencer_em'] !== '' && $data['vencer_em'] !== null) ? (int) $data['vencer_em'] : null;
+        $somenteAlerta = isset($data['somente_alerta']) && $data['somente_alerta'] !== '' ? filter_var($data['somente_alerta'], FILTER_VALIDATE_BOOLEAN) : false;
+
+        \Log::debug('ContratoFiltroDTO::fromArray - valores processados', [
+            'srp' => $srp,
+            'vigente' => $vigente,
+            'orgaoId' => $orgaoId,
+        ]);
 
         return new self(
             busca: $busca,
