@@ -42,9 +42,19 @@ class CriarContratoUseCase
             ]);
         }
         
-        // Mapear situacao corretamente
+        // Mapear situacao corretamente - valores permitidos: vigente, encerrado, cancelado
         $situacao = $dto->situacao;
+        $situacoesValidas = ['vigente', 'encerrado', 'cancelado'];
+        
+        // Mapear valores do frontend para valores válidos no banco
         if ($situacao === 'ativo') {
+            $situacao = 'vigente';
+        } elseif ($situacao === 'suspenso') {
+            $situacao = 'cancelado'; // Suspenso mapeia para cancelado
+        }
+        
+        // Se não for um valor válido, usar vigente como padrão
+        if (!in_array($situacao, $situacoesValidas)) {
             $situacao = 'vigente';
         }
         

@@ -24,8 +24,8 @@ class ContratoCreateRequest extends FormRequest
             'locais_entrega' => 'nullable|string',
             'prazos_contrato' => 'nullable|string',
             'regras_contrato' => 'nullable|string',
-            'situacao' => 'nullable|string',
-            'status' => 'nullable|string|in:ativo,encerrado,suspenso,cancelado',
+            'situacao' => 'nullable|string|in:vigente,encerrado,cancelado,ativo,suspenso',
+            'status' => 'nullable|string|in:vigente,encerrado,cancelado,ativo,suspenso',
             'vigente' => 'nullable|boolean',
             'observacoes' => 'nullable|string',
             'arquivo_contrato' => 'nullable|file|mimes:pdf,doc,docx|max:10240', // 10MB

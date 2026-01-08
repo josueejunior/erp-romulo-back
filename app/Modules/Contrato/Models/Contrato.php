@@ -79,21 +79,18 @@ class Contrato extends BaseModel
         $this->valor_empenhado = $totalEmpenhos;
         $this->saldo = $this->valor_total - $totalEmpenhos;
         
-        // Atualizar situação baseada em empenhos
-        if ($totalEmpenhos == 0) {
-            $this->situacao = 'aguardando_empenho';
-        } elseif ($totalEmpenhos < $this->valor_total) {
-            $this->situacao = 'atendendo';
-        } elseif ($this->saldo <= 0) {
-            $this->situacao = 'concluido';
-        } else {
-            $this->situacao = 'atendendo';
-        }
-        
         // Atualizar vigência baseado nas datas
         $hoje = now();
-        if ($this->data_fim && $hoje->isAfter($this->data_fim)) {
+        $vencido = $this->data_fim && $hoje->isAfter($this->data_fim);
+        
+        if ($vencido) {
             $this->vigente = false;
+            // Valores permitidos na constraint: vigente, encerrado, cancelado
+            $this->situacao = 'encerrado';
+        } else {
+            $this->vigente = true;
+            // Manter como vigente enquanto estiver dentro do prazo
+            $this->situacao = 'vigente';
         }
         
         // Usar saveQuietly para evitar loops infinitos com observers
