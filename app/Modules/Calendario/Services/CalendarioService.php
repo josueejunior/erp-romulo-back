@@ -181,7 +181,7 @@ class CalendarioService
         // Aviso de itens sem orçamento escolhido
         $itensSemOrcamento = $processo->itens()
             ->whereDoesntHave('orcamentos', function ($query) {
-                $query->where('fornecedor_escolhido', true);
+                $query->where('orcamentos.fornecedor_escolhido', true);
             })
             ->count();
 
@@ -196,7 +196,7 @@ class CalendarioService
         // Aviso de itens sem formação de preço
         $itensSemFormacao = $processo->itens()
             ->whereHas('orcamentos', function ($query) {
-                $query->where('fornecedor_escolhido', true);
+                $query->where('orcamentos.fornecedor_escolhido', true);
             })
             ->whereDoesntHave('formacoesPreco')
             ->count();
