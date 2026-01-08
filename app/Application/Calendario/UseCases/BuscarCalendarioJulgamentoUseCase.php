@@ -38,13 +38,6 @@ final class BuscarCalendarioJulgamentoUseCase
         $dataInicio = $dto->dataInicio ?? Carbon::now();
         $dataFim = $dto->dataFim ?? Carbon::now()->addDays(30);
 
-        $filtros = [
-            'empresa_id' => $dto->empresaId,
-            'status' => 'julgamento_habilitacao',
-            'data_hora_sessao_publica_inicio' => $dataInicio->toDateTimeString(),
-            'data_hora_sessao_publica_fim' => $dataFim->toDateTimeString(),
-        ];
-
         $with = [
             'orgao',
             'setor',
@@ -53,9 +46,36 @@ final class BuscarCalendarioJulgamentoUseCase
             }
         ];
 
-        $processos = $this->processoRepository->buscarModelosComFiltros($filtros, $with);
+        // Buscar processos em julgamento COM data de sessão no período
+        $filtrosComData = [
+            'empresa_id' => $dto->empresaId,
+            'status' => 'julgamento_habilitacao',
+            'data_hora_sessao_publica_inicio' => $dataInicio->toDateTimeString(),
+            'data_hora_sessao_publica_fim' => $dataFim->toDateTimeString(),
+        ];
+        
+        $processosComData = $this->processoRepository->buscarModelosComFiltros($filtrosComData, $with);
+        
+        Log::debug('BuscarCalendarioJulgamentoUseCase - Processos com data encontrados', [
+            'count' => $processosComData->count(),
+        ]);
 
-        Log::debug('BuscarCalendarioJulgamentoUseCase::executar - Processos encontrados', [
+        // Buscar TODOS os processos em julgamento (para incluir os sem data)
+        $filtrosSemData = [
+            'empresa_id' => $dto->empresaId,
+            'status' => 'julgamento_habilitacao',
+        ];
+        
+        $todosProcessosJulgamento = $this->processoRepository->buscarModelosComFiltros($filtrosSemData, $with);
+        
+        Log::debug('BuscarCalendarioJulgamentoUseCase - Total processos em julgamento', [
+            'count' => $todosProcessosJulgamento->count(),
+        ]);
+
+        // Combinar e remover duplicatas
+        $processos = $processosComData->merge($todosProcessosJulgamento)->unique('id');
+
+        Log::debug('BuscarCalendarioJulgamentoUseCase::executar - Processos combinados', [
             'count' => $processos->count(),
         ]);
 
