@@ -341,11 +341,11 @@ class NotaFiscalController extends BaseApiController
     /**
      * API: Atualizar nota fiscal (Route::module)
      */
-    public function update(Request $request, $id)
+    public function update(Request $request)
     {
         try {
             $processoId = (int) $request->route()->parameter('processo');
-            $notaFiscalId = (int) $id;
+            $notaFiscalId = (int) $request->route()->parameter('notaFiscal');
             $empresa = $this->getEmpresaAtivaOrFail();
             
             Log::debug('NotaFiscalController::update - Iniciando', [
@@ -426,7 +426,7 @@ class NotaFiscalController extends BaseApiController
         } catch (\Exception $e) {
             Log::error('Erro ao buscar processo/nota fiscal para atualizar', [
                 'processo_id' => $request->route()->parameter('processo'),
-                'nota_fiscal_id' => $id,
+                'nota_fiscal_id' => $request->route()->parameter('notaFiscal'),
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
@@ -437,11 +437,11 @@ class NotaFiscalController extends BaseApiController
     /**
      * API: Excluir nota fiscal (Route::module)
      */
-    public function destroy(Request $request, $id)
+    public function destroy(Request $request)
     {
         try {
             $processoId = (int) $request->route()->parameter('processo');
-            $notaFiscalId = (int) $id;
+            $notaFiscalId = (int) $request->route()->parameter('notaFiscal');
             $empresa = $this->getEmpresaAtivaOrFail();
             
             Log::debug('NotaFiscalController::destroy - Iniciando', [
@@ -511,7 +511,7 @@ class NotaFiscalController extends BaseApiController
         } catch (\Exception $e) {
             Log::error('Erro ao buscar processo/nota fiscal para deletar', [
                 'processo_id' => $request->route()->parameter('processo'),
-                'nota_fiscal_id' => $id,
+                'nota_fiscal_id' => $request->route()->parameter('notaFiscal'),
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
