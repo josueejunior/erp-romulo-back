@@ -219,6 +219,8 @@ class DocumentoHabilitacaoService extends BaseService
             'caminho' => $meta['caminho'] ?? $documento->arquivo,
             'mime' => $meta['mime'] ?? null,
             'tamanho_bytes' => $meta['tamanho'] ?? null,
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
     }
 

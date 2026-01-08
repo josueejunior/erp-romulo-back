@@ -12,6 +12,12 @@ class DocumentoHabilitacaoVersao extends BaseModel
 
     protected $table = 'documento_habilitacao_versoes';
 
+    /**
+     * Desabilitar timestamps automáticos para esta tabela
+     * Os campos são gerenciados manualmente no fillable
+     */
+    public $timestamps = false;
+
     protected $fillable = [
         'empresa_id',
         'documento_habilitacao_id',
@@ -21,6 +27,8 @@ class DocumentoHabilitacaoVersao extends BaseModel
         'caminho',
         'mime',
         'tamanho_bytes',
+        'created_at', // Timestamp padrão Laravel
+        'updated_at', // Timestamp padrão Laravel
     ];
 
     protected function casts(): array
@@ -28,6 +36,8 @@ class DocumentoHabilitacaoVersao extends BaseModel
         return [
             'versao' => 'integer',
             'tamanho_bytes' => 'integer',
+            'created_at' => 'datetime',
+            'updated_at' => 'datetime',
         ];
     }
 

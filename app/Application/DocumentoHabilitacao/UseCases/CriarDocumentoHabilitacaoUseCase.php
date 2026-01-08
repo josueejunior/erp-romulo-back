@@ -140,6 +140,8 @@ class CriarDocumentoHabilitacaoUseCase
             'caminho' => $meta['caminho'],
             'mime' => $meta['mime'] ?? null,
             'tamanho_bytes' => $meta['tamanho'] ?? null,
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
     }
 }
