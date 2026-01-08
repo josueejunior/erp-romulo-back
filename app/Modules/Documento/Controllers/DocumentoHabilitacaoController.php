@@ -12,9 +12,17 @@ use App\Application\DocumentoHabilitacao\DTOs\CriarDocumentoHabilitacaoDTO;
 use App\Domain\Shared\ValueObjects\TenantContext;
 use App\Http\Middleware\EnsureEmpresaAtivaContext;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use App\Helpers\PermissionHelper;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 
+/**
+ * Controller de Documentos de Habilitação
+ * 
+ * ✅ DDD: Usa Use Cases para criar/atualizar
+ * ✅ Retorna dados completos após operações
+ */
 class DocumentoHabilitacaoController extends BaseApiController
 {
     use HasAuthContext;
@@ -25,7 +33,6 @@ class DocumentoHabilitacaoController extends BaseApiController
         private AtualizarDocumentoHabilitacaoUseCase $atualizarDocumentoUseCase,
     ) {
         $this->service = $service;
-        // Garante empresa ativa no contexto para todas as rotas
         $this->middleware(EnsureEmpresaAtivaContext::class);
     }
 
@@ -44,22 +51,240 @@ class DocumentoHabilitacaoController extends BaseApiController
     }
 
     /**
-     * Sobrescrever handleList para usar service
+     * GET /documentos-habilitacao - Listar documentos
      */
-    protected function handleList(Request $request, array $mergeParams = []): \Illuminate\Http\JsonResponse
+    public function list(Request $request): JsonResponse
     {
         try {
             $this->ensureEmpresaContext();
-            $params = $this->service->createListParamBag(array_merge($request->all(), $mergeParams));
+            $params = $this->service->createListParamBag($request->all());
             $documentos = $this->service->list($params);
             
-            // Sempre retorna LengthAwarePaginator
             return response()->json($documentos);
         } catch (\Exception $e) {
-            \Log::error('Erro ao listar documentos de habilitação', [
+            Log::error('DocumentoHabilitacaoController::list - Erro', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
-                'params' => $request->all()
+            ]);
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 400);
+        }
+    }
+
+    /**
+     * GET /documentos-habilitacao/{id} - Buscar documento por ID
+     */
+    public function get(Request $request, int|string $id = null): JsonResponse
+    {
+        // Extrair ID da rota se não foi passado
+        if ($id === null) {
+            $route = $request->route();
+            $parameters = $route->parameters();
+            $id = $parameters['documentoHabilitacao'] ?? $parameters['id'] ?? null;
+        }
+        
+        if (!$id) {
+            return response()->json(['message' => 'ID não fornecido'], 400);
+        }
+
+        try {
+            $this->ensureEmpresaContext();
+            $documento = $this->service->findById($id);
+            
+            if (!$documento) {
+                return response()->json([
+                    'message' => 'Documento não encontrado ou não pertence à empresa ativa.'
+                ], 404);
+            }
+            
+            // Carregar versões
+            $documento->loadMissing('versoes');
+            $this->service->logAction($documento, 'view');
+            
+            return response()->json(['data' => $documento]);
+        } catch (\Exception $e) {
+            Log::error('DocumentoHabilitacaoController::get - Erro', [
+                'error' => $e->getMessage(),
+                'id' => $id,
+            ]);
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 400);
+        }
+    }
+
+    /**
+     * POST /documentos-habilitacao - Criar documento
+     * 
+     * ✅ DDD: Usa Use Case
+     */
+    public function store(Request $request): JsonResponse
+    {
+        if (!PermissionHelper::canManageDocuments()) {
+            return response()->json([
+                'message' => 'Você não tem permissão para cadastrar documentos de habilitação.',
+            ], 403);
+        }
+
+        Log::info('DocumentoHabilitacaoController::store - Iniciando', [
+            'has_file' => $request->hasFile('arquivo'),
+            'tipo' => $request->input('tipo'),
+            'numero' => $request->input('numero'),
+        ]);
+
+        try {
+            $this->ensureEmpresaContext();
+            $data = $request->all();
+            
+            // Validar dados
+            $validator = $this->service->validateStoreData($data);
+            
+            if ($validator->fails()) {
+                return response()->json([
+                    'message' => 'Erro de validação',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $validated = $validator->validated();
+            
+            // Anexar arquivo para o DTO processar
+            if ($request->hasFile('arquivo')) {
+                $validated['arquivo'] = $request->file('arquivo');
+            }
+
+            // Criar DTO e executar Use Case
+            $dto = CriarDocumentoHabilitacaoDTO::fromArray($validated);
+            $documentoEntity = $this->criarDocumentoUseCase->executar($dto);
+
+            // Buscar modelo completo para retornar com todos os campos
+            $model = DocumentoHabilitacao::with('versoes')->find($documentoEntity->id);
+            
+            Log::info('DocumentoHabilitacaoController::store - Documento criado', [
+                'documento_id' => $model->id,
+                'tipo' => $model->tipo,
+                'numero' => $model->numero,
+            ]);
+            
+            return response()->json([
+                'message' => 'Documento cadastrado com sucesso!',
+                'data' => $model,
+            ], 201);
+            
+        } catch (\DomainException $e) {
+            Log::warning('DocumentoHabilitacaoController::store - Erro de domínio', [
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 400);
+        } catch (\Exception $e) {
+            Log::error('DocumentoHabilitacaoController::store - Erro', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'message' => 'Erro ao criar documento de habilitação: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * PUT /documentos-habilitacao/{id} - Atualizar documento
+     * 
+     * ✅ DDD: Usa Use Case
+     */
+    public function update(Request $request, int|string $id): JsonResponse
+    {
+        if (!PermissionHelper::canManageDocuments()) {
+            return response()->json([
+                'message' => 'Você não tem permissão para editar documentos de habilitação.',
+            ], 403);
+        }
+
+        Log::info('DocumentoHabilitacaoController::update - Iniciando', [
+            'id' => $id,
+            'has_file' => $request->hasFile('arquivo'),
+            'tipo' => $request->input('tipo'),
+            'numero' => $request->input('numero'),
+        ]);
+
+        try {
+            $this->ensureEmpresaContext();
+            $data = $request->all();
+            
+            // Validar dados
+            $validator = $this->service->validateUpdateData($data, $id);
+            
+            if ($validator->fails()) {
+                return response()->json([
+                    'message' => 'Erro de validação',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $validated = $validator->validated();
+            
+            // Anexar arquivo para o DTO processar
+            if ($request->hasFile('arquivo')) {
+                $validated['arquivo'] = $request->file('arquivo');
+            }
+
+            // Criar DTO e executar Use Case
+            $dto = CriarDocumentoHabilitacaoDTO::fromArray($validated);
+            $documentoEntity = $this->atualizarDocumentoUseCase->executar((int) $id, $dto);
+
+            // Buscar modelo completo para retornar com todos os campos
+            $model = DocumentoHabilitacao::with('versoes')->find($documentoEntity->id);
+            
+            Log::info('DocumentoHabilitacaoController::update - Documento atualizado', [
+                'documento_id' => $model->id,
+                'tipo' => $model->tipo,
+                'numero' => $model->numero,
+            ]);
+            
+            return response()->json([
+                'message' => 'Documento atualizado com sucesso!',
+                'data' => $model,
+            ]);
+            
+        } catch (\DomainException $e) {
+            Log::warning('DocumentoHabilitacaoController::update - Erro de domínio', [
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 400);
+        } catch (\Exception $e) {
+            Log::error('DocumentoHabilitacaoController::update - Erro', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'message' => 'Erro ao atualizar documento de habilitação: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * DELETE /documentos-habilitacao/{id} - Excluir documento
+     */
+    public function destroy(Request $request, int|string $id): JsonResponse
+    {
+        if (!PermissionHelper::canManageDocuments()) {
+            return response()->json([
+                'message' => 'Você não tem permissão para excluir documentos de habilitação.',
+            ], 403);
+        }
+
+        try {
+            $this->service->deleteById($id);
+            return response()->json(['message' => 'Documento excluído com sucesso!'], 200);
+        } catch (\Exception $e) {
+            Log::error('DocumentoHabilitacaoController::destroy - Erro', [
+                'error' => $e->getMessage(),
+                'id' => $id,
             ]);
             return response()->json([
                 'message' => $e->getMessage()
@@ -70,11 +295,11 @@ class DocumentoHabilitacaoController extends BaseApiController
     /**
      * GET /documentos-habilitacao/vencendo - Listar documentos vencendo
      */
-    public function vencendo(Request $request): \Illuminate\Http\JsonResponse
+    public function vencendo(Request $request): JsonResponse
     {
         try {
             $this->ensureEmpresaContext();
-            $context = \App\Domain\Shared\ValueObjects\TenantContext::get();
+            $context = TenantContext::get();
             $dias = (int) ($request->get('dias', 30));
             
             $repository = app(\App\Domain\DocumentoHabilitacao\Repositories\DocumentoHabilitacaoRepositoryInterface::class);
@@ -94,11 +319,11 @@ class DocumentoHabilitacaoController extends BaseApiController
     /**
      * GET /documentos-habilitacao/vencidos - Listar documentos vencidos
      */
-    public function vencidos(Request $request): \Illuminate\Http\JsonResponse
+    public function vencidos(Request $request): JsonResponse
     {
         try {
             $this->ensureEmpresaContext();
-            $context = \App\Domain\Shared\ValueObjects\TenantContext::get();
+            $context = TenantContext::get();
             
             $repository = app(\App\Domain\DocumentoHabilitacao\Repositories\DocumentoHabilitacaoRepositoryInterface::class);
             $documentos = $repository->buscarVencidos($context->empresaId);
@@ -115,241 +340,7 @@ class DocumentoHabilitacaoController extends BaseApiController
     }
 
     /**
-     * Extrai o ID da rota
-     */
-    protected function getRouteId($route): ?int
-    {
-        $parameters = $route->parameters();
-        // Tentar 'documentoHabilitacao' primeiro, depois 'id'
-        $id = $parameters['documentoHabilitacao'] ?? $parameters['id'] ?? null;
-        return $id ? (int) $id : null;
-    }
-
-    /**
-     * Sobrescrever handleGet para usar service
-     */
-    protected function handleGet(Request $request, array $mergeParams = []): \Illuminate\Http\JsonResponse
-    {
-        $route = $request->route();
-        $id = $this->getRouteId($route);
-        
-        if (!$id) {
-            return response()->json(['message' => 'ID não fornecido'], 400);
-        }
-
-        try {
-            $this->ensureEmpresaContext();
-            $params = array_merge($request->all(), $mergeParams);
-            $paramBag = $this->service->createFindByIdParamBag($params);
-            $documento = $this->service->findById($id, $paramBag);
-            if ($documento) {
-                $documento->loadMissing('versoes');
-                $this->service->logAction($documento, 'view');
-            }
-            
-            if (!$documento) {
-                return response()->json([
-                    'message' => 'Documento não encontrado ou não pertence à empresa ativa.'
-                ], 404);
-            }
-            
-            return response()->json(['data' => $documento]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 400);
-        }
-    }
-
-    /**
-     * Sobrescrever handleStore para validação de permissão e usar Use Case
-     */
-    protected function handleStore(Request $request, array $mergeParams = []): \Illuminate\Http\JsonResponse
-    {
-        if (!PermissionHelper::canManageDocuments()) {
-            return response()->json([
-                'message' => 'Você não tem permissão para cadastrar documentos de habilitação.',
-            ], 403);
-        }
-
-        try {
-            $this->ensureEmpresaContext();
-            $data = array_merge($request->all(), $mergeParams);
-            
-            // Validar dados
-            $validator = $this->service->validateStoreData($data);
-            
-            if ($validator->fails()) {
-                return response()->json([
-                    'message' => 'Erro de validação',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-
-            $validated = $validator->validated();
-            
-            // Anexar arquivo para o service tratar versionamento
-            if ($request->hasFile('arquivo')) {
-                $validated['arquivo'] = $request->file('arquivo');
-            }
-
-            // Criar DTO e executar Use Case
-            $dto = CriarDocumentoHabilitacaoDTO::fromArray($validated);
-            $documento = $this->criarDocumentoUseCase->executar($dto);
-
-            // Buscar modelo para retornar com relacionamentos
-            $model = $this->service->findById($documento->id);
-            if ($model) {
-                $model->loadMissing('versoes');
-            }
-            
-            return response()->json($model, 201);
-        } catch (\DomainException $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 400);
-        } catch (\Exception $e) {
-            \Log::error('Erro ao criar documento de habilitação', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-            return response()->json([
-                'message' => 'Erro ao criar documento de habilitação.'
-            ], 500);
-        }
-    }
-
-    /**
-     * Sobrescrever handleUpdate para validação de permissão e usar Use Case
-     */
-    protected function handleUpdate(Request $request, int|string $id, array $mergeParams = []): \Illuminate\Http\JsonResponse
-    {
-        if (!PermissionHelper::canManageDocuments()) {
-            return response()->json([
-                'message' => 'Você não tem permissão para editar documentos de habilitação.',
-            ], 403);
-        }
-
-        try {
-            $this->ensureEmpresaContext();
-            $data = array_merge($request->all(), $mergeParams);
-            
-            // Validar dados
-            $validator = $this->service->validateUpdateData($data, $id);
-            
-            if ($validator->fails()) {
-                return response()->json([
-                    'message' => 'Erro de validação',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-
-            $validated = $validator->validated();
-            
-            // Anexar arquivo para o service tratar versionamento (não deletar anterior)
-            if ($request->hasFile('arquivo')) {
-                $validated['arquivo'] = $request->file('arquivo');
-            }
-
-            // Criar DTO e executar Use Case
-            $dto = CriarDocumentoHabilitacaoDTO::fromArray($validated);
-            $documento = $this->atualizarDocumentoUseCase->executar($id, $dto);
-
-            // Buscar modelo para retornar com relacionamentos
-            $model = $this->service->findById($documento->id);
-            if ($model) {
-                $model->loadMissing('versoes');
-            }
-            
-            return response()->json($model);
-        } catch (\DomainException $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 400);
-        } catch (\Exception $e) {
-            \Log::error('Erro ao atualizar documento de habilitação', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-            return response()->json([
-                'message' => 'Erro ao atualizar documento de habilitação.'
-            ], 500);
-        }
-    }
-
-    /**
-     * Sobrescrever handleDestroy para validação de permissão
-     */
-    protected function handleDestroy(Request $request, int|string $id, array $mergeParams = []): \Illuminate\Http\JsonResponse
-    {
-        if (!PermissionHelper::canManageDocuments()) {
-            return response()->json([
-                'message' => 'Você não tem permissão para excluir documentos de habilitação.',
-            ], 403);
-        }
-
-        try {
-            $this->service->deleteById($id);
-            return response()->json(null, 204);
-        } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 400);
-        }
-    }
-
-    /**
-     * GET /documentos-habilitacao - Listar documentos
-     * Método chamado pelo Route::module()
-     */
-    public function list(Request $request): \Illuminate\Http\JsonResponse
-    {
-        return $this->handleList($request);
-    }
-
-    /**
-     * GET /documentos-habilitacao/{id} - Buscar documento por ID
-     * Método chamado pelo Route::module()
-     */
-    public function get(Request $request, int|string $id = null): \Illuminate\Http\JsonResponse
-    {
-        // Se o ID foi passado como parâmetro, definir na rota
-        if ($id !== null) {
-            $route = $request->route();
-            $route->setParameter('documentoHabilitacao', $id);
-        }
-        return $this->handleGet($request);
-    }
-
-    /**
-     * POST /documentos-habilitacao - Criar documento
-     * Método chamado pelo Route::module()
-     */
-    public function store(Request $request): \Illuminate\Http\JsonResponse
-    {
-        return $this->handleStore($request);
-    }
-
-    /**
-     * PUT /documentos-habilitacao/{id} - Atualizar documento
-     * Método chamado pelo Route::module()
-     */
-    public function update(Request $request, int|string $id): \Illuminate\Http\JsonResponse
-    {
-        return $this->handleUpdate($request, $id);
-    }
-
-    /**
-     * DELETE /documentos-habilitacao/{id} - Excluir documento
-     * Método chamado pelo Route::module()
-     */
-    public function destroy(Request $request, int|string $id): \Illuminate\Http\JsonResponse
-    {
-        return $this->handleDestroy($request, $id);
-    }
-
-    /**
-     * Métodos de compatibilidade (mantidos para compatibilidade com rotas antigas)
+     * Métodos de compatibilidade
      */
     public function index(Request $request)
     {
@@ -358,10 +349,6 @@ class DocumentoHabilitacaoController extends BaseApiController
 
     public function show(DocumentoHabilitacao $documentoHabilitacao)
     {
-        $request = request();
-        $request->route()->setParameter('documentoHabilitacao', $documentoHabilitacao->id);
-        return $this->handleGet($request);
+        return $this->get(request(), $documentoHabilitacao->id);
     }
 }
-
-
