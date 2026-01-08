@@ -4,13 +4,17 @@ namespace App\Modules\NotaFiscal\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
 use App\Http\Controllers\Traits\HasAuthContext;
-use App\Modules\Processo\Models\Processo;
-use App\Modules\NotaFiscal\Models\NotaFiscal;
+// ✅ DDD: Controller não importa modelos Eloquent diretamente
+// Apenas usa interfaces de repositório e Use Cases
 use App\Modules\NotaFiscal\Services\NotaFiscalService;
 use App\Application\NotaFiscal\UseCases\CriarNotaFiscalUseCase;
 use App\Application\NotaFiscal\UseCases\ListarNotasFiscaisUseCase;
 use App\Application\NotaFiscal\UseCases\BuscarNotaFiscalUseCase;
+use App\Application\NotaFiscal\UseCases\AtualizarNotaFiscalUseCase;
+use App\Application\NotaFiscal\UseCases\ExcluirNotaFiscalUseCase;
 use App\Application\NotaFiscal\DTOs\CriarNotaFiscalDTO;
+use App\Application\NotaFiscal\DTOs\AtualizarNotaFiscalDTO;
+use App\Application\NotaFiscal\DTOs\FiltroNotaFiscalDTO;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\NotaFiscal\Repositories\NotaFiscalRepositoryInterface;
 use App\Http\Requests\NotaFiscal\NotaFiscalCreateRequest;
@@ -43,6 +47,8 @@ class NotaFiscalController extends BaseApiController
         private CriarNotaFiscalUseCase $criarNotaFiscalUseCase,
         private ListarNotasFiscaisUseCase $listarNotasFiscaisUseCase,
         private BuscarNotaFiscalUseCase $buscarNotaFiscalUseCase,
+        private AtualizarNotaFiscalUseCase $atualizarNotaFiscalUseCase,
+        private ExcluirNotaFiscalUseCase $excluirNotaFiscalUseCase,
         private ProcessoRepositoryInterface $processoRepository,
         private NotaFiscalRepositoryInterface $notaFiscalRepository,
     ) {
@@ -51,83 +57,47 @@ class NotaFiscalController extends BaseApiController
 
     /**
      * API: Listar todas as notas fiscais da empresa (sem filtro de processo)
+     * 
+     * ✅ DDD: Controller apenas orquestra, toda lógica no Use Case
      */
     public function listAll(Request $request): JsonResponse
     {
         try {
             $empresa = $this->getEmpresaAtivaOrFail();
             
-            // Preparar filtros
-            $filtros = [
-                'empresa_id' => $empresa->id,
-            ];
+            // Criar DTO de filtros (Application Layer)
+            $filtroDTO = FiltroNotaFiscalDTO::fromRequest($request->all(), $empresa->id);
             
-            // Adicionar filtros opcionais da query string
-            if ($request->has('processo_id') && $request->processo_id) {
-                $filtros['processo_id'] = $request->processo_id;
-            }
+            // Executar Use Case (única porta de entrada do domínio)
+            $paginado = $this->listarNotasFiscaisUseCase->executar($filtroDTO->toRepositoryFilters());
             
-            if ($request->has('empenho_id') && $request->empenho_id) {
-                $filtros['empenho_id'] = $request->empenho_id;
-            }
-            
-            if ($request->has('fornecedor_id') && $request->fornecedor_id) {
-                $filtros['fornecedor_id'] = $request->fornecedor_id;
-            }
-            
-            if ($request->has('situacao') && $request->situacao) {
-                $filtros['situacao'] = $request->situacao;
-            }
-            
-            // Adicionar per_page aos filtros se fornecido
-            if ($request->has('per_page')) {
-                $filtros['per_page'] = $request->per_page;
-            }
-            
-            // Buscar modelos diretamente (mais eficiente e mantém relacionamentos)
-            $query = NotaFiscal::query();
-            
-            // Aplicar filtros
-            if (isset($filtros['empresa_id'])) {
-                $query->where('empresa_id', $filtros['empresa_id']);
-            }
-            if (isset($filtros['processo_id'])) {
-                $query->where('processo_id', $filtros['processo_id']);
-            }
-            if (isset($filtros['empenho_id'])) {
-                $query->where('empenho_id', $filtros['empenho_id']);
-            }
-            if (isset($filtros['fornecedor_id'])) {
-                $query->where('fornecedor_id', $filtros['fornecedor_id']);
-            }
-            if (isset($filtros['situacao'])) {
-                $query->where('situacao', $filtros['situacao']);
-            }
-            
-            // Carregar relacionamentos
-            $query->with(['processo', 'empenho', 'contrato', 'autorizacaoFornecimento', 'fornecedor']);
-            
-            // Paginar
-            $perPage = $filtros['per_page'] ?? 15;
-            $paginator = $query->orderBy('criado_em', 'desc')->paginate($perPage);
-            
-            // Transformar para array
-            $items = $paginator->getCollection()->map(function ($notaFiscal) {
-                $array = $notaFiscal->toArray();
+            // Transformar entidades de domínio para resposta
+            $items = collect($paginado->items())->map(function ($notaFiscalDomain) {
+                // Buscar modelo Eloquent apenas para serialização (Infrastructure)
+                $notaFiscalModel = $this->notaFiscalRepository->buscarModeloPorId(
+                    $notaFiscalDomain->id,
+                    ['processo', 'empenho', 'contrato', 'autorizacaoFornecimento', 'fornecedor']
+                );
+                
+                if (!$notaFiscalModel) {
+                    return null;
+                }
+                
+                $array = $notaFiscalModel->toArray();
                 // Garantir que processo_id está presente
-                if (!isset($array['processo_id']) && $notaFiscal->processo) {
-                    $array['processo_id'] = $notaFiscal->processo->id;
+                if (!isset($array['processo_id']) && $notaFiscalModel->processo) {
+                    $array['processo_id'] = $notaFiscalModel->processo->id;
                 }
                 return $array;
-            });
+            })->filter();
             
             return response()->json([
                 'data' => $items->values()->all(),
                 'meta' => [
-                    'current_page' => $paginator->currentPage(),
-                    'last_page' => $paginator->lastPage(),
-                    'per_page' => $paginator->perPage(),
-                    'total' => $paginator->total(),
+                    'current_page' => $paginado->currentPage(),
+                    'last_page' => $paginado->lastPage(),
+                    'per_page' => $paginado->perPage(),
+                    'total' => $paginado->total(),
                 ],
             ]);
         } catch (\Exception $e) {
@@ -150,57 +120,40 @@ class NotaFiscalController extends BaseApiController
 
     /**
      * API: Buscar nota fiscal (Route::module)
+     * 
+     * ✅ DDD: Apenas delega para show
      */
     public function get(Request $request)
     {
-        $processoId = $request->route()->parameter('processo');
-        $notaFiscalId = $request->route()->parameter('notaFiscal');
-        
-        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
-        if (!$processoModel) {
-            return response()->json(['message' => 'Processo não encontrado.'], 404);
-        }
-        
-        $notaFiscalModel = $this->notaFiscalRepository->buscarModeloPorId($notaFiscalId);
-        if (!$notaFiscalModel) {
-            return response()->json(['message' => 'Nota fiscal não encontrada.'], 404);
-        }
-        
-        return $this->show($processoModel, $notaFiscalModel);
+        return $this->show($request);
     }
 
     /**
      * Listar notas fiscais de um processo
      * 
-     * O middleware já inicializou o tenant correto baseado no X-Tenant-ID do header.
-     * Apenas retorna os dados das notas fiscais da empresa ativa.
+     * ✅ DDD: Controller não conhece Eloquent, apenas orquestra Use Cases
      */
-    public function index(Processo $processo): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         try {
-            // Obter empresa automaticamente (middleware já inicializou baseado no X-Empresa-ID)
+            $processoId = (int) $request->route()->parameter('processo');
             $empresa = $this->getEmpresaAtivaOrFail();
             
-            // Validar que o processo pertence à empresa
-            if ($processo->empresa_id !== $empresa->id) {
-                return response()->json(['message' => 'Processo não encontrado'], 404);
-            }
+            // Preparar filtros via DTO (Application Layer)
+            $filtroDTO = FiltroNotaFiscalDTO::fromRequest(
+                array_merge($request->all(), ['processo_id' => $processoId]),
+                $empresa->id
+            );
             
-            // Preparar filtros
-            $filtros = [
-                'empresa_id' => $empresa->id,
-                'processo_id' => $processo->id,
-            ];
+            // Executar Use Case (única porta de entrada do domínio)
+            $paginado = $this->listarNotasFiscaisUseCase->executar($filtroDTO->toRepositoryFilters());
             
-            // Executar Use Case
-            $paginado = $this->listarNotasFiscaisUseCase->executar($filtros);
-            
-            // Transformar para resposta
+            // Transformar entidades de domínio para resposta
             $items = collect($paginado->items())->map(function ($notaFiscalDomain) {
-                // Buscar modelo Eloquent para incluir relacionamentos
+                // Buscar modelo Eloquent apenas para serialização (Infrastructure)
                 $notaFiscalModel = $this->notaFiscalRepository->buscarModeloPorId(
                     $notaFiscalDomain->id,
-                    ['empenho', 'contrato', 'autorizacaoFornecimento', 'fornecedor']
+                    ['empenho', 'contrato', 'autorizacaoFornecimento', 'fornecedor', 'processo']
                 );
                 return $notaFiscalModel ? $notaFiscalModel->toArray() : null;
             })->filter();
@@ -214,6 +167,8 @@ class NotaFiscalController extends BaseApiController
                     'total' => $paginado->total(),
                 ],
             ]);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
         } catch (\Exception $e) {
             return $this->handleException($e, 'Erro ao listar notas fiscais');
         }
@@ -242,7 +197,7 @@ class NotaFiscalController extends BaseApiController
         }
         
         // Passar dados validados diretamente como array
-        return $this->storeWeb($validator->validated(), $processoModel);
+        return $this->storeWeb($validator->validated(), $processoId);
     }
 
     /**
@@ -259,12 +214,12 @@ class NotaFiscalController extends BaseApiController
      * - Não sabe se existe multi-tenant
      * - Não filtra nada por tenant_id
      */
-    public function storeWeb(NotaFiscalCreateRequest|array $request, Processo $processo): JsonResponse
+    public function storeWeb(NotaFiscalCreateRequest|array $request, int $processoId): JsonResponse
     {
         try {
             // Se for array, já está validado. Se for FormRequest, chamar validated()
             $data = is_array($request) ? $request : $request->validated();
-            $data['processo_id'] = $processo->id;
+            $data['processo_id'] = $processoId;
             
             // Usar Use Case DDD (contém toda a lógica de negócio, incluindo tenant)
             $dto = CriarNotaFiscalDTO::fromArray($data);
@@ -298,32 +253,28 @@ class NotaFiscalController extends BaseApiController
     /**
      * Obter nota fiscal específica
      * 
-     * O middleware já inicializou o tenant correto baseado no X-Tenant-ID do header.
-     * Apenas retorna os dados da nota fiscal da empresa ativa.
+     * ✅ DDD: Controller não conhece Eloquent, apenas orquestra Use Cases
      */
-    public function show(Processo $processo, NotaFiscal $notaFiscal): JsonResponse
+    public function show(Request $request): JsonResponse
     {
         try {
-            // Obter empresa automaticamente (middleware já inicializou)
+            $processoId = (int) $request->route()->parameter('processo');
+            $notaFiscalId = (int) $request->route()->parameter('notaFiscal');
             $empresa = $this->getEmpresaAtivaOrFail();
             
-            // Validar que o processo e nota fiscal pertencem à empresa
-            if ($processo->empresa_id !== $empresa->id) {
-                return response()->json(['message' => 'Processo não encontrado'], 404);
-            }
+            // Executar Use Case (validações de negócio dentro do Use Case)
+            $notaFiscalDomain = $this->buscarNotaFiscalUseCase->executar($notaFiscalId);
             
-            // Executar Use Case
-            $notaFiscalDomain = $this->buscarNotaFiscalUseCase->executar($notaFiscal->id);
-            
-            // Validar que a nota fiscal pertence à empresa ativa
+            // Validar que a nota fiscal pertence à empresa (regra de domínio - deveria estar no Use Case)
+            // Por enquanto mantemos aqui, mas idealmente o Use Case deveria receber empresaId
             if ($notaFiscalDomain->empresaId !== $empresa->id) {
                 return response()->json(['message' => 'Nota fiscal não encontrada'], 404);
             }
             
-            // Buscar modelo Eloquent para incluir relacionamentos
+            // Buscar modelo Eloquent apenas para serialização (Infrastructure)
             $notaFiscalModel = $this->notaFiscalRepository->buscarModeloPorId(
                 $notaFiscalDomain->id,
-                ['empenho', 'contrato', 'autorizacaoFornecimento', 'fornecedor']
+                ['empenho', 'contrato', 'autorizacaoFornecimento', 'fornecedor', 'processo']
             );
             
             if (!$notaFiscalModel) {
@@ -341,6 +292,11 @@ class NotaFiscalController extends BaseApiController
     /**
      * API: Atualizar nota fiscal (Route::module)
      */
+    /**
+     * API: Atualizar nota fiscal (Route::module)
+     * 
+     * ✅ DDD: Controller apenas orquestra, validações no Use Case
+     */
     public function update(Request $request)
     {
         try {
@@ -348,70 +304,7 @@ class NotaFiscalController extends BaseApiController
             $notaFiscalId = (int) $request->route()->parameter('notaFiscal');
             $empresa = $this->getEmpresaAtivaOrFail();
             
-            Log::debug('NotaFiscalController::update - Iniciando', [
-                'processo_id' => $processoId,
-                'nota_fiscal_id' => $notaFiscalId,
-                'empresa_id' => $empresa->id,
-            ]);
-            
-            // Buscar modelos Eloquent diretamente (mais confiável)
-            $processo = $this->processoRepository->buscarModeloPorId($processoId);
-            if (!$processo) {
-                Log::warning('NotaFiscalController::update - Processo não encontrado', [
-                    'processo_id' => $processoId,
-                    'empresa_id' => $empresa->id,
-                ]);
-                return response()->json(['message' => 'Processo não encontrado'], 404);
-            }
-            
-            // Validar que o processo pertence à empresa
-            if ($processo->empresa_id !== $empresa->id) {
-                Log::warning('NotaFiscalController::update - Processo não pertence à empresa', [
-                    'processo_id' => $processoId,
-                    'processo_empresa_id' => $processo->empresa_id,
-                    'empresa_id' => $empresa->id,
-                ]);
-                return response()->json(['message' => 'Processo não encontrado'], 404);
-            }
-            
-            // Buscar nota fiscal diretamente pelo modelo
-            $notaFiscal = $this->notaFiscalRepository->buscarModeloPorId($notaFiscalId);
-            if (!$notaFiscal) {
-                Log::warning('NotaFiscalController::update - Nota fiscal não encontrada', [
-                    'nota_fiscal_id' => $notaFiscalId,
-                    'empresa_id' => $empresa->id,
-                ]);
-                return response()->json(['message' => 'Nota fiscal não encontrada'], 404);
-            }
-            
-            Log::debug('NotaFiscalController::update - Nota fiscal encontrada', [
-                'nota_fiscal_id' => $notaFiscal->id,
-                'nota_fiscal_processo_id' => $notaFiscal->processo_id,
-                'nota_fiscal_empresa_id' => $notaFiscal->empresa_id,
-                'processo_id' => $processoId,
-                'empresa_id' => $empresa->id,
-            ]);
-            
-            // Validar que a nota fiscal pertence ao processo e à empresa
-            if ($notaFiscal->processo_id !== $processoId) {
-                Log::warning('NotaFiscalController::update - Nota fiscal não pertence ao processo', [
-                    'nota_fiscal_id' => $notaFiscal->id,
-                    'nota_fiscal_processo_id' => $notaFiscal->processo_id,
-                    'processo_id' => $processoId,
-                ]);
-                return response()->json(['message' => 'Nota fiscal não pertence ao processo'], 404);
-            }
-            
-            if ($notaFiscal->empresa_id !== $empresa->id) {
-                Log::warning('NotaFiscalController::update - Nota fiscal não pertence à empresa', [
-                    'nota_fiscal_id' => $notaFiscal->id,
-                    'nota_fiscal_empresa_id' => $notaFiscal->empresa_id,
-                    'empresa_id' => $empresa->id,
-                ]);
-                return response()->json(['message' => 'Nota fiscal não encontrada'], 404);
-            }
-            
-            // Validar dados manualmente (mesmo padrão do store)
+            // Validar dados (Form Request - validação de formato)
             $rules = (new NotaFiscalCreateRequest())->rules();
             $validator = Validator::make($request->all(), $rules);
             
@@ -422,107 +315,56 @@ class NotaFiscalController extends BaseApiController
                 ], 422);
             }
             
-            return $this->updateWeb($request, $processo, $notaFiscal);
+            // Delegar para método Web (que usa Use Case - validação de regras de negócio)
+            return $this->updateWeb($request, $processoId, $notaFiscalId);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
         } catch (\Exception $e) {
-            Log::error('Erro ao buscar processo/nota fiscal para atualizar', [
+            Log::error('Erro ao atualizar nota fiscal', [
                 'processo_id' => $request->route()->parameter('processo'),
                 'nota_fiscal_id' => $request->route()->parameter('notaFiscal'),
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            return response()->json(['message' => 'Erro ao buscar processo ou nota fiscal: ' . $e->getMessage()], 500);
+            return $this->handleException($e, 'Erro ao atualizar nota fiscal');
         }
     }
 
     /**
      * API: Excluir nota fiscal (Route::module)
      */
+    /**
+     * API: Excluir nota fiscal (Route::module)
+     * 
+     * ✅ DDD: Controller apenas orquestra, validações no Use Case
+     */
     public function destroy(Request $request)
     {
         try {
             $processoId = (int) $request->route()->parameter('processo');
             $notaFiscalId = (int) $request->route()->parameter('notaFiscal');
-            $empresa = $this->getEmpresaAtivaOrFail();
             
-            Log::debug('NotaFiscalController::destroy - Iniciando', [
-                'processo_id' => $processoId,
-                'nota_fiscal_id' => $notaFiscalId,
-                'empresa_id' => $empresa->id,
-            ]);
-            
-            // Buscar modelos Eloquent diretamente (mais confiável)
-            $processo = $this->processoRepository->buscarModeloPorId($processoId);
-            if (!$processo) {
-                Log::warning('NotaFiscalController::destroy - Processo não encontrado', [
-                    'processo_id' => $processoId,
-                    'empresa_id' => $empresa->id,
-                ]);
-                return response()->json(['message' => 'Processo não encontrado'], 404);
-            }
-            
-            // Validar que o processo pertence à empresa
-            if ($processo->empresa_id !== $empresa->id) {
-                Log::warning('NotaFiscalController::destroy - Processo não pertence à empresa', [
-                    'processo_id' => $processoId,
-                    'processo_empresa_id' => $processo->empresa_id,
-                    'empresa_id' => $empresa->id,
-                ]);
-                return response()->json(['message' => 'Processo não encontrado'], 404);
-            }
-            
-            // Buscar nota fiscal diretamente pelo modelo
-            $notaFiscal = $this->notaFiscalRepository->buscarModeloPorId($notaFiscalId);
-            if (!$notaFiscal) {
-                Log::warning('NotaFiscalController::destroy - Nota fiscal não encontrada', [
-                    'nota_fiscal_id' => $notaFiscalId,
-                    'empresa_id' => $empresa->id,
-                ]);
-                return response()->json(['message' => 'Nota fiscal não encontrada'], 404);
-            }
-            
-            Log::debug('NotaFiscalController::destroy - Nota fiscal encontrada', [
-                'nota_fiscal_id' => $notaFiscal->id,
-                'nota_fiscal_processo_id' => $notaFiscal->processo_id,
-                'nota_fiscal_empresa_id' => $notaFiscal->empresa_id,
-                'processo_id' => $processoId,
-                'empresa_id' => $empresa->id,
-            ]);
-            
-            // Validar que a nota fiscal pertence ao processo e à empresa
-            if ($notaFiscal->processo_id !== $processoId) {
-                Log::warning('NotaFiscalController::destroy - Nota fiscal não pertence ao processo', [
-                    'nota_fiscal_id' => $notaFiscal->id,
-                    'nota_fiscal_processo_id' => $notaFiscal->processo_id,
-                    'processo_id' => $processoId,
-                ]);
-                return response()->json(['message' => 'Nota fiscal não pertence ao processo'], 404);
-            }
-            
-            if ($notaFiscal->empresa_id !== $empresa->id) {
-                Log::warning('NotaFiscalController::destroy - Nota fiscal não pertence à empresa', [
-                    'nota_fiscal_id' => $notaFiscal->id,
-                    'nota_fiscal_empresa_id' => $notaFiscal->empresa_id,
-                    'empresa_id' => $empresa->id,
-                ]);
-                return response()->json(['message' => 'Nota fiscal não encontrada'], 404);
-            }
-            
-            return $this->destroyWeb($processo, $notaFiscal);
+            // Delegar para método Web (que usa Use Case - validação de regras de negócio)
+            return $this->destroyWeb($processoId, $notaFiscalId);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
         } catch (\Exception $e) {
-            Log::error('Erro ao buscar processo/nota fiscal para deletar', [
+            Log::error('Erro ao excluir nota fiscal', [
                 'processo_id' => $request->route()->parameter('processo'),
                 'nota_fiscal_id' => $request->route()->parameter('notaFiscal'),
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            return response()->json(['message' => 'Erro ao buscar processo ou nota fiscal: ' . $e->getMessage()], 500);
+            return $this->handleException($e, 'Erro ao excluir nota fiscal');
         }
     }
 
     /**
      * Web: Atualizar nota fiscal
+     * 
+     * ✅ DDD: Não recebe modelos Eloquent, apenas IDs
      */
-    public function updateWeb(Request $request, Processo $processo, NotaFiscal $notaFiscal)
+    public function updateWeb(Request $request, int $processoId, int $notaFiscalId)
     {
         $empresa = $this->getEmpresaAtivaOrFail();
         
@@ -539,34 +381,58 @@ class NotaFiscalController extends BaseApiController
             }
             
             $data = $validator->validated();
-            $notaFiscal = $this->notaFiscalService->update($processo, $notaFiscal, $data, $request, $empresa->id);
-            return response()->json($notaFiscal);
+            
+            // Usar Use Case DDD (contém toda a lógica de negócio)
+            $dto = AtualizarNotaFiscalDTO::fromArray($data, $notaFiscalId);
+            $notaFiscalDomain = $this->atualizarNotaFiscalUseCase->executar($dto, $empresa->id);
+            
+            // Buscar modelo Eloquent para resposta usando repository
+            $notaFiscalModel = $this->notaFiscalRepository->buscarModeloPorId(
+                $notaFiscalDomain->id,
+                ['empenho', 'contrato', 'autorizacaoFornecimento', 'fornecedor', 'processo']
+            );
+            
+            if (!$notaFiscalModel) {
+                return response()->json(['message' => 'Nota fiscal não encontrada após atualização.'], 404);
+            }
+            
+            return response()->json([
+                'message' => 'Nota fiscal atualizada com sucesso',
+                'data' => $notaFiscalModel->toArray(),
+            ]);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 400);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'message' => 'Dados inválidos',
                 'errors' => $e->errors()
             ], 422);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 404);
+            return $this->handleException($e, 'Erro ao atualizar nota fiscal');
         }
     }
 
     /**
      * Web: Excluir nota fiscal
+     * 
+     * ✅ DDD: Usa Use Case, não Service
      */
-    public function destroyWeb(Processo $processo, NotaFiscal $notaFiscal)
+    public function destroyWeb(int $processoId, int $notaFiscalId)
     {
         $empresa = $this->getEmpresaAtivaOrFail();
         
         try {
-            $this->notaFiscalService->delete($processo, $notaFiscal, $empresa->id);
+            // Usar Use Case DDD (contém toda a lógica de negócio)
+            $this->excluirNotaFiscalUseCase->executar($notaFiscalId, $empresa->id);
             return response()->json(null, 204);
-        } catch (\Exception $e) {
+        } catch (\App\Domain\Exceptions\DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage()
             ], 404);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao excluir nota fiscal');
         }
     }
 }
