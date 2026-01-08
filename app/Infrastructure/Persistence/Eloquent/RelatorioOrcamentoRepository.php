@@ -24,15 +24,25 @@ class RelatorioOrcamentoRepository implements RelatorioOrcamentoRepositoryInterf
         return $query->with([
                 'fornecedor' => fn($q) => $q->withoutGlobalScopes(),
                 'processo' => fn($q) => $q->withoutGlobalScopes(),
+                'processoItem.processo' => fn($q) => $q->withoutGlobalScopes(),
                 'itens'
             ])
             ->get()
             ->map(function ($o) {
+                // Tentar obter o processo de múltiplas formas
+                $processoNumero = 'N/A';
+                if ($o->processo) {
+                    $processoNumero = $o->processo->numero_modalidade ?? $o->processo->identificador ?? 'N/A';
+                } elseif ($o->processoItem && $o->processoItem->processo) {
+                    $processoNumero = $o->processoItem->processo->numero_modalidade ?? $o->processoItem->processo->identificador ?? 'N/A';
+                }
+                
                 return [
                     'id' => $o->id,
-                    'data' => $o->created_at?->format('d/m/Y') ?? 'N/A',
+                    'data' => $o->criado_em?->format('d/m/Y') ?? $o->created_at?->format('d/m/Y') ?? 'N/A',
                     'fornecedor' => $o->fornecedor?->nome_fantasia ?? $o->fornecedor?->razao_social ?? 'N/A',
-                    'processo' => $o->processo?->numero ?? 'N/A',
+                    'processo' => $processoNumero,
+                    'processo_id' => $o->processo_id ?? $o->processoItem?->processo_id ?? null,
                     'valor_total' => $o->custo_total,
                     'status' => $o->fornecedor_escolhido ? 'escolhido' : 'pendente',
                     'total_itens' => $o->itens->count()
