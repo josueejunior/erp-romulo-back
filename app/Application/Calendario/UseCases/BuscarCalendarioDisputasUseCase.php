@@ -160,6 +160,14 @@ final class BuscarCalendarioDisputasUseCase
             ? Carbon::now()->diffInDays($processo->data_hora_sessao_publica, false) 
             : null;
 
+        // Converter horario_sessao_publica para string (pode ser Carbon ou string)
+        $horarioSessao = null;
+        if ($processo->horario_sessao_publica instanceof Carbon) {
+            $horarioSessao = $processo->horario_sessao_publica->format('H:i');
+        } elseif (is_string($processo->horario_sessao_publica)) {
+            $horarioSessao = $processo->horario_sessao_publica;
+        }
+
         return new CalendarioEventoDTO(
             id: $processo->id,
             identificador: $processo->identificador,
@@ -169,7 +177,7 @@ final class BuscarCalendarioDisputasUseCase
             uasg: $processo->orgao?->uasg,
             setor: $processo->setor?->nome,
             dataHoraSessao: $processo->data_hora_sessao_publica?->toIso8601String(),
-            horarioSessao: $processo->horario_sessao_publica,
+            horarioSessao: $horarioSessao,
             objetoResumido: $processo->objeto_resumido,
             linkEdital: $processo->link_edital,
             portal: $processo->portal,

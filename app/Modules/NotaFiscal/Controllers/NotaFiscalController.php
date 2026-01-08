@@ -115,7 +115,7 @@ class NotaFiscalController extends BaseApiController
         if (!$processoModel) {
             return response()->json(['message' => 'Processo não encontrado.'], 404);
         }
-        return $this->index($processoModel);
+        return $this->index($request);
     }
 
     /**
