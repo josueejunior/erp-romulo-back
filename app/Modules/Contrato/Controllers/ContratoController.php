@@ -20,7 +20,6 @@ use App\Domain\Exceptions\ContratoNaoEncontradoException;
 use App\Domain\Exceptions\ContratoPossuiEmpenhosException;
 use App\Domain\Exceptions\EntidadeNaoPertenceException;
 use App\Domain\Exceptions\NotFoundException;
-use App\Services\RedisService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\ValidationException;
@@ -388,9 +387,6 @@ class ContratoController extends BaseApiController
             // Por enquanto, usando Service diretamente
             $contrato = $this->contratoService->update($processo, $contrato, $request->all(), $request, $empresa->id);
             
-            // Invalidar cache de contratos após atualização
-            $this->invalidarCacheContratos($empresa->id);
-            
             // Buscar modelo Eloquent para incluir relacionamentos
             $contratoModel = $this->contratoRepository->buscarModeloPorId(
                 $contrato->id,
@@ -446,9 +442,6 @@ class ContratoController extends BaseApiController
             // Por enquanto, usando Service diretamente
             $this->contratoService->delete($processo, $contrato, $empresa->id);
             
-            // Invalidar cache de contratos após exclusão
-            $this->invalidarCacheContratos($empresa->id);
-            
             return response()->json(['message' => 'Contrato deletado com sucesso'], 204);
         } catch (ContratoNaoEncontradoException $e) {
             return response()->json(['message' => $e->getMessage()], 404);
@@ -460,34 +453,6 @@ class ContratoController extends BaseApiController
             // Fallback para mensagens de string (será removido quando Service usar Domain Exceptions)
             $statusCode = str_contains($e->getMessage(), 'empenhos vinculados') ? 403 : 404;
             return response()->json(['message' => $e->getMessage()], $statusCode);
-        }
-    }
-    
-    /**
-     * Invalida o cache de contratos para a empresa
-     */
-    private function invalidarCacheContratos(int $empresaId): void
-    {
-        try {
-            if (RedisService::isAvailable()) {
-                $tenantId = $this->getTenantId();
-                
-                if ($tenantId) {
-                    $pattern = "contratos:{$tenantId}:{$empresaId}:*";
-                    $deleted = RedisService::forgetByPattern($pattern);
-                    
-                    \Log::debug('ContratoController: Cache de contratos invalidado', [
-                        'empresa_id' => $empresaId,
-                        'tenant_id' => $tenantId,
-                        'pattern' => $pattern,
-                        'keys_deleted' => $deleted,
-                    ]);
-                }
-            }
-        } catch (\Exception $e) {
-            \Log::warning('ContratoController: Falha ao invalidar cache', [
-                'error' => $e->getMessage(),
-            ]);
         }
     }
 }

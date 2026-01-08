@@ -7,9 +7,6 @@ use App\Domain\Contrato\Queries\ContratoQuery;
 use App\Domain\Contrato\Queries\ContratoIndicadoresQuery;
 use App\Domain\Orgao\Repositories\OrgaoRepositoryInterface;
 use App\Domain\Exceptions\DomainException;
-use App\Services\RedisService;
-use App\Modules\Contrato\Models\Contrato as ContratoModel;
-use Illuminate\Support\Facades\Log;
 
 /**
  * Use Case para listar todos os contratos com filtros, indicadores e paginação
@@ -17,13 +14,10 @@ use Illuminate\Support\Facades\Log;
  * Responsabilidades:
  * - Aplicar filtros complexos
  * - Calcular indicadores
- * - Gerenciar cache
  * - Retornar estrutura padronizada
  */
 class ListarTodosContratosUseCase
 {
-    private const CACHE_TTL = 300; // 5 minutos
-
     public function __construct(
         private OrgaoRepositoryInterface $orgaoRepository,
     ) {}
@@ -36,7 +30,7 @@ class ListarTodosContratosUseCase
      * @param string $ordenacao Campo de ordenação
      * @param string $direcao Direção da ordenação (asc/desc)
      * @param int $perPage Itens por página
-     * @param mixed $tenantId ID do tenant (para cache)
+     * @param mixed $tenantId ID do tenant (não usado - mantido para compatibilidade)
      * @return array Dados paginados com indicadores
      */
     public function executar(
@@ -55,18 +49,6 @@ class ListarTodosContratosUseCase
             $orgao = $this->orgaoRepository->buscarPorId($filtroDTO->orgaoId);
             if (!$orgao || $orgao->empresaId !== $empresaId) {
                 throw new DomainException('Órgão não encontrado ou não pertence à empresa ativa.');
-            }
-        }
-
-        // Tentar obter do cache
-        if ($tenantId && RedisService::isAvailable()) {
-            $cacheKey = $this->getCacheKey($tenantId, $empresaId, $filtroDTO);
-            $cached = RedisService::get($cacheKey);
-            if ($cached !== null) {
-                Log::debug('ListarTodosContratosUseCase: dados obtidos do cache', [
-                    'empresa_id' => $empresaId,
-                ]);
-                return $cached;
             }
         }
 
@@ -101,7 +83,7 @@ class ListarTodosContratosUseCase
         // Mapear para arrays
         $items = $contratos->items();
 
-        $resultado = [
+        return [
             'data' => $items,
             'indicadores' => $indicadores,
             'pagination' => [
@@ -111,16 +93,7 @@ class ListarTodosContratosUseCase
                 'total' => $contratos->total(),
             ],
         ];
-
-        // Salvar no cache
-        if ($tenantId && RedisService::isAvailable()) {
-            $cacheKey = $this->getCacheKey($tenantId, $empresaId, $filtroDTO);
-            RedisService::set($cacheKey, $resultado, self::CACHE_TTL);
-        }
-
-        return $resultado;
     }
-
 
     /**
      * Retorna indicadores vazios
@@ -135,15 +108,6 @@ class ListarTodosContratosUseCase
             'saldo_restante' => 0,
             'margem_media' => 0,
         ];
-    }
-
-    /**
-     * Gera chave de cache
-     */
-    private function getCacheKey($tenantId, int $empresaId, ContratoFiltroDTO $filtros): string
-    {
-        $filtrosKey = md5(json_encode($filtros->toArray()));
-        return "contratos:{$tenantId}:{$empresaId}:{$filtrosKey}";
     }
 }
 

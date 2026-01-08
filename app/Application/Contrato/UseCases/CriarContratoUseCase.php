@@ -6,7 +6,6 @@ use App\Application\Contrato\DTOs\CriarContratoDTO;
 use App\Application\Shared\Traits\HasApplicationContext;
 use App\Domain\Contrato\Entities\Contrato;
 use App\Domain\Contrato\Repositories\ContratoRepositoryInterface;
-use App\Services\RedisService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use DomainException;
@@ -82,43 +81,7 @@ class CriarContratoUseCase
             numeroCte: $dto->numeroCte,
         );
 
-        $contratoCriado = $this->contratoRepository->criar($contrato);
-        
-        // Invalidar cache de contratos para esta empresa
-        $this->invalidarCacheContratos($empresaId);
-        
-        return $contratoCriado;
-    }
-    
-    /**
-     * Invalida o cache de contratos para a empresa
-     */
-    private function invalidarCacheContratos(int $empresaId): void
-    {
-        try {
-            if (RedisService::isAvailable()) {
-                // Obter tenant_id do contexto
-                $tenantId = tenancy()->tenant?->id;
-                
-                if ($tenantId) {
-                    // Usar padrão de chave para deletar todas as variações de cache
-                    $pattern = "contratos:{$tenantId}:{$empresaId}:*";
-                    $deleted = RedisService::forgetByPattern($pattern);
-                    
-                    Log::debug('CriarContratoUseCase: Cache de contratos invalidado', [
-                        'empresa_id' => $empresaId,
-                        'tenant_id' => $tenantId,
-                        'pattern' => $pattern,
-                        'keys_deleted' => $deleted,
-                    ]);
-                }
-            }
-        } catch (\Exception $e) {
-            // Não falhar a operação por erro de cache
-            Log::warning('CriarContratoUseCase: Falha ao invalidar cache', [
-                'error' => $e->getMessage(),
-            ]);
-        }
+        return $this->contratoRepository->criar($contrato);
     }
 }
 
