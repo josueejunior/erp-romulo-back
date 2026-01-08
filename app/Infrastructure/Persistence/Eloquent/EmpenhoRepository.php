@@ -6,6 +6,7 @@ use App\Domain\Empenho\Entities\Empenho;
 use App\Domain\Empenho\Repositories\EmpenhoRepositoryInterface;
 use App\Modules\Empenho\Models\Empenho as EmpenhoModel;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class EmpenhoRepository implements EmpenhoRepositoryInterface
@@ -65,10 +66,18 @@ class EmpenhoRepository implements EmpenhoRepositoryInterface
 
     public function buscarModeloPorId(int $id, array $with = []): ?EmpenhoModel
     {
-        $query = EmpenhoModel::query();
+        // Remover Global Scope para garantir controle explícito
+        $query = EmpenhoModel::withoutGlobalScope('empresa');
         
         if (!empty($with)) {
-            $query->with($with);
+            // Usar withoutGlobalScopes nos relacionamentos para evitar filtros indesejados
+            $eagerLoad = [];
+            foreach ($with as $relation) {
+                $eagerLoad[$relation] = function ($q) {
+                    $q->withoutGlobalScopes();
+                };
+            }
+            $query->with($eagerLoad);
         }
         
         return $query->find($id);
@@ -106,10 +115,51 @@ class EmpenhoRepository implements EmpenhoRepositoryInterface
         }
 
         // Carregar relacionamentos necessários
-        $query->with(['processo', 'contrato', 'autorizacaoFornecimento']);
+        // Usar withoutGlobalScopes nos relacionamentos para evitar filtros indesejados
+        $query->with([
+            'processo' => function ($q) {
+                $q->withoutGlobalScopes();
+            },
+            'contrato' => function ($q) {
+                $q->withoutGlobalScopes();
+            },
+            'autorizacaoFornecimento' => function ($q) {
+                $q->withoutGlobalScopes();
+            },
+        ]);
+
+        // Verificação direta no banco (para debug)
+        $directCount = DB::table('empenhos')
+            ->where('empresa_id', $filtros['empresa_id'] ?? 0)
+            ->where('processo_id', $filtros['processo_id'] ?? 0)
+            ->whereNull('excluido_em')
+            ->count();
+        
+        // Verificar quantos registros existem antes de paginar (para debug)
+        $countBeforePaginate = $query->count();
+        \Log::debug('EmpenhoRepository::buscarComFiltros() - Count antes de paginar', [
+            'count' => $countBeforePaginate,
+            'direct_db_count' => $directCount,
+            'sql' => $query->toSql(),
+            'bindings' => $query->getBindings(),
+            'filtros' => $filtros,
+        ]);
 
         $perPage = $filtros['per_page'] ?? 15;
-        $paginator = $query->orderBy('criado_em', 'desc')->paginate($perPage);
+        $page = $filtros['page'] ?? 1;
+        
+        // Usar paginate com page explícito
+        $paginator = $query->orderBy('criado_em', 'desc')->paginate($perPage, ['*'], 'page', $page);
+
+        // Log do resultado
+        \Log::debug('EmpenhoRepository::buscarComFiltros() - Resultado da paginação', [
+            'total' => $paginator->total(),
+            'count' => $paginator->count(),
+            'count_before_paginate' => $countBeforePaginate,
+            'current_page' => $paginator->currentPage(),
+            'per_page' => $paginator->perPage(),
+            'items_ids' => $paginator->getCollection()->pluck('id')->toArray(),
+        ]);
 
         $paginator->getCollection()->transform(function ($model) {
             return $this->toDomain($model);

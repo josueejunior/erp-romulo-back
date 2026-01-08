@@ -186,7 +186,16 @@ class EmpenhoController extends BaseApiController
             $filtros = [
                 'empresa_id' => $empresa->id,
                 'processo_id' => $processoId,
+                'per_page' => (int) ($request->get('per_page') ?? 15),
+                'page' => (int) ($request->get('page') ?? 1),
             ];
+            
+            // Log para debug antes de executar
+            \Log::debug('EmpenhoController::index - Filtros preparados', [
+                'processo_id' => $processoId,
+                'empresa_id' => $empresa->id,
+                'filtros' => $filtros,
+            ]);
             
             // Executar Use Case (única porta de entrada do domínio)
             $paginado = $this->listarEmpenhosUseCase->executar($filtros);
