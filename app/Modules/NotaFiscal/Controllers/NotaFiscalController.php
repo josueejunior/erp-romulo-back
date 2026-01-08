@@ -18,6 +18,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Controller para gerenciamento de Notas Fiscais
@@ -342,30 +343,57 @@ class NotaFiscalController extends BaseApiController
      */
     public function update(Request $request, $id)
     {
-        $processoId = $request->route()->parameter('processo');
-        
-        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
-        if (!$processoModel) {
-            return response()->json(['message' => 'Processo não encontrado.'], 404);
+        try {
+            $processoId = $request->route()->parameter('processo');
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Buscar modelos Eloquent diretamente (mais confiável)
+            $processo = $this->processoRepository->buscarModeloPorId($processoId);
+            if (!$processo) {
+                return response()->json(['message' => 'Processo não encontrado'], 404);
+            }
+            
+            // Validar que o processo pertence à empresa
+            if ($processo->empresa_id !== $empresa->id) {
+                return response()->json(['message' => 'Processo não encontrado'], 404);
+            }
+            
+            // Buscar nota fiscal diretamente pelo modelo
+            $notaFiscal = $this->notaFiscalRepository->buscarModeloPorId($id);
+            if (!$notaFiscal) {
+                return response()->json(['message' => 'Nota fiscal não encontrada'], 404);
+            }
+            
+            // Validar que a nota fiscal pertence ao processo e à empresa
+            if ($notaFiscal->processo_id !== (int) $processoId) {
+                return response()->json(['message' => 'Nota fiscal não pertence ao processo'], 404);
+            }
+            
+            if ($notaFiscal->empresa_id !== $empresa->id) {
+                return response()->json(['message' => 'Nota fiscal não encontrada'], 404);
+            }
+            
+            // Validar dados manualmente (mesmo padrão do store)
+            $rules = (new NotaFiscalCreateRequest())->rules();
+            $validator = Validator::make($request->all(), $rules);
+            
+            if ($validator->fails()) {
+                return response()->json([
+                    'message' => 'Dados inválidos',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+            
+            return $this->updateWeb($request, $processo, $notaFiscal);
+        } catch (\Exception $e) {
+            Log::error('Erro ao buscar processo/nota fiscal para atualizar', [
+                'processo_id' => $request->route()->parameter('processo'),
+                'nota_fiscal_id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json(['message' => 'Erro ao buscar processo ou nota fiscal: ' . $e->getMessage()], 500);
         }
-        
-        $notaFiscalModel = $this->notaFiscalRepository->buscarModeloPorId($id);
-        if (!$notaFiscalModel) {
-            return response()->json(['message' => 'Nota fiscal não encontrada.'], 404);
-        }
-        
-        // Validar dados manualmente (mesmo padrão do store)
-        $rules = (new NotaFiscalCreateRequest())->rules();
-        $validator = Validator::make($request->all(), $rules);
-        
-        if ($validator->fails()) {
-            return response()->json([
-                'message' => 'Dados inválidos',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-        
-        return $this->updateWeb($request, $processoModel, $notaFiscalModel);
     }
 
     /**
@@ -373,19 +401,46 @@ class NotaFiscalController extends BaseApiController
      */
     public function destroy(Request $request, $id)
     {
-        $processoId = $request->route()->parameter('processo');
-        
-        $processoModel = $this->processoRepository->buscarModeloPorId($processoId);
-        if (!$processoModel) {
-            return response()->json(['message' => 'Processo não encontrado.'], 404);
+        try {
+            $processoId = $request->route()->parameter('processo');
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Buscar modelos Eloquent diretamente (mais confiável)
+            $processo = $this->processoRepository->buscarModeloPorId($processoId);
+            if (!$processo) {
+                return response()->json(['message' => 'Processo não encontrado'], 404);
+            }
+            
+            // Validar que o processo pertence à empresa
+            if ($processo->empresa_id !== $empresa->id) {
+                return response()->json(['message' => 'Processo não encontrado'], 404);
+            }
+            
+            // Buscar nota fiscal diretamente pelo modelo
+            $notaFiscal = $this->notaFiscalRepository->buscarModeloPorId($id);
+            if (!$notaFiscal) {
+                return response()->json(['message' => 'Nota fiscal não encontrada'], 404);
+            }
+            
+            // Validar que a nota fiscal pertence ao processo e à empresa
+            if ($notaFiscal->processo_id !== (int) $processoId) {
+                return response()->json(['message' => 'Nota fiscal não pertence ao processo'], 404);
+            }
+            
+            if ($notaFiscal->empresa_id !== $empresa->id) {
+                return response()->json(['message' => 'Nota fiscal não encontrada'], 404);
+            }
+            
+            return $this->destroyWeb($processo, $notaFiscal);
+        } catch (\Exception $e) {
+            Log::error('Erro ao buscar processo/nota fiscal para deletar', [
+                'processo_id' => $request->route()->parameter('processo'),
+                'nota_fiscal_id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json(['message' => 'Erro ao buscar processo ou nota fiscal: ' . $e->getMessage()], 500);
         }
-        
-        $notaFiscalModel = $this->notaFiscalRepository->buscarModeloPorId($id);
-        if (!$notaFiscalModel) {
-            return response()->json(['message' => 'Nota fiscal não encontrada.'], 404);
-        }
-        
-        return $this->destroyWeb($processoModel, $notaFiscalModel);
     }
 
     /**
