@@ -182,9 +182,17 @@ class EmpenhoController extends BaseApiController
             $processoId = (int) $request->route()->parameter('processo');
             $empresa = $this->getEmpresaAtivaOrFail();
             
-            // Preparar filtros
+            // Validar se o processo pertence à empresa (segurança)
+            $processo = $this->processoRepository->buscarPorId($processoId);
+            if (!$processo || $processo->empresaId !== $empresa->id) {
+                return response()->json([
+                    'message' => 'Processo não encontrado ou não pertence à empresa ativa.',
+                ], 404);
+            }
+            
+            // Preparar filtros - NÃO filtrar por empresa_id quando buscar por processo_id
+            // A validação acima já garante que o processo pertence à empresa
             $filtros = [
-                'empresa_id' => $empresa->id,
                 'processo_id' => $processoId,
                 'per_page' => (int) ($request->get('per_page') ?? 15),
                 'page' => (int) ($request->get('page') ?? 1),
@@ -194,6 +202,7 @@ class EmpenhoController extends BaseApiController
             \Log::debug('EmpenhoController::index - Filtros preparados', [
                 'processo_id' => $processoId,
                 'empresa_id' => $empresa->id,
+                'processo_empresa_id' => $processo->empresaId,
                 'filtros' => $filtros,
             ]);
             

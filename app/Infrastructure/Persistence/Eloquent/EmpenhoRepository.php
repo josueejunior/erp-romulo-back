@@ -88,18 +88,19 @@ class EmpenhoRepository implements EmpenhoRepositoryInterface
         // Remover Global Scope para garantir controle explícito do filtro de empresa
         $query = EmpenhoModel::withoutGlobalScope('empresa');
 
-        // Sempre filtrar por empresa_id se fornecido (obrigatório para segurança)
-        if (isset($filtros['empresa_id'])) {
+        // Se houver processo_id, não filtrar por empresa_id (a validação é feita no Controller)
+        // Se não houver processo_id, filtrar por empresa_id para segurança
+        if (isset($filtros['processo_id'])) {
+            // Buscar apenas por processo_id (validação de empresa feita no Controller)
+            $query->where('processo_id', $filtros['processo_id']);
+        } elseif (isset($filtros['empresa_id'])) {
+            // Se não houver processo_id, filtrar por empresa_id (obrigatório para segurança)
             $query->where('empresa_id', $filtros['empresa_id']);
         } else {
-            // Se não fornecido, o Global Scope pode estar aplicando, mas é melhor ser explícito
-            \Log::warning('EmpenhoRepository::buscarComFiltros() chamado sem empresa_id', [
+            // Se não fornecido nem processo_id nem empresa_id, logar warning
+            \Log::warning('EmpenhoRepository::buscarComFiltros() chamado sem empresa_id nem processo_id', [
                 'filtros' => $filtros,
             ]);
-        }
-
-        if (isset($filtros['processo_id'])) {
-            $query->where('processo_id', $filtros['processo_id']);
         }
 
         if (isset($filtros['contrato_id'])) {
@@ -128,18 +129,46 @@ class EmpenhoRepository implements EmpenhoRepositoryInterface
             },
         ]);
 
-        // Verificação direta no banco (para debug)
+        // Verificações diretas no banco (para debug)
         $directCount = DB::table('empenhos')
             ->where('empresa_id', $filtros['empresa_id'] ?? 0)
             ->where('processo_id', $filtros['processo_id'] ?? 0)
             ->whereNull('excluido_em')
             ->count();
         
+        // Verificar se há empenhos para esse processo (sem filtro de empresa)
+        $countPorProcesso = DB::table('empenhos')
+            ->where('processo_id', $filtros['processo_id'] ?? 0)
+            ->whereNull('excluido_em')
+            ->count();
+        
+        // Verificar se há empenhos para essa empresa (sem filtro de processo)
+        $countPorEmpresa = DB::table('empenhos')
+            ->where('empresa_id', $filtros['empresa_id'] ?? 0)
+            ->whereNull('excluido_em')
+            ->count();
+        
+        // Verificar total de empenhos (sem filtros)
+        $totalEmpenhos = DB::table('empenhos')
+            ->whereNull('excluido_em')
+            ->count();
+        
+        // Listar alguns empenhos para debug
+        $sampleEmpenhos = DB::table('empenhos')
+            ->whereNull('excluido_em')
+            ->select('id', 'empresa_id', 'processo_id', 'numero', 'excluido_em')
+            ->limit(10)
+            ->get();
+        
         // Verificar quantos registros existem antes de paginar (para debug)
         $countBeforePaginate = $query->count();
         \Log::debug('EmpenhoRepository::buscarComFiltros() - Count antes de paginar', [
             'count' => $countBeforePaginate,
             'direct_db_count' => $directCount,
+            'count_por_processo' => $countPorProcesso,
+            'count_por_empresa' => $countPorEmpresa,
+            'total_empenhos' => $totalEmpenhos,
+            'sample_empenhos' => $sampleEmpenhos->toArray(),
             'sql' => $query->toSql(),
             'bindings' => $query->getBindings(),
             'filtros' => $filtros,
