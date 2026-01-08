@@ -7,6 +7,7 @@ use App\Application\Tenant\UseCases\CriarTenantUseCase;
 use App\Application\Tenant\DTOs\CriarTenantDTO;
 use App\Application\Assinatura\UseCases\CriarAssinaturaUseCase;
 use App\Application\Assinatura\DTOs\CriarAssinaturaDTO;
+use App\Application\Afiliado\UseCases\ValidarCupomAfiliadoUseCase;
 use App\Domain\Exceptions\DomainException;
 use App\Services\CnpjConsultaService;
 use App\Modules\Auth\Models\User;
@@ -36,6 +37,7 @@ class CadastroPublicoController extends Controller
         private readonly CriarTenantUseCase $criarTenantUseCase,
         private readonly CriarAssinaturaUseCase $criarAssinaturaUseCase,
         private readonly CnpjConsultaService $cnpjConsultaService,
+        private readonly ValidarCupomAfiliadoUseCase $validarCupomAfiliadoUseCase,
     ) {}
 
     /**
@@ -79,7 +81,12 @@ class CadastroPublicoController extends Controller
             // envolve criar um novo banco de dados (operação DDL)
             $tenantResult = $this->createTenant($validated);
             
-            // 2. Criar assinatura
+            // 2. Registrar afiliado na empresa se cupom foi usado
+            if (!empty($validated['cupom_codigo']) && !empty($validated['afiliado_id'])) {
+                $this->registrarAfiliadoNaEmpresa($tenantResult['empresa'], $validated);
+            }
+            
+            // 3. Criar assinatura
             $assinaturaResult = $this->createAssinatura(
                 $tenantResult['admin_user'],
                 $tenantResult['tenant'],
@@ -171,6 +178,11 @@ class CadastroPublicoController extends Controller
             'admin_name' => 'required|string|max:255',
             'admin_email' => 'required|email|max:255',
             'admin_password' => 'required|string|min:8',
+            
+            // Cupom de afiliado (opcional)
+            'cupom_codigo' => 'nullable|string|max:50',
+            'afiliado_id' => 'nullable|integer|exists:afiliados,id',
+            'desconto_afiliado' => 'nullable|numeric|min:0|max:100',
         ]);
     }
 
@@ -228,6 +240,38 @@ class CadastroPublicoController extends Controller
     }
 
     /**
+     * Registrar afiliado na empresa
+     */
+    private function registrarAfiliadoNaEmpresa($empresa, array $validated): void
+    {
+        try {
+            // Atualizar empresa com dados do afiliado
+            $empresa->afiliado_id = $validated['afiliado_id'];
+            $empresa->afiliado_codigo = $validated['cupom_codigo'];
+            $empresa->afiliado_desconto_aplicado = $validated['desconto_afiliado'] ?? 0;
+            $empresa->afiliado_aplicado_em = Carbon::now();
+            $empresa->save();
+
+            // Registrar indicação na tabela central (afiliado_indicacoes)
+            // Isso precisa ser feito no contexto central (não no tenant)
+            // Por enquanto, apenas logamos - a indicação será registrada quando o pagamento for confirmado
+            Log::info('Afiliado registrado na empresa durante cadastro público', [
+                'empresa_id' => $empresa->id,
+                'afiliado_id' => $validated['afiliado_id'],
+                'cupom_codigo' => $validated['cupom_codigo'],
+                'desconto' => $validated['desconto_afiliado'] ?? 0,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Erro ao registrar afiliado na empresa', [
+                'error' => $e->getMessage(),
+                'empresa_id' => $empresa->id ?? null,
+                'afiliado_id' => $validated['afiliado_id'] ?? null,
+            ]);
+            // Não lança exceção - apenas loga o erro para não bloquear o cadastro
+        }
+    }
+
+    /**
      * Criar assinatura para o usuário
      * 
      * @return array{assinatura: \App\Domain\Assinatura\Entities\Assinatura, plano: \App\Modules\Assinatura\Models\Plano, data_fim: \Carbon\Carbon}
@@ -247,12 +291,58 @@ class CadastroPublicoController extends Controller
             default => $dataInicio->copy()->addMonth(),
         };
         
-        // Calcular valor
-        $valorPago = match (true) {
+        // Calcular valor original
+        $valorOriginal = match (true) {
             $isPlanoGratuito => 0,
             $periodo === 'anual' && $plano->preco_anual => $plano->preco_anual,
             default => $plano->preco_mensal,
         };
+
+        // Aplicar desconto de afiliado se fornecido
+        $valorPago = $valorOriginal;
+        $observacoes = $isPlanoGratuito 
+            ? 'Plano gratuito - teste de 3 dias' 
+            : 'Cadastro público - pagamento pendente';
+
+        if (!empty($validated['cupom_codigo']) && !empty($validated['afiliado_id']) && $valorOriginal > 0) {
+            try {
+                // Validar cupom novamente para garantir que ainda é válido
+                $cupomInfo = $this->validarCupomAfiliadoUseCase->calcularDesconto(
+                    $validated['cupom_codigo'],
+                    $valorOriginal
+                );
+
+                if ($cupomInfo['valido'] && $cupomInfo['afiliado_id'] == $validated['afiliado_id']) {
+                    $valorPago = $cupomInfo['valor_final'];
+                    $desconto = $cupomInfo['valor_desconto'];
+                    $observacoes .= sprintf(
+                        ' | Cupom %s aplicado: %s%% de desconto (R$ %.2f) | Afiliado ID: %d',
+                        $cupomInfo['codigo'],
+                        $cupomInfo['percentual_desconto'],
+                        $desconto,
+                        $cupomInfo['afiliado_id']
+                    );
+
+                    // Registrar indicação do afiliado na empresa
+                    // Isso será feito quando o tenant/empresa for criado
+                    // Por enquanto, apenas logamos
+                    Log::info('Cupom de afiliado aplicado no cadastro público', [
+                        'afiliado_id' => $cupomInfo['afiliado_id'],
+                        'tenant_id' => $tenant->id,
+                        'cupom' => $cupomInfo['codigo'],
+                        'desconto' => $desconto,
+                        'valor_original' => $valorOriginal,
+                        'valor_final' => $valorPago,
+                    ]);
+                }
+            } catch (\Exception $e) {
+                Log::warning('Erro ao aplicar cupom de afiliado no cadastro público', [
+                    'error' => $e->getMessage(),
+                    'cupom_codigo' => $validated['cupom_codigo'] ?? null,
+                ]);
+                // Continua sem desconto se houver erro na validação
+            }
+        }
 
         $assinaturaDTO = new CriarAssinaturaDTO(
             userId: $adminUser->id,
@@ -264,9 +354,7 @@ class CadastroPublicoController extends Controller
             metodoPagamento: $isPlanoGratuito ? 'gratuito' : 'pendente',
             transacaoId: null,
             diasGracePeriod: $isPlanoGratuito ? 0 : 7,
-            observacoes: $isPlanoGratuito 
-                ? 'Plano gratuito - teste de 3 dias' 
-                : 'Cadastro público - pagamento pendente',
+            observacoes: $observacoes,
             tenantId: $tenant->id,
         );
 
