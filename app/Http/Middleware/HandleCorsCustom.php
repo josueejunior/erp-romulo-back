@@ -52,7 +52,12 @@ class HandleCorsCustom
         }
 
         // SEMPRE adicionar headers CORS na resposta
-        return $response->withHeaders($this->headers($request));
+        // Usar headers->set() para compatibilidade com StreamedResponse
+        foreach ($this->headers($request) as $key => $value) {
+            $response->headers->set($key, $value);
+        }
+        
+        return $response;
     }
 
     /**
