@@ -82,20 +82,22 @@ class NotificationService
                 continue;
             }
 
-            $diasRestantes = $hoje->diffInDays($processo->dataHoraSessaoPublica, false);
+            // Usar inteiro para dias
+            $diasRestantes = (int) $hoje->diffInDays($processo->dataHoraSessaoPublica, false);
             
             if ($diasRestantes < 0) {
                 continue; // Já passou
             }
 
             $prioridade = $diasRestantes <= 1 ? 'alta' : ($diasRestantes <= 3 ? 'media' : 'baixa');
+            $textoTempo = $diasRestantes === 0 ? 'hoje' : ($diasRestantes === 1 ? '1 dia' : "{$diasRestantes} dias");
             
             $notificacoes[] = [
                 'id' => 'processo_' . $processo->id . '_sessao',
                 'tipo' => 'processo',
                 'categoria' => 'sessao_publica',
                 'titulo' => 'Sessão Pública Próxima',
-                'mensagem' => "Processo {$processo->numeroModalidade} tem sessão pública em " . ($diasRestantes === 0 ? 'hoje' : "{$diasRestantes} dia(s)"),
+                'mensagem' => "Processo {$processo->numeroModalidade} tem sessão pública em {$textoTempo}",
                 'prioridade' => $prioridade,
                 'data' => $processo->dataHoraSessaoPublica->toDateTimeString(),
                 'link' => "/processos/{$processo->id}",
@@ -162,16 +164,20 @@ class NotificationService
                 continue;
             }
 
-            $diasRestantes = $hoje->diffInDays($documento->dataValidade, false);
+            // Usar inteiro para dias (sem decimais)
+            $diasRestantes = (int) $hoje->diffInDays($documento->dataValidade, false);
             
             if ($diasRestantes < 0) {
                 // Documento vencido
+                $diasVencido = abs($diasRestantes);
+                $textoTempo = $diasVencido === 1 ? '1 dia' : "{$diasVencido} dias";
+                
                 $notificacoes[] = [
                     'id' => 'documento_' . $documento->id . '_vencido',
                     'tipo' => 'documento',
                     'categoria' => 'vencido',
                     'titulo' => 'Documento Vencido',
-                    'mensagem' => "Documento {$documento->tipo} ({$documento->numero}) está vencido há " . abs($diasRestantes) . " dia(s)",
+                    'mensagem' => "Documento {$documento->tipo} ({$documento->numero}) está vencido há {$textoTempo}",
                     'prioridade' => 'alta',
                     'data' => $documento->dataValidade->toDateTimeString(),
                     'link' => "/documentos-habilitacao?vencendo=1",
@@ -180,13 +186,14 @@ class NotificationService
                 ];
             } else {
                 $prioridade = $diasRestantes <= 3 ? 'alta' : 'media';
+                $textoTempo = $diasRestantes === 1 ? '1 dia' : "{$diasRestantes} dias";
                 
                 $notificacoes[] = [
                     'id' => 'documento_' . $documento->id . '_vencendo',
                     'tipo' => 'documento',
                     'categoria' => 'vencendo',
                     'titulo' => 'Documento Vencendo',
-                    'mensagem' => "Documento {$documento->tipo} ({$documento->numero}) vence em {$diasRestantes} dia(s)",
+                    'mensagem' => "Documento {$documento->tipo} ({$documento->numero}) vence em {$textoTempo}",
                     'prioridade' => $prioridade,
                     'data' => $documento->dataValidade->toDateTimeString(),
                     'link' => "/documentos-habilitacao?vencendo=1",
@@ -209,14 +216,16 @@ class NotificationService
                 continue;
             }
 
-            $diasRestantes = $hoje->diffInDays($documento->dataValidade, false);
+            // Usar inteiro para dias
+            $diasRestantes = (int) $hoje->diffInDays($documento->dataValidade, false);
+            $textoTempo = $diasRestantes === 1 ? '1 dia' : "{$diasRestantes} dias";
             
             $notificacoes[] = [
                 'id' => 'documento_' . $documento->id . '_aviso',
                 'tipo' => 'documento',
                 'categoria' => 'aviso',
                 'titulo' => 'Documento Vencendo em Breve',
-                'mensagem' => "Documento {$documento->tipo} ({$documento->numero}) vence em {$diasRestantes} dia(s)",
+                'mensagem' => "Documento {$documento->tipo} ({$documento->numero}) vence em {$textoTempo}",
                 'prioridade' => 'baixa',
                 'data' => $documento->dataValidade->toDateTimeString(),
                 'link' => "/documentos-habilitacao",
@@ -270,16 +279,19 @@ class NotificationService
             }
 
             $hoje = Carbon::now();
-            $diasRestantes = $hoje->diffInDays($assinatura->dataFim, false);
+            // Usar inteiro para dias
+            $diasRestantes = (int) $hoje->diffInDays($assinatura->dataFim, false);
 
             if ($diasRestantes < 0) {
                 // Assinatura expirada
+                $diasExpirado = abs($diasRestantes);
+                $textoTempo = $diasExpirado === 1 ? '1 dia' : "{$diasExpirado} dias";
                 $notificacoes[] = [
                     'id' => 'assinatura_expirada',
                     'tipo' => 'assinatura',
                     'categoria' => 'expirada',
                     'titulo' => 'Assinatura Expirada',
-                    'mensagem' => 'Sua assinatura expirou há ' . abs($diasRestantes) . ' dia(s). Renove para continuar usando o sistema.',
+                    'mensagem' => "Sua assinatura expirou há {$textoTempo}. Renove para continuar usando o sistema.",
                     'prioridade' => 'alta',
                     'data' => $assinatura->dataFim->toDateTimeString(),
                     'link' => '/planos',
@@ -287,12 +299,13 @@ class NotificationService
                 ];
             } elseif ($diasRestantes <= 7) {
                 // Assinatura vencendo em até 7 dias
+                $textoTempo = $diasRestantes === 1 ? '1 dia' : "{$diasRestantes} dias";
                 $notificacoes[] = [
                     'id' => 'assinatura_vencendo',
                     'tipo' => 'assinatura',
                     'categoria' => 'vencendo',
                     'titulo' => 'Assinatura Vencendo',
-                    'mensagem' => "Sua assinatura vence em {$diasRestantes} dia(s). Renove para evitar interrupções.",
+                    'mensagem' => "Sua assinatura vence em {$textoTempo}. Renove para evitar interrupções.",
                     'prioridade' => $diasRestantes <= 3 ? 'alta' : 'media',
                     'data' => $assinatura->dataFim->toDateTimeString(),
                     'link' => '/planos',
@@ -300,12 +313,13 @@ class NotificationService
                 ];
             } elseif ($diasRestantes <= 30) {
                 // Assinatura vencendo em até 30 dias
+                $textoTempo = $diasRestantes === 1 ? '1 dia' : "{$diasRestantes} dias";
                 $notificacoes[] = [
                     'id' => 'assinatura_aviso',
                     'tipo' => 'assinatura',
                     'categoria' => 'aviso',
                     'titulo' => 'Assinatura Vencendo em Breve',
-                    'mensagem' => "Sua assinatura vence em {$diasRestantes} dia(s). Considere renovar.",
+                    'mensagem' => "Sua assinatura vence em {$textoTempo}. Considere renovar.",
                     'prioridade' => 'baixa',
                     'data' => $assinatura->dataFim->toDateTimeString(),
                     'link' => '/planos',

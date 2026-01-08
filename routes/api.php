@@ -128,6 +128,8 @@ Route::prefix('v1')->group(function () {
         
         // Notificações (não precisa de assinatura ativa)
         Route::get('/notifications', [\App\Modules\Notification\Controllers\NotificationController::class, 'index']);
+        Route::patch('/notifications/{id}/read', [\App\Modules\Notification\Controllers\NotificationController::class, 'markAsRead']);
+        Route::post('/notifications/read-all', [\App\Modules\Notification\Controllers\NotificationController::class, 'markAllAsRead']);
         
         // Rotas que PRECISAM de assinatura ativa
         Route::middleware([\App\Http\Middleware\CheckSubscription::class])->group(function () {
