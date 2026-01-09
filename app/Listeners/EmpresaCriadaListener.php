@@ -64,11 +64,33 @@ class EmpresaCriadaListener
                 return;
             }
 
+            // Verificar configuração de email antes de enviar
+            $mailDriver = config('mail.default');
+            $mailHost = config('mail.mailers.smtp.host');
+            $mailPort = config('mail.mailers.smtp.port');
+            
             Log::info('EmpresaCriadaListener - Enviando email', [
                 'tenant_id' => $event->tenantId,
                 'email_destino' => $emailDestino,
-                'mail_driver' => config('mail.default'),
+                'mail_driver' => $mailDriver,
+                'mail_host' => $mailHost,
+                'mail_port' => $mailPort,
+                'mail_username' => config('mail.mailers.smtp.username'),
             ]);
+
+            // Validar configuração SMTP
+            if ($mailDriver === 'smtp') {
+                if (empty($mailHost) || $mailHost === 'mailpit' || $mailHost === 'localhost') {
+                    Log::warning('EmpresaCriadaListener - Configuração SMTP inválida ou de desenvolvimento', [
+                        'mail_host' => $mailHost,
+                        'sugestao' => 'Verifique as variáveis MAIL_HOST, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD no .env',
+                    ]);
+                    throw new \RuntimeException(
+                        'Configuração de email inválida. Verifique MAIL_HOST no arquivo .env. ' .
+                        'Host atual: ' . ($mailHost ?: 'não definido')
+                    );
+                }
+            }
 
             // Enviar email
             Mail::to($emailDestino)->send(new EmpresaCriadaEmail($tenantData, $empresaData));
