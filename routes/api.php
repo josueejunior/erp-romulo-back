@@ -80,6 +80,10 @@ Route::prefix('v1')->group(function () {
     Route::get('/cadastro-publico/consultar-cnpj/{cnpj}', [\App\Http\Controllers\Public\CadastroPublicoController::class, 'consultarCnpj'])
         ->middleware(['throttle:10,1']); // 10 consultas por minuto
 
+    // Cadastro público de afiliados (sem autenticação)
+    Route::post('/afiliados/cadastro-publico', [\App\Http\Controllers\Public\CadastroAfiliadoController::class, 'store'])
+        ->middleware(['throttle:5,1', 'throttle:10,60']); // 5/min, 10/hora
+
     // 🔥 NOVA ARQUITETURA: Pipeline previsível e testável
     // 
     // CAMADA 3: AuthenticateJWT - Valida JWT e define user
