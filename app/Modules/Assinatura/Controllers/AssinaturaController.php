@@ -98,28 +98,64 @@ class AssinaturaController extends BaseApiController
                 ], 200);
             }
 
-            \Log::info('AssinaturaController@atual - Validando assinatura do usuário', [
+            // 🔥 CRÍTICO: Verificar se usuário tem empresa ativa
+            if (!$user->empresa_ativa_id) {
+                \Log::warning('AssinaturaController::atual() - Usuário não tem empresa ativa', [
+                    'user_id' => $user->id,
+                ]);
+                
+                return response()->json([
+                    'data' => null,
+                    'message' => 'Nenhuma empresa ativa encontrada. Selecione uma empresa para ver a assinatura.',
+                    'code' => 'NO_ACTIVE_COMPANY'
+                ], 200);
+            }
+
+            \Log::info('AssinaturaController@atual - Buscando assinatura da empresa', [
                 'user_id' => $user->id,
                 'empresa_ativa_id' => $user->empresa_ativa_id,
                 'tenant_id' => $tenant->id,
             ]);
             
-            // 🔥 NOVO: Buscar assinatura do USUÁRIO, não do tenant
-            // Tentar buscar assinatura, mas não lançar erro se não encontrar
+            // 🔥 CORRIGIDO: Buscar assinatura da EMPRESA ATIVA do usuário, não do usuário
+            // A assinatura pertence à empresa, não ao usuário
             try {
-                $assinatura = $this->buscarAssinaturaAtualUseCase->executar($user->id);
+                $assinatura = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($user->empresa_ativa_id);
+                
+                if (!$assinatura) {
+                    \Log::info('AssinaturaController@atual - Nenhuma assinatura encontrada para a empresa', [
+                        'empresa_ativa_id' => $user->empresa_ativa_id,
+                    ]);
+                    
+                    return response()->json([
+                        'data' => null,
+                        'message' => 'Nenhuma assinatura encontrada para esta empresa',
+                        'code' => 'NO_SUBSCRIPTION'
+                    ], 200);
+                }
                 
                 // Transformar entidade do domínio em DTO de resposta
                 $responseDTO = $this->assinaturaResource->toResponse($assinatura);
+
+                \Log::info('AssinaturaController@atual - Assinatura encontrada', [
+                    'assinatura_id' => $assinatura->id,
+                    'empresa_id' => $assinatura->empresaId,
+                    'status' => $assinatura->status,
+                ]);
 
                 return response()->json([
                     'data' => $responseDTO->toArray()
                 ]);
             } catch (\App\Domain\Exceptions\NotFoundException $e) {
                 // Não há assinatura - retornar null para que o frontend possa tratar
+                \Log::info('AssinaturaController@atual - NotFoundException capturada', [
+                    'empresa_ativa_id' => $user->empresa_ativa_id,
+                    'message' => $e->getMessage(),
+                ]);
+                
                 return response()->json([
                     'data' => null,
-                    'message' => 'Nenhuma assinatura encontrada',
+                    'message' => 'Nenhuma assinatura encontrada para esta empresa',
                     'code' => 'NO_SUBSCRIPTION'
                 ], 200);
             }
@@ -178,13 +214,33 @@ class AssinaturaController extends BaseApiController
                 ], 200);
             }
             
+            // 🔥 CRÍTICO: Verificar se usuário tem empresa ativa
+            if (!$user->empresa_ativa_id) {
+                \Log::warning('AssinaturaController::status() - Usuário não tem empresa ativa', [
+                    'user_id' => $user->id,
+                ]);
+                
+                return response()->json([
+                    'data' => [
+                        'status' => null,
+                        'limite_processos' => null,
+                        'limite_usuarios' => null,
+                        'limite_armazenamento_mb' => null,
+                        'processos_utilizados' => 0,
+                        'usuarios_utilizados' => 0,
+                        'mensagem' => 'Nenhuma empresa ativa encontrada. Selecione uma empresa para ver a assinatura.',
+                        'code' => 'NO_ACTIVE_COMPANY'
+                    ]
+                ], 200);
+            }
+
             // Obter empresa automaticamente (middleware já inicializou baseado no X-Empresa-ID)
             $empresa = $this->getEmpresaAtivaOrFail();
             
-            // 🔥 NOVO: Buscar status da assinatura do USUÁRIO, não do tenant
-            // Tentar buscar status, mas não lançar erro se não encontrar assinatura
+            // 🔥 CORRIGIDO: Buscar status da assinatura da EMPRESA ATIVA, não do usuário
+            // A assinatura pertence à empresa, não ao usuário
             try {
-                $statusData = $this->obterStatusAssinaturaUseCase->executar($user->id, $empresa->id);
+                $statusData = $this->obterStatusAssinaturaUseCase->executar($user->empresa_ativa_id, $empresa->id);
 
                 return response()->json([
                     'data' => $statusData

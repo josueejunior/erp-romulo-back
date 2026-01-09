@@ -18,19 +18,20 @@ class ObterStatusAssinaturaUseCase
     /**
      * Executar o caso de uso
      * 
-     * 🔥 NOVO: Assinatura pertence ao usuário, não ao tenant
+     * 🔥 CORRIGIDO: Assinatura pertence à empresa, não ao usuário
      * 
-     * @param int $userId ID do usuário
-     * @param int $empresaId ID da empresa ativa (para contar usuários)
+     * @param int $empresaId ID da empresa ativa (para buscar assinatura)
+     * @param int $empresaIdParaContagem ID da empresa para contar usuários (geralmente o mesmo)
      * @return array Dados do status da assinatura
      * @throws NotFoundException Se a assinatura não for encontrada
      */
-    public function executar(int $userId, int $empresaId): array
+    public function executar(int $empresaId, int $empresaIdParaContagem): array
     {
-        $assinatura = $this->assinaturaRepository->buscarAssinaturaAtualPorUsuario($userId);
+        // 🔥 CORRIGIDO: Buscar assinatura pela empresa, não pelo usuário
+        $assinatura = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($empresaId);
 
         if (!$assinatura) {
-            throw new NotFoundException("Nenhuma assinatura encontrada para este usuário.");
+            throw new NotFoundException("Nenhuma assinatura encontrada para esta empresa.");
         }
 
         // Buscar modelo para acessar relacionamento com plano
@@ -45,8 +46,8 @@ class ObterStatusAssinaturaUseCase
         $processosUtilizados = \App\Modules\Processo\Models\Processo::count();
 
         // Contar usuários utilizados (no contexto da empresa)
-        $usuariosUtilizados = \App\Modules\Auth\Models\User::whereHas('empresas', function($query) use ($empresaId) {
-            $query->where('empresas.id', $empresaId);
+        $usuariosUtilizados = \App\Modules\Auth\Models\User::whereHas('empresas', function($query) use ($empresaIdParaContagem) {
+            $query->where('empresas.id', $empresaIdParaContagem);
         })->count();
 
         return [
