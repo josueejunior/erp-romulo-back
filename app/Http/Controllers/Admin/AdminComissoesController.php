@@ -5,48 +5,44 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\AfiliadoComissaoRecorrente;
-use App\Models\AfiliadoPagamentoComissao;
-use App\Modules\Afiliado\Models\Afiliado;
+use App\Application\Afiliado\UseCases\ListarComissoesAdminUseCase;
+use App\Application\Afiliado\UseCases\MarcarComissaoComoPagaUseCase;
+use App\Application\Afiliado\UseCases\CriarPagamentoComissaoUseCase;
+use App\Application\Afiliado\UseCases\ListarPagamentosComissaoUseCase;
+use App\Application\Afiliado\DTOs\CriarPagamentoComissaoDTO;
+use App\Domain\Exceptions\DomainException;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Controller Admin para gerenciar comissões de afiliados
+ * 
+ * ✅ DDD: Usa Use Cases e DTOs
  */
 class AdminComissoesController extends Controller
 {
+    public function __construct(
+        private readonly ListarComissoesAdminUseCase $listarComissoesAdminUseCase,
+        private readonly MarcarComissaoComoPagaUseCase $marcarComissaoComoPagaUseCase,
+        private readonly CriarPagamentoComissaoUseCase $criarPagamentoComissaoUseCase,
+        private readonly ListarPagamentosComissaoUseCase $listarPagamentosComissaoUseCase,
+    ) {}
     /**
      * Lista todas as comissões (com filtros)
      */
     public function index(Request $request): JsonResponse
     {
         try {
-            $query = AfiliadoComissaoRecorrente::with(['afiliado', 'indicacao'])
-                ->orderBy('data_inicio_ciclo', 'desc');
-
-            // Filtros
-            if ($request->has('afiliado_id')) {
-                $query->where('afiliado_id', $request->input('afiliado_id'));
-            }
-
-            if ($request->has('status')) {
-                $query->where('status', $request->input('status'));
-            }
-
-            if ($request->has('data_inicio')) {
-                $query->where('data_inicio_ciclo', '>=', $request->input('data_inicio'));
-            }
-
-            if ($request->has('data_fim')) {
-                $query->where('data_inicio_ciclo', '<=', $request->input('data_fim'));
-            }
-
-            $perPage = $request->input('per_page', 15);
-            $comissoes = $query->paginate($perPage);
+            $comissoes = $this->listarComissoesAdminUseCase->executar(
+                afiliadoId: $request->input('afiliado_id') ? (int) $request->input('afiliado_id') : null,
+                status: $request->input('status'),
+                dataInicio: $request->input('data_inicio'),
+                dataFim: $request->input('data_fim'),
+                perPage: (int) $request->input('per_page', 15),
+                page: (int) $request->input('page', 1),
+            );
 
             return response()->json([
                 'success' => true,
@@ -71,31 +67,23 @@ class AdminComissoesController extends Controller
     public function marcarComoPaga(Request $request, int $comissaoId): JsonResponse
     {
         try {
-            $comissao = AfiliadoComissaoRecorrente::find($comissaoId);
-
-            if (!$comissao) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Comissão não encontrada.',
-                ], 404);
-            }
-
-            $comissao->update([
-                'status' => 'paga',
-                'data_pagamento_afiliado' => $request->input('data_pagamento', Carbon::now()),
-                'observacoes' => $request->input('observacoes'),
-            ]);
-
-            Log::info('Comissão marcada como paga', [
-                'comissao_id' => $comissaoId,
-                'afiliado_id' => $comissao->afiliado_id,
-            ]);
+            $comissao = $this->marcarComissaoComoPagaUseCase->executar(
+                comissaoId: $comissaoId,
+                dataPagamento: $request->input('data_pagamento'),
+                observacoes: $request->input('observacoes'),
+            );
 
             return response()->json([
                 'success' => true,
                 'message' => 'Comissão marcada como paga.',
-                'data' => $comissao->fresh(),
+                'data' => $comissao,
             ]);
+
+        } catch (DomainException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 404);
 
         } catch (\Exception $e) {
             Log::error('Erro ao marcar comissão como paga', [
@@ -116,7 +104,7 @@ class AdminComissoesController extends Controller
     public function criarPagamento(Request $request): JsonResponse
     {
         try {
-            $request->validate([
+            $validated = $request->validate([
                 'afiliado_id' => 'required|exists:afiliados,id',
                 'periodo_competencia' => 'required|date',
                 'comissao_ids' => 'required|array',
@@ -124,69 +112,32 @@ class AdminComissoesController extends Controller
                 'metodo_pagamento' => 'nullable|string|max:50',
                 'comprovante' => 'nullable|string|max:255',
                 'observacoes' => 'nullable|string',
+                'data_pagamento' => 'nullable|date',
             ]);
 
-            return DB::transaction(function () use ($request) {
-                // Buscar comissões
-                $comissoes = AfiliadoComissaoRecorrente::whereIn('id', $request->input('comissao_ids'))
-                    ->where('afiliado_id', $request->input('afiliado_id'))
-                    ->where('status', 'pendente')
-                    ->get();
+            $dto = CriarPagamentoComissaoDTO::fromArray($validated);
+            $pagoPor = auth('admin')->id();
 
-                if ($comissoes->isEmpty()) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Nenhuma comissão pendente encontrada.',
-                    ], 400);
-                }
+            $pagamento = $this->criarPagamentoComissaoUseCase->executar($dto, $pagoPor);
 
-                // Calcular valor total
-                $valorTotal = $comissoes->sum('valor_comissao');
+            return response()->json([
+                'success' => true,
+                'message' => 'Pagamento criado com sucesso.',
+                'data' => $pagamento,
+            ], 201);
 
-                // Criar pagamento
-                $pagamento = AfiliadoPagamentoComissao::create([
-                    'afiliado_id' => $request->input('afiliado_id'),
-                    'periodo_competencia' => $request->input('periodo_competencia'),
-                    'data_pagamento' => $request->input('data_pagamento', Carbon::now()),
-                    'valor_total' => $valorTotal,
-                    'quantidade_comissoes' => $comissoes->count(),
-                    'status' => 'pago',
-                    'metodo_pagamento' => $request->input('metodo_pagamento'),
-                    'comprovante' => $request->input('comprovante'),
-                    'observacoes' => $request->input('observacoes'),
-                    'pago_por' => auth('admin')->id(),
-                    'pago_em' => Carbon::now(),
-                ]);
-
-                // Marcar comissões como pagas
-                foreach ($comissoes as $comissao) {
-                    $comissao->update([
-                        'status' => 'paga',
-                        'data_pagamento_afiliado' => $pagamento->data_pagamento,
-                    ]);
-                }
-
-                Log::info('Pagamento de comissões criado', [
-                    'pagamento_id' => $pagamento->id,
-                    'afiliado_id' => $request->input('afiliado_id'),
-                    'valor_total' => $valorTotal,
-                    'quantidade_comissoes' => $comissoes->count(),
-                ]);
-
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Pagamento criado com sucesso.',
-                    'data' => $pagamento->load('afiliado'),
-                ], 201);
-
-            });
-
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Dados inválidos.',
                 'errors' => $e->errors(),
             ], 422);
+
+        } catch (DomainException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
 
         } catch (\Exception $e) {
             Log::error('Erro ao criar pagamento de comissões', [
@@ -207,19 +158,12 @@ class AdminComissoesController extends Controller
     public function pagamentos(Request $request): JsonResponse
     {
         try {
-            $query = AfiliadoPagamentoComissao::with('afiliado')
-                ->orderBy('periodo_competencia', 'desc');
-
-            if ($request->has('afiliado_id')) {
-                $query->where('afiliado_id', $request->input('afiliado_id'));
-            }
-
-            if ($request->has('status')) {
-                $query->where('status', $request->input('status'));
-            }
-
-            $perPage = $request->input('per_page', 15);
-            $pagamentos = $query->paginate($perPage);
+            $pagamentos = $this->listarPagamentosComissaoUseCase->executar(
+                afiliadoId: $request->input('afiliado_id') ? (int) $request->input('afiliado_id') : null,
+                status: $request->input('status'),
+                perPage: (int) $request->input('per_page', 15),
+                page: (int) $request->input('page', 1),
+            );
 
             return response()->json([
                 'success' => true,

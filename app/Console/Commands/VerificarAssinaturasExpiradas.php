@@ -6,6 +6,7 @@ use Illuminate\Console\Command;
 use App\Models\Tenant;
 use App\Modules\Assinatura\Models\Assinatura;
 use App\Modules\Assinatura\Models\Plano;
+use App\Application\Afiliado\UseCases\AtualizarComissaoIndicacaoUseCase;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
@@ -45,6 +46,7 @@ class VerificarAssinaturasExpiradas extends Command
         $totalExpiradas = 0;
         $totalBloqueadas = 0;
         $totalCobradas = 0;
+        $hoje = Carbon::now();
 
         foreach ($tenants as $tenant) {
             try {

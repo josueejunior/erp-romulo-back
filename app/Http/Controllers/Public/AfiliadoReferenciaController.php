@@ -6,6 +6,8 @@ namespace App\Http\Controllers\Public;
 
 use App\Http\Controllers\Controller;
 use App\Application\Afiliado\UseCases\RastrearReferenciaAfiliadoUseCase;
+use App\Application\Afiliado\UseCases\BuscarCupomAutomaticoUseCase;
+use App\Domain\Exceptions\DomainException;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
@@ -13,10 +15,16 @@ use Illuminate\Support\Facades\Log;
 /**
  * Controller para rastreamento de referência de afiliado
  */
+/**
+ * Controller para rastreamento de referência de afiliado
+ * 
+ * ✅ DDD: Usa Use Cases
+ */
 class AfiliadoReferenciaController extends Controller
 {
     public function __construct(
         private readonly RastrearReferenciaAfiliadoUseCase $rastrearReferenciaAfiliadoUseCase,
+        private readonly BuscarCupomAutomaticoUseCase $buscarCupomAutomaticoUseCase,
     ) {}
 
     /**
@@ -112,6 +120,9 @@ class AfiliadoReferenciaController extends Controller
     /**
      * Busca cupom automático para usuário autenticado
      * Verifica se há referência de afiliado vinculada ao tenant
+     * 
+     * Este endpoint é chamado na tela de planos para exibir o cupom que foi aplicado
+     * durante o cadastro. O cupom já foi aplicado, então apenas exibimos para informação.
      */
     public function buscarCupomAutomatico(Request $request): JsonResponse
     {
@@ -124,45 +135,31 @@ class AfiliadoReferenciaController extends Controller
             ], 404);
         }
 
-        // Buscar referência de afiliado vinculada ao tenant
-        $referencia = \App\Models\AfiliadoReferencia::where('tenant_id', $tenantId)
-            ->where('cadastro_concluido', true)
-            ->where('cupom_aplicado', false)
-            ->with('afiliado')
-            ->first();
+        try {
+            $cupom = $this->buscarCupomAutomaticoUseCase->executar($tenantId);
 
-        if (!$referencia || !$referencia->afiliado) {
+            return response()->json([
+                'success' => true,
+                'data' => $cupom,
+            ]);
+
+        } catch (DomainException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Nenhum cupom disponível.',
+                'message' => $e->getMessage(),
             ], 404);
-        }
 
-        // Verificar se CNPJ já usou cupom
-        $empresa = \App\Models\Empresa::first();
-        if ($empresa && $empresa->cnpj) {
-            $cnpjLimpo = preg_replace('/\D/', '', $empresa->cnpj);
-            $jaUsou = \App\Models\AfiliadoReferencia::where('cnpj', $cnpjLimpo)
-                ->where('cupom_aplicado', true)
-                ->exists();
-            
-            if ($jaUsou) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Cupom já foi utilizado para este CNPJ.',
-                ], 400);
-            }
-        }
+        } catch (\Exception $e) {
+            Log::error('Erro ao buscar cupom automático', [
+                'tenant_id' => $tenantId,
+                'error' => $e->getMessage(),
+            ]);
 
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'cupom_codigo' => $referencia->afiliado->codigo,
-                'afiliado_nome' => $referencia->afiliado->nome,
-                'desconto_percentual' => $referencia->afiliado->percentual_desconto ?? 30,
-                'mensagem' => "Você recebeu um cupom exclusivo de {$referencia->afiliado->percentual_desconto}% por indicação de {$referencia->afiliado->nome}.",
-            ],
-        ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao buscar cupom.',
+            ], 500);
+        }
     }
 }
 
