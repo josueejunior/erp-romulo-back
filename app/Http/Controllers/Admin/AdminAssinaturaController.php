@@ -81,19 +81,25 @@ class AdminAssinaturaController extends Controller
             $offset = ($currentPage - 1) * $perPage;
             $paginated = $todasAssinaturas->slice($offset, $perPage)->values();
 
-            return response()->json([
-                'data' => $paginated,
-                'current_page' => $currentPage,
-                'per_page' => $perPage,
-                'total' => $total,
-                'last_page' => ceil($total / $perPage),
-            ]);
+            // Criar paginator manual (UseCase retorna Collection, não Paginator)
+            $paginator = new \Illuminate\Pagination\LengthAwarePaginator(
+                $paginated,
+                $total,
+                $perPage,
+                $currentPage,
+                [
+                    'path' => $request->url(),
+                    'pageName' => 'page',
+                ]
+            );
+
+            return ApiResponse::paginated($paginator);
         } catch (\Exception $e) {
             Log::error('Erro ao listar assinaturas', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            return response()->json(['message' => 'Erro ao listar assinaturas.'], 500);
+            return ApiResponse::error('Erro ao listar assinaturas.', 500);
         }
     }
 
@@ -108,9 +114,7 @@ class AdminAssinaturaController extends Controller
         $assinaturaId = $this->getAssinaturaIdFromRoute($route);
         
         if (!$tenantId || !$assinaturaId) {
-            return response()->json([
-                'message' => 'Tenant ID ou Assinatura ID não fornecido'
-            ], 400);
+            return ApiResponse::error('Tenant ID ou Assinatura ID não fornecido', 400);
         }
 
         try {
@@ -119,14 +123,14 @@ class AdminAssinaturaController extends Controller
 
             return ApiResponse::item($data);
         } catch (\App\Domain\Exceptions\NotFoundException $e) {
-            return response()->json(['message' => $e->getMessage()], 404);
+            return ApiResponse::error($e->getMessage(), 404);
         } catch (\Exception $e) {
             Log::error('Erro ao buscar assinatura', [
                 'error' => $e->getMessage(),
                 'tenant_id' => $tenantId,
                 'assinatura_id' => $assinaturaId,
             ]);
-            return response()->json(['message' => 'Erro ao buscar assinatura.'], 500);
+            return ApiResponse::error('Erro ao buscar assinatura.', 500);
         }
     }
 
@@ -173,14 +177,14 @@ class AdminAssinaturaController extends Controller
             // Buscar modelo para resposta
             $assinaturaModel = $this->buscarAssinaturaAdminUseCase->executar($tenantId, $assinaturaId);
 
-            return response()->json([
-                'message' => 'Assinatura atualizada com sucesso',
-                'data' => $assinaturaModel,
-            ]);
+            return ApiResponse::success(
+                'Assinatura atualizada com sucesso',
+                $assinaturaModel
+            );
         } catch (\App\Domain\Exceptions\NotFoundException $e) {
-            return response()->json(['message' => $e->getMessage()], 404);
+            return ApiResponse::error($e->getMessage(), 404);
         } catch (\App\Domain\Exceptions\DomainException $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
+            return ApiResponse::error($e->getMessage(), 400);
         } catch (\Exception $e) {
             Log::error('Erro ao atualizar assinatura', [
                 'error' => $e->getMessage(),
@@ -188,7 +192,7 @@ class AdminAssinaturaController extends Controller
                 'assinatura_id' => $assinaturaId,
                 'trace' => $e->getTraceAsString(),
             ]);
-            return response()->json(['message' => 'Erro ao atualizar assinatura.'], 500);
+            return ApiResponse::error('Erro ao atualizar assinatura.', 500);
         }
     }
 
@@ -258,18 +262,19 @@ class AdminAssinaturaController extends Controller
                 $assinatura->id
             );
 
-            return response()->json([
-                'message' => 'Assinatura criada com sucesso',
-                'data' => $assinaturaCompleta,
-            ], 201);
+            return ApiResponse::success(
+                'Assinatura criada com sucesso',
+                $assinaturaCompleta,
+                201
+            );
         } catch (\App\Domain\Exceptions\DomainException $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
+            return ApiResponse::error($e->getMessage(), 400);
         } catch (\Exception $e) {
             Log::error('Erro ao criar assinatura', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            return response()->json(['message' => 'Erro ao criar assinatura.'], 500);
+            return ApiResponse::error('Erro ao criar assinatura.', 500);
         }
     }
 
@@ -282,12 +287,10 @@ class AdminAssinaturaController extends Controller
             // Executar Use Case
             $tenants = $this->listarTenantsParaFiltroUseCase->executar();
 
-            return response()->json([
-                'data' => $tenants->values(),
-            ]);
+            return ApiResponse::collection($tenants->values()->all());
         } catch (\Exception $e) {
             Log::error('Erro ao listar tenants', ['error' => $e->getMessage()]);
-            return response()->json(['message' => 'Erro ao listar empresas.'], 500);
+            return ApiResponse::error('Erro ao listar empresas.', 500);
         }
     }
 
@@ -305,16 +308,16 @@ class AdminAssinaturaController extends Controller
             // Buscar assinatura atual
             $assinaturaAtual = $this->buscarAssinaturaAdminUseCase->executar($tenantId, $assinaturaId);
             if (!$assinaturaAtual) {
-                return response()->json(['message' => 'Assinatura não encontrada.'], 404);
+                return ApiResponse::error('Assinatura não encontrada.', 404);
             }
 
             // Se já está no mesmo plano, retornar erro
             if ($assinaturaAtual['plano_id'] == $validated['novo_plano_id']) {
-                return response()->json(['message' => 'A assinatura já está neste plano.'], 400);
+                return ApiResponse::error('A assinatura já está neste plano.', 400);
             }
 
             // Atualizar assinatura com novo plano
-            $assinaturaAtualizada = $this->atualizarAssinaturaAdminUseCase->executar(
+            $this->atualizarAssinaturaAdminUseCase->executar(
                 $tenantId,
                 $assinaturaId,
                 [
@@ -329,12 +332,12 @@ class AdminAssinaturaController extends Controller
                 $assinaturaId
             );
 
-            return response()->json([
-                'message' => 'Plano alterado com sucesso!',
-                'data' => $assinaturaCompleta,
-            ]);
+            return ApiResponse::success(
+                'Plano alterado com sucesso!',
+                $assinaturaCompleta
+            );
         } catch (\App\Domain\Exceptions\DomainException $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
+            return ApiResponse::error($e->getMessage(), 400);
         } catch (\Exception $e) {
             Log::error('Erro ao trocar plano', [
                 'tenant_id' => $tenantId,
@@ -342,7 +345,7 @@ class AdminAssinaturaController extends Controller
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            return response()->json(['message' => 'Erro ao trocar plano.'], 500);
+            return ApiResponse::error('Erro ao trocar plano.', 500);
         }
     }
 }

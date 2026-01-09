@@ -5,38 +5,50 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Application\Auth\UseCases\CriarUsuarioUseCase;
 use App\Application\Auth\UseCases\AtualizarUsuarioUseCase;
+use App\Application\Auth\UseCases\DeletarUsuarioAdminUseCase;
+use App\Application\Auth\UseCases\ReativarUsuarioAdminUseCase;
+use App\Application\Auth\UseCases\BuscarUsuarioPorEmailAdminUseCase;
 use App\Application\Auth\DTOs\CriarUsuarioDTO;
 use App\Application\Auth\DTOs\AtualizarUsuarioDTO;
 use App\Application\Auth\Presenters\UserPresenter;
-use App\Domain\Auth\Repositories\UserRepositoryInterface;
 use App\Domain\Auth\Repositories\UserReadRepositoryInterface;
+use App\Domain\Auth\Services\UserErrorService;
 use App\Domain\Shared\ValueObjects\TenantContext;
 use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
 use App\Services\AdminTenancyRunner;
 use App\Http\Responses\ApiResponse;
+use App\Http\Requests\Admin\StoreUserAdminRequest;
+use App\Http\Requests\Admin\UpdateUserAdminRequest;
+use App\Http\Requests\Admin\BuscarPorEmailAdminRequest;
 use App\Models\Tenant;
-use App\Models\Empresa;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\ValidationException;
 use App\Domain\Exceptions\DomainException;
 
 /**
- * Controller Admin para gerenciar usuários das empresas
- * Controller FINO - apenas recebe request e devolve response
- * Toda lógica está nos Use Cases
+ * 🔥 DDD: Controller Admin para gerenciar usuários das empresas
  * 
- * 🔥 ARQUITETURA LIMPA: Usa AdminTenancyRunner para isolar lógica de tenancy
+ * Controller FINO - apenas recebe request e devolve response
+ * Toda lógica está nos UseCases, Domain Services e FormRequests
+ * 
+ * Responsabilidades:
+ * - Receber request HTTP
+ * - Validar entrada (via FormRequest)
+ * - Chamar UseCase apropriado
+ * - Retornar response padronizado (ApiResponse)
  */
 class AdminUserController extends Controller
 {
     public function __construct(
         private CriarUsuarioUseCase $criarUsuarioUseCase,
         private AtualizarUsuarioUseCase $atualizarUsuarioUseCase,
-        private UserRepositoryInterface $userRepository,
+        private DeletarUsuarioAdminUseCase $deletarUsuarioAdminUseCase,
+        private ReativarUsuarioAdminUseCase $reativarUsuarioAdminUseCase,
+        private BuscarUsuarioPorEmailAdminUseCase $buscarUsuarioPorEmailAdminUseCase,
         private UserReadRepositoryInterface $userReadRepository,
         private TenantRepositoryInterface $tenantRepository,
         private AdminTenancyRunner $adminTenancyRunner,
+        private UserErrorService $userErrorService,
     ) {}
 
     /**
@@ -160,7 +172,7 @@ class AdminUserController extends Controller
                 'trace' => $e->getTraceAsString(),
             ]);
             
-            return response()->json(['message' => 'Erro ao listar usuários.'], 500);
+            return ApiResponse::error('Erro ao listar usuários.', 500);
         }
     }
 
@@ -263,7 +275,7 @@ class AdminUserController extends Controller
             }
             
             if (!$userData) {
-                return response()->json(['message' => 'Usuário não encontrado.'], 404);
+                return ApiResponse::error('Usuário não encontrado.', 404);
             }
             
             // Consolidar dados
@@ -285,7 +297,7 @@ class AdminUserController extends Controller
                 'error' => $e->getMessage(),
             ]);
             
-            return response()->json(['message' => 'Erro ao buscar usuário.'], 500);
+            return ApiResponse::error('Erro ao buscar usuário.', 500);
         }
     }
 
@@ -346,7 +358,7 @@ class AdminUserController extends Controller
                 'trace' => $e->getTraceAsString(),
                 'tenant_id' => $tenant->id ?? null,
             ]);
-            return response()->json(['message' => 'Erro ao listar usuários.'], 500);
+            return ApiResponse::error('Erro ao listar usuários.', 500);
         }
     }
 
@@ -361,212 +373,69 @@ class AdminUserController extends Controller
             $userData = $this->userReadRepository->buscarComRelacionamentos($userId);
 
             if (!$userData) {
-                return response()->json(['message' => 'Usuário não encontrado.'], 404);
+                return ApiResponse::error('Usuário não encontrado.', 404);
             }
 
             // Garantir que empresas e roles sejam sempre arrays (frontend espera isso)
-            // Isso é crítico para evitar erros de .filter() no frontend
             $userData['empresas'] = is_array($userData['empresas'] ?? null) ? $userData['empresas'] : [];
             $userData['roles'] = is_array($userData['roles'] ?? null) ? $userData['roles'] : [];
             $userData['roles_list'] = is_array($userData['roles_list'] ?? null) ? $userData['roles_list'] : $userData['roles'];
             $userData['empresas_list'] = is_array($userData['empresas_list'] ?? null) ? $userData['empresas_list'] : $userData['empresas'];
 
-            // Retornar como array padronizado (frontend pode usar .filter() sem problemas)
             return ApiResponse::item($userData);
         } catch (\Exception $e) {
             Log::error('Erro ao buscar usuário', ['error' => $e->getMessage()]);
-            return response()->json(['message' => 'Erro ao buscar usuário.'], 500);
+            return ApiResponse::error('Erro ao buscar usuário.', 500);
         }
     }
 
     /**
-     * Criar novo usuário na empresa
-     * Use Case cuida de toda a lógica
+     * Criar novo usuário
+     * 🔥 DDD: Controller fino - validação via FormRequest, delega para UseCase
      */
-    public function store(Request $request, Tenant $tenant)
+    public function store(StoreUserAdminRequest $request, Tenant $tenant)
     {
         try {
-            \Log::info('AdminUserController::store - Iniciando', [
-                'tenant_id' => $tenant->id,
-                'request_data' => $request->except(['password']), // Não logar senha
-                'has_password' => $request->has('password'),
-                'password_empty' => $request->has('password') && (empty($request->input('password')) || trim($request->input('password')) === ''),
-                'has_empresas' => $request->has('empresas'),
-                'has_empresa_id' => $request->has('empresa_id'),
-                'has_empresa_ativa_id' => $request->has('empresa_ativa_id'),
-            ]);
-            
-            // Validação de FORMATO apenas (Controller não valida regra de negócio)
-            // Regras de força de senha ficam no Value Object Senha (Domain)
-            $rules = [
-                'name' => 'required|string|max:255',
-                'email' => 'required|email|max:255',
-                'password' => ['required', 'string', 'min:1'], // Apenas formato básico - força validada no Domain
-                'role' => 'nullable|string|in:Administrador,Operacional,Financeiro,Consulta',
-            ];
-            
-            // Se empresas for enviado, validar como array
-            // Se não, validar empresa_id OU empresa_ativa_id como obrigatório
-            // IMPORTANTE: Validação de exists será feita no UseCase (já no contexto do tenant)
-            $empresasInput = $request->input('empresas');
-            // Verificar se empresas existe e é um array não vazio
-            $hasEmpresasArray = ($request->has('empresas') || array_key_exists('empresas', $request->all())) 
-                && is_array($empresasInput) 
-                && count($empresasInput) > 0;
-            
-            \Log::debug('AdminUserController::store - Verificando empresas', [
-                'has_empresas_key' => $request->has('empresas'),
-                'empresas_in_all' => array_key_exists('empresas', $request->all()),
-                'empresas_input' => $empresasInput,
-                'is_array' => is_array($empresasInput),
-                'count' => is_array($empresasInput) ? count($empresasInput) : 0,
-                'has_empresas_array' => $hasEmpresasArray,
-            ]);
-            
-            if ($hasEmpresasArray) {
-                $rules['empresas'] = 'required|array|min:1';
-                $rules['empresas.*'] = 'integer';
-                // empresa_ativa_id é opcional quando empresas é fornecido
-                if ($request->has('empresa_ativa_id') || array_key_exists('empresa_ativa_id', $request->all())) {
-                    $rules['empresa_ativa_id'] = 'nullable|integer';
-                }
-            } else {
-                // Se não tem empresas array, precisa de empresa_id OU empresa_ativa_id
-                $hasEmpresaId = $request->has('empresa_id') || array_key_exists('empresa_id', $request->all());
-                $hasEmpresaAtivaId = $request->has('empresa_ativa_id') || array_key_exists('empresa_ativa_id', $request->all());
-                
-                \Log::debug('AdminUserController::store - Verificando empresa_id/empresa_ativa_id', [
-                    'has_empresa_id' => $hasEmpresaId,
-                    'has_empresa_ativa_id' => $hasEmpresaAtivaId,
-                ]);
-                
-                if (!$hasEmpresaId && !$hasEmpresaAtivaId) {
-                    // Nenhum dos dois foi fornecido, exigir pelo menos um
-                    $rules['empresa_id'] = 'required_without:empresa_ativa_id|integer';
-                    $rules['empresa_ativa_id'] = 'required_without:empresa_id|integer';
-                } else {
-                    // Pelo menos um foi fornecido, validar o que foi enviado
-                    if ($hasEmpresaId) {
-                        $rules['empresa_id'] = 'required|integer';
-                    }
-                    if ($hasEmpresaAtivaId) {
-                        $rules['empresa_ativa_id'] = 'required|integer';
-                    }
-                }
-            }
-            
-            $validated = $request->validate($rules, [
-                'name.required' => 'O nome é obrigatório.',
-                'email.required' => 'O e-mail é obrigatório.',
-                'password.required' => 'A senha é obrigatória.',
-                'empresa_id.required' => 'A empresa é obrigatória.',
-                'empresas.required' => 'Selecione pelo menos uma empresa.',
-                'empresas.min' => 'Selecione pelo menos uma empresa.',
-                'role.in' => 'O perfil deve ser: Administrador, Operacional, Financeiro ou Consulta.',
-            ]);
-            
-            \Log::info('AdminUserController::store - Validação passou', [
-                'validated_keys' => array_keys($validated),
-            ]);
-
-            // Criar TenantContext explícito (não depende de request())
+            // Criar TenantContext explícito
             $context = TenantContext::create($tenant->id);
 
             // Criar DTO (sem tenantId - vem do context)
             $dto = CriarUsuarioDTO::fromRequest($request);
 
-            // Executar Use Case (toda a lógica está aqui)
+            // Executar Use Case
             $user = $this->criarUsuarioUseCase->executar($dto, $context);
 
-            // Usar ResponseBuilder padronizado
             return ApiResponse::success(
                 'Usuário criado com sucesso!',
                 UserPresenter::fromDomain($user),
                 201
             );
-        } catch (ValidationException $e) {
-            \Log::error('AdminUserController::store - Erro de validação', [
-                'errors' => $e->errors(),
-                'request_data' => $request->except(['password']),
-                'has_password' => $request->has('password'),
-                'password_empty' => $request->has('password') && (empty($request->input('password')) || trim($request->input('password')) === ''),
-            ]);
-            return response()->json([
-                'message' => 'Dados inválidos.',
-                'errors' => $e->errors(),
-                'success' => false,
-            ], 422);
         } catch (DomainException $e) {
-            \Log::warning('AdminUserController::store - Erro de domínio', [
-                'error' => $e->getMessage(),
-                'email' => $request->input('email'),
-                'tenant_id' => $tenant->id,
-            ]);
-            
-            // Determinar o campo de erro baseado na mensagem
-            $field = 'general';
-            $message = $e->getMessage();
-            
-            if (str_contains($message, 'email') || str_contains($message, 'E-mail') || str_contains($message, 'e-mail')) {
-                $field = 'email';
-                
-                // 🔥 UX: Se o erro for de email duplicado, buscar informações do usuário existente
-                if (str_contains($message, 'já está cadastrado') || str_contains($message, 'já existe')) {
-                    try {
-                        // Inicializar contexto do tenant para buscar usuário
-                        tenancy()->initialize($tenant);
-                        
-                        $userExistente = $this->userReadRepository->buscarPorEmail($request->input('email'));
-                        
-                        if ($userExistente) {
-                            \Log::info('AdminUserController::store - Usuário existente encontrado', [
-                                'user_id' => $userExistente['id'],
-                                'user_name' => $userExistente['name'],
-                                'empresas_atuais' => $userExistente['empresas'] ?? [],
-                            ]);
-                            
-                            // Retornar erro com informações do usuário existente
-                            return response()->json([
-                                'message' => $message,
-                                'errors' => [
-                                    $field => [
-                                        $message . ' Este usuário já existe no sistema. Use a opção "Vincular usuário existente" ou atualize o usuário existente para adicioná-lo a esta empresa.'
-                                    ]
-                                ],
-                                'success' => false,
-                                'existing_user' => [
-                                    'id' => $userExistente['id'],
-                                    'name' => $userExistente['name'],
-                                    'email' => $userExistente['email'],
-                                    'empresas' => $userExistente['empresas'] ?? [],
-                                    'can_link' => true, // Indica que pode vincular à empresa
-                                ],
-                                'suggestion' => 'use_existing_user_link', // Sugestão para o frontend
-                            ], 422);
-                        }
-                    } catch (\Exception $searchError) {
-                        \Log::error('AdminUserController::store - Erro ao buscar usuário existente', [
-                            'error' => $searchError->getMessage(),
-                            'email' => $request->input('email'),
-                        ]);
-                        // Continuar com erro padrão se não conseguir buscar
-                    } finally {
-                        if (tenancy()->initialized) {
-                            tenancy()->end();
-                        }
-                    }
+            // 🔥 DDD: Usar Domain Service para buscar usuário existente e montar erro customizado
+            $tenantDomain = $this->tenantRepository->buscarPorId($tenant->id);
+            if ($tenantDomain) {
+                $errorResponse = $this->userErrorService->buscarUsuarioExistenteParaErro(
+                    $request->input('email'),
+                    $tenantDomain,
+                    $e->getMessage()
+                );
+
+                if ($errorResponse) {
+                    return response()->json(
+                        array_merge(['success' => false], $errorResponse),
+                        422
+                    );
                 }
-            } elseif (str_contains($message, 'senha') || str_contains($message, 'Senha')) {
-                $field = 'password';
-            } elseif (str_contains($message, 'empresa') || str_contains($message, 'Empresa')) {
-                $field = 'empresa_id';
             }
-            
-            return response()->json([
-                'message' => $message,
-                'errors' => [$field => [$message]],
-                'success' => false,
-            ], 422);
+
+            // Erro padrão
+            $field = $this->userErrorService->determinarCampoErro($e->getMessage());
+            return ApiResponse::error(
+                $e->getMessage(),
+                422,
+                null,
+                [$field => [$e->getMessage()]]
+            );
         } catch (\Exception $e) {
             Log::error('AdminUserController::store - Erro inesperado', [
                 'error' => $e->getMessage(),
@@ -574,210 +443,104 @@ class AdminUserController extends Controller
                 'email' => $request->input('email'),
                 'tenant_id' => $tenant->id,
             ]);
-            return response()->json(['message' => 'Erro ao criar usuário.'], 500);
+            return ApiResponse::error('Erro ao criar usuário.', 500);
         }
     }
 
     /**
      * Atualizar usuário
-     * Use Case cuida de toda a lógica
+     * 🔥 DDD: Controller fino - validação via FormRequest, delega para UseCase
      */
-    public function update(Request $request, Tenant $tenant, int $userId)
+    public function update(UpdateUserAdminRequest $request, Tenant $tenant, int $userId)
     {
         try {
-            // 🔥 NORMALIZAÇÃO ANTES DE VALIDAR (regra de ouro)
-            // Se password existir mas estiver vazio → remove completamente
-            $data = $request->all();
-            
-            if (array_key_exists('password', $data)) {
-                // Se password existir mas estiver vazio → remove
-                if (trim((string) $data['password']) === '') {
-                    unset($data['password']);
-                }
-            }
-            
-            // Recriar request completamente (replace remove campos não presentes)
-            $request->replace($data);
-            
-            \Log::info('AdminUserController::update - Request após normalização', [
-                'request_keys' => array_keys($request->all()),
-                'has_password_in_request' => $request->has('password'),
-            ]);
-
-            // 🔥 VALIDAÇÃO CORRETA (regra de ouro)
-            // Senha em update NUNCA deve ser required
-            // Ela deve ser: opcional, validada apenas se existir, ignorada se vazia
-            $rules = [
-                'name' => 'sometimes|required|string|max:255',
-                'email' => 'sometimes|required|email|max:255',
-                'role' => 'nullable|string|in:Administrador,Operacional,Financeiro,Consulta',
-            ];
-            
-            // Aceitar empresas (array) OU empresa_id OU empresa_ativa_id
-            $empresasInput = $request->input('empresas');
-            $hasEmpresasArray = $request->has('empresas') && is_array($empresasInput) && !empty($empresasInput);
-            
-            if ($hasEmpresasArray) {
-                $rules['empresas'] = 'sometimes|required|array|min:1';
-                $rules['empresas.*'] = 'integer';
-                if ($request->has('empresa_ativa_id')) {
-                    $rules['empresa_ativa_id'] = 'sometimes|nullable|integer';
-                }
-            } else {
-                // Se não tem empresas array, aceitar empresa_id OU empresa_ativa_id (opcional em update)
-                if ($request->has('empresa_id')) {
-                    $rules['empresa_id'] = 'sometimes|required|integer';
-                }
-                if ($request->has('empresa_ativa_id')) {
-                    $rules['empresa_ativa_id'] = 'sometimes|required|integer';
-                }
-            }
-            
-            // ⚠️ NUNCA use 'required' aqui para password em update
-            // Só valida senha se ela EXISTIR (já foi normalizada acima)
-            if ($request->has('password')) {
-                // Apenas formato básico - força validada no Value Object Senha (Domain)
-                $rules['password'] = ['string', 'min:1'];
-            }
-            
-            \Log::info('AdminUserController::update - Regras de validação', [
-                'rules' => array_keys($rules),
-                'has_password_rule' => isset($rules['password']),
-                'request_has_password' => $request->has('password'),
-            ]);
-            
-            $validated = $request->validate($rules, [
-                'role.in' => 'O perfil deve ser: Administrador, Operacional, Financeiro ou Consulta.',
-            ]);
-
-            // Criar TenantContext explícito (não depende de request())
+            // Criar TenantContext explícito
             $context = TenantContext::create($tenant->id);
 
             // Criar DTO (sem tenantId - vem do context)
             $dto = AtualizarUsuarioDTO::fromRequest($request, $userId);
 
-            // Executar Use Case (toda a lógica está aqui)
+            // Executar Use Case
             $user = $this->atualizarUsuarioUseCase->executar($dto, $context);
 
-            // Usar ResponseBuilder padronizado
             return ApiResponse::success(
                 'Usuário atualizado com sucesso!',
                 UserPresenter::fromDomain($user)
             );
-        } catch (ValidationException $e) {
-            \Log::error('AdminUserController::update - Erro de validação', [
-                'errors' => $e->errors(),
-                'request_data' => $request->except(['password']),
-                'has_password' => $request->has('password'),
-                'rules_applied' => array_keys($rules ?? []),
-            ]);
-            return response()->json([
-                'message' => 'Dados inválidos.',
-                'errors' => $e->errors(),
-                'success' => false,
-            ], 422);
         } catch (DomainException $e) {
-            // Determinar o campo de erro baseado na mensagem
-            $field = 'general';
-            $message = $e->getMessage();
-            
-            if (str_contains($message, 'senha') || str_contains($message, 'Senha')) {
-                $field = 'password';
-            } elseif (str_contains($message, 'email') || str_contains($message, 'E-mail')) {
-                $field = 'email';
-            }
-            
-            return response()->json([
-                'message' => $message,
-                'errors' => [$field => [$message]],
-                'success' => false,
-            ], 422);
+            $field = $this->userErrorService->determinarCampoErro($e->getMessage());
+            return ApiResponse::error(
+                $e->getMessage(),
+                422,
+                null,
+                [$field => [$e->getMessage()]]
+            );
         } catch (\Exception $e) {
             Log::error('Erro ao atualizar usuário', ['error' => $e->getMessage()]);
-            return response()->json(['message' => 'Erro ao atualizar usuário.'], 500);
+            return ApiResponse::error('Erro ao atualizar usuário.', 500);
         }
     }
 
     /**
      * Excluir usuário (soft delete)
+     * 🔥 DDD: Controller fino - delega para UseCase
      */
     public function destroy(Request $request, Tenant $tenant, int $userId)
     {
         try {
-            $user = $this->userRepository->buscarPorId($userId);
+            $this->deletarUsuarioAdminUseCase->executar($userId);
 
-            if (!$user) {
-                return response()->json(['message' => 'Usuário não encontrado.'], 404);
-            }
-
-            $this->userRepository->deletar($userId);
-
-            return response()->json([
-                'message' => 'Usuário excluído com sucesso!',
-                'success' => true,
-            ]);
+            return ApiResponse::success('Usuário excluído com sucesso!');
+        } catch (DomainException $e) {
+            return ApiResponse::error($e->getMessage(), 404);
         } catch (\Exception $e) {
             Log::error('Erro ao excluir usuário', ['error' => $e->getMessage()]);
-            return response()->json(['message' => 'Erro ao excluir usuário.'], 500);
+            return ApiResponse::error('Erro ao excluir usuário.', 500);
         }
     }
 
     /**
      * Reativar usuário
+     * 🔥 DDD: Controller fino - delega para UseCase
      */
     public function reactivate(Request $request, Tenant $tenant, int $userId)
     {
         try {
-            $this->userRepository->reativar($userId);
+            $this->reativarUsuarioAdminUseCase->executar($userId);
 
-            return response()->json([
-                'message' => 'Usuário reativado com sucesso!',
-                'success' => true,
-            ]);
+            return ApiResponse::success('Usuário reativado com sucesso!');
+        } catch (DomainException $e) {
+            return ApiResponse::error($e->getMessage(), 404);
         } catch (\Exception $e) {
             Log::error('Erro ao reativar usuário', ['error' => $e->getMessage()]);
-            return response()->json(['message' => 'Erro ao reativar usuário.'], 500);
+            return ApiResponse::error('Erro ao reativar usuário.', 500);
         }
     }
 
     /**
      * Buscar usuário por email (para vincular a empresa existente)
-     * 
-     * 🔥 UX: Permite buscar usuário já existente no sistema para apenas vinculá-lo
-     * a uma nova empresa, em vez de criar um duplicado.
-     * 
-     * Usado quando: "Novo Usuário" dentro de uma empresa específica
+     * 🔥 DDD: Controller fino - validação via FormRequest, delega para UseCase
      */
-    public function buscarPorEmail(Request $request, Tenant $tenant)
+    public function buscarPorEmail(BuscarPorEmailAdminRequest $request, Tenant $tenant)
     {
         try {
-            $request->validate([
-                'email' => 'required|email',
-            ]);
-
-            $email = $request->input('email');
+            $tenantDomain = $this->tenantRepository->buscarPorId($tenant->id);
             
-            // Buscar usuário por email no tenant atual
-            $user = $this->userReadRepository->buscarPorEmail($email);
-            
-            if (!$user) {
-                return response()->json([
-                    'message' => 'Usuário não encontrado com este e-mail.',
-                    'data' => null,
-                ], 404);
+            if (!$tenantDomain) {
+                return ApiResponse::error('Tenant não encontrado.', 404);
             }
 
-            // Retornar dados do usuário (sem senha)
+            $user = $this->buscarUsuarioPorEmailAdminUseCase->executar(
+                $request->input('email'),
+                $tenantDomain
+            );
+
             return ApiResponse::item($user);
-        } catch (ValidationException $e) {
-            return response()->json([
-                'message' => 'Dados inválidos.',
-                'errors' => $e->errors(),
-                'success' => false,
-            ], 422);
+        } catch (DomainException $e) {
+            return ApiResponse::error($e->getMessage(), 404);
         } catch (\Exception $e) {
             Log::error('Erro ao buscar usuário por email', ['error' => $e->getMessage()]);
-            return response()->json(['message' => 'Erro ao buscar usuário.'], 500);
+            return ApiResponse::error('Erro ao buscar usuário.', 500);
         }
     }
 

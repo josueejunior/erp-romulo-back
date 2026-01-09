@@ -11,10 +11,11 @@ use App\Application\Afiliado\UseCases\CriarPagamentoComissaoUseCase;
 use App\Application\Afiliado\UseCases\ListarPagamentosComissaoUseCase;
 use App\Application\Afiliado\DTOs\CriarPagamentoComissaoDTO;
 use App\Domain\Exceptions\DomainException;
+use App\Http\Requests\Admin\CriarPagamentoComissaoAdminRequest;
+use App\Http\Responses\ApiResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\ValidationException;
 
 /**
  * Controller Admin para gerenciar comissões de afiliados
@@ -44,20 +45,14 @@ class AdminComissoesController extends Controller
                 page: (int) $request->input('page', 1),
             );
 
-            return response()->json([
-                'success' => true,
-                'data' => $comissoes,
-            ]);
+            return response()->json(['success' => true, 'data' => $comissoes]);
 
         } catch (\Exception $e) {
             Log::error('Erro ao listar comissões', [
                 'error' => $e->getMessage(),
             ]);
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Erro ao listar comissões.',
-            ], 500);
+            return ApiResponse::error('Erro ao listar comissões.', 500);
         }
     }
 
@@ -73,17 +68,13 @@ class AdminComissoesController extends Controller
                 observacoes: $request->input('observacoes'),
             );
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Comissão marcada como paga.',
-                'data' => $comissao,
-            ]);
+            return ApiResponse::success(
+                'Comissão marcada como paga.',
+                is_array($comissao) ? $comissao : (is_object($comissao) ? [$comissao] : $comissao)
+            );
 
         } catch (DomainException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ], 404);
+            return ApiResponse::error($e->getMessage(), 404);
 
         } catch (\Exception $e) {
             Log::error('Erro ao marcar comissão como paga', [
@@ -91,53 +82,30 @@ class AdminComissoesController extends Controller
                 'error' => $e->getMessage(),
             ]);
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Erro ao marcar comissão como paga.',
-            ], 500);
+            return ApiResponse::error('Erro ao marcar comissão como paga.', 500);
         }
     }
 
     /**
      * Cria pagamento de comissões (agrupa múltiplas comissões)
+     * 🔥 DDD: Controller fino - validação via FormRequest
      */
-    public function criarPagamento(Request $request): JsonResponse
+    public function criarPagamento(CriarPagamentoComissaoAdminRequest $request): JsonResponse
     {
         try {
-            $validated = $request->validate([
-                'afiliado_id' => 'required|exists:afiliados,id',
-                'periodo_competencia' => 'required|date',
-                'comissao_ids' => 'required|array',
-                'comissao_ids.*' => 'exists:afiliado_comissoes_recorrentes,id',
-                'metodo_pagamento' => 'nullable|string|max:50',
-                'comprovante' => 'nullable|string|max:255',
-                'observacoes' => 'nullable|string',
-                'data_pagamento' => 'nullable|date',
-            ]);
-
-            $dto = CriarPagamentoComissaoDTO::fromArray($validated);
+            $dto = CriarPagamentoComissaoDTO::fromArray($request->validated());
             $pagoPor = auth('admin')->id();
 
             $pagamento = $this->criarPagamentoComissaoUseCase->executar($dto, $pagoPor);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Pagamento criado com sucesso.',
-                'data' => $pagamento,
-            ], 201);
-
-        } catch (ValidationException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Dados inválidos.',
-                'errors' => $e->errors(),
-            ], 422);
+            return ApiResponse::success(
+                'Pagamento criado com sucesso.',
+                is_array($pagamento) ? $pagamento : (is_object($pagamento) ? [$pagamento] : $pagamento),
+                201
+            );
 
         } catch (DomainException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ], 400);
+            return ApiResponse::error($e->getMessage(), 400);
 
         } catch (\Exception $e) {
             Log::error('Erro ao criar pagamento de comissões', [
@@ -145,10 +113,7 @@ class AdminComissoesController extends Controller
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Erro ao criar pagamento.',
-            ], 500);
+            return ApiResponse::error('Erro ao criar pagamento.', 500);
         }
     }
 
@@ -165,20 +130,14 @@ class AdminComissoesController extends Controller
                 page: (int) $request->input('page', 1),
             );
 
-            return response()->json([
-                'success' => true,
-                'data' => $pagamentos,
-            ]);
+            return response()->json(['success' => true, 'data' => $pagamentos]);
 
         } catch (\Exception $e) {
             Log::error('Erro ao listar pagamentos', [
                 'error' => $e->getMessage(),
             ]);
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Erro ao listar pagamentos.',
-            ], 500);
+            return ApiResponse::error('Erro ao listar pagamentos.', 500);
         }
     }
 }

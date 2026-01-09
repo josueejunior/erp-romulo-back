@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Application\Plano\UseCases\ListarPlanosUseCase;
+use App\Application\Plano\UseCases\ListarPlanosAdminUseCase;
 use App\Application\Plano\UseCases\BuscarPlanoUseCase;
 use App\Application\Plano\UseCases\CriarPlanoUseCase;
 use App\Application\Plano\UseCases\AtualizarPlanoUseCase;
@@ -11,6 +11,7 @@ use App\Application\Plano\UseCases\DeletarPlanoUseCase;
 use App\Domain\Plano\Repositories\PlanoRepositoryInterface;
 use App\Http\Requests\Plano\CriarPlanoRequest;
 use App\Http\Requests\Plano\AtualizarPlanoRequest;
+use App\Http\Responses\ApiResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
@@ -22,7 +23,7 @@ use Illuminate\Http\JsonResponse;
 class AdminPlanoController extends Controller
 {
     public function __construct(
-        private ListarPlanosUseCase $listarPlanosUseCase,
+        private ListarPlanosAdminUseCase $listarPlanosAdminUseCase,
         private BuscarPlanoUseCase $buscarPlanoUseCase,
         private CriarPlanoUseCase $criarPlanoUseCase,
         private AtualizarPlanoUseCase $atualizarPlanoUseCase,
@@ -32,6 +33,7 @@ class AdminPlanoController extends Controller
 
     /**
      * Lista todos os planos
+     * 🔥 DDD: Controller fino - delega para UseCase que evita N+1
      */
     public function index(Request $request): JsonResponse
     {
@@ -42,29 +44,18 @@ class AdminPlanoController extends Controller
                 $filtros['ativo'] = $request->boolean('ativo');
             }
 
-            // Buscar planos usando o UseCase
-            $planosDomain = $this->listarPlanosUseCase->executar($filtros);
+            // UseCase já retorna dados formatados (evita N+1)
+            $planos = $this->listarPlanosAdminUseCase->executar($filtros);
 
-            // Converter para modelos Eloquent para resposta
-            $planos = $planosDomain->map(function ($planoDomain) {
-                return $this->planoRepository->buscarModeloPorId($planoDomain->id);
-            })->filter();
-
-            return response()->json([
-                'data' => $planos->values()->all(),
-                'meta' => [
-                    'total' => $planos->count(),
-                ],
-            ]);
+            return ApiResponse::collection($planos->all());
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'Erro ao listar planos: ' . $e->getMessage(),
-            ], 500);
+            return ApiResponse::error('Erro ao listar planos.', 500);
         }
     }
 
     /**
      * Busca um plano específico
+     * 🔥 DDD: Controller fino - padronizado response
      */
     public function show(int $plano): JsonResponse
     {
@@ -72,17 +63,15 @@ class AdminPlanoController extends Controller
             $planoDomain = $this->buscarPlanoUseCase->executar($plano);
             $planoModel = $this->planoRepository->buscarModeloPorId($plano);
 
-            return response()->json([
-                'data' => $planoModel
-            ]);
+            if (!$planoModel) {
+                return ApiResponse::error('Plano não encontrado.', 404);
+            }
+
+            return ApiResponse::item($planoModel->toArray());
         } catch (\App\Domain\Exceptions\NotFoundException $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 404);
+            return ApiResponse::error($e->getMessage(), 404);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'Erro ao buscar plano: ' . $e->getMessage(),
-            ], 500);
+            return ApiResponse::error('Erro ao buscar plano.', 500);
         }
     }
 
@@ -101,18 +90,15 @@ class AdminPlanoController extends Controller
             // Buscar modelo para resposta
             $planoModel = $this->planoRepository->buscarModeloPorId($planoDomain->id);
 
-            return response()->json([
-                'message' => 'Plano criado com sucesso',
-                'data' => $planoModel,
-            ], 201);
+            return ApiResponse::success(
+                'Plano criado com sucesso',
+                $planoModel?->toArray(),
+                201
+            );
         } catch (\App\Domain\Exceptions\DomainException $e) {
-            return response()->json([
-                'message' => $e->getMessage(),
-            ], 400);
+            return ApiResponse::error($e->getMessage(), 400);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'Erro ao criar plano: ' . $e->getMessage(),
-            ], 500);
+            return ApiResponse::error('Erro ao criar plano.', 500);
         }
     }
 
@@ -131,22 +117,16 @@ class AdminPlanoController extends Controller
             // Buscar modelo para resposta
             $planoModel = $this->planoRepository->buscarModeloPorId($planoDomain->id);
 
-            return response()->json([
-                'message' => 'Plano atualizado com sucesso',
-                'data' => $planoModel,
-            ]);
+            return ApiResponse::success(
+                'Plano atualizado com sucesso',
+                $planoModel?->toArray()
+            );
         } catch (\App\Domain\Exceptions\NotFoundException $e) {
-            return response()->json([
-                'message' => $e->getMessage(),
-            ], 404);
+            return ApiResponse::error($e->getMessage(), 404);
         } catch (\App\Domain\Exceptions\DomainException $e) {
-            return response()->json([
-                'message' => $e->getMessage(),
-            ], 400);
+            return ApiResponse::error($e->getMessage(), 400);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'Erro ao atualizar plano: ' . $e->getMessage(),
-            ], 500);
+            return ApiResponse::error('Erro ao atualizar plano.', 500);
         }
     }
 
@@ -159,21 +139,13 @@ class AdminPlanoController extends Controller
             // Executar Use Case
             $this->deletarPlanoUseCase->executar($plano);
 
-            return response()->json([
-                'message' => 'Plano deletado com sucesso',
-            ]);
+            return ApiResponse::success('Plano deletado com sucesso');
         } catch (\App\Domain\Exceptions\NotFoundException $e) {
-            return response()->json([
-                'message' => $e->getMessage(),
-            ], 404);
+            return ApiResponse::error($e->getMessage(), 404);
         } catch (\App\Domain\Exceptions\DomainException $e) {
-            return response()->json([
-                'message' => $e->getMessage(),
-            ], 400);
+            return ApiResponse::error($e->getMessage(), 400);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'Erro ao deletar plano: ' . $e->getMessage(),
-            ], 500);
+            return ApiResponse::error('Erro ao deletar plano.', 500);
         }
     }
 }
