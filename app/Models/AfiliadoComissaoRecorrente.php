@@ -64,3 +64,4 @@ class AfiliadoComissaoRecorrente extends Model
     }
 }
 
+

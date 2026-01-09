@@ -35,3 +35,4 @@ readonly class AssinaturaAtualizada implements DomainEvent
     }
 }
 
+

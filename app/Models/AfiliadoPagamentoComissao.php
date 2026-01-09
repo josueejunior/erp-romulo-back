@@ -47,3 +47,4 @@ class AfiliadoPagamentoComissao extends Model
     }
 }
 
+

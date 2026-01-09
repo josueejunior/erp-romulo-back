@@ -203,3 +203,4 @@ CREATE TABLE afiliado_comissoes_pagamentos (
 - Considerar criar eventos de domínio: `ComissaoGerada`, `ComissaoPaga`, etc.
 - Usar Jobs para processar comissões em background (evitar timeout)
 
+

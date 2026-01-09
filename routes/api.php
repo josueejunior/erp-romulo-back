@@ -33,6 +33,7 @@ use App\Modules\Payment\Controllers\WebhookController as ApiWebhookController;
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Admin\AdminTenantController;
 use App\Http\Controllers\Admin\AdminUserController;
+use App\Http\Controllers\Admin\AdminComissoesController;
 
 /*
 |--------------------------------------------------------------------------

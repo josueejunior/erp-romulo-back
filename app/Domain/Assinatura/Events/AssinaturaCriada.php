@@ -35,3 +35,4 @@ readonly class AssinaturaCriada implements DomainEvent
     }
 }
 
+
