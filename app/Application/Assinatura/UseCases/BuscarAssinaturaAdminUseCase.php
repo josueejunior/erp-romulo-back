@@ -65,6 +65,7 @@ class BuscarAssinaturaAdminUseCase
             'metodo_pagamento' => $assinaturaDomain->metodoPagamento ?? 'N/A',
             'transacao_id' => $assinaturaDomain->transacaoId,
             'dias_restantes' => $diasRestantes,
+            'dias_grace_period' => $assinaturaDomain->diasGracePeriod ?? 7,
             'observacoes' => $assinaturaDomain->observacoes,
         ];
     }
