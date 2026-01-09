@@ -3,10 +3,13 @@
 namespace App\Application\Assinatura\UseCases;
 
 use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
+use App\Domain\Assinatura\Events\AssinaturaAtualizada;
+use App\Domain\Shared\Events\EventDispatcherInterface;
 use App\Domain\Plano\Repositories\PlanoRepositoryInterface;
 use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
 use App\Domain\Exceptions\NotFoundException;
 use App\Domain\Exceptions\DomainException;
+use App\Modules\Auth\Models\User;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -20,6 +23,7 @@ class AtualizarAssinaturaAdminUseCase
         private AssinaturaRepositoryInterface $assinaturaRepository,
         private PlanoRepositoryInterface $planoRepository,
         private TenantRepositoryInterface $tenantRepository,
+        private EventDispatcherInterface $eventDispatcher,
     ) {}
 
     /**
@@ -113,8 +117,32 @@ class AtualizarAssinaturaAdminUseCase
             }
         }
 
-        // Retornar entidade atualizada
-        return $this->assinaturaRepository->buscarPorId($assinaturaId);
+        // Buscar entidade atualizada
+        $assinaturaAtualizada = $this->assinaturaRepository->buscarPorId($assinaturaId);
+
+        // Buscar email do usuário para notificação
+        $emailDestino = null;
+        if ($assinaturaDomain->userId) {
+            $user = User::find($assinaturaDomain->userId);
+            if ($user) {
+                $emailDestino = $user->email;
+            }
+        }
+
+        // Disparar evento de assinatura atualizada
+        $this->eventDispatcher->dispatch(
+            new AssinaturaAtualizada(
+                assinaturaId: $assinaturaId,
+                tenantId: $tenantId,
+                empresaId: $assinaturaDomain->empresaId ?? 0,
+                userId: $assinaturaDomain->userId,
+                planoId: $assinaturaModel->plano_id,
+                status: $assinaturaModel->status,
+                emailDestino: $emailDestino,
+            )
+        );
+
+        return $assinaturaAtualizada;
     }
 }
 

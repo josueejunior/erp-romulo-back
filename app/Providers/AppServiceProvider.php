@@ -284,5 +284,16 @@ class AppServiceProvider extends ServiceProvider
             \App\Domain\Tenant\Events\EmpresaVinculada::class,
             \App\Listeners\EmpresaVinculadaListener::class
         );
+
+        // Listeners para eventos de Assinatura
+        \Illuminate\Support\Facades\Event::listen(
+            \App\Domain\Assinatura\Events\AssinaturaCriada::class,
+            [\App\Listeners\AssinaturaNotificacaoListener::class, 'handleAssinaturaCriada']
+        );
+
+        \Illuminate\Support\Facades\Event::listen(
+            \App\Domain\Assinatura\Events\AssinaturaAtualizada::class,
+            [\App\Listeners\AssinaturaNotificacaoListener::class, 'handleAssinaturaAtualizada']
+        );
     }
 }

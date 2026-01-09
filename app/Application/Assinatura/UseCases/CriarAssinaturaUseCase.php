@@ -6,6 +6,8 @@ use App\Application\Assinatura\DTOs\CriarAssinaturaDTO;
 use App\Domain\Assinatura\Entities\Assinatura;
 use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
 use App\Domain\Assinatura\Services\AssinaturaValidationService;
+use App\Domain\Assinatura\Events\AssinaturaCriada;
+use App\Domain\Shared\Events\EventDispatcherInterface;
 use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
 use App\Domain\Exceptions\DomainException;
 use App\Modules\Assinatura\Models\Plano;
@@ -26,6 +28,7 @@ class CriarAssinaturaUseCase
         private AssinaturaRepositoryInterface $assinaturaRepository,
         private TenantRepositoryInterface $tenantRepository,
         private AssinaturaValidationService $validationService,
+        private EventDispatcherInterface $eventDispatcher,
     ) {}
 
     /**
@@ -117,6 +120,25 @@ class CriarAssinaturaUseCase
             'assinatura_id' => $assinaturaSalva->id,
             'plano_id' => $plano->id,
         ]);
+
+        // Buscar email do usuário para notificação
+        $emailDestino = null;
+        if ($user) {
+            $emailDestino = $user->email;
+        }
+
+        // Disparar evento de assinatura criada
+        $this->eventDispatcher->dispatch(
+            new AssinaturaCriada(
+                assinaturaId: $assinaturaSalva->id,
+                tenantId: $dto->tenantId ?? 0,
+                empresaId: $empresaId ?? 0,
+                userId: $dto->userId,
+                planoId: $dto->planoId,
+                status: $dto->status,
+                emailDestino: $emailDestino,
+            )
+        );
 
         return $assinaturaSalva;
     }

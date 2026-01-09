@@ -8,6 +8,8 @@ use App\Application\Assinatura\DTOs\CriarAssinaturaDTO;
 use App\Domain\Assinatura\Entities\Assinatura;
 use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
 use App\Domain\Assinatura\Services\AssinaturaDomainService;
+use App\Domain\Assinatura\Events\AssinaturaCriada;
+use App\Domain\Shared\Events\EventDispatcherInterface;
 use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
 use App\Domain\Exceptions\DomainException;
 use App\Domain\Plano\Repositories\PlanoRepositoryInterface;
@@ -37,6 +39,7 @@ class CriarAssinaturaAdminUseCase
         private PlanoRepositoryInterface $planoRepository,
         private AssinaturaDomainService $assinaturaDomainService,
         private AdminTenancyRunner $adminTenancyRunner,
+        private EventDispatcherInterface $eventDispatcher,
     ) {}
 
     /**
@@ -162,6 +165,9 @@ class CriarAssinaturaAdminUseCase
             'plano_id' => $dados['plano_id'],
             'assinatura_id' => $assinatura->id,
         ]);
+
+        // Nota: O evento AssinaturaCriada já é disparado pelo CriarAssinaturaUseCase
+        // Não é necessário disparar novamente aqui para evitar duplicação
 
         return $assinatura;
     }
