@@ -11,6 +11,7 @@ use App\Domain\Shared\Events\EventDispatcherInterface;
 use App\Http\Responses\ApiResponse;
 use App\Models\Tenant;
 use App\Models\TenantEmpresa;
+use App\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
@@ -52,9 +53,11 @@ class AdminTenantController extends Controller
             $tenants = $this->tenantRepository->buscarComFiltros($filters);
 
             // Buscar modelos Eloquent para eager loading de relacionamentos
+            // IMPORTANTE: Selecionar explicitamente criado_em e atualizado_em para garantir que sejam retornados
             $tenantIds = $tenants->pluck('id')->toArray();
             $tenantModels = Tenant::with(['planoAtual', 'assinaturaAtual'])
                 ->whereIn('id', $tenantIds)
+                ->select('*') // Selecionar todas as colunas (inclui timestamps)
                 ->get()
                 ->keyBy('id');
 
@@ -71,6 +74,42 @@ class AdminTenantController extends Controller
                     'cidade' => $tenant->cidade,
                     'estado' => $tenant->estado,
                 ];
+
+                // 🔥 Adicionar timestamps (última atualização)
+                // Tenant usa timestamps customizados: atualizado_em e criado_em
+                if ($tenantModel) {
+                    // Usar métodos do Eloquent para obter timestamps (funciona com timestamps customizados)
+                    // O Eloquent automaticamente acessa os timestamps via getCreatedAt() e getUpdatedAt()
+                    $criadoEm = $tenantModel->{$tenantModel->getCreatedAtColumn()}; // Acessa 'criado_em'
+                    $atualizadoEm = $tenantModel->{$tenantModel->getUpdatedAtColumn()}; // Acessa 'atualizado_em'
+                    
+                    // Converter para ISO string se for Carbon/DateTime (cast automático do Eloquent)
+                    if ($criadoEm instanceof \Carbon\Carbon) {
+                        $data['created_at'] = $criadoEm->toISOString();
+                    } elseif (is_string($criadoEm) && !empty($criadoEm)) {
+                        $data['created_at'] = $criadoEm;
+                    } else {
+                        $data['created_at'] = null;
+                    }
+                    
+                    if ($atualizadoEm instanceof \Carbon\Carbon) {
+                        $data['updated_at'] = $atualizadoEm->toISOString();
+                    } elseif (is_string($atualizadoEm) && !empty($atualizadoEm)) {
+                        $data['updated_at'] = $atualizadoEm;
+                    } else {
+                        $data['updated_at'] = null;
+                    }
+                    
+                    // Também retornar nos nomes customizados para compatibilidade
+                    $data['criado_em'] = $data['created_at'];
+                    $data['atualizado_em'] = $data['updated_at'];
+                } else {
+                    // Se não encontrou o modelo, definir como null
+                    $data['created_at'] = null;
+                    $data['updated_at'] = null;
+                    $data['criado_em'] = null;
+                    $data['atualizado_em'] = null;
+                }
 
                 // Adicionar informações de plano e assinatura se disponíveis
                 if ($tenantModel) {
