@@ -482,13 +482,36 @@ class AdminUserController extends Controller
                 'success' => false,
             ], 422);
         } catch (DomainException $e) {
+            \Log::warning('AdminUserController::store - Erro de domínio', [
+                'error' => $e->getMessage(),
+                'email' => $request->input('email'),
+                'tenant_id' => $tenant->id,
+            ]);
+            
+            // Determinar o campo de erro baseado na mensagem
+            $field = 'general';
+            $message = $e->getMessage();
+            
+            if (str_contains($message, 'email') || str_contains($message, 'E-mail') || str_contains($message, 'e-mail')) {
+                $field = 'email';
+            } elseif (str_contains($message, 'senha') || str_contains($message, 'Senha')) {
+                $field = 'password';
+            } elseif (str_contains($message, 'empresa') || str_contains($message, 'Empresa')) {
+                $field = 'empresa_id';
+            }
+            
             return response()->json([
-                'message' => $e->getMessage(),
-                'errors' => ['email' => [$e->getMessage()]],
+                'message' => $message,
+                'errors' => [$field => [$message]],
                 'success' => false,
             ], 422);
         } catch (\Exception $e) {
-            Log::error('Erro ao criar usuário', ['error' => $e->getMessage()]);
+            Log::error('AdminUserController::store - Erro inesperado', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'email' => $request->input('email'),
+                'tenant_id' => $tenant->id,
+            ]);
             return response()->json(['message' => 'Erro ao criar usuário.'], 500);
         }
     }
