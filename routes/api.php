@@ -46,6 +46,12 @@ use App\Http\Controllers\Admin\AdminComissoesController;
 |
 */
 
+// Health check endpoints (sem autenticação, sem rate limiting agressivo)
+Route::prefix('health')->group(function () {
+    Route::get('/', [\App\Http\Controllers\Api\HealthController::class, 'check']);
+    Route::get('/detailed', [\App\Http\Controllers\Api\HealthController::class, 'detailed']);
+});
+
 Route::prefix('v1')->group(function () {
     // Rotas públicas (central) - Gerenciamento de Tenants/Empresas
     // Rate limiting mais permissivo para criação de tenants (10/min, 20/hora)
@@ -75,7 +81,7 @@ Route::prefix('v1')->group(function () {
     
     // Cadastro público (cria tenant + assinatura + usuário)
     Route::post('/cadastro-publico', [\App\Http\Controllers\Public\CadastroPublicoController::class, 'store'])
-        ->middleware(['throttle:5,1', 'throttle:10,60']); // 5/min, 10/hora
+        ->middleware(['throttle:5,1', 'throttle:10,60', 'sanitize.inputs']); // 5/min, 10/hora + sanitização
     
     // Consulta pública de CNPJ (para cadastro público)
     Route::get('/cadastro-publico/consultar-cnpj/{cnpj}', [\App\Http\Controllers\Public\CadastroPublicoController::class, 'consultarCnpj'])
@@ -83,7 +89,7 @@ Route::prefix('v1')->group(function () {
 
     // Cadastro público de afiliados (sem autenticação)
     Route::post('/afiliados/cadastro-publico', [\App\Http\Controllers\Public\CadastroAfiliadoController::class, 'store'])
-        ->middleware(['throttle:5,1', 'throttle:10,60']); // 5/min, 10/hora
+        ->middleware(['throttle:5,1', 'throttle:10,60', 'sanitize.inputs']); // 5/min, 10/hora + sanitização
 
     // 🔥 NOVA ARQUITETURA: Pipeline previsível e testável
     // 

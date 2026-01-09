@@ -28,6 +28,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'assinatura.ativa' => \App\Http\Middleware\EnsureTenantHasActiveSubscription::class,
             'onboarding.completo' => \App\Http\Middleware\CheckOnboarding::class,
             
+            // Middlewares de segurança e robustez
+            'sanitize.inputs' => \App\Http\Middleware\SanitizeInputs::class,
+            
             // Middlewares legados (deprecated - não usar)
             'empresa.ativa' => \App\Http\Middleware\EnsureEmpresaAtiva::class,
             'empresa.context' => \App\Http\Middleware\EnsureEmpresaAtivaContext::class,

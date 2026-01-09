@@ -58,20 +58,46 @@ class ProcessarAssinaturaPlanoUseCase
         // Gerar chave de idempotência única
         $idempotencyKey = $this->generateIdempotencyKey($tenant->id, $plano->id, $periodo);
 
-        // Log da tentativa de pagamento
-        $paymentLog = PaymentLog::create([
-            'tenant_id' => $tenant->id,
-            'plano_id' => $plano->id,
-            'valor' => $valor,
-            'periodo' => $periodo,
-            'status' => 'pending',
-            'idempotency_key' => $idempotencyKey,
-            'metodo_pagamento' => $paymentRequest->paymentMethodId ?? 'credit_card',
-            'dados_requisicao' => [
-                'payer_email' => $paymentRequest->payerEmail,
-                'description' => $paymentRequest->description,
-            ],
-        ]);
+        // 🔥 ROBUSTEZ: Verificar se já existe PaymentLog com esta chave (idempotência)
+        // Usar transação com lock para evitar race condition em requisições simultâneas
+        $existingLog = DB::transaction(function () use ($idempotencyKey) {
+            return PaymentLog::where('idempotency_key', $idempotencyKey)
+                ->lockForUpdate()
+                ->first();
+        });
+        
+        if ($existingLog) {
+            Log::warning('Tentativa de pagamento duplicado detectada (idempotência)', [
+                'idempotency_key' => $idempotencyKey,
+                'existing_log_id' => $existingLog->id,
+                'existing_status' => $existingLog->status,
+                'tenant_id' => $tenant->id,
+                'plano_id' => $plano->id,
+            ]);
+            
+            // Se já foi aprovado, retornar erro informando que já foi processado
+            if ($existingLog->status === 'approved') {
+                throw new DomainException('Este pagamento já foi processado anteriormente.');
+            }
+            
+            // Se ainda está pendente, usar o log existente
+            $paymentLog = $existingLog;
+        } else {
+            // Log da tentativa de pagamento
+            $paymentLog = PaymentLog::create([
+                'tenant_id' => $tenant->id,
+                'plano_id' => $plano->id,
+                'valor' => $valor,
+                'periodo' => $periodo,
+                'status' => 'pending',
+                'idempotency_key' => $idempotencyKey,
+                'metodo_pagamento' => $paymentRequest->paymentMethodId ?? 'credit_card',
+                'dados_requisicao' => [
+                    'payer_email' => $paymentRequest->payerEmail,
+                    'description' => $paymentRequest->description,
+                ],
+            ]);
+        }
 
         try {
             // Processar pagamento
