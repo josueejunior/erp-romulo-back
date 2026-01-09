@@ -7,6 +7,7 @@ use App\Http\Responses\ApiResponse;
 use App\Application\Assinatura\UseCases\ListarAssinaturasAdminUseCase;
 use App\Application\Assinatura\UseCases\BuscarAssinaturaAdminUseCase;
 use App\Application\Assinatura\UseCases\AtualizarAssinaturaAdminUseCase;
+use App\Application\Assinatura\UseCases\CriarAssinaturaAdminUseCase;
 use App\Application\Tenant\UseCases\ListarTenantsParaFiltroUseCase;
 use App\Http\Requests\Assinatura\AtualizarAssinaturaAdminRequest;
 use App\Models\Tenant;
@@ -30,6 +31,7 @@ class AdminAssinaturaController extends Controller
         private ListarAssinaturasAdminUseCase $listarAssinaturasAdminUseCase,
         private BuscarAssinaturaAdminUseCase $buscarAssinaturaAdminUseCase,
         private AtualizarAssinaturaAdminUseCase $atualizarAssinaturaAdminUseCase,
+        private CriarAssinaturaAdminUseCase $criarAssinaturaAdminUseCase,
         private ListarTenantsParaFiltroUseCase $listarTenantsParaFiltroUseCase,
     ) {}
 
@@ -220,6 +222,55 @@ class AdminAssinaturaController extends Controller
         }
         
         return $this->handleUpdate($request, $tenantId, $assinaturaId);
+    }
+
+    /**
+     * Criar nova assinatura para um tenant
+     */
+    public function store(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'tenant_id' => 'required|integer|exists:tenants,id',
+                'plano_id' => 'required|integer|exists:planos,id',
+                'empresa_id' => 'nullable|integer',
+                'user_id' => 'nullable|integer',
+                'status' => 'nullable|string|in:ativa,suspensa,expirada,cancelada',
+                'data_inicio' => 'nullable|date',
+                'data_fim' => 'nullable|date',
+                'valor_pago' => 'nullable|numeric|min:0',
+                'metodo_pagamento' => 'nullable|string|in:gratuito,credit_card,pix,boleto',
+                'transacao_id' => 'nullable|string|max:255',
+                'dias_grace_period' => 'nullable|integer|min:0|max:90',
+                'observacoes' => 'nullable|string|max:5000',
+                'periodo' => 'nullable|string|in:mensal,anual',
+            ]);
+
+            // Executar Use Case
+            $assinatura = $this->criarAssinaturaAdminUseCase->executar(
+                $validated['tenant_id'],
+                $validated
+            );
+
+            // Buscar assinatura completa para resposta
+            $assinaturaCompleta = $this->buscarAssinaturaAdminUseCase->executar(
+                $validated['tenant_id'],
+                $assinatura->id
+            );
+
+            return response()->json([
+                'message' => 'Assinatura criada com sucesso',
+                'data' => $assinaturaCompleta,
+            ], 201);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        } catch (\Exception $e) {
+            Log::error('Erro ao criar assinatura', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json(['message' => 'Erro ao criar assinatura.'], 500);
+        }
     }
 
     /**

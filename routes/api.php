@@ -422,6 +422,7 @@ Route::prefix('admin')->group(function () {
         // Gerenciamento de assinaturas
         Route::prefix('assinaturas')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\AdminAssinaturaController::class, 'index']);
+            Route::post('/', [\App\Http\Controllers\Admin\AdminAssinaturaController::class, 'store']);
             Route::get('/tenants', [\App\Http\Controllers\Admin\AdminAssinaturaController::class, 'tenants']);
             Route::get('/{tenantId}/{assinaturaId}', [\App\Http\Controllers\Admin\AdminAssinaturaController::class, 'show'])
                 ->where(['tenantId' => '[0-9]+', 'assinaturaId' => '[0-9]+']);
