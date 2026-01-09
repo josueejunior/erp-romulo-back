@@ -116,13 +116,64 @@ class UserRepository implements UserRepositoryInterface
 
     public function emailExiste(string $email, ?int $excluirUserId = null): bool
     {
+        // Log detalhado para debug
+        $tenantId = tenancy()->tenant?->id ?? null;
+        $tenantInitialized = tenancy()->initialized ?? false;
+        $currentDatabase = tenancy()->initialized ? \DB::connection()->getDatabaseName() : 'central';
+        
+        \Log::debug('UserRepository::emailExiste - Verificando email', [
+            'email' => $email,
+            'excluir_user_id' => $excluirUserId,
+            'tenant_id' => $tenantId,
+            'tenancy_initialized' => $tenantInitialized,
+            'current_database' => $currentDatabase,
+        ]);
+
+        // 🔥 CORREÇÃO: Eloquent com SoftDeletes já exclui automaticamente registros deletados
+        // Mas vamos garantir explicitamente que não estamos incluindo deletados
+        // UserModel usa SoftDeletes, então where() já exclui automaticamente deletados
         $query = UserModel::where('email', $email);
         
         if ($excluirUserId) {
             $query->where('id', '!=', $excluirUserId);
         }
 
-        return $query->exists();
+        // Verificar se existe usuário ativo (não deletado)
+        // exists() já exclui soft deletes automaticamente
+        $exists = $query->exists();
+        
+        // Se encontrou, buscar detalhes para log e validação
+        if ($exists) {
+            $userFound = $query->first();
+            
+            // Verificar explicitamente se está deletado (por segurança)
+            if ($userFound && $userFound->deleted_at) {
+                \Log::warning('UserRepository::emailExiste - Email encontrado mas usuário está deletado (soft delete), ignorando', [
+                    'email' => $email,
+                    'user_id' => $userFound->id,
+                    'deleted_at' => $userFound->deleted_at,
+                    'tenant_id' => $tenantId,
+                ]);
+                return false; // Usuário deletado não conta como existente
+            }
+            
+            \Log::warning('UserRepository::emailExiste - Email encontrado (usuário ativo)', [
+                'email' => $email,
+                'user_id' => $userFound->id ?? null,
+                'user_name' => $userFound->name ?? null,
+                'tenant_id' => $tenantId,
+                'excluir_user_id' => $excluirUserId,
+                'current_database' => $currentDatabase,
+            ]);
+        } else {
+            \Log::debug('UserRepository::emailExiste - Email não encontrado', [
+                'email' => $email,
+                'tenant_id' => $tenantId,
+                'current_database' => $currentDatabase,
+            ]);
+        }
+
+        return $exists;
     }
 
     public function buscarComFiltros(array $filtros = []): LengthAwarePaginator
