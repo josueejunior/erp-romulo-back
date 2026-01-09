@@ -103,7 +103,7 @@ class CadastroPublicoController extends Controller
         } catch (ValidationException $e) {
             return $this->validationErrorResponse($e);
         } catch (DomainException $e) {
-            return $this->domainErrorResponse($e);
+            return $this->domainErrorResponse($e, $validated ?? null);
         } catch (\Exception $e) {
             return $this->serverErrorResponse($e);
         }
@@ -233,7 +233,7 @@ class CadastroPublicoController extends Controller
                 ]);
                 
                 throw new DomainException(
-                    'Este CNPJ já está cadastrado no sistema. Se você é o responsável, faça login ou entre em contato com o suporte.',
+                    'Este CNPJ já está cadastrado no sistema. Se você é o responsável, faça login para acessar sua conta.',
                     409,
                     null,
                     'CNPJ_EXISTS'
@@ -584,7 +584,7 @@ class CadastroPublicoController extends Controller
     /**
      * Resposta de erro de domínio
      */
-    private function domainErrorResponse(DomainException $e): JsonResponse
+    private function domainErrorResponse(DomainException $e, ?array $context = null): JsonResponse
     {
         $code = $e->getCode() ?: 400;
         $errorCode = method_exists($e, 'getErrorCode') ? $e->getErrorCode() : null;
@@ -598,6 +598,11 @@ class CadastroPublicoController extends Controller
         if ($errorCode) {
             $response['code'] = $errorCode;
             $response['redirect_to'] = '/login';
+            
+            // Incluir email na resposta se for EMAIL_EXISTS e tiver contexto
+            if ($errorCode === 'EMAIL_EXISTS' && $context && isset($context['admin_email'])) {
+                $response['email'] = $context['admin_email'];
+            }
         }
 
         return response()->json($response, is_int($code) ? $code : 400);
