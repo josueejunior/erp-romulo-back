@@ -32,44 +32,46 @@ class AtualizarPlanoUseCase
         }
 
         // Atualizar propriedades
+        // Nota: A entidade Plano é imutável, então os setters retornam uma nova instância
+        // É necessário atribuir o resultado de volta à variável $plano
         if (isset($dados['nome'])) {
-            $plano->setNome($dados['nome']);
+            $plano = $plano->setNome($dados['nome']);
         }
         
         if (isset($dados['descricao'])) {
-            $plano->setDescricao($dados['descricao']);
+            $plano = $plano->setDescricao($dados['descricao']);
         }
         
         if (isset($dados['preco_mensal'])) {
-            $plano->setPrecoMensal($dados['preco_mensal']);
+            $plano = $plano->setPrecoMensal($dados['preco_mensal']);
         }
         
         if (isset($dados['preco_anual'])) {
-            $plano->setPrecoAnual($dados['preco_anual']);
+            $plano = $plano->setPrecoAnual($dados['preco_anual']);
         }
         
         if (isset($dados['limite_processos'])) {
-            $plano->setLimiteProcessos($dados['limite_processos']);
+            $plano = $plano->setLimiteProcessos($dados['limite_processos']);
         }
         
         if (isset($dados['limite_usuarios'])) {
-            $plano->setLimiteUsuarios($dados['limite_usuarios']);
+            $plano = $plano->setLimiteUsuarios($dados['limite_usuarios']);
         }
         
         if (isset($dados['limite_armazenamento_mb'])) {
-            $plano->setLimiteArmazenamentoMb($dados['limite_armazenamento_mb']);
+            $plano = $plano->setLimiteArmazenamentoMb($dados['limite_armazenamento_mb']);
         }
         
         if (isset($dados['recursos_disponiveis'])) {
-            $plano->setRecursosDisponiveis($dados['recursos_disponiveis']);
+            $plano = $plano->setRecursosDisponiveis($dados['recursos_disponiveis']);
         }
         
         if (isset($dados['ativo'])) {
-            $plano->setAtivo($dados['ativo']);
+            $plano = $plano->setAtivo($dados['ativo']);
         }
         
         if (isset($dados['ordem'])) {
-            $plano->setOrdem($dados['ordem']);
+            $plano = $plano->setOrdem($dados['ordem']);
         }
 
         // Salvar alterações

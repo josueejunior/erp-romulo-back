@@ -83,6 +83,21 @@ class PlanoRepository implements PlanoRepositoryInterface
         if ($plano->id) {
             // Atualizar
             $model = PlanoModel::findOrFail($plano->id);
+            
+            \Log::info('PlanoRepository::salvar - Atualizando plano', [
+                'plano_id' => $plano->id,
+                'dados' => [
+                    'nome' => $plano->nome,
+                    'preco_mensal' => $plano->precoMensal,
+                    'preco_anual' => $plano->precoAnual,
+                    'limite_processos' => $plano->limiteProcessos,
+                    'limite_usuarios' => $plano->limiteUsuarios,
+                    'limite_armazenamento_mb' => $plano->limiteArmazenamentoMb,
+                    'ativo' => $plano->ativo,
+                    'ordem' => $plano->ordem,
+                ],
+            ]);
+            
             $model->fill([
                 'nome' => $plano->nome,
                 'descricao' => $plano->descricao,
@@ -95,7 +110,14 @@ class PlanoRepository implements PlanoRepositoryInterface
                 'ativo' => $plano->ativo,
                 'ordem' => $plano->ordem,
             ]);
-            $model->save();
+            
+            $saved = $model->save();
+            
+            \Log::info('PlanoRepository::salvar - Plano atualizado', [
+                'plano_id' => $model->id,
+                'saved' => $saved,
+                'was_changed' => $model->wasChanged(),
+            ]);
         } else {
             // Criar
             \Log::info('PlanoRepository::salvar - Criando novo plano', [
