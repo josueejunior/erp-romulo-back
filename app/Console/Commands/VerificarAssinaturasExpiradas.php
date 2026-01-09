@@ -45,91 +45,120 @@ class VerificarAssinaturasExpiradas extends Command
                 // Inicializar contexto do tenant
                 tenancy()->initialize($tenant);
 
-                // Buscar assinatura atual
-                $assinatura = Assinatura::where('tenant_id', $tenant->id)
-                    ->where('status', '!=', 'cancelada')
+                // Buscar assinaturas ativas ou pendentes (não canceladas)
+                $assinaturas = Assinatura::where('tenant_id', $tenant->id)
+                    ->whereIn('status', ['ativa', 'pendente', 'suspensa'])
                     ->orderBy('data_fim', 'desc')
-                    ->first();
-
-                if (!$assinatura) {
-                    $this->warn("  ⚠️  Tenant {$tenant->razao_social} (ID: {$tenant->id}) - Sem assinatura");
+                    ->get();
+                
+                if ($assinaturas->isEmpty()) {
+                    $this->warn("  ⚠️  Tenant {$tenant->razao_social} (ID: {$tenant->id}) - Sem assinaturas ativas");
                     tenancy()->end();
                     continue;
                 }
+                
+                // Processar cada assinatura
+                foreach ($assinaturas as $assinatura) {
+                        $dataFim = Carbon::parse($assinatura->data_fim);
+                    $diasExpirado = $hoje->diffInDays($dataFim, false) * -1; // Negativo se expirado
 
-                $hoje = Carbon::now();
-                $dataFim = Carbon::parse($assinatura->data_fim);
-                $diasExpirado = $hoje->diffInDays($dataFim, false) * -1; // Negativo se expirado
+                    // Verificar se expirou
+                    if ($diasExpirado > 0) {
+                        $totalExpiradas++;
 
-                // Verificar se expirou
-                if ($diasExpirado > 0) {
-                    $totalExpiradas++;
+                        // Verificar se está no grace period
+                        $diasGracePeriod = $assinatura->dias_grace_period ?? 7;
+                        $foraGracePeriod = $diasExpirado > $diasGracePeriod;
 
-                    // Verificar se está no grace period
-                    $diasGracePeriod = $assinatura->dias_grace_period ?? 7;
-                    $foraGracePeriod = $diasExpirado > $diasGracePeriod;
-
-                    $planoNome = $assinatura->plano ? ($assinatura->plano->nome ?? 'N/A') : 'N/A';
-                    
-                    $this->line("  📅 Tenant {$tenant->razao_social} (ID: {$tenant->id})");
-                    $this->line("     Plano: {$planoNome}");
-                    $this->line("     Vencimento: {$dataFim->format('d/m/Y')}");
-                    $this->line("     Expirado há: {$diasExpirado} dias");
-
-                    // Se está fora do grace period, bloquear
-                    if ($foraGracePeriod && $bloquear) {
-                        if ($assinatura->status !== 'expirada') {
-                            $assinatura->update([
-                                'status' => 'expirada',
-                                'observacoes' => ($assinatura->observacoes ?? '') . "\nBloqueada automaticamente em " . $hoje->format('d/m/Y H:i:s'),
-                            ]);
-                            $this->info("     ✅ Status alterado para 'expirada'");
-                            $totalBloqueadas++;
-                        }
-                    }
-
-                    // Tentar cobrança automática (se configurado e se tem método de pagamento salvo)
-                    if ($cobrar && $foraGracePeriod && $assinatura->metodo_pagamento && $assinatura->metodo_pagamento !== 'gratuito') {
-                        $this->line("     💳 Tentando cobrança automática...");
+                        $planoNome = $assinatura->plano ? ($assinatura->plano->nome ?? 'N/A') : 'N/A';
+                        $empresaInfo = $assinatura->empresa_id ? " (Empresa ID: {$assinatura->empresa_id})" : '';
                         
-                        try {
-                            $cobrancaUseCase = app(\App\Application\Assinatura\UseCases\CobrarAssinaturaExpiradaUseCase::class);
-                            $resultado = $cobrancaUseCase->executar($tenant->id, $assinatura->id);
-                            
-                            if ($resultado['sucesso']) {
-                                $this->info("     ✅ Cobrança automática realizada com sucesso!");
-                                $totalCobradas++;
-                            } else {
-                                $this->warn("     ⚠️  {$resultado['mensagem']}");
+                        $this->line("  📅 Tenant {$tenant->razao_social} (ID: {$tenant->id}){$empresaInfo}");
+                        $this->line("     Assinatura ID: {$assinatura->id}");
+                        $this->line("     Plano: {$planoNome}");
+                        $this->line("     Vencimento: {$dataFim->format('d/m/Y')}");
+                        $this->line("     Expirado há: {$diasExpirado} dias");
+                        $this->line("     Status atual: {$assinatura->status}");
+
+                        // Se está fora do grace period, suspender/bloquear
+                        if ($foraGracePeriod && $bloquear) {
+                            // Se ainda está ativa ou pendente, suspender primeiro
+                            if (in_array($assinatura->status, ['ativa', 'pendente'])) {
+                                $assinatura->update([
+                                    'status' => 'suspensa',
+                                    'observacoes' => ($assinatura->observacoes ?? '') . "\n⚠️ Suspensa automaticamente por inadimplência em " . $hoje->format('d/m/Y H:i:s') . " (expirado há {$diasExpirado} dias, fora do grace period de {$diasGracePeriod} dias)",
+                                ]);
+                                $this->warn("     ⚠️  Status alterado para 'suspensa' (inadimplente)");
+                                $totalBloqueadas++;
+                                
+                                Log::warning('Assinatura suspensa por inadimplência', [
+                                    'tenant_id' => $tenant->id,
+                                    'empresa_id' => $assinatura->empresa_id,
+                                    'assinatura_id' => $assinatura->id,
+                                    'dias_expirado' => $diasExpirado,
+                                    'dias_grace_period' => $diasGracePeriod,
+                                ]);
+                            } 
+                            // Se já está suspensa há mais de 30 dias, marcar como expirada
+                            elseif ($assinatura->status === 'suspensa' && $diasExpirado > 30) {
+                                $assinatura->update([
+                                    'status' => 'expirada',
+                                    'observacoes' => ($assinatura->observacoes ?? '') . "\n❌ Expirada automaticamente em " . $hoje->format('d/m/Y H:i:s') . " (suspensa há mais de 30 dias)",
+                                ]);
+                                $this->error("     ❌ Status alterado para 'expirada' (suspensa há mais de 30 dias)");
+                                
+                                Log::error('Assinatura expirada após suspensão prolongada', [
+                                    'tenant_id' => $tenant->id,
+                                    'empresa_id' => $assinatura->empresa_id,
+                                    'assinatura_id' => $assinatura->id,
+                                    'dias_expirado' => $diasExpirado,
+                                ]);
                             }
-                        } catch (\Exception $e) {
-                            $this->error("     ❌ Erro ao tentar cobrança automática: {$e->getMessage()}");
-                            Log::error('Erro ao tentar cobrança automática', [
+                        }
+
+                        // Tentar cobrança automática (se configurado e se tem método de pagamento salvo)
+                        if ($cobrar && $foraGracePeriod && $assinatura->metodo_pagamento && $assinatura->metodo_pagamento !== 'gratuito') {
+                            $this->line("     💳 Tentando cobrança automática...");
+                            
+                            try {
+                                $cobrancaUseCase = app(\App\Application\Assinatura\UseCases\CobrarAssinaturaExpiradaUseCase::class);
+                                $resultado = $cobrancaUseCase->executar($tenant->id, $assinatura->id);
+                                
+                                if ($resultado['sucesso']) {
+                                    $this->info("     ✅ Cobrança automática realizada com sucesso!");
+                                    $totalCobradas++;
+                                } else {
+                                    $this->warn("     ⚠️  {$resultado['mensagem']}");
+                                }
+                            } catch (\Exception $e) {
+                                $this->error("     ❌ Erro ao tentar cobrança automática: {$e->getMessage()}");
+                                Log::error('Erro ao tentar cobrança automática', [
+                                    'tenant_id' => $tenant->id,
+                                    'assinatura_id' => $assinatura->id,
+                                    'error' => $e->getMessage(),
+                                ]);
+                            }
+                        }
+
+                        // Verificar se é Trial e expirou
+                        $plano = $assinatura->plano;
+                        if ($plano && strtolower($plano->nome) === 'trial') {
+                            $this->warn("     ⚠️  Plano Trial expirado - requer ação manual");
+                            Log::warning('Plano Trial expirado', [
                                 'tenant_id' => $tenant->id,
                                 'assinatura_id' => $assinatura->id,
-                                'error' => $e->getMessage(),
+                                'dias_expirado' => $diasExpirado,
                             ]);
                         }
-                    }
-
-                    // Verificar se é Trial e expirou
-                    $plano = $assinatura->plano;
-                    if ($plano && strtolower($plano->nome) === 'trial') {
-                        $this->warn("     ⚠️  Plano Trial expirado - requer ação manual");
-                        Log::warning('Plano Trial expirado', [
-                            'tenant_id' => $tenant->id,
-                            'assinatura_id' => $assinatura->id,
-                            'dias_expirado' => $diasExpirado,
-                        ]);
-                    }
-                } else {
-                    // Ainda não expirou
-                    $diasRestantes = $diasExpirado * -1;
-                    if ($diasRestantes <= 7) {
-                        $this->line("  ⚠️  Tenant {$tenant->razao_social} - Vencimento em {$diasRestantes} dias");
+                    } else {
+                        // Ainda não expirou
+                        $diasRestantes = $diasExpirado * -1;
+                        if ($diasRestantes <= 7) {
+                            $this->line("  ⚠️  Tenant {$tenant->razao_social} - Assinatura ID {$assinatura->id} vence em {$diasRestantes} dias");
+                        }
                     }
                 }
-
+                
                 $totalProcessados++;
                 tenancy()->end();
 
