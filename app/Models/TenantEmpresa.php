@@ -70,5 +70,17 @@ class TenantEmpresa extends Model
     {
         return self::where('empresa_id', $empresaId)->delete() > 0;
     }
+
+    /**
+     * Buscar empresa_id por tenant_id (método estático de conveniência)
+     * 
+     * @param int $tenantId
+     * @return int|null
+     */
+    public static function findEmpresaIdByTenantId(int $tenantId): ?int
+    {
+        $mapping = self::where('tenant_id', $tenantId)->first();
+        return $mapping?->empresa_id;
+    }
 }
 

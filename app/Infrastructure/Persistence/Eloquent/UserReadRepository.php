@@ -121,11 +121,23 @@ class UserReadRepository implements UserReadRepositoryInterface
         ]);
 
         // 🔥 UX: Filtrar por empresa específica quando solicitado
-        // Mostra APENAS usuários vinculados àquela empresa
-        if (isset($filtros['empresa_id']) && $filtros['empresa_id']) {
+        // Comportamento:
+        // - Se empresa_id for fornecido: mostrar APENAS usuários vinculados àquela empresa específica
+        // - Se não for fornecido: mostrar TODOS os usuários do tenant (todas as empresas do tenant)
+        // Normalmente é 1 tenant = 1 empresa, então sem filtro mostra todos os usuários do tenant
+        if (isset($filtros['empresa_id']) && $filtros['empresa_id'] > 0) {
+            \Log::info('UserReadRepository: Filtrando por empresa_id específico', [
+                'empresa_id' => $filtros['empresa_id'],
+            ]);
             $query->whereHas('empresas', function($q) use ($filtros) {
                 $q->where('empresas.id', $filtros['empresa_id']);
             });
+        } else {
+            \Log::info('UserReadRepository: Mostrando TODOS os usuários do tenant (sem filtro de empresa)', [
+                'tenant_id' => tenancy()->tenant?->id,
+            ]);
+            // Sem filtro de empresa_id, mostra todos os usuários do tenant
+            // Como normalmente é 1 tenant = 1 empresa, isso mostra todos os usuários
         }
 
         if (isset($filtros['search']) && !empty($filtros['search'])) {

@@ -10,9 +10,11 @@ use App\Domain\Tenant\Events\EmpresaCriada;
 use App\Domain\Shared\Events\EventDispatcherInterface;
 use App\Http\Responses\ApiResponse;
 use App\Models\Tenant;
+use App\Models\TenantEmpresa;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
+use Stancl\Tenancy\Facades\Tenancy;
 use DomainException;
 
 /**
@@ -106,6 +108,9 @@ class AdminTenantController extends Controller
 
     /**
      * Buscar empresa específica
+     * 
+     * 🔥 IMPORTANTE: Retorna dados do Tenant (empresa central) e também busca a Empresa
+     * dentro do tenant para retornar o empresa_id correto (usado para filtrar usuários)
      */
     public function show(Tenant $tenant)
     {
@@ -114,6 +119,70 @@ class AdminTenantController extends Controller
 
             if (!$tenantDomain) {
                 return response()->json(['message' => 'Empresa não encontrada.'], 404);
+            }
+
+            // 🔥 Buscar empresa dentro do tenant para obter o empresa_id correto
+            // Isso é necessário porque os usuários são vinculados à Empresa (dentro do tenant),
+            // não diretamente ao Tenant (empresa central)
+            $empresaId = null;
+            $empresaRazaoSocial = null;
+            $empresaCnpj = null;
+            
+            try {
+                // 1. Tentar buscar via mapeamento TenantEmpresa (mais rápido)
+                $empresaIdMapeado = TenantEmpresa::findEmpresaIdByTenantId($tenant->id);
+                
+                if ($empresaIdMapeado) {
+                    // Inicializar tenancy para buscar dados completos da empresa
+                    $tenantModel = Tenant::find($tenant->id);
+                    if ($tenantModel) {
+                        Tenancy::initialize($tenantModel);
+                        try {
+                            $empresa = \App\Models\Empresa::find($empresaIdMapeado);
+                            if ($empresa) {
+                                $empresaId = $empresa->id;
+                                $empresaRazaoSocial = $empresa->razao_social;
+                                $empresaCnpj = $empresa->cnpj;
+                            }
+                        } finally {
+                            Tenancy::end();
+                        }
+                    }
+                } else {
+                    // 2. Fallback: buscar primeira empresa do tenant (se não houver mapeamento)
+                    $tenantModel = Tenant::find($tenant->id);
+                    if ($tenantModel) {
+                        Tenancy::initialize($tenantModel);
+                        try {
+                            $empresa = \App\Models\Empresa::first();
+                            if ($empresa) {
+                                $empresaId = $empresa->id;
+                                $empresaRazaoSocial = $empresa->razao_social;
+                                $empresaCnpj = $empresa->cnpj;
+                                
+                                // Criar mapeamento para próxima vez (cache)
+                                try {
+                                    TenantEmpresa::createOrUpdateMapping($tenant->id, $empresa->id);
+                                } catch (\Exception $e) {
+                                    Log::warning('Erro ao criar mapeamento TenantEmpresa', [
+                                        'tenant_id' => $tenant->id,
+                                        'empresa_id' => $empresa->id,
+                                        'error' => $e->getMessage(),
+                                    ]);
+                                }
+                            }
+                        } finally {
+                            Tenancy::end();
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::warning('Erro ao buscar empresa dentro do tenant', [
+                    'tenant_id' => $tenant->id,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+                // Continuar mesmo se não conseguir buscar empresa (empresa_id será null)
             }
 
             // Retornar como array padronizado com todos os campos
@@ -138,6 +207,10 @@ class AdminTenantController extends Controller
                 'representante_legal_cpf' => $tenantDomain->representanteLegalCpf,
                 'representante_legal_cargo' => $tenantDomain->representanteLegalCargo,
                 'logo' => $tenantDomain->logo,
+                // 🔥 CRÍTICO: Retornar empresa_id da empresa dentro do tenant (usado para filtrar usuários)
+                'empresa_id' => $empresaId, // ID da Empresa dentro do tenant (para filtrar usuários)
+                'empresa_razao_social' => $empresaRazaoSocial, // Razão social da empresa dentro do tenant
+                'empresa_cnpj' => $empresaCnpj, // CNPJ da empresa dentro do tenant
             ];
 
             return ApiResponse::item($tenantData);
