@@ -494,6 +494,53 @@ class AdminUserController extends Controller
             
             if (str_contains($message, 'email') || str_contains($message, 'E-mail') || str_contains($message, 'e-mail')) {
                 $field = 'email';
+                
+                // 🔥 UX: Se o erro for de email duplicado, buscar informações do usuário existente
+                if (str_contains($message, 'já está cadastrado') || str_contains($message, 'já existe')) {
+                    try {
+                        // Inicializar contexto do tenant para buscar usuário
+                        tenancy()->initialize($tenant);
+                        
+                        $userExistente = $this->userReadRepository->buscarPorEmail($request->input('email'));
+                        
+                        if ($userExistente) {
+                            \Log::info('AdminUserController::store - Usuário existente encontrado', [
+                                'user_id' => $userExistente['id'],
+                                'user_name' => $userExistente['name'],
+                                'empresas_atuais' => $userExistente['empresas'] ?? [],
+                            ]);
+                            
+                            // Retornar erro com informações do usuário existente
+                            return response()->json([
+                                'message' => $message,
+                                'errors' => [
+                                    $field => [
+                                        $message . ' Este usuário já existe no sistema. Use a opção "Vincular usuário existente" ou atualize o usuário existente para adicioná-lo a esta empresa.'
+                                    ]
+                                ],
+                                'success' => false,
+                                'existing_user' => [
+                                    'id' => $userExistente['id'],
+                                    'name' => $userExistente['name'],
+                                    'email' => $userExistente['email'],
+                                    'empresas' => $userExistente['empresas'] ?? [],
+                                    'can_link' => true, // Indica que pode vincular à empresa
+                                ],
+                                'suggestion' => 'use_existing_user_link', // Sugestão para o frontend
+                            ], 422);
+                        }
+                    } catch (\Exception $searchError) {
+                        \Log::error('AdminUserController::store - Erro ao buscar usuário existente', [
+                            'error' => $searchError->getMessage(),
+                            'email' => $request->input('email'),
+                        ]);
+                        // Continuar com erro padrão se não conseguir buscar
+                    } finally {
+                        if (tenancy()->initialized) {
+                            tenancy()->end();
+                        }
+                    }
+                }
             } elseif (str_contains($message, 'senha') || str_contains($message, 'Senha')) {
                 $field = 'password';
             } elseif (str_contains($message, 'empresa') || str_contains($message, 'Empresa')) {
