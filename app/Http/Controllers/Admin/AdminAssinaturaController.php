@@ -290,23 +290,54 @@ class AdminAssinaturaController extends Controller
         try {
             $validated = $request->validated();
 
+            Log::debug('AdminAssinaturaController::trocarPlano - Iniciando', [
+                'tenant_id' => $tenantId,
+                'assinatura_id' => $assinaturaId,
+                'novo_plano_id' => $validated['novo_plano_id'] ?? null,
+                'periodo' => $validated['periodo'] ?? null,
+            ]);
+
             // Buscar assinatura atual
             $assinaturaAtual = $this->buscarAssinaturaAdminUseCase->executar($tenantId, $assinaturaId);
             if (!$assinaturaAtual) {
+                Log::warning('AdminAssinaturaController::trocarPlano - Assinatura não encontrada', [
+                    'tenant_id' => $tenantId,
+                    'assinatura_id' => $assinaturaId,
+                ]);
                 return ApiResponse::error('Assinatura não encontrada.', 404);
             }
 
+            $planoAtualId = is_array($assinaturaAtual) ? ($assinaturaAtual['plano_id'] ?? null) : ($assinaturaAtual->plano_id ?? null);
+            $novoPlanoId = $validated['novo_plano_id'];
+
+            Log::debug('AdminAssinaturaController::trocarPlano - Verificando plano atual', [
+                'plano_atual_id' => $planoAtualId,
+                'novo_plano_id' => $novoPlanoId,
+                'sao_iguais' => $planoAtualId == $novoPlanoId,
+            ]);
+
             // Se já está no mesmo plano, retornar erro
-            if ($assinaturaAtual['plano_id'] == $validated['novo_plano_id']) {
+            if ($planoAtualId == $novoPlanoId) {
+                Log::info('AdminAssinaturaController::trocarPlano - Assinatura já está no mesmo plano', [
+                    'tenant_id' => $tenantId,
+                    'assinatura_id' => $assinaturaId,
+                    'plano_id' => $novoPlanoId,
+                ]);
                 return ApiResponse::error('A assinatura já está neste plano.', 400);
             }
 
             // Atualizar assinatura com novo plano
+            Log::debug('AdminAssinaturaController::trocarPlano - Atualizando assinatura', [
+                'tenant_id' => $tenantId,
+                'assinatura_id' => $assinaturaId,
+                'novo_plano_id' => $novoPlanoId,
+            ]);
+
             $this->atualizarAssinaturaAdminUseCase->executar(
                 $tenantId,
                 $assinaturaId,
                 [
-                    'plano_id' => $validated['novo_plano_id'],
+                    'plano_id' => $novoPlanoId,
                     // O valor_pago será atualizado automaticamente pelo Use Case
                 ]
             );
@@ -317,14 +348,34 @@ class AdminAssinaturaController extends Controller
                 $assinaturaId
             );
 
+            Log::info('AdminAssinaturaController::trocarPlano - Plano alterado com sucesso', [
+                'tenant_id' => $tenantId,
+                'assinatura_id' => $assinaturaId,
+                'plano_anterior_id' => $planoAtualId,
+                'novo_plano_id' => $novoPlanoId,
+            ]);
+
             return ApiResponse::success(
                 'Plano alterado com sucesso!',
                 $assinaturaCompleta
             );
         } catch (\App\Domain\Exceptions\DomainException $e) {
+            Log::error('AdminAssinaturaController::trocarPlano - DomainException', [
+                'tenant_id' => $tenantId,
+                'assinatura_id' => $assinaturaId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
             return ApiResponse::error($e->getMessage(), 400);
+        } catch (\App\Domain\Exceptions\NotFoundException $e) {
+            Log::warning('AdminAssinaturaController::trocarPlano - NotFoundException', [
+                'tenant_id' => $tenantId,
+                'assinatura_id' => $assinaturaId,
+                'error' => $e->getMessage(),
+            ]);
+            return ApiResponse::error($e->getMessage(), 404);
         } catch (\Exception $e) {
-            Log::error('Erro ao trocar plano', [
+            Log::error('AdminAssinaturaController::trocarPlano - Exception', [
                 'tenant_id' => $tenantId,
                 'assinatura_id' => $assinaturaId,
                 'error' => $e->getMessage(),
