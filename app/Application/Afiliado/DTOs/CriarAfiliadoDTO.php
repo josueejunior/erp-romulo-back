@@ -28,6 +28,7 @@ final class CriarAfiliadoDTO
         public readonly ?string $conta = null,
         public readonly ?string $tipoConta = null,
         public readonly ?string $pix = null,
+        public readonly ?array $contasBancarias = null, // Array de contas bancárias
         public readonly bool $ativo = true,
         public readonly ?string $observacoes = null,
     ) {}
@@ -53,6 +54,9 @@ final class CriarAfiliadoDTO
             conta: $data['conta'] ?? null,
             tipoConta: $data['tipo_conta'] ?? null,
             pix: $data['pix'] ?? null,
+            contasBancarias: isset($data['contas_bancarias']) && is_array($data['contas_bancarias']) 
+                ? $data['contas_bancarias'] 
+                : null,
             ativo: $data['ativo'] ?? true,
             observacoes: $data['observacoes'] ?? null,
         );
@@ -79,9 +83,12 @@ final class CriarAfiliadoDTO
             'conta' => $this->conta,
             'tipo_conta' => $this->tipoConta,
             'pix' => $this->pix,
+            'contas_bancarias' => $this->contasBancarias,
             'ativo' => $this->ativo,
             'observacoes' => $this->observacoes,
         ];
     }
 }
+
+
 

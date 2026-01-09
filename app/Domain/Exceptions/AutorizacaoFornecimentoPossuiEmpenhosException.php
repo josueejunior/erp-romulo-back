@@ -18,3 +18,5 @@ class AutorizacaoFornecimentoPossuiEmpenhosException extends BusinessRuleExcepti
     }
 }
 
+
+

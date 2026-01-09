@@ -29,3 +29,5 @@ interface RelatorioOrcamentoRepositoryInterface
     public function buscarOrcamentosPorStatus(int $empresaId, FiltrosRelatorio $filtros): Collection;
 }
 
+
+

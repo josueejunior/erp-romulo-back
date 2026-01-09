@@ -54,8 +54,22 @@ final class CriarAfiliadoUseCase
             throw new DomainException('O percentual de comissão deve estar entre 0 e 100.');
         }
 
+        // Preparar dados para criação
+        $data = $dto->toArray();
+        
+        // Se não há contas_bancarias mas há dados bancários antigos, migrar
+        if (empty($data['contas_bancarias']) && ($data['banco'] || $data['agencia'] || $data['conta'] || $data['pix'])) {
+            $data['contas_bancarias'] = [[
+                'banco' => $data['banco'] ?? '',
+                'agencia' => $data['agencia'] ?? '',
+                'conta' => $data['conta'] ?? '',
+                'tipo_conta' => $data['tipo_conta'] ?? '',
+                'pix' => $data['pix'] ?? '',
+            ]];
+        }
+
         // Criar afiliado
-        $afiliado = Afiliado::create($dto->toArray());
+        $afiliado = Afiliado::create($data);
 
         Log::info('CriarAfiliadoUseCase - Afiliado criado', [
             'id' => $afiliado->id,
@@ -65,4 +79,6 @@ final class CriarAfiliadoUseCase
         return $afiliado;
     }
 }
+
+
 

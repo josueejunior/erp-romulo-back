@@ -47,6 +47,7 @@ class Afiliado extends Model
         'conta',
         'tipo_conta',
         'pix',
+        'contas_bancarias', // Array de contas bancárias (JSON)
         
         // Status
         'ativo',
@@ -59,6 +60,7 @@ class Afiliado extends Model
             'percentual_desconto' => 'decimal:2',
             'percentual_comissao' => 'decimal:2',
             'ativo' => 'boolean',
+            'contas_bancarias' => 'array', // Cast para array (JSON)
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
             'deleted_at' => 'datetime',
@@ -208,5 +210,8 @@ class Afiliado extends Model
               ->orWhere('codigo', 'ilike', "%{$termo}%");
         });
     }
+
 }
+
+
 

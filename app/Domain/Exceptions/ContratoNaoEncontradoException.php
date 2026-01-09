@@ -13,3 +13,5 @@ class ContratoNaoEncontradoException extends NotFoundException
     }
 }
 
+
+

@@ -318,3 +318,5 @@ class ProcessoController extends BaseApiController
 - [ ] Usa Domain Exceptions para erros de negócio
 - [ ] Controller apenas orquestra (Request → DTO → Use Case → Presenter → Response)
 
+
+

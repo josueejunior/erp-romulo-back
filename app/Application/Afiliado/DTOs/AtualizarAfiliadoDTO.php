@@ -29,6 +29,7 @@ final class AtualizarAfiliadoDTO
         public readonly ?string $conta = null,
         public readonly ?string $tipoConta = null,
         public readonly ?string $pix = null,
+        public readonly ?array $contasBancarias = null, // Array de contas bancárias
         public readonly ?bool $ativo = null,
         public readonly ?string $observacoes = null,
     ) {}
@@ -55,6 +56,9 @@ final class AtualizarAfiliadoDTO
             conta: $data['conta'] ?? null,
             tipoConta: $data['tipo_conta'] ?? null,
             pix: $data['pix'] ?? null,
+            contasBancarias: isset($data['contas_bancarias']) && is_array($data['contas_bancarias']) 
+                ? $data['contas_bancarias'] 
+                : null,
             ativo: isset($data['ativo']) ? (bool) $data['ativo'] : null,
             observacoes: $data['observacoes'] ?? null,
         );
@@ -82,10 +86,13 @@ final class AtualizarAfiliadoDTO
         if ($this->conta !== null) $data['conta'] = $this->conta;
         if ($this->tipoConta !== null) $data['tipo_conta'] = $this->tipoConta;
         if ($this->pix !== null) $data['pix'] = $this->pix;
+        if ($this->contasBancarias !== null) $data['contas_bancarias'] = $this->contasBancarias;
         if ($this->ativo !== null) $data['ativo'] = $this->ativo;
         if ($this->observacoes !== null) $data['observacoes'] = $this->observacoes;
         
         return $data;
     }
 }
+
+
 

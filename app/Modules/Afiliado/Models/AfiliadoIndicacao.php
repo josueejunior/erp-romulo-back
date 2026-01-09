@@ -184,3 +184,5 @@ class AfiliadoIndicacao extends Model
     }
 }
 
+
+

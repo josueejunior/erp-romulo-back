@@ -68,8 +68,22 @@ final class AtualizarAfiliadoUseCase
             throw new DomainException('O percentual de comissão deve estar entre 0 e 100.');
         }
 
+        // Preparar dados para atualização
+        $data = $dto->toArray();
+        
+        // Se não há contas_bancarias mas há dados bancários antigos, migrar
+        if (empty($data['contas_bancarias']) && ($data['banco'] || $data['agencia'] || $data['conta'] || $data['pix'])) {
+            $data['contas_bancarias'] = [[
+                'banco' => $data['banco'] ?? '',
+                'agencia' => $data['agencia'] ?? '',
+                'conta' => $data['conta'] ?? '',
+                'tipo_conta' => $data['tipo_conta'] ?? '',
+                'pix' => $data['pix'] ?? '',
+            ]];
+        }
+
         // Atualizar afiliado
-        $afiliado->update($dto->toArray());
+        $afiliado->update($data);
 
         Log::info('AtualizarAfiliadoUseCase - Afiliado atualizado', [
             'id' => $afiliado->id,
@@ -78,4 +92,6 @@ final class AtualizarAfiliadoUseCase
         return $afiliado->fresh();
     }
 }
+
+
 

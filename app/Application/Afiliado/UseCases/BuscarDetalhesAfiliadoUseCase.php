@@ -148,3 +148,5 @@ final class BuscarDetalhesAfiliadoUseCase
     }
 }
 
+
+

@@ -86,6 +86,12 @@ class AfiliadoController extends BaseApiController
                 'whatsapp' => 'nullable|string|max:20',
                 'percentual_desconto' => 'nullable|numeric|min:0|max:100',
                 'percentual_comissao' => 'nullable|numeric|min:0|max:100',
+                'contas_bancarias' => 'nullable|array',
+                'contas_bancarias.*.banco' => 'nullable|string|max:100',
+                'contas_bancarias.*.agencia' => 'nullable|string|max:20',
+                'contas_bancarias.*.conta' => 'nullable|string|max:30',
+                'contas_bancarias.*.tipo_conta' => 'nullable|in:corrente,poupanca',
+                'contas_bancarias.*.pix' => 'nullable|string|max:255',
             ]);
 
             $dto = CriarAfiliadoDTO::fromArray($request->all());
@@ -121,8 +127,24 @@ class AfiliadoController extends BaseApiController
         try {
             $afiliado = $this->buscarAfiliadoUseCase->executar($id);
 
+            // Garantir que contas_bancarias sempre seja um array
+            $afiliadoData = $afiliado->toArray();
+            if (empty($afiliadoData['contas_bancarias']) && 
+                ($afiliadoData['banco'] || $afiliadoData['agencia'] || $afiliadoData['conta'] || $afiliadoData['pix'])) {
+                // Migrar dados antigos para novo formato
+                $afiliadoData['contas_bancarias'] = [[
+                    'banco' => $afiliadoData['banco'] ?? '',
+                    'agencia' => $afiliadoData['agencia'] ?? '',
+                    'conta' => $afiliadoData['conta'] ?? '',
+                    'tipo_conta' => $afiliadoData['tipo_conta'] ?? '',
+                    'pix' => $afiliadoData['pix'] ?? '',
+                ]];
+            } elseif (empty($afiliadoData['contas_bancarias'])) {
+                $afiliadoData['contas_bancarias'] = [];
+            }
+
             return response()->json([
-                'data' => $afiliado,
+                'data' => $afiliadoData,
             ]);
         } catch (DomainException $e) {
             return response()->json([
@@ -155,6 +177,12 @@ class AfiliadoController extends BaseApiController
                 'email' => 'sometimes|email|max:255',
                 'percentual_desconto' => 'nullable|numeric|min:0|max:100',
                 'percentual_comissao' => 'nullable|numeric|min:0|max:100',
+                'contas_bancarias' => 'nullable|array',
+                'contas_bancarias.*.banco' => 'nullable|string|max:100',
+                'contas_bancarias.*.agencia' => 'nullable|string|max:20',
+                'contas_bancarias.*.conta' => 'nullable|string|max:30',
+                'contas_bancarias.*.tipo_conta' => 'nullable|in:corrente,poupanca',
+                'contas_bancarias.*.pix' => 'nullable|string|max:255',
             ]);
 
             $dto = AtualizarAfiliadoDTO::fromArray($id, $request->all());
@@ -298,4 +326,6 @@ class AfiliadoController extends BaseApiController
         }
     }
 }
+
+
 

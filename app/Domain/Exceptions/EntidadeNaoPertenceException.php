@@ -24,3 +24,5 @@ class EntidadeNaoPertenceException extends BusinessRuleException
     }
 }
 
+
+
