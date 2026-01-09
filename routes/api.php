@@ -135,6 +135,19 @@ Route::prefix('v1')->group(function () {
         Route::patch('/notifications/{id}/read', [\App\Modules\Notification\Controllers\NotificationController::class, 'markAsRead']);
         Route::post('/notifications/read-all', [\App\Modules\Notification\Controllers\NotificationController::class, 'markAllAsRead']);
         
+        // Onboarding (usuários autenticados)
+        Route::prefix('onboarding')->group(function () {
+            Route::get('/status', [\App\Modules\Onboarding\Controllers\OnboardingController::class, 'status']);
+            Route::post('/marcar-etapa', [\App\Modules\Onboarding\Controllers\OnboardingController::class, 'marcarEtapa']);
+            Route::post('/concluir', [\App\Modules\Onboarding\Controllers\OnboardingController::class, 'concluir']);
+        });
+        
+        // Planos (protegido por onboarding - só após tutorial concluído)
+        Route::prefix('planos')->middleware(['onboarding.completo'])->group(function () {
+            Route::get('/', [ApiPlanoController::class, 'list']);
+            Route::get('/{id}', [ApiPlanoController::class, 'get'])->where('id', '[0-9]+');
+        });
+        
         // Rotas que PRECISAM de assinatura ativa
         Route::middleware([\App\Http\Middleware\CheckSubscription::class])->group(function () {
             // Dashboard

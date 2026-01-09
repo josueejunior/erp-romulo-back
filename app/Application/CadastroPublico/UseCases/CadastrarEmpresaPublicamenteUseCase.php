@@ -360,6 +360,7 @@ final class CadastrarEmpresaPublicamenteUseCase
 
         // Processar pagamento
         return $this->processarPagamento(
+            $tenantResult['admin_user'],
             $tenantResult['tenant'],
             $tenantResult['empresa'],
             $plano,
@@ -465,9 +466,25 @@ final class CadastrarEmpresaPublicamenteUseCase
     /**
      * Processa pagamento e cria assinatura
      */
-    private function processarPagamento($tenant, $empresa, $plano, CadastroPublicoDTO $dto): array
+    private function processarPagamento($adminUser, $tenant, $empresa, $plano, CadastroPublicoDTO $dto): array
     {
         $valorOriginal = $this->assinaturaDomainService->calcularValor($plano, $dto->periodo);
+        
+        // Se o plano for gratuito, não processar pagamento - criar assinatura gratuita diretamente
+        if ($valorOriginal <= 0) {
+            Log::info('CadastrarEmpresaPublicamenteUseCase::processarPagamento - Plano gratuito detectado, criando assinatura gratuita', [
+                'plano_id' => $plano->id,
+                'valor' => $valorOriginal,
+            ]);
+            
+            return $this->criarAssinaturaGratuita(
+                $adminUser,
+                $tenant,
+                $empresa,
+                $plano,
+                $dto
+            );
+        }
         
         // Aplicar desconto de afiliado se houver
         $valorFinal = $valorOriginal;
@@ -485,6 +502,23 @@ final class CadastrarEmpresaPublicamenteUseCase
                     'error' => $e->getMessage(),
                 ]);
             }
+        }
+        
+        // Garantir que o valor final ainda seja maior que zero após desconto
+        if ($valorFinal <= 0) {
+            Log::info('CadastrarEmpresaPublicamenteUseCase::processarPagamento - Valor final zero após desconto, criando assinatura gratuita', [
+                'plano_id' => $plano->id,
+                'valor_original' => $valorOriginal,
+                'valor_final' => $valorFinal,
+            ]);
+            
+            return $this->criarAssinaturaGratuita(
+                $adminUser,
+                $tenant,
+                $empresa,
+                $plano,
+                $dto
+            );
         }
 
         // Criar PaymentRequest

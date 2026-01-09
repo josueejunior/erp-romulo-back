@@ -27,7 +27,16 @@ readonly class PaymentRequest
 
     private function validate(): void
     {
-        if ($this->amount->cents <= 0) {
+        // Permitir valor zero apenas para planos gratuitos (quando não há método de pagamento real)
+        // Se há método de pagamento (PIX, cartão), o valor deve ser maior que zero
+        $isGratuito = $this->amount->cents === 0;
+        $temMetodoPagamento = $this->paymentMethodId !== null || $this->cardToken !== null;
+        
+        if ($isGratuito && $temMetodoPagamento) {
+            throw new \App\Domain\Exceptions\DomainException('Não é possível processar pagamento com valor zero. Planos gratuitos não requerem pagamento.');
+        }
+        
+        if (!$isGratuito && $this->amount->cents <= 0) {
             throw new \App\Domain\Exceptions\DomainException('O valor do pagamento deve ser maior que zero.');
         }
 
@@ -35,7 +44,8 @@ readonly class PaymentRequest
             throw new \App\Domain\Exceptions\DomainException('A descrição do pagamento é obrigatória.');
         }
 
-        if (!filter_var($this->payerEmail, FILTER_VALIDATE_EMAIL)) {
+        // E-mail só é obrigatório se houver método de pagamento
+        if ($temMetodoPagamento && !filter_var($this->payerEmail, FILTER_VALIDATE_EMAIL)) {
             throw new \App\Domain\Exceptions\DomainException('O e-mail do pagador é inválido.');
         }
 
