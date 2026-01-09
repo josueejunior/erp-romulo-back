@@ -370,9 +370,15 @@ final class CadastrarEmpresaPublicamenteUseCase
 
         $paymentRequest = PaymentRequest::fromArray($paymentRequestData);
 
-        // Processar pagamento usando o Use Case
+        // Buscar modelo Eloquent do Tenant (ProcessarAssinaturaPlanoUseCase espera Eloquent model)
+        $tenantModel = $this->tenantRepository->buscarModeloPorId($tenant->id);
+        if (!$tenantModel) {
+            throw new \DomainException('Tenant não encontrado após criação.');
+        }
+
+        // Processar pagamento usando o Use Case (passa modelo Eloquent)
         $assinatura = $this->processarAssinaturaPlanoUseCase->executar(
-            $tenant,
+            $tenantModel,
             $plano,
             $paymentRequest,
             $dto->periodo
@@ -394,7 +400,7 @@ final class CadastrarEmpresaPublicamenteUseCase
             // Nota: Em DDD ideal, isso viria de um PaymentResultDTO retornado pelo
             // ProcessarAssinaturaPlanoUseCase, mas por enquanto mantemos compatibilidade
             // com a estrutura existente. Isso deveria ser abstraído via PaymentRepository.
-            $paymentLog = \App\Models\PaymentLog::where('tenant_id', $tenant->id)
+            $paymentLog = \App\Models\PaymentLog::where('tenant_id', $tenantModel->id)
                 ->where('plano_id', $plano->id)
                 ->latest()
                 ->first();
