@@ -26,18 +26,26 @@ class AssinaturaRepository implements AssinaturaRepositoryInterface
 {
     /**
      * Normalizar método de pagamento (corrigir valores inválidos no banco)
+     * 
+     * Este método garante que valores inválidos no banco de dados sejam
+     * convertidos para valores válidos antes de criar a entidade do domínio.
      */
     private function normalizarMetodoPagamento(?string $metodoPagamento): ?string
     {
-        if ($metodoPagamento === null) {
+        if ($metodoPagamento === null || $metodoPagamento === '') {
             return null;
         }
 
+        // Normalizar para lowercase para comparação case-insensitive
+        $metodoPagamentoLower = strtolower(trim($metodoPagamento));
+
         $metodosValidos = ['gratuito', 'credit_card', 'pix', 'boleto', 'pendente'];
         
-        // Se já é válido, retornar como está
-        if (in_array($metodoPagamento, $metodosValidos, true)) {
-            return $metodoPagamento;
+        // Se já é válido (case-insensitive), retornar o valor válido correto
+        foreach ($metodosValidos as $metodoValido) {
+            if (strtolower($metodoValido) === $metodoPagamentoLower) {
+                return $metodoValido;
+            }
         }
 
         // Mapear valores inválidos conhecidos para valores válidos
@@ -45,18 +53,22 @@ class AssinaturaRepository implements AssinaturaRepositoryInterface
             'master' => 'gratuito', // 'master' era usado antigamente para planos gratuitos
             'card' => 'credit_card',
             'creditcard' => 'credit_card',
+            'credit_card' => 'credit_card', // Garantir formato correto
             'debit_card' => 'credit_card',
+            'debitcard' => 'credit_card',
+            'free' => 'gratuito',
+            'gratis' => 'gratuito',
         ];
 
-        if (isset($mapeamento[$metodoPagamento])) {
+        if (isset($mapeamento[$metodoPagamentoLower])) {
             Log::warning('AssinaturaRepository::normalizarMetodoPagamento - Valor inválido corrigido', [
                 'valor_antigo' => $metodoPagamento,
-                'valor_novo' => $mapeamento[$metodoPagamento],
+                'valor_novo' => $mapeamento[$metodoPagamentoLower],
             ]);
-            return $mapeamento[$metodoPagamento];
+            return $mapeamento[$metodoPagamentoLower];
         }
 
-        // Se não conseguir mapear, usar 'pendente' como fallback
+        // Se não conseguir mapear, usar 'pendente' como fallback seguro
         Log::warning('AssinaturaRepository::normalizarMetodoPagamento - Valor desconhecido, usando fallback', [
             'valor_antigo' => $metodoPagamento,
             'valor_novo' => 'pendente',
@@ -66,25 +78,64 @@ class AssinaturaRepository implements AssinaturaRepositoryInterface
 
     /**
      * Converter modelo Eloquent para entidade do domínio
+     * 
+     * Garante que valores inválidos sejam normalizados antes de criar a entidade.
      */
     private function toDomain(AssinaturaModel $model): Assinatura
     {
-        return new Assinatura(
-            id: $model->id,
-            userId: $model->user_id,
-            tenantId: $model->tenant_id,
-            empresaId: $model->empresa_id,
-            planoId: $model->plano_id,
-            status: $model->status,
-            dataInicio: $model->data_inicio ? Carbon::parse($model->data_inicio) : null,
-            dataFim: $model->data_fim ? Carbon::parse($model->data_fim) : null,
-            dataCancelamento: $model->data_cancelamento ? Carbon::parse($model->data_cancelamento) : null,
-            valorPago: $model->valor_pago ? (float) $model->valor_pago : null,
-            metodoPagamento: $this->normalizarMetodoPagamento($model->metodo_pagamento),
-            transacaoId: $model->transacao_id,
-            diasGracePeriod: $model->dias_grace_period ?? 7,
-            observacoes: $model->observacoes,
-        );
+        // Normalizar método de pagamento ANTES de criar a entidade
+        $metodoPagamentoNormalizado = $this->normalizarMetodoPagamento($model->metodo_pagamento);
+        
+        try {
+            return new Assinatura(
+                id: $model->id,
+                userId: $model->user_id,
+                tenantId: $model->tenant_id,
+                empresaId: $model->empresa_id,
+                planoId: $model->plano_id,
+                status: $model->status,
+                dataInicio: $model->data_inicio ? Carbon::parse($model->data_inicio) : null,
+                dataFim: $model->data_fim ? Carbon::parse($model->data_fim) : null,
+                dataCancelamento: $model->data_cancelamento ? Carbon::parse($model->data_cancelamento) : null,
+                valorPago: $model->valor_pago ? (float) $model->valor_pago : null,
+                metodoPagamento: $metodoPagamentoNormalizado,
+                transacaoId: $model->transacao_id,
+                diasGracePeriod: $model->dias_grace_period ?? 7,
+                observacoes: $model->observacoes,
+            );
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            // Se ainda houver erro de validação (não deveria acontecer após normalização),
+            // tentar novamente com 'pendente' como fallback absoluto
+            if (str_contains($e->getMessage(), 'Método de pagamento inválido')) {
+                Log::error('AssinaturaRepository::toDomain - Erro de validação mesmo após normalização', [
+                    'assinatura_id' => $model->id,
+                    'metodo_pagamento_original' => $model->metodo_pagamento,
+                    'metodo_pagamento_normalizado' => $metodoPagamentoNormalizado,
+                    'erro' => $e->getMessage(),
+                ]);
+                
+                // Tentar novamente com 'pendente' como último recurso
+                return new Assinatura(
+                    id: $model->id,
+                    userId: $model->user_id,
+                    tenantId: $model->tenant_id,
+                    empresaId: $model->empresa_id,
+                    planoId: $model->plano_id,
+                    status: $model->status,
+                    dataInicio: $model->data_inicio ? Carbon::parse($model->data_inicio) : null,
+                    dataFim: $model->data_fim ? Carbon::parse($model->data_fim) : null,
+                    dataCancelamento: $model->data_cancelamento ? Carbon::parse($model->data_cancelamento) : null,
+                    valorPago: $model->valor_pago ? (float) $model->valor_pago : null,
+                    metodoPagamento: 'pendente', // Fallback absoluto
+                    transacaoId: $model->transacao_id,
+                    diasGracePeriod: $model->dias_grace_period ?? 7,
+                    observacoes: $model->observacoes,
+                );
+            }
+            
+            // Re-lançar se não for erro de método de pagamento
+            throw $e;
+        }
     }
 
     /**
