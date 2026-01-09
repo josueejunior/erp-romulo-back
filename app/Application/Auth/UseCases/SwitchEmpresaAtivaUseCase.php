@@ -7,17 +7,21 @@ use App\Domain\Auth\Entities\User;
 use App\Domain\Auth\Events\EmpresaAtivaAlterada;
 use App\Domain\Shared\Events\EventDispatcherInterface;
 use App\Domain\Shared\ValueObjects\TenantContext;
+use App\Application\Assinatura\UseCases\VerificarAssinaturaAtivaPorEmpresaUseCase;
 use DomainException;
 
 /**
  * Use Case: Trocar Empresa Ativa
  * Orquestra a troca de empresa ativa e dispara Domain Event para limpar cache
+ * 
+ * 🔥 NOVO: Verifica se a empresa tem assinatura ativa após trocar
  */
 class SwitchEmpresaAtivaUseCase
 {
     public function __construct(
         private UserRepositoryInterface $userRepository,
         private EventDispatcherInterface $eventDispatcher,
+        private VerificarAssinaturaAtivaPorEmpresaUseCase $verificarAssinaturaUseCase,
     ) {}
 
     /**
@@ -55,6 +59,19 @@ class SwitchEmpresaAtivaUseCase
                 ocorreuEm: new \DateTimeImmutable(),
             )
         );
+
+        // 🔥 NOVO: Verificar se a empresa tem assinatura ativa
+        // Se não tiver, lançar exceção para que o controller retorne erro apropriado
+        $resultadoAssinatura = $this->verificarAssinaturaUseCase->executar($novaEmpresaId);
+        
+        if (!$resultadoAssinatura['pode_acessar']) {
+            // Armazenar resultado da verificação no usuário para o controller acessar
+            // Por enquanto, lançamos uma exceção específica
+            throw new \App\Domain\Exceptions\DomainException(
+                $resultadoAssinatura['message'] ?? 'Esta empresa não possui uma assinatura ativa.',
+                $resultadoAssinatura['code'] ?? 'NO_SUBSCRIPTION'
+            );
+        }
 
         return $userAtualizado;
     }

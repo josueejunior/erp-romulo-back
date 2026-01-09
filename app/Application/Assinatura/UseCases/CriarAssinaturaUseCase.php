@@ -58,11 +58,22 @@ class CriarAssinaturaUseCase
             $tenantModel = $this->tenantRepository->buscarModeloPorId($dto->tenantId);
         }
 
+        // 🔥 NOVO: Se empresaId não foi fornecido, tentar obter do usuário (empresa_ativa_id)
+        $empresaId = $dto->empresaId;
+        if (!$empresaId && $user->empresa_ativa_id) {
+            $empresaId = $user->empresa_ativa_id;
+            Log::info('CriarAssinaturaUseCase - Usando empresa_ativa_id do usuário', [
+                'user_id' => $user->id,
+                'empresa_id' => $empresaId,
+            ]);
+        }
+
         // Criar entidade do domínio
         $assinatura = new Assinatura(
             id: null, // Nova assinatura
-            userId: $dto->userId, // 🔥 NOVO: Assinatura pertence ao usuário
+            userId: $dto->userId,
             tenantId: $dto->tenantId, // Opcional para compatibilidade
+            empresaId: $empresaId, // 🔥 NOVO: Assinatura pertence à empresa
             planoId: $dto->planoId,
             status: $dto->status,
             dataInicio: $dto->dataInicio ?? Carbon::now(),

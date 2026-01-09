@@ -146,6 +146,17 @@ class ProcessarAssinaturaPlanoUseCase
             $dataInicio = Carbon::now();
             $dataFim = $dataInicio->copy()->addDays($diasValidade);
 
+            // 🔥 NOVO: Buscar empresa do tenant (primeira empresa do tenant)
+            $empresa = \App\Models\Empresa::where('tenant_id', $tenant->id)->first();
+            if (!$empresa) {
+                // Tentar buscar via TenantEmpresa (mapeamento central)
+                $tenantEmpresa = \App\Models\TenantEmpresa::where('tenant_id', $tenant->id)->first();
+                if ($tenantEmpresa) {
+                    // Buscar empresa no banco do tenant
+                    $empresa = \App\Models\Empresa::find($tenantEmpresa->empresa_id);
+                }
+            }
+
             // CRÍTICO: Cancelar assinaturas ativas antigas antes de criar a nova
             // Isso garante que apenas uma assinatura fique ativa por vez
             $assinaturasAntigas = Assinatura::where('tenant_id', $tenant->id)
@@ -170,6 +181,7 @@ class ProcessarAssinaturaPlanoUseCase
             // Criar nova assinatura
             $assinatura = Assinatura::create([
                 'tenant_id' => $tenant->id,
+                'empresa_id' => $empresa?->id, // 🔥 NOVO: Assinatura pertence à empresa
                 'plano_id' => $plano->id,
                 'status' => 'ativa',
                 'data_inicio' => $dataInicio,
@@ -217,11 +229,23 @@ class ProcessarAssinaturaPlanoUseCase
             $dataInicio = Carbon::now();
             $dataFim = $dataInicio->copy()->addDays($diasValidade);
 
+            // 🔥 NOVO: Buscar empresa do tenant (primeira empresa do tenant)
+            $empresa = \App\Models\Empresa::where('tenant_id', $tenant->id)->first();
+            if (!$empresa) {
+                // Tentar buscar via TenantEmpresa (mapeamento central)
+                $tenantEmpresa = \App\Models\TenantEmpresa::where('tenant_id', $tenant->id)->first();
+                if ($tenantEmpresa) {
+                    // Buscar empresa no banco do tenant
+                    $empresa = \App\Models\Empresa::find($tenantEmpresa->empresa_id);
+                }
+            }
+
             // IMPORTANTE: NÃO atualizar tenant quando está pendente
             // O tenant só deve ser atualizado quando o pagamento for aprovado (via webhook)
             // Criar assinatura com status pendente
             $assinatura = Assinatura::create([
                 'tenant_id' => $tenant->id,
+                'empresa_id' => $empresa?->id, // 🔥 NOVO: Assinatura pertence à empresa
                 'plano_id' => $plano->id,
                 'status' => 'suspensa', // Será ativada quando o webhook confirmar
                 'data_inicio' => $dataInicio,

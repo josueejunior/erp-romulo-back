@@ -23,6 +23,7 @@ class Assinatura
         public readonly ?int $id,
         public readonly ?int $userId,
         public readonly ?int $tenantId,
+        public readonly ?int $empresaId, // 🔥 NOVO: Assinatura pertence à empresa
         public readonly int $planoId,
         public readonly string $status,
         public readonly ?Carbon $dataInicio = null,
@@ -247,6 +248,7 @@ class Assinatura
             'id' => $this->id,
             'user_id' => $this->userId,
             'tenant_id' => $this->tenantId,
+            'empresa_id' => $this->empresaId,
             'plano_id' => $this->planoId,
             'status' => $this->status,
             'status_label' => $this->statusLabel(),

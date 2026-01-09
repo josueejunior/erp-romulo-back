@@ -16,11 +16,25 @@ final class AssinaturaQueries
 {
     /**
      * Busca assinatura atual por usuário (mais recente válida)
+     * 
+     * @deprecated Use assinaturaAtualPorEmpresa() - assinatura pertence à empresa
      */
     public static function assinaturaAtualPorUsuario(int $userId): ?AssinaturaModel
     {
         return self::baseQueryValida()
             ->where('user_id', $userId)
+            ->first();
+    }
+
+    /**
+     * Busca assinatura atual por empresa (mais recente válida)
+     * 
+     * 🔥 NOVO: Assinatura pertence à empresa, não ao usuário
+     */
+    public static function assinaturaAtualPorEmpresa(int $empresaId): ?AssinaturaModel
+    {
+        return self::baseQueryValida()
+            ->where('empresa_id', $empresaId)
             ->first();
     }
 
@@ -91,10 +105,25 @@ final class AssinaturaQueries
 
     /**
      * Verifica se usuário tem assinatura válida
+     * 
+     * @deprecated Use empresaTemAssinaturaValida() - assinatura pertence à empresa
      */
     public static function usuarioTemAssinaturaValida(int $userId): bool
     {
         return AssinaturaModel::where('user_id', $userId)
+            ->whereIn('status', StatusAssinatura::statusAtivos())
+            ->whereDate('data_fim', '>=', now())
+            ->exists();
+    }
+
+    /**
+     * Verifica se empresa tem assinatura válida
+     * 
+     * 🔥 NOVO: Assinatura pertence à empresa
+     */
+    public static function empresaTemAssinaturaValida(int $empresaId): bool
+    {
+        return AssinaturaModel::where('empresa_id', $empresaId)
             ->whereIn('status', StatusAssinatura::statusAtivos())
             ->whereDate('data_fim', '>=', now())
             ->exists();

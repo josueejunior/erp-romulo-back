@@ -165,7 +165,21 @@ class UserController extends BaseApiController
             $context = TenantContext::create(tenancy()->tenant?->id ?? 0);
 
             // Executar use case (dispara Domain Event que limpa cache via Listener)
-            $usuarioDomain = $this->switchEmpresaAtivaUseCase->executar($user->id, $novaEmpresaId, $context);
+            // O use case verifica se a empresa tem assinatura ativa
+            try {
+                $usuarioDomain = $this->switchEmpresaAtivaUseCase->executar($user->id, $novaEmpresaId, $context);
+            } catch (\App\Domain\Exceptions\DomainException $e) {
+                // Se a empresa não tem assinatura, retornar erro específico para o frontend redirecionar
+                if ($e->getErrorCode() === 'NO_SUBSCRIPTION' || str_contains($e->getMessage(), 'assinatura')) {
+                    return response()->json([
+                        'message' => $e->getMessage(),
+                        'code' => 'NO_SUBSCRIPTION',
+                        'action' => 'subscribe',
+                        'empresa_id' => $novaEmpresaId,
+                    ], 403);
+                }
+                throw $e; // Re-lançar outras exceções
+            }
 
             // 🔍 IMPORTANTE: Buscar o tenant correto da empresa ativa
             // Como empresas podem estar em tenants diferentes, precisamos encontrar

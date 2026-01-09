@@ -10,7 +10,7 @@ use Carbon\Carbon;
 class CriarAssinaturaDTO
 {
     public function __construct(
-        public readonly int $userId, // 🔥 NOVO: Assinatura pertence ao usuário
+        public readonly int $userId, // Mantido para compatibilidade
         public readonly int $planoId,
         public readonly string $status = 'ativa',
         public readonly ?Carbon $dataInicio = null,
@@ -21,6 +21,7 @@ class CriarAssinaturaDTO
         public readonly int $diasGracePeriod = 7,
         public readonly ?string $observacoes = null,
         public readonly ?int $tenantId = null, // Opcional para compatibilidade
+        public readonly ?int $empresaId = null, // 🔥 NOVO: Assinatura pertence à empresa
     ) {}
 
     /**
@@ -29,7 +30,7 @@ class CriarAssinaturaDTO
     public static function fromArray(array $data): self
     {
         return new self(
-            userId: $data['user_id'] ?? $data['userId'] ?? 0, // 🔥 NOVO: userId é obrigatório
+            userId: $data['user_id'] ?? $data['userId'] ?? 0,
             planoId: $data['plano_id'] ?? $data['planoId'] ?? 0,
             status: $data['status'] ?? 'ativa',
             dataInicio: isset($data['data_inicio']) ? Carbon::parse($data['data_inicio']) : (isset($data['dataInicio']) ? Carbon::parse($data['dataInicio']) : now()),
@@ -40,6 +41,7 @@ class CriarAssinaturaDTO
             diasGracePeriod: $data['dias_grace_period'] ?? $data['diasGracePeriod'] ?? 7,
             observacoes: $data['observacoes'] ?? null,
             tenantId: $data['tenant_id'] ?? $data['tenantId'] ?? null, // Opcional
+            empresaId: $data['empresa_id'] ?? $data['empresaId'] ?? null, // 🔥 NOVO: Assinatura pertence à empresa
         );
     }
 }

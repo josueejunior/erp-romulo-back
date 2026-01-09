@@ -14,8 +14,9 @@ class Assinatura extends BaseModel
     public $timestamps = true;
 
     protected $fillable = [
-        'user_id', // 🔥 NOVO: Assinatura pertence ao usuário
+        'user_id', // Mantido para compatibilidade
         'tenant_id', // Mantido para compatibilidade
+        'empresa_id', // 🔥 NOVO: Assinatura pertence à empresa
         'plano_id',
         'status',
         'data_inicio',
@@ -47,6 +48,11 @@ class Assinatura extends BaseModel
     public function tenant()
     {
         return $this->belongsTo(Tenant::class, 'tenant_id');
+    }
+
+    public function empresa()
+    {
+        return $this->belongsTo(\App\Models\Empresa::class, 'empresa_id');
     }
 
     public function plano()

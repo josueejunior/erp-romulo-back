@@ -25,8 +25,17 @@ interface AssinaturaRepositoryInterface
 
     /**
      * Buscar assinatura atual do usuário (mais recente válida)
+     * 
+     * @deprecated Use buscarAssinaturaAtualPorEmpresa() - assinatura pertence à empresa
      */
     public function buscarAssinaturaAtualPorUsuario(int $userId): ?Assinatura;
+
+    /**
+     * Buscar assinatura atual da empresa (mais recente válida)
+     * 
+     * 🔥 NOVO: Assinatura pertence à empresa
+     */
+    public function buscarAssinaturaAtualPorEmpresa(int $empresaId): ?Assinatura;
 
     /**
      * Listar assinaturas ativas do usuário

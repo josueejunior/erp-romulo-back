@@ -419,12 +419,13 @@ class ApplicationContext implements ApplicationContextContract
         }
         
         // Buscar assinatura se não temos ainda
-        if ($this->assinaturaRepository) {
+        // 🔥 NOVO: Buscar assinatura por empresa, não por usuário
+        if ($this->assinaturaRepository && $this->empresaId) {
             try {
-                $this->assinatura = $this->assinaturaRepository->buscarAssinaturaAtualPorUsuario($this->user->id);
+                $this->assinatura = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($this->empresaId);
             } catch (\Exception $e) {
                 Log::warning('ApplicationContext::assinatura() - Erro ao buscar assinatura', [
-                    'user_id' => $this->user->id,
+                    'empresa_id' => $this->empresaId,
                     'error' => $e->getMessage(),
                 ]);
             }
@@ -686,15 +687,25 @@ class ApplicationContext implements ApplicationContextContract
             return $this->assinaturaCache;
         }
         
+        // 🔥 NOVO: Verificar se temos empresa_id (obrigatório para buscar assinatura)
+        if (!$this->empresaId) {
+            $this->assinaturaCache = [
+                'pode_acessar' => false,
+                'code' => 'NO_EMPRESA',
+                'message' => 'Empresa não definida no contexto.',
+            ];
+            return $this->assinaturaCache;
+        }
+
         try {
-            // Buscar assinatura do usuário
-            $assinatura = $this->assinaturaRepository->buscarAssinaturaAtualPorUsuario($this->user->id);
+            // 🔥 NOVO: Buscar assinatura da empresa, não do usuário
+            $assinatura = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($this->empresaId);
             
             if (!$assinatura) {
                 $this->assinaturaCache = [
                     'pode_acessar' => false,
                     'code' => 'NO_SUBSCRIPTION',
-                    'message' => 'Nenhuma assinatura encontrada. Contrate um plano para continuar usando o sistema.',
+                    'message' => 'Esta empresa não possui uma assinatura ativa. Contrate um plano para continuar usando o sistema.',
                     'action' => 'subscribe',
                 ];
                 return $this->assinaturaCache;
@@ -723,7 +734,7 @@ class ApplicationContext implements ApplicationContextContract
                 $this->assinaturaCache = [
                     'pode_acessar' => false,
                     'code' => 'SUBSCRIPTION_SUSPENDED',
-                    'message' => 'Sua assinatura está suspensa. Entre em contato com o suporte.',
+                    'message' => 'A assinatura desta empresa está suspensa. Entre em contato com o suporte.',
                 ];
                 return $this->assinaturaCache;
             }
@@ -746,7 +757,7 @@ class ApplicationContext implements ApplicationContextContract
             $this->assinaturaCache = [
                 'pode_acessar' => false,
                 'code' => 'SUBSCRIPTION_EXPIRED',
-                'message' => 'Sua assinatura expirou em ' . $dataFim->format('d/m/Y') . '. Renove sua assinatura para continuar usando o sistema.',
+                'message' => 'A assinatura desta empresa expirou em ' . $dataFim->format('d/m/Y') . '. Renove sua assinatura para continuar usando o sistema.',
                 'data_vencimento' => $dataFim->format('Y-m-d'),
                 'dias_expirado' => $diasExpirado,
                 'action' => 'renew',
@@ -755,7 +766,8 @@ class ApplicationContext implements ApplicationContextContract
             
         } catch (\Exception $e) {
             Log::error('ApplicationContext::validateAssinatura() - Erro', [
-                'user_id' => $this->user->id,
+                'empresa_id' => $this->empresaId,
+                'user_id' => $this->user?->id,
                 'error' => $e->getMessage(),
             ]);
             

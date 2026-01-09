@@ -33,6 +33,7 @@ class AssinaturaRepository implements AssinaturaRepositoryInterface
             id: $model->id,
             userId: $model->user_id,
             tenantId: $model->tenant_id,
+            empresaId: $model->empresa_id,
             planoId: $model->plano_id,
             status: $model->status,
             dataInicio: $model->data_inicio ? Carbon::parse($model->data_inicio) : null,
@@ -83,10 +84,23 @@ class AssinaturaRepository implements AssinaturaRepositoryInterface
 
     /**
      * Buscar assinatura atual do usuário (método principal)
+     * 
+     * @deprecated Use buscarAssinaturaAtualPorEmpresa() - assinatura pertence à empresa
      */
     public function buscarAssinaturaAtualPorUsuario(int $userId): ?Assinatura
     {
         $model = AssinaturaQueries::assinaturaAtualPorUsuario($userId);
+        return $model ? $this->toDomain($model) : null;
+    }
+
+    /**
+     * Buscar assinatura atual da empresa (método principal)
+     * 
+     * 🔥 NOVO: Assinatura pertence à empresa
+     */
+    public function buscarAssinaturaAtualPorEmpresa(int $empresaId): ?Assinatura
+    {
+        $model = AssinaturaQueries::assinaturaAtualPorEmpresa($empresaId);
         return $model ? $this->toDomain($model) : null;
     }
 
@@ -216,6 +230,7 @@ class AssinaturaRepository implements AssinaturaRepositoryInterface
         $model = AssinaturaModel::create([
             'user_id' => $assinatura->userId,
             'tenant_id' => $assinatura->tenantId,
+            'empresa_id' => $assinatura->empresaId,
             'plano_id' => $assinatura->planoId,
             'status' => $assinatura->status,
             'data_inicio' => $assinatura->dataInicio ?? now(),
@@ -248,6 +263,7 @@ class AssinaturaRepository implements AssinaturaRepositoryInterface
         $model->update([
             'user_id' => $assinatura->userId,
             'tenant_id' => $assinatura->tenantId,
+            'empresa_id' => $assinatura->empresaId,
             'plano_id' => $assinatura->planoId,
             'status' => $assinatura->status,
             'data_inicio' => $assinatura->dataInicio,

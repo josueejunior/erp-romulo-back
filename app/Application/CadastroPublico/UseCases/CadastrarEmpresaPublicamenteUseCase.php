@@ -341,6 +341,7 @@ final class CadastrarEmpresaPublicamenteUseCase
             return $this->criarAssinaturaGratuita(
                 $tenantResult['admin_user'],
                 $tenantResult['tenant'],
+                $tenantResult['empresa'],
                 $plano,
                 $dto
             );
@@ -351,6 +352,7 @@ final class CadastrarEmpresaPublicamenteUseCase
             return $this->criarAssinaturaPendente(
                 $tenantResult['admin_user'],
                 $tenantResult['tenant'],
+                $tenantResult['empresa'],
                 $plano,
                 $dto
             );
@@ -359,6 +361,7 @@ final class CadastrarEmpresaPublicamenteUseCase
         // Processar pagamento
         return $this->processarPagamento(
             $tenantResult['tenant'],
+            $tenantResult['empresa'],
             $plano,
             $dto
         );
@@ -367,7 +370,7 @@ final class CadastrarEmpresaPublicamenteUseCase
     /**
      * Cria assinatura gratuita
      */
-    private function criarAssinaturaGratuita($adminUser, $tenant, $plano, CadastroPublicoDTO $dto): array
+    private function criarAssinaturaGratuita($adminUser, $tenant, $empresa, $plano, CadastroPublicoDTO $dto): array
     {
         $dataInicio = Carbon::now();
         $dataFim = $this->assinaturaDomainService->calcularDataFim($plano, $dto->periodo, $dataInicio);
@@ -386,6 +389,7 @@ final class CadastrarEmpresaPublicamenteUseCase
             diasGracePeriod: $diasGracePeriod,
             observacoes: 'Plano gratuito - teste de 3 dias',
             tenantId: $tenant->id,
+            empresaId: $empresa->id, // 🔥 NOVO: Assinatura pertence à empresa
         );
 
         $assinatura = $this->criarAssinaturaUseCase->executar($assinaturaDTO);
@@ -400,7 +404,7 @@ final class CadastrarEmpresaPublicamenteUseCase
     /**
      * Cria assinatura pendente (sem pagamento processado)
      */
-    private function criarAssinaturaPendente($adminUser, $tenant, $plano, CadastroPublicoDTO $dto): array
+    private function criarAssinaturaPendente($adminUser, $tenant, $empresa, $plano, CadastroPublicoDTO $dto): array
     {
         $dataInicio = Carbon::now();
         $dataFim = $this->assinaturaDomainService->calcularDataFim($plano, $dto->periodo, $dataInicio);
@@ -446,6 +450,7 @@ final class CadastrarEmpresaPublicamenteUseCase
             diasGracePeriod: $diasGracePeriod,
             observacoes: $observacoes,
             tenantId: $tenant->id,
+            empresaId: $empresa->id, // 🔥 NOVO: Assinatura pertence à empresa
         );
 
         $assinatura = $this->criarAssinaturaUseCase->executar($assinaturaDTO);
@@ -460,7 +465,7 @@ final class CadastrarEmpresaPublicamenteUseCase
     /**
      * Processa pagamento e cria assinatura
      */
-    private function processarPagamento($tenant, $plano, CadastroPublicoDTO $dto): array
+    private function processarPagamento($tenant, $empresa, $plano, CadastroPublicoDTO $dto): array
     {
         $valorOriginal = $this->assinaturaDomainService->calcularValor($plano, $dto->periodo);
         
