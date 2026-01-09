@@ -3,24 +3,16 @@
 namespace App\Http\Controllers\Public;
 
 use App\Http\Controllers\Controller;
-use App\Application\Tenant\UseCases\CriarTenantUseCase;
-use App\Application\Tenant\DTOs\CriarTenantDTO;
-use App\Application\Assinatura\UseCases\CriarAssinaturaUseCase;
-use App\Application\Assinatura\DTOs\CriarAssinaturaDTO;
-use App\Application\Afiliado\UseCases\ValidarCupomAfiliadoUseCase;
-use App\Application\Empresa\UseCases\RegistrarAfiliadoNaEmpresaUseCase;
-use App\Application\Payment\UseCases\ProcessarAssinaturaPlanoUseCase;
-use App\Domain\Payment\ValueObjects\PaymentRequest;
+use App\Application\CadastroPublico\UseCases\CadastrarEmpresaPublicamenteUseCase;
+use App\Application\CadastroPublico\DTOs\CadastroPublicoDTO;
 use App\Domain\Exceptions\DomainException;
+use App\Domain\Exceptions\EmailJaCadastradoException;
+use App\Domain\Exceptions\CnpjJaCadastradoException;
 use App\Services\CnpjConsultaService;
-use App\Modules\Auth\Models\User;
-use App\Models\Tenant;
-use App\Modules\Assinatura\Models\Plano;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
-use Carbon\Carbon;
 use OpenApi\Annotations as OA;
 
 /**
@@ -37,12 +29,8 @@ use OpenApi\Annotations as OA;
 class CadastroPublicoController extends Controller
 {
     public function __construct(
-        private readonly CriarTenantUseCase $criarTenantUseCase,
-        private readonly CriarAssinaturaUseCase $criarAssinaturaUseCase,
+        private readonly CadastrarEmpresaPublicamenteUseCase $cadastrarEmpresaPublicamenteUseCase,
         private readonly CnpjConsultaService $cnpjConsultaService,
-        private readonly ValidarCupomAfiliadoUseCase $validarCupomAfiliadoUseCase,
-        private readonly RegistrarAfiliadoNaEmpresaUseCase $registrarAfiliadoNaEmpresaUseCase,
-        private readonly ProcessarAssinaturaPlanoUseCase $processarAssinaturaPlanoUseCase,
     ) {}
 
     /**
@@ -78,32 +66,22 @@ class CadastroPublicoController extends Controller
         try {
             $validated = $this->validateRequest($request);
 
-            // Verificar duplicidades antes de criar
-            $this->checkDuplicates($validated);
+            // Converter array validado para DTO
+            $dto = CadastroPublicoDTO::fromArray($validated);
 
-            // 1. Criar tenant com empresa e usuário admin
-            // Nota: Não usar DB::transaction() aqui pois a criação de tenant
-            // envolve criar um novo banco de dados (operação DDL)
-            $tenantResult = $this->createTenant($validated);
-            
-            // 2. Registrar afiliado na empresa se cupom foi usado
-            if (!empty($validated['cupom_codigo']) && !empty($validated['afiliado_id'])) {
-                $this->registrarAfiliadoNaEmpresa($tenantResult['empresa'], $validated);
-            }
-            
-            // 3. Processar pagamento e criar assinatura
-            $assinaturaResult = $this->processarPagamentoECriarAssinatura(
-                $tenantResult['admin_user'],
-                $tenantResult['tenant'],
-                $validated
-            );
+            // Executar Use Case (toda a orquestração está aqui)
+            $result = $this->cadastrarEmpresaPublicamenteUseCase->executar($dto);
 
-            return $this->successResponse($tenantResult, $assinaturaResult);
+            return $this->successResponse($result);
 
         } catch (ValidationException $e) {
             return $this->validationErrorResponse($e);
+        } catch (EmailJaCadastradoException $e) {
+            return $this->emailExistsResponse($e);
+        } catch (CnpjJaCadastradoException $e) {
+            return $this->cnpjExistsResponse($e);
         } catch (DomainException $e) {
-            return $this->domainErrorResponse($e, $validated ?? null);
+            return $this->domainErrorResponse($e);
         } catch (\Exception $e) {
             return $this->serverErrorResponse($e);
         }
@@ -198,347 +176,21 @@ class CadastroPublicoController extends Controller
         ]);
     }
 
-    /**
-     * Verificar se email ou CNPJ já existem
-     * 
-     * @throws DomainException
-     */
-    private function checkDuplicates(array $validated): void
-    {
-        // Verificar email
-        if (User::where('email', $validated['admin_email'])->exists()) {
-            Log::info('Tentativa de cadastro com email já existente', [
-                'email' => $validated['admin_email'],
-            ]);
-            
-            throw new DomainException(
-                'Este e-mail já está cadastrado no sistema. Faça login para acessar sua conta.',
-                409,
-                null,
-                'EMAIL_EXISTS'
-            );
-        }
-
-        // Verificar CNPJ (se informado)
-        if (!empty($validated['cnpj'])) {
-            $cnpjLimpo = preg_replace('/\D/', '', $validated['cnpj']);
-            
-            $cnpjExiste = Tenant::where('cnpj', $validated['cnpj'])
-                ->orWhere('cnpj', $cnpjLimpo)
-                ->exists();
-                
-            if ($cnpjExiste) {
-                Log::info('Tentativa de cadastro com CNPJ já existente', [
-                    'cnpj' => $validated['cnpj'],
-                ]);
-                
-                throw new DomainException(
-                    'Este CNPJ já está cadastrado no sistema. Se você é o responsável, faça login para acessar sua conta.',
-                    409,
-                    null,
-                    'CNPJ_EXISTS'
-                );
-            }
-        }
-    }
-
-    /**
-     * Criar tenant com empresa e usuário admin
-     */
-    private function createTenant(array $validated): array
-    {
-        $tenantDTO = CriarTenantDTO::fromArray($validated);
-        return $this->criarTenantUseCase->executar($tenantDTO, requireAdmin: true);
-    }
-
-    /**
-     * Registrar afiliado na empresa
-     * 
-     * Segue padrão DDD - usa Use Case ao invés de manipular entidade diretamente
-     */
-    private function registrarAfiliadoNaEmpresa($empresa, array $validated): void
-    {
-        try {
-            // Usar Use Case para registrar afiliado (seguindo DDD)
-            $this->registrarAfiliadoNaEmpresaUseCase->executar(
-                empresaId: $empresa->id,
-                afiliadoId: $validated['afiliado_id'],
-                codigo: $validated['cupom_codigo'],
-                descontoAplicado: $validated['desconto_afiliado'] ?? 0.0
-            );
-
-            // Registrar indicação na tabela central (afiliado_indicacoes)
-            // Isso precisa ser feito no contexto central (não no tenant)
-            // Por enquanto, apenas logamos - a indicação será registrada quando o pagamento for confirmado
-            Log::info('Afiliado registrado na empresa durante cadastro público', [
-                'empresa_id' => $empresa->id,
-                'afiliado_id' => $validated['afiliado_id'],
-                'cupom_codigo' => $validated['cupom_codigo'],
-                'desconto' => $validated['desconto_afiliado'] ?? 0,
-            ]);
-        } catch (DomainException $e) {
-            Log::error('Erro de domínio ao registrar afiliado na empresa', [
-                'error' => $e->getMessage(),
-                'empresa_id' => $empresa->id ?? null,
-                'afiliado_id' => $validated['afiliado_id'] ?? null,
-            ]);
-            // Não lança exceção - apenas loga o erro para não bloquear o cadastro
-        } catch (\Exception $e) {
-            Log::error('Erro ao registrar afiliado na empresa', [
-                'error' => $e->getMessage(),
-                'empresa_id' => $empresa->id ?? null,
-                'afiliado_id' => $validated['afiliado_id'] ?? null,
-            ]);
-            // Não lança exceção - apenas loga o erro para não bloquear o cadastro
-        }
-    }
-
-    /**
-     * Processar pagamento e criar assinatura
-     * 
-     * Se houver dados de pagamento e o plano não for gratuito, processa o pagamento.
-     * Caso contrário, cria assinatura pendente ou gratuita.
-     * 
-     * @return array{assinatura: \App\Modules\Assinatura\Models\Assinatura, plano: \App\Modules\Assinatura\Models\Plano, data_fim: \Carbon\Carbon, payment_result?: array}
-     */
-    private function processarPagamentoECriarAssinatura($adminUser, $tenant, array $validated): array
-    {
-        $periodo = $validated['periodo'] ?? 'mensal';
-        $plano = Plano::findOrFail($validated['plano_id']);
-        
-        $isPlanoGratuito = ($plano->preco_mensal == 0 || $plano->preco_mensal === null);
-        
-        // Se for plano gratuito, criar assinatura normalmente
-        if ($isPlanoGratuito) {
-            return $this->createAssinatura($adminUser, $tenant, $validated);
-        }
-        
-        // Se não houver dados de pagamento, criar assinatura pendente
-        if (empty($validated['payment_method']) || empty($validated['payer_email'])) {
-            return $this->createAssinatura($adminUser, $tenant, $validated);
-        }
-        
-        // Processar pagamento
-        try {
-            // Calcular valor com desconto de afiliado
-            $valorOriginal = $periodo === 'anual' && $plano->preco_anual 
-                ? $plano->preco_anual 
-                : $plano->preco_mensal;
-            
-            $valorFinal = $valorOriginal;
-            if (!empty($validated['cupom_codigo']) && !empty($validated['afiliado_id'])) {
-                try {
-                    $cupomInfo = $this->validarCupomAfiliadoUseCase->calcularDesconto(
-                        $validated['cupom_codigo'],
-                        $valorOriginal
-                    );
-                    if ($cupomInfo['valido']) {
-                        $valorFinal = $cupomInfo['valor_final'];
-                    }
-                } catch (\Exception $e) {
-                    Log::warning('Erro ao aplicar cupom no pagamento do cadastro público', [
-                        'error' => $e->getMessage(),
-                    ]);
-                }
-            }
-            
-            // Criar PaymentRequest
-            $paymentRequestData = [
-                'amount' => $valorFinal,
-                'description' => "Plano {$plano->nome} - {$periodo} - Sistema Rômulo",
-                'payer_email' => $validated['payer_email'],
-                'payer_cpf' => $validated['payer_cpf'] ?? null,
-                'payment_method_id' => $validated['payment_method'] === 'pix' ? 'pix' : null,
-                'external_reference' => "tenant_{$tenant->id}_plano_{$plano->id}_cadastro",
-                'metadata' => [
-                    'tenant_id' => $tenant->id,
-                    'plano_id' => $plano->id,
-                    'periodo' => $periodo,
-                    'cadastro_publico' => true,
-                ],
-            ];
-            
-            // Para cartão, adicionar token e parcelas
-            if ($validated['payment_method'] === 'credit_card') {
-                $paymentRequestData['card_token'] = $validated['card_token'] ?? null;
-                $paymentRequestData['installments'] = isset($validated['installments']) 
-                    ? (int) $validated['installments'] 
-                    : 1;
-                unset($paymentRequestData['payment_method_id']);
-            }
-            
-            $paymentRequest = PaymentRequest::fromArray($paymentRequestData);
-            
-            // Processar pagamento usando o Use Case
-            $assinatura = $this->processarAssinaturaPlanoUseCase->executar(
-                $tenant,
-                $plano,
-                $paymentRequest,
-                $periodo
-            );
-            
-            $dataFim = Carbon::parse($assinatura->data_fim);
-            
-            // Preparar resposta com dados do pagamento
-            $result = [
-                'assinatura' => $assinatura,
-                'plano' => $plano,
-                'data_fim' => $dataFim,
-            ];
-            
-            // Se for PIX pendente, incluir dados do QR Code
-            if ($assinatura->status === 'pendente' && $assinatura->metodo_pagamento === 'pix') {
-                $paymentLog = \App\Models\PaymentLog::where('tenant_id', $tenant->id)
-                    ->where('plano_id', $plano->id)
-                    ->latest()
-                    ->first();
-                
-                if ($paymentLog && isset($paymentLog->dados_resposta['pix_qr_code'])) {
-                    $result['payment_result'] = [
-                        'status' => 'pending',
-                        'payment_method' => 'pix',
-                        'pix_qr_code' => $paymentLog->dados_resposta['pix_qr_code'],
-                        'pix_qr_code_base64' => $paymentLog->dados_resposta['pix_qr_code_base64'] ?? null,
-                        'pix_ticket_url' => $paymentLog->dados_resposta['pix_ticket_url'] ?? null,
-                    ];
-                }
-            }
-            
-            return $result;
-            
-        } catch (DomainException $e) {
-            Log::error('Erro ao processar pagamento no cadastro público', [
-                'error' => $e->getMessage(),
-                'tenant_id' => $tenant->id,
-                'plano_id' => $plano->id,
-            ]);
-            
-            // Se falhar o pagamento, criar assinatura pendente
-            return $this->createAssinatura($adminUser, $tenant, $validated);
-        } catch (\Exception $e) {
-            Log::error('Erro inesperado ao processar pagamento no cadastro público', [
-                'error' => $e->getMessage(),
-                'tenant_id' => $tenant->id,
-                'plano_id' => $plano->id,
-            ]);
-            
-            // Se falhar, criar assinatura pendente
-            return $this->createAssinatura($adminUser, $tenant, $validated);
-        }
-    }
-
-    /**
-     * Criar assinatura para o usuário (método antigo - mantido para planos gratuitos)
-     * 
-     * @return array{assinatura: \App\Domain\Assinatura\Entities\Assinatura, plano: \App\Modules\Assinatura\Models\Plano, data_fim: \Carbon\Carbon}
-     */
-    private function createAssinatura($adminUser, $tenant, array $validated): array
-    {
-        $periodo = $validated['periodo'] ?? 'mensal';
-        $plano = Plano::findOrFail($validated['plano_id']);
-        
-        $dataInicio = Carbon::now();
-        $isPlanoGratuito = ($plano->preco_mensal == 0 || $plano->preco_mensal === null);
-        
-        // Calcular data de término
-        $dataFim = match (true) {
-            $isPlanoGratuito => $dataInicio->copy()->addDays(3),
-            $periodo === 'anual' => $dataInicio->copy()->addYear(),
-            default => $dataInicio->copy()->addMonth(),
-        };
-        
-        // Calcular valor original
-        $valorOriginal = match (true) {
-            $isPlanoGratuito => 0,
-            $periodo === 'anual' && $plano->preco_anual => $plano->preco_anual,
-            default => $plano->preco_mensal,
-        };
-
-        // Aplicar desconto de afiliado se fornecido
-        $valorPago = $valorOriginal;
-        $observacoes = $isPlanoGratuito 
-            ? 'Plano gratuito - teste de 3 dias' 
-            : 'Cadastro público - pagamento pendente';
-
-        if (!empty($validated['cupom_codigo']) && !empty($validated['afiliado_id']) && $valorOriginal > 0) {
-            try {
-                // Validar cupom novamente para garantir que ainda é válido
-                $cupomInfo = $this->validarCupomAfiliadoUseCase->calcularDesconto(
-                    $validated['cupom_codigo'],
-                    $valorOriginal
-                );
-
-                if ($cupomInfo['valido'] && $cupomInfo['afiliado_id'] == $validated['afiliado_id']) {
-                    $valorPago = $cupomInfo['valor_final'];
-                    $desconto = $cupomInfo['valor_desconto'];
-                    $observacoes .= sprintf(
-                        ' | Cupom %s aplicado: %s%% de desconto (R$ %.2f) | Afiliado ID: %d',
-                        $cupomInfo['codigo'],
-                        $cupomInfo['percentual_desconto'],
-                        $desconto,
-                        $cupomInfo['afiliado_id']
-                    );
-
-                    // Registrar indicação do afiliado na empresa
-                    // Isso será feito quando o tenant/empresa for criado
-                    // Por enquanto, apenas logamos
-                    Log::info('Cupom de afiliado aplicado no cadastro público', [
-                        'afiliado_id' => $cupomInfo['afiliado_id'],
-                        'tenant_id' => $tenant->id,
-                        'cupom' => $cupomInfo['codigo'],
-                        'desconto' => $desconto,
-                        'valor_original' => $valorOriginal,
-                        'valor_final' => $valorPago,
-                    ]);
-                }
-            } catch (\Exception $e) {
-                Log::warning('Erro ao aplicar cupom de afiliado no cadastro público', [
-                    'error' => $e->getMessage(),
-                    'cupom_codigo' => $validated['cupom_codigo'] ?? null,
-                ]);
-                // Continua sem desconto se houver erro na validação
-            }
-        }
-
-        $assinaturaDTO = new CriarAssinaturaDTO(
-            userId: $adminUser->id,
-            planoId: $plano->id,
-            status: 'ativa',
-            dataInicio: $dataInicio,
-            dataFim: $dataFim,
-            valorPago: $valorPago,
-            metodoPagamento: $isPlanoGratuito ? 'gratuito' : 'pendente',
-            transacaoId: null,
-            diasGracePeriod: $isPlanoGratuito ? 0 : 7,
-            observacoes: $observacoes,
-            tenantId: $tenant->id,
-        );
-
-        $assinatura = $this->criarAssinaturaUseCase->executar($assinaturaDTO);
-
-        return [
-            'assinatura' => $assinatura,
-            'plano' => $plano,
-            'data_fim' => $dataFim,
-        ];
-    }
-
     // ==================== RESPONSE HELPERS ====================
 
     /**
      * Resposta de sucesso
      */
-    private function successResponse(array $tenantResult, array $assinaturaResult): JsonResponse
+    private function successResponse(array $result): JsonResponse
     {
-        $tenant = $tenantResult['tenant'];
-        $empresa = $tenantResult['empresa'];
-        $adminUser = $tenantResult['admin_user'];
-        
-        $assinatura = $assinaturaResult['assinatura'];
-        $plano = $assinaturaResult['plano'];
-        $dataFim = $assinaturaResult['data_fim'];
+        $tenant = $result['tenant'];
+        $empresa = $result['empresa'];
+        $adminUser = $result['admin_user'];
+        $assinatura = $result['assinatura'];
+        $plano = $result['plano'];
+        $dataFim = $result['data_fim'];
 
-        return response()->json([
+        $response = [
             'message' => 'Cadastro realizado com sucesso!',
             'success' => true,
             'data' => [
@@ -566,7 +218,14 @@ class CadastroPublicoController extends Controller
                     'data_fim' => $dataFim->format('Y-m-d'),
                 ],
             ],
-        ], 201);
+        ];
+
+        // Incluir dados de pagamento se houver (ex: PIX QR Code)
+        if (isset($result['payment_result'])) {
+            $response['data']['payment'] = $result['payment_result'];
+        }
+
+        return response()->json($response, 201);
     }
 
     /**
@@ -582,27 +241,47 @@ class CadastroPublicoController extends Controller
     }
 
     /**
-     * Resposta de erro de domínio
+     * Resposta para email já cadastrado
      */
-    private function domainErrorResponse(DomainException $e, ?array $context = null): JsonResponse
+    private function emailExistsResponse(EmailJaCadastradoException $e): JsonResponse
+    {
+        return response()->json([
+            'message' => $e->getMessage(),
+            'success' => false,
+            'code' => 'EMAIL_EXISTS',
+            'redirect_to' => '/login',
+            'email' => $e->getEmail(),
+        ], 409);
+    }
+
+    /**
+     * Resposta para CNPJ já cadastrado
+     */
+    private function cnpjExistsResponse(CnpjJaCadastradoException $e): JsonResponse
+    {
+        return response()->json([
+            'message' => $e->getMessage(),
+            'success' => false,
+            'code' => 'CNPJ_EXISTS',
+            'redirect_to' => '/login',
+        ], 409);
+    }
+
+    /**
+     * Resposta de erro de domínio genérico
+     */
+    private function domainErrorResponse(DomainException $e): JsonResponse
     {
         $code = $e->getCode() ?: 400;
-        $errorCode = method_exists($e, 'getErrorCode') ? $e->getErrorCode() : null;
+        $errorCode = $e->getErrorCode();
         
         $response = [
             'message' => $e->getMessage(),
             'success' => false,
         ];
 
-        // Adicionar código específico se for duplicidade
         if ($errorCode) {
             $response['code'] = $errorCode;
-            $response['redirect_to'] = '/login';
-            
-            // Incluir email na resposta se for EMAIL_EXISTS e tiver contexto
-            if ($errorCode === 'EMAIL_EXISTS' && $context && isset($context['admin_email'])) {
-                $response['email'] = $context['admin_email'];
-            }
         }
 
         return response()->json($response, is_int($code) ? $code : 400);
