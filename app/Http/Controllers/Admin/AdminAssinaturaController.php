@@ -316,14 +316,14 @@ class AdminAssinaturaController extends Controller
                 'sao_iguais' => $planoAtualId == $novoPlanoId,
             ]);
 
-            // Se já está no mesmo plano, retornar erro
+            // Se já está no mesmo plano, retornar erro com mensagem mais clara
             if ($planoAtualId == $novoPlanoId) {
                 Log::info('AdminAssinaturaController::trocarPlano - Assinatura já está no mesmo plano', [
                     'tenant_id' => $tenantId,
                     'assinatura_id' => $assinaturaId,
                     'plano_id' => $novoPlanoId,
                 ]);
-                return ApiResponse::error('A assinatura já está neste plano.', 400);
+                return ApiResponse::error('A assinatura já está no plano selecionado. Selecione um plano diferente para realizar a troca.', 400);
             }
 
             // Atualizar assinatura com novo plano
