@@ -24,12 +24,16 @@ class EmpresaSelecaoController extends Controller
     /**
      * Exibir página de seleção de empresa
      */
-    public function selecionar()
+    public function selecionar(Request $request)
     {
         $user = Auth::user();
         
         if (!$user) {
-            return redirect()->route('login');
+            // Se for API, retornar JSON. Se for web, redirecionar para /login
+            if ($request->expectsJson() || $request->is('api/*')) {
+                return response()->json(['message' => 'Usuário não autenticado.'], 401);
+            }
+            return redirect('/login');
         }
 
         // Listar empresas do tenant atual
@@ -63,7 +67,11 @@ class EmpresaSelecaoController extends Controller
         $user = Auth::user();
         
         if (!$user) {
-            return redirect()->route('login');
+            // Se for API, retornar JSON. Se for web, redirecionar para /login
+            if ($request->expectsJson() || $request->is('api/*')) {
+                return response()->json(['message' => 'Usuário não autenticado.'], 401);
+            }
+            return redirect('/login');
         }
 
         try {
@@ -73,9 +81,17 @@ class EmpresaSelecaoController extends Controller
             // Executar use case
             $this->switchEmpresaAtivaUseCase->executar($user->id, $novaEmpresaId, $context);
 
-            return redirect()->route('dashboard')->with('success', 'Empresa selecionada com sucesso!');
+            // Se for API, retornar JSON. Se for web, redirecionar
+            if ($request->expectsJson() || $request->is('api/*')) {
+                return response()->json(['message' => 'Empresa selecionada com sucesso!']);
+            }
+            return redirect('/dashboard')->with('success', 'Empresa selecionada com sucesso!');
         } catch (\Exception $e) {
-            return redirect()->route('empresas.selecionar')
+            // Se for API, retornar JSON. Se for web, redirecionar
+            if ($request->expectsJson() || $request->is('api/*')) {
+                return response()->json(['message' => 'Erro ao selecionar empresa: ' . $e->getMessage()], 400);
+            }
+            return redirect('/empresas/selecionar')
                 ->with('error', 'Erro ao selecionar empresa: ' . $e->getMessage());
         }
     }

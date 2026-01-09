@@ -12,6 +12,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Configurar redirectTo para rotas de autenticação
+        // Para rotas web, redirecionar para /login (URL direta)
+        // Para APIs, retornar JSON 401 (manipulado pelo Exception Handler)
+        $middleware->redirectGuestsTo('/login');
+        
         $middleware->alias([
             // 🔥 Nova arquitetura (em uso)
             'jwt.auth' => \App\Http\Middleware\AuthenticateJWT::class,

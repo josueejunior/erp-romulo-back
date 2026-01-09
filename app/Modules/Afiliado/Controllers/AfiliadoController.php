@@ -306,23 +306,9 @@ class AfiliadoController extends BaseApiController
                 $resultado = $this->validarCupomAfiliadoUseCase->executar($codigo);
             }
 
-            // Se o usuário estiver autenticado e tiver tenant, validar se CNPJ já usou cupom
-            if (auth()->check() && tenancy()->tenant) {
-                $tenant = tenancy()->tenant;
-                $cnpj = $tenant->cnpj;
-                
-                if ($cnpj) {
-                    $rastrearReferenciaUseCase = app(\App\Application\Afiliado\UseCases\RastrearReferenciaAfiliadoUseCase::class);
-                    $jaUsouCupom = $rastrearReferenciaUseCase->cnpjJaUsouCupom($cnpj);
-                    
-                    if ($jaUsouCupom) {
-                        return response()->json([
-                            'message' => 'Este CNPJ já utilizou um cupom de afiliado. O cupom é de uso único por CNPJ.',
-                            'data' => ['valido' => false],
-                        ], 422);
-                    }
-                }
-            }
+            // NOTA: Validação de CNPJ já usou cupom será feita no checkout (PaymentController)
+            // Não validar aqui para evitar chamadas desnecessárias e permitir que o usuário
+            // veja o desconto mesmo se já tiver usado (a validação final será no checkout)
 
             return response()->json([
                 'message' => 'Cupom válido!',

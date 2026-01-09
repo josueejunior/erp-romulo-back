@@ -92,24 +92,35 @@ class AtualizarAssinaturaViaWebhookUseCase
                 ]);
                 
                 // Marcar flag cupom_aplicado se houver referência de afiliado pendente
+                // Usar lock para evitar race condition (múltiplas requisições de webhook)
                 // Buscar referência vinculada ao tenant que ainda não teve cupom aplicado
-                $referenciaAfiliado = AfiliadoReferencia::where('tenant_id', $tenant->id)
+                $referenciaAfiliado = \App\Models\AfiliadoReferencia::where('tenant_id', $tenant->id)
                     ->where('cadastro_concluido', true)
                     ->where('cupom_aplicado', false)
                     ->orderBy('cadastro_concluido_em', 'desc')
+                    ->lockForUpdate() // Lock para evitar race condition
                     ->first();
                 
                 if ($referenciaAfiliado) {
-                    $referenciaAfiliado->update([
-                        'cupom_aplicado' => true,
-                    ]);
-                    
-                    Log::info('Flag cupom_aplicado marcada via webhook (pagamento confirmado)', [
-                        'referencia_id' => $referenciaAfiliado->id,
-                        'afiliado_id' => $referenciaAfiliado->afiliado_id,
-                        'tenant_id' => $tenant->id,
-                        'assinatura_id' => $assinatura->id,
-                    ]);
+                    // Double-check: verificar novamente se ainda não foi marcado
+                    // Isso evita que múltiplas requisições simultâneas marquem a mesma referência
+                    if (!$referenciaAfiliado->cupom_aplicado) {
+                        $referenciaAfiliado->update([
+                            'cupom_aplicado' => true,
+                        ]);
+                        
+                        Log::info('Flag cupom_aplicado marcada via webhook (pagamento confirmado)', [
+                            'referencia_id' => $referenciaAfiliado->id,
+                            'afiliado_id' => $referenciaAfiliado->afiliado_id,
+                            'tenant_id' => $tenant->id,
+                            'assinatura_id' => $assinatura->id,
+                        ]);
+                    } else {
+                        Log::debug('Flag cupom_aplicado já estava marcada (race condition evitada)', [
+                            'referencia_id' => $referenciaAfiliado->id,
+                            'tenant_id' => $tenant->id,
+                        ]);
+                    }
                 }
             } elseif ($paymentResult->isRejected()) {
                 // Marcar como suspensa se rejeitado

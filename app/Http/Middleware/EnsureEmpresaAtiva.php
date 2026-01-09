@@ -16,7 +16,13 @@ class EnsureEmpresaAtiva
     public function handle(Request $request, Closure $next): Response
     {
         if (!auth()->check()) {
-            return redirect()->route('login');
+            // Se for API, retornar JSON. Se for web, redirecionar para /login (URL direta)
+            if ($request->expectsJson() || $request->is('api/*')) {
+                return response()->json([
+                    'message' => 'Usuário não autenticado.',
+                ], 401);
+            }
+            return redirect('/login');
         }
 
         $user = auth()->user();

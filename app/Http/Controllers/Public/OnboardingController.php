@@ -9,6 +9,7 @@ use App\Application\Onboarding\UseCases\GerenciarOnboardingUseCase;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
+use Stancl\Tenancy\Facades\Tenancy;
 
 /**
  * Controller para gerenciamento de onboarding
@@ -44,16 +45,56 @@ class OnboardingController extends Controller
 
     /**
      * Marca uma etapa como concluída
+     * Se onboarding_id não fornecido, busca automaticamente pelo usuário autenticado
      */
     public function marcarEtapa(Request $request): JsonResponse
     {
         $request->validate([
-            'onboarding_id' => 'required|integer',
             'etapa' => 'required|string|max:100',
+            'onboarding_id' => 'nullable|integer', // Opcional - buscará automaticamente se não fornecido
         ]);
 
+        // Buscar onboarding_id se não fornecido
+        $onboardingId = $request->input('onboarding_id');
+        
+        if (!$onboardingId) {
+            // Buscar automaticamente pelo usuário autenticado ou pelos parâmetros fornecidos
+            $user = $request->user();
+            $tenantId = $request->input('tenant_id') ?? ($user ? (Tenancy::tenant()?->id ?? null) : null);
+            $userId = $request->input('user_id') ?? ($user?->id ?? null);
+            $sessionId = $request->input('session_id');
+            $email = $request->input('email') ?? ($user?->email ?? null);
+
+            if (!$userId && !$sessionId && !$email) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuário não identificado. Forneça user_id, session_id ou email, ou faça login.',
+                ], 400);
+            }
+
+            // Buscar progresso atual
+            $onboarding = $this->gerenciarOnboardingUseCase->buscarProgresso(
+                tenantId: $tenantId,
+                userId: $userId,
+                sessionId: $sessionId,
+                email: $email,
+            );
+
+            if (!$onboarding) {
+                // Criar novo onboarding se não existir
+                $onboarding = $this->gerenciarOnboardingUseCase->iniciar(
+                    tenantId: $tenantId,
+                    userId: $userId,
+                    sessionId: $sessionId,
+                    email: $email,
+                );
+            }
+
+            $onboardingId = $onboarding->id;
+        }
+
         $onboarding = $this->gerenciarOnboardingUseCase->marcarEtapaConcluida(
-            onboardingId: $request->input('onboarding_id'),
+            onboardingId: $onboardingId,
             etapa: $request->input('etapa'),
         );
 
@@ -69,16 +110,56 @@ class OnboardingController extends Controller
 
     /**
      * Marca item do checklist como concluído
+     * Se onboarding_id não fornecido, busca automaticamente pelo usuário autenticado
      */
     public function marcarChecklistItem(Request $request): JsonResponse
     {
         $request->validate([
-            'onboarding_id' => 'required|integer',
             'item' => 'required|string|max:100',
+            'onboarding_id' => 'nullable|integer', // Opcional - buscará automaticamente se não fornecido
         ]);
 
+        // Buscar onboarding_id se não fornecido
+        $onboardingId = $request->input('onboarding_id');
+        
+        if (!$onboardingId) {
+            // Buscar automaticamente pelo usuário autenticado ou pelos parâmetros fornecidos
+            $user = $request->user();
+            $tenantId = $request->input('tenant_id') ?? ($user ? (Tenancy::tenant()?->id ?? null) : null);
+            $userId = $request->input('user_id') ?? ($user?->id ?? null);
+            $sessionId = $request->input('session_id');
+            $email = $request->input('email') ?? ($user?->email ?? null);
+
+            if (!$userId && !$sessionId && !$email) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuário não identificado. Forneça user_id, session_id ou email, ou faça login.',
+                ], 400);
+            }
+
+            // Buscar progresso atual
+            $onboarding = $this->gerenciarOnboardingUseCase->buscarProgresso(
+                tenantId: $tenantId,
+                userId: $userId,
+                sessionId: $sessionId,
+                email: $email,
+            );
+
+            if (!$onboarding) {
+                // Criar novo onboarding se não existir
+                $onboarding = $this->gerenciarOnboardingUseCase->iniciar(
+                    tenantId: $tenantId,
+                    userId: $userId,
+                    sessionId: $sessionId,
+                    email: $email,
+                );
+            }
+
+            $onboardingId = $onboarding->id;
+        }
+
         $onboarding = $this->gerenciarOnboardingUseCase->marcarChecklistItem(
-            onboardingId: $request->input('onboarding_id'),
+            onboardingId: $onboardingId,
             item: $request->input('item'),
         );
 
@@ -93,16 +174,62 @@ class OnboardingController extends Controller
 
     /**
      * Conclui o onboarding
+     * Se onboarding_id não fornecido, busca automaticamente pelo usuário autenticado
      */
     public function concluir(Request $request): JsonResponse
     {
         $request->validate([
-            'onboarding_id' => 'required|integer',
+            'onboarding_id' => 'nullable|integer', // Opcional - buscará automaticamente se não fornecido
         ]);
 
+        // Buscar onboarding_id se não fornecido
+        $onboardingId = $request->input('onboarding_id');
+        
+        if (!$onboardingId) {
+            // Buscar automaticamente pelo usuário autenticado ou pelos parâmetros fornecidos
+            $user = $request->user();
+            $tenantId = $request->input('tenant_id') ?? ($user ? (Tenancy::tenant()?->id ?? null) : null);
+            $userId = $request->input('user_id') ?? ($user?->id ?? null);
+            $sessionId = $request->input('session_id');
+            $email = $request->input('email') ?? ($user?->email ?? null);
+
+            if (!$userId && !$sessionId && !$email) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuário não identificado. Forneça user_id, session_id ou email, ou faça login.',
+                ], 400);
+            }
+
+            // Buscar progresso atual
+            $onboarding = $this->gerenciarOnboardingUseCase->buscarProgresso(
+                tenantId: $tenantId,
+                userId: $userId,
+                sessionId: $sessionId,
+                email: $email,
+            );
+
+            if (!$onboarding) {
+                // Criar novo onboarding se não existir
+                $onboarding = $this->gerenciarOnboardingUseCase->iniciar(
+                    tenantId: $tenantId,
+                    userId: $userId,
+                    sessionId: $sessionId,
+                    email: $email,
+                );
+            }
+
+            $onboardingId = $onboarding->id;
+        }
+
         $onboarding = $this->gerenciarOnboardingUseCase->concluir(
-            onboardingId: $request->input('onboarding_id'),
+            onboardingId: $onboardingId,
         );
+
+        Log::info('OnboardingController::concluir - Onboarding concluído', [
+            'onboarding_id' => $onboarding->id,
+            'user_id' => $request->user()?->id,
+            'tenant_id' => Tenancy::tenant()?->id,
+        ]);
 
         return response()->json([
             'success' => true,
@@ -117,20 +244,45 @@ class OnboardingController extends Controller
 
     /**
      * Verifica se onboarding está concluído
+     * Retorna status completo do onboarding (incluindo dados completos)
      */
     public function verificarStatus(Request $request): JsonResponse
     {
-        $estaConcluido = $this->gerenciarOnboardingUseCase->estaConcluido(
-            tenantId: $request->input('tenant_id'),
-            userId: $request->input('user_id'),
-            sessionId: $request->input('session_id') ?? $request->session()->getId(),
-            email: $request->input('email'),
+        // Buscar dados do usuário autenticado se disponível
+        $user = $request->user();
+        $tenantId = $request->input('tenant_id') ?? ($user ? (Tenancy::tenant()?->id ?? null) : null);
+        $userId = $request->input('user_id') ?? ($user?->id ?? null);
+        $sessionId = $request->input('session_id') ?? $request->session()->getId();
+        $email = $request->input('email') ?? ($user?->email ?? null);
+
+        // Buscar progresso completo
+        $onboarding = $this->gerenciarOnboardingUseCase->buscarProgresso(
+            tenantId: $tenantId,
+            userId: $userId,
+            sessionId: $sessionId,
+            email: $email,
         );
+
+        if (!$onboarding) {
+            // Se não existe, criar novo onboarding não concluído
+            $onboarding = $this->gerenciarOnboardingUseCase->iniciar(
+                tenantId: $tenantId,
+                userId: $userId,
+                sessionId: $sessionId,
+                email: $email,
+            );
+        }
 
         return response()->json([
             'success' => true,
-            'onboarding_concluido' => $estaConcluido,
-            'pode_ver_planos' => $estaConcluido, // Se onboarding concluído, pode ver planos
+            'data' => [
+                'onboarding_id' => $onboarding->id,
+                'onboarding_concluido' => $onboarding->onboarding_concluido ?? false,
+                'progresso_percentual' => $onboarding->progresso_percentual ?? 0,
+                'etapas_concluidas' => $onboarding->etapas_concluidas ?? [],
+                'checklist' => $onboarding->checklist ?? [],
+                'pode_ver_planos' => $onboarding->onboarding_concluido ?? false, // Se onboarding concluído, pode ver planos
+            ],
         ]);
     }
 

@@ -16,6 +16,7 @@ use App\Modules\Afiliado\Models\Afiliado;
 use App\Application\Afiliado\UseCases\ValidarCupomAfiliadoUseCase;
 use App\Application\Afiliado\UseCases\RastrearReferenciaAfiliadoUseCase;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Carbon\Carbon;
 
@@ -97,19 +98,35 @@ class PaymentController extends BaseApiController
                             }
                             
                             // Buscar referência do afiliado vinculada ao tenant
+                            // IMPORTANTE: Buscar por afiliado_id E tenant_id para garantir correspondência correta
                             $referenciaAfiliado = AfiliadoReferencia::where('tenant_id', $tenant->id)
-                                ->where(function($query) use ($cupomAfiliado, $codigoCupom) {
-                                    $query->where('afiliado_id', $cupomAfiliado['afiliado_id'])
-                                          ->orWhere('referencia_code', $codigoCupom);
-                                })
+                                ->where('afiliado_id', $cupomAfiliado['afiliado_id'])
                                 ->where('cadastro_concluido', true)
                                 ->where('cupom_aplicado', false)
                                 ->orderBy('cadastro_concluido_em', 'desc')
                                 ->first();
                             
+                            // Se não encontrou por afiliado_id, tentar por código de referência
+                            // (para casos onde o código foi usado na URL mas não há vínculo direto)
+                            if (!$referenciaAfiliado) {
+                                $referenciaAfiliado = AfiliadoReferencia::where('tenant_id', $tenant->id)
+                                    ->where('referencia_code', $codigoCupom)
+                                    ->where('cadastro_concluido', true)
+                                    ->where('cupom_aplicado', false)
+                                    ->orderBy('cadastro_concluido_em', 'desc')
+                                    ->first();
+                            }
+                            
                             if (!$referenciaAfiliado) {
                                 return response()->json([
-                                    'message' => 'Este cupom não está disponível para este cliente ou já foi utilizado.',
+                                    'message' => 'Este cupom não está disponível para este cliente ou já foi utilizado. Verifique se você veio através de um link de afiliado válido.',
+                                ], 422);
+                            }
+                            
+                            // Validar se a referência corresponde ao afiliado correto
+                            if ($referenciaAfiliado->afiliado_id !== $cupomAfiliado['afiliado_id']) {
+                                return response()->json([
+                                    'message' => 'O cupom informado não corresponde ao afiliado que o indicou.',
                                 ], 422);
                             }
                             
@@ -232,17 +249,25 @@ class PaymentController extends BaseApiController
                 }
                 
                 // Se cupom de afiliado foi aplicado em plano gratuito, marcar flag
+                // Usar transação para garantir consistência
                 if ($cupomAfiliadoAplicado && $referenciaAfiliado) {
-                    $referenciaAfiliado->update([
-                        'cupom_aplicado' => true,
-                    ]);
-                    
-                    Log::info('Flag cupom_aplicado marcada na referência de afiliado (plano gratuito)', [
-                        'referencia_id' => $referenciaAfiliado->id,
-                        'afiliado_id' => $cupomAfiliadoAplicado['afiliado_id'],
-                        'tenant_id' => $tenant->id,
-                        'assinatura_id' => $assinaturaModel->id,
-                    ]);
+                    DB::transaction(function () use ($referenciaAfiliado, $cupomAfiliadoAplicado, $tenant, $assinaturaModel) {
+                        // Recarregar referência para garantir dados atualizados
+                        $referenciaAtualizada = AfiliadoReferencia::lockForUpdate()->find($referenciaAfiliado->id);
+                        
+                        if ($referenciaAtualizada && !$referenciaAtualizada->cupom_aplicado) {
+                            $referenciaAtualizada->update([
+                                'cupom_aplicado' => true,
+                            ]);
+                            
+                            Log::info('Flag cupom_aplicado marcada na referência de afiliado (plano gratuito)', [
+                                'referencia_id' => $referenciaAtualizada->id,
+                                'afiliado_id' => $cupomAfiliadoAplicado['afiliado_id'],
+                                'tenant_id' => $tenant->id,
+                                'assinatura_id' => $assinaturaModel->id,
+                            ]);
+                        }
+                    });
                 }
 
                 Log::info('Assinatura gratuita criada e vinculada ao tenant', [
@@ -318,17 +343,31 @@ class PaymentController extends BaseApiController
                 }
                 
                 // Cupom de afiliado - marcar flag cupom_aplicado na referência
+                // Usar transação para garantir consistência
                 if ($cupomAfiliadoAplicado && $referenciaAfiliado && $valorDesconto > 0) {
-                    $referenciaAfiliado->update([
-                        'cupom_aplicado' => true,
-                    ]);
-                    
-                    Log::info('Flag cupom_aplicado marcada na referência de afiliado (pagamento aprovado)', [
-                        'referencia_id' => $referenciaAfiliado->id,
-                        'afiliado_id' => $cupomAfiliadoAplicado['afiliado_id'],
-                        'tenant_id' => $tenant->id,
-                        'assinatura_id' => $assinatura->id,
-                    ]);
+                    DB::transaction(function () use ($referenciaAfiliado, $cupomAfiliadoAplicado, $tenant, $assinatura) {
+                        // Recarregar referência para garantir dados atualizados
+                        $referenciaAtualizada = AfiliadoReferencia::lockForUpdate()->find($referenciaAfiliado->id);
+                        
+                        if ($referenciaAtualizada && !$referenciaAtualizada->cupom_aplicado) {
+                            $referenciaAtualizada->update([
+                                'cupom_aplicado' => true,
+                            ]);
+                            
+                            Log::info('Flag cupom_aplicado marcada na referência de afiliado (pagamento aprovado)', [
+                                'referencia_id' => $referenciaAtualizada->id,
+                                'afiliado_id' => $cupomAfiliadoAplicado['afiliado_id'],
+                                'tenant_id' => $tenant->id,
+                                'assinatura_id' => $assinatura->id,
+                            ]);
+                        } else {
+                            Log::warning('Tentativa de marcar cupom_aplicado em referência já marcada', [
+                                'referencia_id' => $referenciaAfiliado->id,
+                                'tenant_id' => $tenant->id,
+                                'já_marcada' => $referenciaAtualizada?->cupom_aplicado ?? 'não encontrada',
+                            ]);
+                        }
+                    });
                 }
             } else {
                 // Se pendente, salvar referência para marcar depois no webhook
