@@ -150,6 +150,12 @@ Route::prefix('v1')->group(function () {
             Route::get('/cupom-automatico', [\App\Http\Controllers\Public\AfiliadoReferenciaController::class, 'buscarCupomAutomatico']);
         });
         
+        // Rotas de comissões para afiliados (autenticadas)
+        Route::prefix('afiliado')->middleware(['auth:api'])->group(function () {
+            Route::get('/comissoes', [\App\Http\Controllers\Afiliado\AfiliadoComissoesController::class, 'index']);
+            Route::get('/comissoes/resumo', [\App\Http\Controllers\Afiliado\AfiliadoComissoesController::class, 'resumo']);
+        });
+
         // Rotas que PRECISAM de assinatura ativa
         Route::middleware([\App\Http\Middleware\CheckSubscription::class])->group(function () {
             // Dashboard
