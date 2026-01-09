@@ -45,7 +45,13 @@ class AdminComissoesController extends Controller
                 page: (int) $request->input('page', 1),
             );
 
-            return response()->json(['success' => true, 'data' => $comissoes]);
+            // UseCase retorna LengthAwarePaginator
+            if ($comissoes instanceof \Illuminate\Contracts\Pagination\LengthAwarePaginator) {
+                return ApiResponse::paginated($comissoes);
+            }
+            
+            // Fallback: se for array ou collection
+            return ApiResponse::collection(is_array($comissoes) ? $comissoes : $comissoes->toArray());
 
         } catch (\Exception $e) {
             Log::error('Erro ao listar comissões', [
@@ -130,7 +136,13 @@ class AdminComissoesController extends Controller
                 page: (int) $request->input('page', 1),
             );
 
-            return response()->json(['success' => true, 'data' => $pagamentos]);
+            // UseCase retorna LengthAwarePaginator
+            if ($pagamentos instanceof \Illuminate\Contracts\Pagination\LengthAwarePaginator) {
+                return ApiResponse::paginated($pagamentos);
+            }
+            
+            // Fallback: se for array ou collection
+            return ApiResponse::collection(is_array($pagamentos) ? $pagamentos : $pagamentos->toArray());
 
         } catch (\Exception $e) {
             Log::error('Erro ao listar pagamentos', [

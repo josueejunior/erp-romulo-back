@@ -15,6 +15,7 @@ use App\Domain\Auth\Repositories\UserReadRepositoryInterface;
 use App\Domain\Auth\Services\UserErrorService;
 use App\Domain\Shared\ValueObjects\TenantContext;
 use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
+use App\Domain\Tenant\Services\EmpresaAdminService;
 use App\Services\AdminTenancyRunner;
 use App\Http\Responses\ApiResponse;
 use App\Http\Requests\Admin\StoreUserAdminRequest;
@@ -49,6 +50,7 @@ class AdminUserController extends Controller
         private TenantRepositoryInterface $tenantRepository,
         private AdminTenancyRunner $adminTenancyRunner,
         private UserErrorService $userErrorService,
+        private EmpresaAdminService $empresaAdminService,
     ) {}
 
     /**
@@ -421,10 +423,24 @@ class AdminUserController extends Controller
                 );
 
                 if ($errorResponse) {
-                    return response()->json(
-                        array_merge(['success' => false], $errorResponse),
-                        422
+                    // Retornar resposta customizada usando ApiResponse::error com dados extras
+                    $response = ApiResponse::error(
+                        $errorResponse['message'],
+                        422,
+                        null,
+                        $errorResponse['errors'] ?? []
                     );
+                    
+                    // Adicionar dados extras ao response
+                    $responseData = json_decode($response->getContent(), true);
+                    if (isset($errorResponse['existing_user'])) {
+                        $responseData['existing_user'] = $errorResponse['existing_user'];
+                    }
+                    if (isset($errorResponse['suggestion'])) {
+                        $responseData['suggestion'] = $errorResponse['suggestion'];
+                    }
+                    
+                    return response()->json($responseData, 422);
                 }
             }
 
@@ -546,6 +562,7 @@ class AdminUserController extends Controller
 
     /**
      * Listar empresas disponíveis do tenant atual
+     * 🔥 DDD: Controller fino - delega para Domain Service
      * 
      * Retorna apenas as empresas do tenant especificado na rota.
      * Remove duplicatas baseado no ID da empresa.
@@ -553,64 +570,24 @@ class AdminUserController extends Controller
     public function empresas(Request $request, Tenant $tenant)
     {
         try {
-            // Garantir que o tenancy está inicializado
-            if (!tenancy()->initialized) {
-                tenancy()->initialize($tenant);
+            $tenantDomain = $this->tenantRepository->buscarPorId($tenant->id);
+            
+            if (!$tenantDomain) {
+                return ApiResponse::error('Tenant não encontrado.', 404);
             }
+
+            // 🔥 DDD: Usar Domain Service para buscar empresas (isola tenancy)
+            $empresasUnicas = $this->empresaAdminService->buscarEmpresasDoTenant($tenantDomain);
             
-            Log::debug('Buscando empresas do tenant', [
-                'tenant_id' => $tenant->id,
-                'tenancy_initialized' => tenancy()->initialized,
-                'current_database' => tenancy()->initialized ? \Illuminate\Support\Facades\DB::connection()->getDatabaseName() : null,
-            ]);
-            
-            // Buscar empresas do tenant atual usando Eloquent (respeita tenancy)
-            $empresas = Empresa::select('id', 'razao_social', 'cnpj', 'status')
-                ->orderBy('razao_social')
-                ->get();
-            
-            Log::debug('Empresas encontradas no tenant', [
-                'tenant_id' => $tenant->id,
-                'count' => $empresas->count(),
-            ]);
-            
-            // Remover duplicatas baseado no ID
-            $empresasUnicas = [];
-            $idsProcessados = [];
-            
-            foreach ($empresas as $empresa) {
-                $empresaId = (int) $empresa->id;
-                if (!in_array($empresaId, $idsProcessados)) {
-                    $empresasUnicas[] = [
-                        'id' => $empresaId,
-                        'razao_social' => $empresa->razao_social,
-                        'cnpj' => $empresa->cnpj,
-                        'status' => $empresa->status,
-                    ];
-                    $idsProcessados[] = $empresaId;
-                }
-            }
-            
-            Log::debug('Empresas únicas após remoção de duplicatas', [
-                'tenant_id' => $tenant->id,
-                'count' => count($empresasUnicas),
-            ]);
-            
-            // Usar ResponseBuilder padronizado (sempre retorna array)
             return ApiResponse::collection($empresasUnicas);
         } catch (\Exception $e) {
             Log::error('Erro ao listar empresas do tenant', [
                 'tenant_id' => $tenant->id,
-                'tenancy_initialized' => tenancy()->initialized,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
             
-            // Em caso de erro, retornar array vazio para não quebrar o frontend
-            return response()->json([
-                'data' => [],
-                'message' => 'Erro ao listar empresas: ' . $e->getMessage(),
-            ], 500);
+            return ApiResponse::error('Erro ao listar empresas.', 500);
         }
     }
 }

@@ -10,6 +10,8 @@ use App\Application\Assinatura\UseCases\AtualizarAssinaturaAdminUseCase;
 use App\Application\Assinatura\UseCases\CriarAssinaturaAdminUseCase;
 use App\Application\Tenant\UseCases\ListarTenantsParaFiltroUseCase;
 use App\Http\Requests\Assinatura\AtualizarAssinaturaAdminRequest;
+use App\Http\Requests\Admin\TrocarPlanoAssinaturaAdminRequest;
+use App\Http\Requests\Admin\StoreAssinaturaAdminRequest;
 use App\Models\Tenant;
 use App\Modules\Assinatura\Models\Assinatura;
 use Illuminate\Http\Request;
@@ -220,9 +222,7 @@ class AdminAssinaturaController extends Controller
         $assinaturaId = $this->getAssinaturaIdFromRoute($route);
         
         if (!$tenantId || !$assinaturaId) {
-            return response()->json([
-                'message' => 'Tenant ID ou Assinatura ID não fornecido'
-            ], 400);
+            return ApiResponse::error('Tenant ID ou Assinatura ID não fornecido', 400);
         }
         
         return $this->handleUpdate($request, $tenantId, $assinaturaId);
@@ -230,25 +230,12 @@ class AdminAssinaturaController extends Controller
 
     /**
      * Criar nova assinatura para um tenant
+     * 🔥 DDD: Controller fino - validação via FormRequest
      */
-    public function store(Request $request)
+    public function store(StoreAssinaturaAdminRequest $request)
     {
         try {
-            $validated = $request->validate([
-                'tenant_id' => 'required|integer|exists:tenants,id',
-                'plano_id' => 'required|integer|exists:planos,id',
-                'empresa_id' => 'nullable|integer',
-                'user_id' => 'nullable|integer',
-                'status' => 'nullable|string|in:ativa,suspensa,expirada,cancelada',
-                'data_inicio' => 'nullable|date',
-                'data_fim' => 'nullable|date',
-                'valor_pago' => 'nullable|numeric|min:0',
-                'metodo_pagamento' => 'nullable|string|in:gratuito,credit_card,pix,boleto',
-                'transacao_id' => 'nullable|string|max:255',
-                'dias_grace_period' => 'nullable|integer|min:0|max:90',
-                'observacoes' => 'nullable|string|max:5000',
-                'periodo' => 'nullable|string|in:mensal,anual',
-            ]);
+            $validated = $request->validated();
 
             // Executar Use Case
             $assinatura = $this->criarAssinaturaAdminUseCase->executar(
@@ -296,14 +283,12 @@ class AdminAssinaturaController extends Controller
 
     /**
      * Trocar plano de uma assinatura (Admin)
+     * 🔥 DDD: Controller fino - validação via FormRequest
      */
-    public function trocarPlano(Request $request, int $tenantId, int $assinaturaId)
+    public function trocarPlano(TrocarPlanoAssinaturaAdminRequest $request, int $tenantId, int $assinaturaId)
     {
         try {
-            $validated = $request->validate([
-                'novo_plano_id' => 'required|integer|exists:planos,id',
-                'periodo' => 'nullable|string|in:mensal,anual',
-            ]);
+            $validated = $request->validated();
 
             // Buscar assinatura atual
             $assinaturaAtual = $this->buscarAssinaturaAdminUseCase->executar($tenantId, $assinaturaId);
