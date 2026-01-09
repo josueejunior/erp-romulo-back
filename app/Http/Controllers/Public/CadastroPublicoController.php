@@ -9,6 +9,8 @@ use App\Application\Assinatura\UseCases\CriarAssinaturaUseCase;
 use App\Application\Assinatura\DTOs\CriarAssinaturaDTO;
 use App\Application\Afiliado\UseCases\ValidarCupomAfiliadoUseCase;
 use App\Application\Empresa\UseCases\RegistrarAfiliadoNaEmpresaUseCase;
+use App\Application\Payment\UseCases\ProcessarAssinaturaPlanoUseCase;
+use App\Domain\Payment\ValueObjects\PaymentRequest;
 use App\Domain\Exceptions\DomainException;
 use App\Services\CnpjConsultaService;
 use App\Modules\Auth\Models\User;
@@ -40,6 +42,7 @@ class CadastroPublicoController extends Controller
         private readonly CnpjConsultaService $cnpjConsultaService,
         private readonly ValidarCupomAfiliadoUseCase $validarCupomAfiliadoUseCase,
         private readonly RegistrarAfiliadoNaEmpresaUseCase $registrarAfiliadoNaEmpresaUseCase,
+        private readonly ProcessarAssinaturaPlanoUseCase $processarAssinaturaPlanoUseCase,
     ) {}
 
     /**
@@ -88,8 +91,8 @@ class CadastroPublicoController extends Controller
                 $this->registrarAfiliadoNaEmpresa($tenantResult['empresa'], $validated);
             }
             
-            // 3. Criar assinatura
-            $assinaturaResult = $this->createAssinatura(
+            // 3. Processar pagamento e criar assinatura
+            $assinaturaResult = $this->processarPagamentoECriarAssinatura(
                 $tenantResult['admin_user'],
                 $tenantResult['tenant'],
                 $validated
@@ -185,6 +188,13 @@ class CadastroPublicoController extends Controller
             'cupom_codigo' => 'nullable|string|max:50',
             'afiliado_id' => 'nullable|integer|exists:afiliados,id',
             'desconto_afiliado' => 'nullable|numeric|min:0|max:100',
+            
+            // Dados de pagamento (opcional - obrigatório se plano não for gratuito)
+            'payment_method' => 'nullable|string|in:credit_card,pix',
+            'payer_email' => 'nullable|email',
+            'payer_cpf' => 'nullable|string',
+            'card_token' => 'nullable|string|required_if:payment_method,credit_card',
+            'installments' => 'nullable|integer|min:1|max:12',
         ]);
     }
 
@@ -284,7 +294,141 @@ class CadastroPublicoController extends Controller
     }
 
     /**
-     * Criar assinatura para o usuário
+     * Processar pagamento e criar assinatura
+     * 
+     * Se houver dados de pagamento e o plano não for gratuito, processa o pagamento.
+     * Caso contrário, cria assinatura pendente ou gratuita.
+     * 
+     * @return array{assinatura: \App\Modules\Assinatura\Models\Assinatura, plano: \App\Modules\Assinatura\Models\Plano, data_fim: \Carbon\Carbon, payment_result?: array}
+     */
+    private function processarPagamentoECriarAssinatura($adminUser, $tenant, array $validated): array
+    {
+        $periodo = $validated['periodo'] ?? 'mensal';
+        $plano = Plano::findOrFail($validated['plano_id']);
+        
+        $isPlanoGratuito = ($plano->preco_mensal == 0 || $plano->preco_mensal === null);
+        
+        // Se for plano gratuito, criar assinatura normalmente
+        if ($isPlanoGratuito) {
+            return $this->createAssinatura($adminUser, $tenant, $validated);
+        }
+        
+        // Se não houver dados de pagamento, criar assinatura pendente
+        if (empty($validated['payment_method']) || empty($validated['payer_email'])) {
+            return $this->createAssinatura($adminUser, $tenant, $validated);
+        }
+        
+        // Processar pagamento
+        try {
+            // Calcular valor com desconto de afiliado
+            $valorOriginal = $periodo === 'anual' && $plano->preco_anual 
+                ? $plano->preco_anual 
+                : $plano->preco_mensal;
+            
+            $valorFinal = $valorOriginal;
+            if (!empty($validated['cupom_codigo']) && !empty($validated['afiliado_id'])) {
+                try {
+                    $cupomInfo = $this->validarCupomAfiliadoUseCase->calcularDesconto(
+                        $validated['cupom_codigo'],
+                        $valorOriginal
+                    );
+                    if ($cupomInfo['valido']) {
+                        $valorFinal = $cupomInfo['valor_final'];
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Erro ao aplicar cupom no pagamento do cadastro público', [
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+            
+            // Criar PaymentRequest
+            $paymentRequestData = [
+                'amount' => $valorFinal,
+                'description' => "Plano {$plano->nome} - {$periodo} - Sistema Rômulo",
+                'payer_email' => $validated['payer_email'],
+                'payer_cpf' => $validated['payer_cpf'] ?? null,
+                'payment_method_id' => $validated['payment_method'] === 'pix' ? 'pix' : null,
+                'external_reference' => "tenant_{$tenant->id}_plano_{$plano->id}_cadastro",
+                'metadata' => [
+                    'tenant_id' => $tenant->id,
+                    'plano_id' => $plano->id,
+                    'periodo' => $periodo,
+                    'cadastro_publico' => true,
+                ],
+            ];
+            
+            // Para cartão, adicionar token e parcelas
+            if ($validated['payment_method'] === 'credit_card') {
+                $paymentRequestData['card_token'] = $validated['card_token'] ?? null;
+                $paymentRequestData['installments'] = isset($validated['installments']) 
+                    ? (int) $validated['installments'] 
+                    : 1;
+                unset($paymentRequestData['payment_method_id']);
+            }
+            
+            $paymentRequest = PaymentRequest::fromArray($paymentRequestData);
+            
+            // Processar pagamento usando o Use Case
+            $assinatura = $this->processarAssinaturaPlanoUseCase->executar(
+                $tenant,
+                $plano,
+                $paymentRequest,
+                $periodo
+            );
+            
+            $dataFim = Carbon::parse($assinatura->data_fim);
+            
+            // Preparar resposta com dados do pagamento
+            $result = [
+                'assinatura' => $assinatura,
+                'plano' => $plano,
+                'data_fim' => $dataFim,
+            ];
+            
+            // Se for PIX pendente, incluir dados do QR Code
+            if ($assinatura->status === 'pendente' && $assinatura->metodo_pagamento === 'pix') {
+                $paymentLog = \App\Models\PaymentLog::where('tenant_id', $tenant->id)
+                    ->where('plano_id', $plano->id)
+                    ->latest()
+                    ->first();
+                
+                if ($paymentLog && isset($paymentLog->dados_resposta['pix_qr_code'])) {
+                    $result['payment_result'] = [
+                        'status' => 'pending',
+                        'payment_method' => 'pix',
+                        'pix_qr_code' => $paymentLog->dados_resposta['pix_qr_code'],
+                        'pix_qr_code_base64' => $paymentLog->dados_resposta['pix_qr_code_base64'] ?? null,
+                        'pix_ticket_url' => $paymentLog->dados_resposta['pix_ticket_url'] ?? null,
+                    ];
+                }
+            }
+            
+            return $result;
+            
+        } catch (DomainException $e) {
+            Log::error('Erro ao processar pagamento no cadastro público', [
+                'error' => $e->getMessage(),
+                'tenant_id' => $tenant->id,
+                'plano_id' => $plano->id,
+            ]);
+            
+            // Se falhar o pagamento, criar assinatura pendente
+            return $this->createAssinatura($adminUser, $tenant, $validated);
+        } catch (\Exception $e) {
+            Log::error('Erro inesperado ao processar pagamento no cadastro público', [
+                'error' => $e->getMessage(),
+                'tenant_id' => $tenant->id,
+                'plano_id' => $plano->id,
+            ]);
+            
+            // Se falhar, criar assinatura pendente
+            return $this->createAssinatura($adminUser, $tenant, $validated);
+        }
+    }
+
+    /**
+     * Criar assinatura para o usuário (método antigo - mantido para planos gratuitos)
      * 
      * @return array{assinatura: \App\Domain\Assinatura\Entities\Assinatura, plano: \App\Modules\Assinatura\Models\Plano, data_fim: \Carbon\Carbon}
      */
