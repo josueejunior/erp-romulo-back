@@ -6,6 +6,7 @@ use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
 use App\Domain\Payment\Entities\PaymentResult;
 use App\Domain\Payment\Repositories\PaymentLogRepositoryInterface;
 use App\Domain\Exceptions\NotFoundException;
+use App\Models\AfiliadoReferencia;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 
@@ -89,6 +90,27 @@ class AtualizarAssinaturaViaWebhookUseCase
                     'external_id' => $transacaoId,
                     'assinaturas_antigas_canceladas' => $assinaturasAntigas->count(),
                 ]);
+                
+                // Marcar flag cupom_aplicado se houver referência de afiliado pendente
+                // Buscar referência vinculada ao tenant que ainda não teve cupom aplicado
+                $referenciaAfiliado = AfiliadoReferencia::where('tenant_id', $tenant->id)
+                    ->where('cadastro_concluido', true)
+                    ->where('cupom_aplicado', false)
+                    ->orderBy('cadastro_concluido_em', 'desc')
+                    ->first();
+                
+                if ($referenciaAfiliado) {
+                    $referenciaAfiliado->update([
+                        'cupom_aplicado' => true,
+                    ]);
+                    
+                    Log::info('Flag cupom_aplicado marcada via webhook (pagamento confirmado)', [
+                        'referencia_id' => $referenciaAfiliado->id,
+                        'afiliado_id' => $referenciaAfiliado->afiliado_id,
+                        'tenant_id' => $tenant->id,
+                        'assinatura_id' => $assinatura->id,
+                    ]);
+                }
             } elseif ($paymentResult->isRejected()) {
                 // Marcar como suspensa se rejeitado
                 $assinatura->update([

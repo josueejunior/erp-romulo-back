@@ -10,7 +10,11 @@ use App\Domain\Payment\ValueObjects\PaymentRequest;
 use App\Domain\Plano\Repositories\PlanoRepositoryInterface;
 use App\Http\Requests\Payment\ProcessarAssinaturaRequest;
 use App\Models\Tenant;
+use App\Models\AfiliadoReferencia;
 use App\Modules\Assinatura\Models\Assinatura;
+use App\Modules\Afiliado\Models\Afiliado;
+use App\Application\Afiliado\UseCases\ValidarCupomAfiliadoUseCase;
+use App\Application\Afiliado\UseCases\RastrearReferenciaAfiliadoUseCase;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Carbon\Carbon;
@@ -24,6 +28,8 @@ class PaymentController extends BaseApiController
         private ProcessarAssinaturaPlanoUseCase $processarAssinaturaUseCase,
         private PlanoRepositoryInterface $planoRepository,
         private CriarAssinaturaUseCase $criarAssinaturaUseCase,
+        private ValidarCupomAfiliadoUseCase $validarCupomAfiliadoUseCase,
+        private RastrearReferenciaAfiliadoUseCase $rastrearReferenciaAfiliadoUseCase,
     ) {}
 
     /**
@@ -60,27 +66,100 @@ class PaymentController extends BaseApiController
 
             // Aplicar cupom se fornecido
             $cupomAplicado = null;
+            $cupomAfiliadoAplicado = null;
+            $referenciaAfiliado = null;
             $valorDesconto = 0;
+            
             if (isset($validated['cupom_codigo'])) {
-                $cupom = \App\Modules\Assinatura\Models\Cupom::where('codigo', strtoupper($validated['cupom_codigo']))->first();
+                $codigoCupom = strtoupper(trim($validated['cupom_codigo']));
                 
-                if ($cupom) {
-                    $validacao = $cupom->podeSerUsadoPor($tenant->id, $plano->id, $valor);
-                    
-                    if ($validacao['valido']) {
-                        $valorDesconto = $cupom->calcularDesconto($valor);
-                        $valor = max(0, $valor - $valorDesconto);
-                        $cupomAplicado = $cupom;
+                // 1. Primeiro, verificar se é código de afiliado válido
+                $afiliadoPorCodigo = Afiliado::where('codigo', $codigoCupom)
+                    ->where('ativo', true)
+                    ->first();
+                
+                if ($afiliadoPorCodigo) {
+                    // É um código de afiliado - validar e aplicar
+                    try {
+                        $cupomAfiliado = $this->validarCupomAfiliadoUseCase->executar($codigoCupom);
                         
-                        Log::info('Cupom aplicado com sucesso', [
-                            'cupom' => $cupom->codigo,
-                            'desconto' => $valorDesconto,
-                            'valor_final' => $valor,
-                        ]);
-                    } else {
+                        if ($cupomAfiliado && $cupomAfiliado['valido']) {
+                            // Validar se CNPJ já usou cupom (uso único por CNPJ)
+                            $cnpjTenant = $tenant->cnpj;
+                            if ($cnpjTenant) {
+                                $jaUsouCupom = $this->rastrearReferenciaAfiliadoUseCase->cnpjJaUsouCupom($cnpjTenant);
+                                
+                                if ($jaUsouCupom) {
+                                    return response()->json([
+                                        'message' => 'Este CNPJ já utilizou um cupom de afiliado. O cupom é de uso único por CNPJ.',
+                                    ], 422);
+                                }
+                            }
+                            
+                            // Buscar referência do afiliado vinculada ao tenant
+                            $referenciaAfiliado = AfiliadoReferencia::where('tenant_id', $tenant->id)
+                                ->where(function($query) use ($cupomAfiliado, $codigoCupom) {
+                                    $query->where('afiliado_id', $cupomAfiliado['afiliado_id'])
+                                          ->orWhere('referencia_code', $codigoCupom);
+                                })
+                                ->where('cadastro_concluido', true)
+                                ->where('cupom_aplicado', false)
+                                ->orderBy('cadastro_concluido_em', 'desc')
+                                ->first();
+                            
+                            if (!$referenciaAfiliado) {
+                                return response()->json([
+                                    'message' => 'Este cupom não está disponível para este cliente ou já foi utilizado.',
+                                ], 422);
+                            }
+                            
+                            // Calcular desconto do afiliado
+                            $percentualDesconto = $cupomAfiliado['percentual_desconto'] ?? 30;
+                            $valorDesconto = ($valor * $percentualDesconto) / 100;
+                            $valor = max(0, $valor - $valorDesconto);
+                            $cupomAfiliadoAplicado = $cupomAfiliado;
+                            
+                            Log::info('Cupom de afiliado aplicado com sucesso', [
+                                'cupom' => $codigoCupom,
+                                'afiliado_id' => $cupomAfiliado['afiliado_id'],
+                                'desconto_percentual' => $percentualDesconto,
+                                'desconto' => $valorDesconto,
+                                'valor_final' => $valor,
+                            ]);
+                        }
+                    } catch (\DomainException $e) {
+                        // Erro na validação do cupom de afiliado
                         return response()->json([
-                            'message' => $validacao['motivo']
-                        ], 400);
+                            'message' => $e->getMessage(),
+                        ], 422);
+                    }
+                } else {
+                    // 2. Não é código de afiliado - tentar como cupom normal
+                    $cupom = \App\Modules\Assinatura\Models\Cupom::where('codigo', $codigoCupom)->first();
+                    
+                    if ($cupom) {
+                        $validacao = $cupom->podeSerUsadoPor($tenant->id, $plano->id, $valor);
+                        
+                        if ($validacao['valido']) {
+                            $valorDesconto = $cupom->calcularDesconto($valor);
+                            $valor = max(0, $valor - $valorDesconto);
+                            $cupomAplicado = $cupom;
+                            
+                            Log::info('Cupom normal aplicado com sucesso', [
+                                'cupom' => $cupom->codigo,
+                                'desconto' => $valorDesconto,
+                                'valor_final' => $valor,
+                            ]);
+                        } else {
+                            return response()->json([
+                                'message' => $validacao['motivo']
+                            ], 400);
+                        }
+                    } else {
+                        // Cupom não encontrado (nem afiliado nem normal)
+                        return response()->json([
+                            'message' => 'Cupom não encontrado ou inválido.',
+                        ], 404);
                     }
                 }
             }
@@ -151,6 +230,20 @@ class PaymentController extends BaseApiController
                     $assinaturaDomain = $this->criarAssinaturaUseCase->executar($assinaturaDTO);
                     $assinaturaModel = Assinatura::find($assinaturaDomain->id);
                 }
+                
+                // Se cupom de afiliado foi aplicado em plano gratuito, marcar flag
+                if ($cupomAfiliadoAplicado && $referenciaAfiliado) {
+                    $referenciaAfiliado->update([
+                        'cupom_aplicado' => true,
+                    ]);
+                    
+                    Log::info('Flag cupom_aplicado marcada na referência de afiliado (plano gratuito)', [
+                        'referencia_id' => $referenciaAfiliado->id,
+                        'afiliado_id' => $cupomAfiliadoAplicado['afiliado_id'],
+                        'tenant_id' => $tenant->id,
+                        'assinatura_id' => $assinaturaModel->id,
+                    ]);
+                }
 
                 Log::info('Assinatura gratuita criada e vinculada ao tenant', [
                     'tenant_id' => $tenant->id,
@@ -205,20 +298,47 @@ class PaymentController extends BaseApiController
                 $validated['periodo']
             );
 
-            // Registrar uso do cupom se aplicado
-            if ($cupomAplicado && $valorDesconto > 0) {
-                \App\Modules\Assinatura\Models\CupomUso::create([
-                    'cupom_id' => $cupomAplicado->id,
+            // Registrar uso do cupom se aplicado (apenas se assinatura foi criada como ativa)
+            // Se estiver pendente, será marcado no webhook quando pagamento for confirmado
+            if ($assinatura->status === 'ativa') {
+                // Cupom normal
+                if ($cupomAplicado && $valorDesconto > 0) {
+                    \App\Modules\Assinatura\Models\CupomUso::create([
+                        'cupom_id' => $cupomAplicado->id,
+                        'tenant_id' => $tenant->id,
+                        'assinatura_id' => $assinatura->id,
+                        'valor_desconto_aplicado' => $valorDesconto,
+                        'valor_original' => $valor + $valorDesconto,
+                        'valor_final' => $valor,
+                        'usado_em' => now(),
+                    ]);
+
+                    // Incrementar contador de uso
+                    $cupomAplicado->increment('total_usado');
+                }
+                
+                // Cupom de afiliado - marcar flag cupom_aplicado na referência
+                if ($cupomAfiliadoAplicado && $referenciaAfiliado && $valorDesconto > 0) {
+                    $referenciaAfiliado->update([
+                        'cupom_aplicado' => true,
+                    ]);
+                    
+                    Log::info('Flag cupom_aplicado marcada na referência de afiliado (pagamento aprovado)', [
+                        'referencia_id' => $referenciaAfiliado->id,
+                        'afiliado_id' => $cupomAfiliadoAplicado['afiliado_id'],
+                        'tenant_id' => $tenant->id,
+                        'assinatura_id' => $assinatura->id,
+                    ]);
+                }
+            } else {
+                // Se pendente, salvar referência para marcar depois no webhook
+                // Isso será feito no WebhookController quando pagamento for confirmado
+                Log::info('Cupom de afiliado aplicado mas pagamento pendente - será marcado no webhook', [
+                    'referencia_id' => $referenciaAfiliado?->id,
+                    'afiliado_id' => $cupomAfiliadoAplicado['afiliado_id'] ?? null,
                     'tenant_id' => $tenant->id,
                     'assinatura_id' => $assinatura->id,
-                    'valor_desconto_aplicado' => $valorDesconto,
-                    'valor_original' => $valor + $valorDesconto,
-                    'valor_final' => $valor,
-                    'usado_em' => now(),
                 ]);
-
-                // Incrementar contador de uso
-                $cupomAplicado->increment('total_usado');
             }
 
             // Buscar resultado do pagamento para incluir dados do PIX se disponível

@@ -296,13 +296,32 @@ class AfiliadoController extends BaseApiController
                 'valor_plano' => 'nullable|numeric|min:0',
             ]);
 
-            $codigo = $request->get('codigo');
+            $codigo = strtoupper(trim($request->get('codigo')));
             $valorPlano = $request->get('valor_plano');
 
+            // Validar cupom de afiliado
             if ($valorPlano) {
-                $resultado = $this->validarCupomAfiliadoUseCase->calcularDesconto($codigo, $valorPlano);
+                $resultado = $this->validarCupomAfiliadoUseCase->calcularDesconto($codigo, (float) $valorPlano);
             } else {
                 $resultado = $this->validarCupomAfiliadoUseCase->executar($codigo);
+            }
+
+            // Se o usuário estiver autenticado e tiver tenant, validar se CNPJ já usou cupom
+            if (auth()->check() && tenancy()->tenant) {
+                $tenant = tenancy()->tenant;
+                $cnpj = $tenant->cnpj;
+                
+                if ($cnpj) {
+                    $rastrearReferenciaUseCase = app(\App\Application\Afiliado\UseCases\RastrearReferenciaAfiliadoUseCase::class);
+                    $jaUsouCupom = $rastrearReferenciaUseCase->cnpjJaUsouCupom($cnpj);
+                    
+                    if ($jaUsouCupom) {
+                        return response()->json([
+                            'message' => 'Este CNPJ já utilizou um cupom de afiliado. O cupom é de uso único por CNPJ.',
+                            'data' => ['valido' => false],
+                        ], 422);
+                    }
+                }
             }
 
             return response()->json([
