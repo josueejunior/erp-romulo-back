@@ -64,30 +64,62 @@ class EmpresaCriadaListener
                 return;
             }
 
-            // Verificar configuração de email antes de enviar
-            $mailDriver = config('mail.default');
-            $mailHost = config('mail.mailers.smtp.host');
-            $mailPort = config('mail.mailers.smtp.port');
+            // 🔥 FORÇAR RELOAD: Limpar cache de configuração antes de ler
+            // Isso garante que estamos lendo do .env atual, não do cache
+            if (app()->configurationIsCached()) {
+                Log::warning('EmpresaCriadaListener - Configuração está em cache, forçando reload', [
+                    'sugestao' => 'Execute: php artisan config:clear',
+                ]);
+            }
             
-            Log::info('EmpresaCriadaListener - Enviando email', [
+            // Ler diretamente do .env usando env() para garantir valores atualizados
+            $mailDriver = env('MAIL_MAILER', config('mail.default'));
+            $mailHost = env('MAIL_HOST', config('mail.mailers.smtp.host'));
+            $mailPort = env('MAIL_PORT', config('mail.mailers.smtp.port'));
+            $mailUsername = env('MAIL_USERNAME', config('mail.mailers.smtp.username'));
+            $mailPassword = env('MAIL_PASSWORD', config('mail.mailers.smtp.password'));
+            $mailEncryption = env('MAIL_ENCRYPTION', config('mail.mailers.smtp.encryption'));
+            
+            Log::info('EmpresaCriadaListener - Verificando configuração de email', [
                 'tenant_id' => $event->tenantId,
                 'email_destino' => $emailDestino,
                 'mail_driver' => $mailDriver,
                 'mail_host' => $mailHost,
                 'mail_port' => $mailPort,
-                'mail_username' => config('mail.mailers.smtp.username'),
+                'mail_username' => $mailUsername ? '***definido***' : 'não definido',
+                'mail_password' => $mailPassword ? '***definido***' : 'não definido',
+                'mail_encryption' => $mailEncryption,
+                'config_cached' => app()->configurationIsCached(),
             ]);
 
             // Validar configuração SMTP
             if ($mailDriver === 'smtp') {
-                if (empty($mailHost) || $mailHost === 'mailpit' || $mailHost === 'localhost') {
-                    Log::warning('EmpresaCriadaListener - Configuração SMTP inválida ou de desenvolvimento', [
+                // Verificar se host é válido (não vazio, não mailpit, não localhost)
+                if (empty($mailHost) || 
+                    strtolower($mailHost) === 'mailpit' || 
+                    strtolower($mailHost) === 'localhost' ||
+                    str_contains(strtolower($mailHost), '127.0.0.1')) {
+                    Log::error('EmpresaCriadaListener - Configuração SMTP inválida ou de desenvolvimento', [
                         'mail_host' => $mailHost,
-                        'sugestao' => 'Verifique as variáveis MAIL_HOST, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD no .env',
+                        'mail_driver' => $mailDriver,
+                        'sugestao' => 'Execute: php artisan config:clear && verifique MAIL_HOST no .env',
                     ]);
                     throw new \RuntimeException(
-                        'Configuração de email inválida. Verifique MAIL_HOST no arquivo .env. ' .
-                        'Host atual: ' . ($mailHost ?: 'não definido')
+                        'Configuração de email inválida. Host atual: ' . ($mailHost ?: 'não definido') . 
+                        '. Execute: php artisan config:clear e verifique MAIL_HOST no .env'
+                    );
+                }
+                
+                // Verificar se credenciais estão definidas
+                if (empty($mailUsername) || empty($mailPassword)) {
+                    Log::error('EmpresaCriadaListener - Credenciais SMTP não definidas', [
+                        'mail_host' => $mailHost,
+                        'username_set' => !empty($mailUsername),
+                        'password_set' => !empty($mailPassword),
+                        'sugestao' => 'Verifique MAIL_USERNAME e MAIL_PASSWORD no .env',
+                    ]);
+                    throw new \RuntimeException(
+                        'Credenciais SMTP não definidas. Verifique MAIL_USERNAME e MAIL_PASSWORD no .env'
                     );
                 }
             }

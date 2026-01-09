@@ -28,27 +28,42 @@ class VerificarConfiguracaoEmail extends Command
     {
         $this->info('🔍 Verificando configuração de email...');
         $this->newLine();
+        
+        // 🔥 IMPORTANTE: Verificar se configuração está em cache
+        if (app()->configurationIsCached()) {
+            $this->warn('⚠️  ATENÇÃO: Configuração está em cache!');
+            $this->line('   Execute: php artisan config:clear');
+            $this->newLine();
+        }
 
-        $mailDriver = config('mail.default');
-        $mailHost = config('mail.mailers.smtp.host');
-        $mailPort = config('mail.mailers.smtp.port');
-        $mailUsername = config('mail.mailers.smtp.username');
-        $mailPassword = config('mail.mailers.smtp.password') ? '***' : 'NÃO DEFINIDO';
-        $mailEncryption = config('mail.mailers.smtp.encryption');
-        $mailFrom = config('mail.from.address');
-        $mailFromName = config('mail.from.name');
+        // Ler diretamente do .env (bypass cache) para diagnóstico
+        $mailDriver = env('MAIL_MAILER', config('mail.default'));
+        $mailHost = env('MAIL_HOST', config('mail.mailers.smtp.host'));
+        $mailPort = env('MAIL_PORT', config('mail.mailers.smtp.port'));
+        $mailUsername = env('MAIL_USERNAME', config('mail.mailers.smtp.username'));
+        $mailPassword = env('MAIL_PASSWORD', config('mail.mailers.smtp.password'));
+        $mailEncryption = env('MAIL_ENCRYPTION', config('mail.mailers.smtp.encryption'));
+        $mailFrom = env('MAIL_FROM_ADDRESS', config('mail.from.address'));
+        $mailFromName = env('MAIL_FROM_NAME', config('mail.from.name'));
+        
+        // Remover aspas da senha se houver (problema comum no .env)
+        if ($mailPassword && (str_starts_with($mailPassword, '"') || str_starts_with($mailPassword, "'"))) {
+            $this->warn('⚠️  ATENÇÃO: Senha tem aspas no .env! Remova as aspas de MAIL_PASSWORD');
+            $this->line('   Exemplo: MAIL_PASSWORD=C/k6@!S0  (sem aspas)');
+            $this->newLine();
+        }
 
         $this->table(
-            ['Configuração', 'Valor'],
+            ['Configuração', 'Valor (do .env)', 'Valor (do cache)'],
             [
-                ['Driver', $mailDriver],
-                ['Host', $mailHost],
-                ['Porta', $mailPort],
-                ['Criptografia', $mailEncryption],
-                ['Usuário', $mailUsername],
-                ['Senha', $mailPassword],
-                ['Email Remetente', $mailFrom],
-                ['Nome Remetente', $mailFromName],
+                ['Driver', env('MAIL_MAILER', 'não definido'), config('mail.default')],
+                ['Host', env('MAIL_HOST', 'não definido'), config('mail.mailers.smtp.host')],
+                ['Porta', env('MAIL_PORT', 'não definido'), config('mail.mailers.smtp.port')],
+                ['Criptografia', env('MAIL_ENCRYPTION', 'não definido'), config('mail.mailers.smtp.encryption')],
+                ['Usuário', env('MAIL_USERNAME', 'não definido'), config('mail.mailers.smtp.username')],
+                ['Senha', $mailPassword ? '***definido***' : 'NÃO DEFINIDO', config('mail.mailers.smtp.password') ? '***definido***' : 'NÃO DEFINIDO'],
+                ['Email Remetente', env('MAIL_FROM_ADDRESS', 'não definido'), config('mail.from.address')],
+                ['Nome Remetente', env('MAIL_FROM_NAME', 'não definido'), config('mail.from.name')],
             ]
         );
 

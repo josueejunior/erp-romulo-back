@@ -194,6 +194,8 @@ class AssinaturaRepository implements AssinaturaRepositoryInterface
     /**
      * Salvar assinatura (criar ou atualizar)
      * 
+     * 🔒 ROBUSTEZ: Validações de integridade antes de persistir
+     * 
      * Nota: A validação de contexto (TenantContextGuard) deve ser feita
      * pelo Application Service antes de chamar este método.
      */
@@ -211,9 +213,13 @@ class AssinaturaRepository implements AssinaturaRepositoryInterface
                 Log::warning('AssinaturaRepository::salvar() - Operando sem tenancy inicializado', [
                     'assinatura_id' => $assinatura->id,
                     'user_id' => $assinatura->userId,
+                    'empresa_id' => $assinatura->empresaId,
                 ]);
             }
         }
+
+        // 🔒 Validações adicionais de integridade antes de persistir
+        $this->validarIntegridadeAntesDeSalvar($assinatura);
 
         if ($assinatura->id) {
             return $this->atualizar($assinatura);
@@ -221,36 +227,120 @@ class AssinaturaRepository implements AssinaturaRepositoryInterface
 
         return $this->criar($assinatura);
     }
+    
+    /**
+     * Validações de integridade antes de salvar
+     * 
+     * 🔒 ROBUSTEZ: Validações adicionais que não estão na entidade
+     * 
+     * @param Assinatura $assinatura
+     * @throws \Exception Se validação falhar
+     */
+    private function validarIntegridadeAntesDeSalvar(Assinatura $assinatura): void
+    {
+        // Validar que empresa_id está presente para novas assinaturas
+        if (!$assinatura->id && (!$assinatura->empresaId || $assinatura->empresaId <= 0)) {
+            Log::error('AssinaturaRepository::validarIntegridadeAntesDeSalvar() - Empresa não informada', [
+                'assinatura_id' => $assinatura->id,
+                'empresa_id' => $assinatura->empresaId,
+            ]);
+            throw new \DomainException('Empresa é obrigatória para criar uma assinatura.');
+        }
+        
+        // Validar que plano_id está presente e válido
+        if (!$assinatura->planoId || $assinatura->planoId <= 0) {
+            Log::error('AssinaturaRepository::validarIntegridadeAntesDeSalvar() - Plano inválido', [
+                'assinatura_id' => $assinatura->id,
+                'plano_id' => $assinatura->planoId,
+            ]);
+            throw new \DomainException('Plano é obrigatório e deve ser válido.');
+        }
+        
+        // Validar datas são consistentes
+        if ($assinatura->dataInicio && $assinatura->dataFim) {
+            if ($assinatura->dataFim->isBefore($assinatura->dataInicio)) {
+                Log::error('AssinaturaRepository::validarIntegridadeAntesDeSalvar() - Datas inconsistentes', [
+                    'assinatura_id' => $assinatura->id,
+                    'data_inicio' => $assinatura->dataInicio->toDateString(),
+                    'data_fim' => $assinatura->dataFim->toDateString(),
+                ]);
+                throw new \DomainException('Data de fim não pode ser anterior à data de início.');
+            }
+        }
+        
+        Log::debug('AssinaturaRepository::validarIntegridadeAntesDeSalvar() - Validações passaram', [
+            'assinatura_id' => $assinatura->id,
+            'empresa_id' => $assinatura->empresaId,
+            'plano_id' => $assinatura->planoId,
+        ]);
+    }
 
     /**
      * Criar nova assinatura
+     * 
+     * 🔒 ROBUSTEZ: Validações e logging detalhado
      */
     private function criar(Assinatura $assinatura): Assinatura
     {
-        $model = AssinaturaModel::create([
-            'user_id' => $assinatura->userId,
-            'tenant_id' => $assinatura->tenantId,
-            'empresa_id' => $assinatura->empresaId,
-            'plano_id' => $assinatura->planoId,
-            'status' => $assinatura->status,
-            'data_inicio' => $assinatura->dataInicio ?? now(),
-            'data_fim' => $assinatura->dataFim,
-            'data_cancelamento' => $assinatura->dataCancelamento,
-            'valor_pago' => $assinatura->valorPago ?? 0,
-            'metodo_pagamento' => $assinatura->metodoPagamento ?? 'gratuito',
-            'transacao_id' => $assinatura->transacaoId,
-            'dias_grace_period' => $assinatura->diasGracePeriod ?? 7,
-            'observacoes' => $assinatura->observacoes,
-        ]);
+        try {
+            Log::info('AssinaturaRepository::criar() - Iniciando criação', [
+                'empresa_id' => $assinatura->empresaId,
+                'plano_id' => $assinatura->planoId,
+                'status' => $assinatura->status,
+                'user_id' => $assinatura->userId,
+            ]);
+            
+            $model = AssinaturaModel::create([
+                'user_id' => $assinatura->userId,
+                'tenant_id' => $assinatura->tenantId,
+                'empresa_id' => $assinatura->empresaId,
+                'plano_id' => $assinatura->planoId,
+                'status' => $assinatura->status,
+                'data_inicio' => $assinatura->dataInicio ?? now(),
+                'data_fim' => $assinatura->dataFim,
+                'data_cancelamento' => $assinatura->dataCancelamento,
+                'valor_pago' => $assinatura->valorPago ?? 0,
+                'metodo_pagamento' => $assinatura->metodoPagamento ?? 'gratuito',
+                'transacao_id' => $assinatura->transacaoId,
+                'dias_grace_period' => $assinatura->diasGracePeriod ?? 7,
+                'observacoes' => $assinatura->observacoes,
+            ]);
 
-        Log::info('Assinatura criada', [
-            'assinatura_id' => $model->id,
-            'user_id' => $assinatura->userId,
-            'plano_id' => $assinatura->planoId,
-            'status' => $assinatura->status,
-        ]);
+            Log::info('AssinaturaRepository::criar() - Assinatura criada com sucesso', [
+                'assinatura_id' => $model->id,
+                'empresa_id' => $model->empresa_id,
+                'user_id' => $model->user_id,
+                'plano_id' => $model->plano_id,
+                'status' => $model->status,
+                'data_inicio' => $model->data_inicio?->toDateString(),
+                'data_fim' => $model->data_fim?->toDateString(),
+            ]);
 
-        return $this->toDomain($model->fresh());
+            return $this->toDomain($model->fresh());
+            
+        } catch (\Illuminate\Database\QueryException $e) {
+            Log::error('AssinaturaRepository::criar() - Erro de banco de dados', [
+                'empresa_id' => $assinatura->empresaId,
+                'plano_id' => $assinatura->planoId,
+                'error' => $e->getMessage(),
+                'sql_state' => $e->getCode(),
+            ]);
+            
+            // Re-lançar com mensagem mais amigável
+            if (str_contains($e->getMessage(), 'foreign key constraint')) {
+                throw new \DomainException('Erro ao criar assinatura: empresa ou plano não encontrado.');
+            }
+            
+            throw new \DomainException('Erro ao criar assinatura: ' . $e->getMessage());
+        } catch (\Exception $e) {
+            Log::error('AssinaturaRepository::criar() - Erro inesperado', [
+                'empresa_id' => $assinatura->empresaId,
+                'plano_id' => $assinatura->planoId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            throw $e;
+        }
     }
 
     /**

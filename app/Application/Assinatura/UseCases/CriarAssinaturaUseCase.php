@@ -5,6 +5,7 @@ namespace App\Application\Assinatura\UseCases;
 use App\Application\Assinatura\DTOs\CriarAssinaturaDTO;
 use App\Domain\Assinatura\Entities\Assinatura;
 use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
+use App\Domain\Assinatura\Services\AssinaturaValidationService;
 use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
 use App\Domain\Exceptions\DomainException;
 use App\Modules\Assinatura\Models\Plano;
@@ -17,12 +18,14 @@ use Illuminate\Support\Facades\Log;
  * Orquestra a criação de uma nova assinatura seguindo regras de negócio
  * 
  * 🔥 ARQUITETURA LIMPA: Usa TenantRepository em vez de Eloquent direto
+ * 🔒 ROBUSTEZ: Usa Domain Service para validações complexas
  */
 class CriarAssinaturaUseCase
 {
     public function __construct(
         private AssinaturaRepositoryInterface $assinaturaRepository,
         private TenantRepositoryInterface $tenantRepository,
+        private AssinaturaValidationService $validationService,
     ) {}
 
     /**
@@ -66,6 +69,11 @@ class CriarAssinaturaUseCase
                 'user_id' => $user->id,
                 'empresa_id' => $empresaId,
             ]);
+        }
+        
+        // 🔒 ROBUSTEZ: Validar empresa e plano existem, e não há conflito de assinatura ativa
+        if ($empresaId) {
+            $this->validationService->validarAntesDeCriar($empresaId, $dto->planoId);
         }
 
         // Criar entidade do domínio
