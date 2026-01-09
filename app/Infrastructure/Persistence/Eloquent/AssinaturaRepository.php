@@ -25,6 +25,46 @@ use Carbon\Carbon;
 class AssinaturaRepository implements AssinaturaRepositoryInterface
 {
     /**
+     * Normalizar método de pagamento (corrigir valores inválidos no banco)
+     */
+    private function normalizarMetodoPagamento(?string $metodoPagamento): ?string
+    {
+        if ($metodoPagamento === null) {
+            return null;
+        }
+
+        $metodosValidos = ['gratuito', 'credit_card', 'pix', 'boleto', 'pendente'];
+        
+        // Se já é válido, retornar como está
+        if (in_array($metodoPagamento, $metodosValidos, true)) {
+            return $metodoPagamento;
+        }
+
+        // Mapear valores inválidos conhecidos para valores válidos
+        $mapeamento = [
+            'master' => 'gratuito', // 'master' era usado antigamente para planos gratuitos
+            'card' => 'credit_card',
+            'creditcard' => 'credit_card',
+            'debit_card' => 'credit_card',
+        ];
+
+        if (isset($mapeamento[$metodoPagamento])) {
+            Log::warning('AssinaturaRepository::normalizarMetodoPagamento - Valor inválido corrigido', [
+                'valor_antigo' => $metodoPagamento,
+                'valor_novo' => $mapeamento[$metodoPagamento],
+            ]);
+            return $mapeamento[$metodoPagamento];
+        }
+
+        // Se não conseguir mapear, usar 'pendente' como fallback
+        Log::warning('AssinaturaRepository::normalizarMetodoPagamento - Valor desconhecido, usando fallback', [
+            'valor_antigo' => $metodoPagamento,
+            'valor_novo' => 'pendente',
+        ]);
+        return 'pendente';
+    }
+
+    /**
      * Converter modelo Eloquent para entidade do domínio
      */
     private function toDomain(AssinaturaModel $model): Assinatura
@@ -40,7 +80,7 @@ class AssinaturaRepository implements AssinaturaRepositoryInterface
             dataFim: $model->data_fim ? Carbon::parse($model->data_fim) : null,
             dataCancelamento: $model->data_cancelamento ? Carbon::parse($model->data_cancelamento) : null,
             valorPago: $model->valor_pago ? (float) $model->valor_pago : null,
-            metodoPagamento: $model->metodo_pagamento,
+            metodoPagamento: $this->normalizarMetodoPagamento($model->metodo_pagamento),
             transacaoId: $model->transacao_id,
             diasGracePeriod: $model->dias_grace_period ?? 7,
             observacoes: $model->observacoes,
