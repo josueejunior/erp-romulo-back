@@ -136,6 +136,21 @@ class CriarAssinaturaAdminUseCase
             $dataFim = $this->assinaturaDomainService->calcularDataFim($planoModel, $periodo, $dataInicio);
         }
 
+        // 🔥 CRÍTICO: Sempre usar o valor do plano, não permitir valor manual diferente
+        // O valor pago DEVE ser o valor da mensalidade do plano
+        $valorPago = $planoDomain->precoMensal ?? 0;
+        
+        // Se foi fornecido valor_pago manualmente, usar apenas se for igual ao do plano (validação)
+        if (isset($dados['valor_pago']) && $dados['valor_pago'] > 0) {
+            if (abs($dados['valor_pago'] - $valorPago) > 0.01) {
+                Log::warning('CriarAssinaturaAdminUseCase - Valor pago fornecido difere do plano, usando valor do plano', [
+                    'valor_fornecido' => $dados['valor_pago'],
+                    'valor_plano' => $valorPago,
+                ]);
+            }
+            // Mesmo assim, usar valor do plano para garantir consistência
+        }
+
         // Preparar DTO
         $dto = new CriarAssinaturaDTO(
             userId: $userId,
@@ -143,7 +158,7 @@ class CriarAssinaturaAdminUseCase
             status: $dados['status'] ?? 'ativa',
             dataInicio: $dataInicio,
             dataFim: $dataFim,
-            valorPago: $dados['valor_pago'] ?? $planoDomain->precoMensal,
+            valorPago: $valorPago, // Sempre usar valor do plano
             metodoPagamento: $dados['metodo_pagamento'] ?? 'gratuito',
             transacaoId: $dados['transacao_id'] ?? null,
             diasGracePeriod: $dados['dias_grace_period'] ?? 7,

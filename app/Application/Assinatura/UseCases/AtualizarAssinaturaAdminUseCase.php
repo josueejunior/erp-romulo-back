@@ -67,6 +67,16 @@ class AtualizarAssinaturaAdminUseCase
                 throw new NotFoundException("Plano não encontrado.");
             }
             $assinaturaModel->plano_id = $dados['plano_id'];
+            
+            // 🔥 CRÍTICO: Atualizar valor_pago automaticamente com o valor do plano
+            // Se não foi fornecido valor_pago manualmente, usar o valor do plano
+            if (!isset($dados['valor_pago']) || $dados['valor_pago'] === null || $dados['valor_pago'] === '') {
+                $assinaturaModel->valor_pago = $plano->precoMensal ?? 0;
+                Log::info('AtualizarAssinaturaAdminUseCase - Valor pago atualizado automaticamente com valor do plano', [
+                    'plano_id' => $dados['plano_id'],
+                    'valor_pago' => $assinaturaModel->valor_pago,
+                ]);
+            }
         }
 
         if (isset($dados['status'])) {
@@ -89,7 +99,22 @@ class AtualizarAssinaturaAdminUseCase
             if ($dados['valor_pago'] < 0) {
                 throw new DomainException("O valor pago não pode ser negativo.");
             }
+            // Se valor_pago foi fornecido, usar ele
+            // Caso contrário, se plano foi atualizado, já foi definido acima
             $assinaturaModel->valor_pago = $dados['valor_pago'];
+        } elseif (!isset($dados['plano_id'])) {
+            // Se não atualizou plano e não forneceu valor_pago, garantir que tem valor
+            // Buscar valor do plano atual se valor_pago estiver vazio
+            if (!$assinaturaModel->valor_pago || $assinaturaModel->valor_pago == 0) {
+                $planoAtual = $this->planoRepository->buscarPorId($assinaturaModel->plano_id);
+                if ($planoAtual) {
+                    $assinaturaModel->valor_pago = $planoAtual->precoMensal ?? 0;
+                    Log::info('AtualizarAssinaturaAdminUseCase - Valor pago preenchido com valor do plano atual', [
+                        'plano_id' => $assinaturaModel->plano_id,
+                        'valor_pago' => $assinaturaModel->valor_pago,
+                    ]);
+                }
+            }
         }
 
         if (isset($dados['metodo_pagamento'])) {

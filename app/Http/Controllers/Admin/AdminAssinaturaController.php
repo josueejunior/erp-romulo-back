@@ -290,5 +290,60 @@ class AdminAssinaturaController extends Controller
             return response()->json(['message' => 'Erro ao listar empresas.'], 500);
         }
     }
+
+    /**
+     * Trocar plano de uma assinatura (Admin)
+     */
+    public function trocarPlano(Request $request, int $tenantId, int $assinaturaId)
+    {
+        try {
+            $validated = $request->validate([
+                'novo_plano_id' => 'required|integer|exists:planos,id',
+                'periodo' => 'nullable|string|in:mensal,anual',
+            ]);
+
+            // Buscar assinatura atual
+            $assinaturaAtual = $this->buscarAssinaturaAdminUseCase->executar($tenantId, $assinaturaId);
+            if (!$assinaturaAtual) {
+                return response()->json(['message' => 'Assinatura não encontrada.'], 404);
+            }
+
+            // Se já está no mesmo plano, retornar erro
+            if ($assinaturaAtual['plano_id'] == $validated['novo_plano_id']) {
+                return response()->json(['message' => 'A assinatura já está neste plano.'], 400);
+            }
+
+            // Atualizar assinatura com novo plano
+            $assinaturaAtualizada = $this->atualizarAssinaturaAdminUseCase->executar(
+                $tenantId,
+                $assinaturaId,
+                [
+                    'plano_id' => $validated['novo_plano_id'],
+                    // O valor_pago será atualizado automaticamente pelo Use Case
+                ]
+            );
+
+            // Buscar assinatura completa atualizada
+            $assinaturaCompleta = $this->buscarAssinaturaAdminUseCase->executar(
+                $tenantId,
+                $assinaturaId
+            );
+
+            return response()->json([
+                'message' => 'Plano alterado com sucesso!',
+                'data' => $assinaturaCompleta,
+            ]);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        } catch (\Exception $e) {
+            Log::error('Erro ao trocar plano', [
+                'tenant_id' => $tenantId,
+                'assinatura_id' => $assinaturaId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json(['message' => 'Erro ao trocar plano.'], 500);
+        }
+    }
 }
 

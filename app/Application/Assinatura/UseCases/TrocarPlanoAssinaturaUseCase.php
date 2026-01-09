@@ -64,7 +64,16 @@ class TrocarPlanoAssinaturaUseCase
 
             $planoAtual = $assinaturaAtual->plano;
             $valorNovoPlano = $periodo === 'anual' ? $novoPlano->preco_anual : $novoPlano->preco_mensal;
+            
+            // 🔥 CRÍTICO: Se valor_pago não existe ou é 0, usar valor do plano atual
             $valorPlanoAtual = $assinaturaAtual->valor_pago;
+            if (!$valorPlanoAtual || $valorPlanoAtual == 0) {
+                $valorPlanoAtual = $planoAtual->preco_mensal ?? 0;
+                Log::info('TrocarPlanoAssinaturaUseCase - Usando valor do plano atual (valor_pago estava vazio)', [
+                    'plano_atual_id' => $planoAtual->id,
+                    'valor_plano_atual' => $valorPlanoAtual,
+                ]);
+            }
 
             // Calcular dias restantes da assinatura atual
             $diasRestantes = now()->diffInDays($assinaturaAtual->data_fim, false);

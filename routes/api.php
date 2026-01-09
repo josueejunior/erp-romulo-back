@@ -428,6 +428,8 @@ Route::prefix('admin')->group(function () {
                 ->where(['tenantId' => '[0-9]+', 'assinaturaId' => '[0-9]+']);
             Route::put('/{tenantId}/{assinaturaId}', [\App\Http\Controllers\Admin\AdminAssinaturaController::class, 'update'])
                 ->where(['tenantId' => '[0-9]+', 'assinaturaId' => '[0-9]+']);
+            Route::post('/{tenantId}/{assinaturaId}/trocar-plano', [\App\Http\Controllers\Admin\AdminAssinaturaController::class, 'trocarPlano'])
+                ->where(['tenantId' => '[0-9]+', 'assinaturaId' => '[0-9]+']);
         });
 
         // Gerenciamento de cupons

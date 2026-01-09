@@ -79,6 +79,17 @@ class CriarAssinaturaUseCase
             $this->validationService->validarAntesDeCriar($empresaId, $dto->planoId);
         }
 
+        // 🔥 CRÍTICO: Garantir que valorPago sempre seja o valor do plano
+        // Se não foi fornecido ou é 0, usar o valor do plano
+        $valorPago = $dto->valorPago;
+        if (!$valorPago || $valorPago == 0) {
+            $valorPago = $plano->preco_mensal ?? 0;
+            Log::info('CriarAssinaturaUseCase - Valor pago preenchido com valor do plano', [
+                'plano_id' => $plano->id,
+                'valor_pago' => $valorPago,
+            ]);
+        }
+
         // Criar entidade do domínio
         $assinatura = new Assinatura(
             id: null, // Nova assinatura
@@ -90,7 +101,7 @@ class CriarAssinaturaUseCase
             dataInicio: $dto->dataInicio ?? Carbon::now(),
             dataFim: $dto->dataFim,
             dataCancelamento: null,
-            valorPago: $dto->valorPago ?? 0,
+            valorPago: $valorPago, // Sempre usar valor do plano ou fornecido
             metodoPagamento: $dto->metodoPagamento ?? 'gratuito',
             transacaoId: $dto->transacaoId,
             diasGracePeriod: $dto->diasGracePeriod,
