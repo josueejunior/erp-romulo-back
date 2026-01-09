@@ -6,328 +6,313 @@ namespace App\Http\Controllers\Public;
 
 use App\Http\Controllers\Controller;
 use App\Application\Onboarding\UseCases\GerenciarOnboardingUseCase;
+use App\Application\Onboarding\DTOs\IniciarOnboardingDTO;
+use App\Application\Onboarding\DTOs\MarcarEtapaDTO;
+use App\Application\Onboarding\DTOs\MarcarChecklistItemDTO;
+use App\Application\Onboarding\DTOs\ConcluirOnboardingDTO;
+use App\Application\Onboarding\DTOs\BuscarProgressoDTO;
+use App\Application\Onboarding\Presenters\OnboardingApiPresenter;
+use App\Domain\Onboarding\Repositories\OnboardingProgressRepositoryInterface;
+use App\Http\Requests\Onboarding\IniciarOnboardingRequest;
+use App\Http\Requests\Onboarding\MarcarEtapaRequest;
+use App\Http\Requests\Onboarding\MarcarChecklistItemRequest;
+use App\Http\Requests\Onboarding\ConcluirOnboardingRequest;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use Stancl\Tenancy\Facades\Tenancy;
+use App\Domain\Exceptions\DomainException;
 
 /**
- * Controller para gerenciamento de onboarding
+ * Controller para gerenciamento de onboarding (rotas públicas)
+ * 
+ * ✅ DDD: Usa Form Requests para validação
+ * ✅ DDD: Usa DTOs para entrada
+ * ✅ DDD: Usa Use Cases para lógica de negócio
+ * ✅ DDD: Usa Presenter para serialização
+ * ✅ DDD: Não acessa Eloquent diretamente
  */
 class OnboardingController extends Controller
 {
     public function __construct(
         private readonly GerenciarOnboardingUseCase $gerenciarOnboardingUseCase,
+        private readonly OnboardingProgressRepositoryInterface $repository,
+        private readonly OnboardingApiPresenter $presenter,
     ) {}
 
     /**
      * Inicia ou retoma onboarding
      */
-    public function iniciar(Request $request): JsonResponse
+    public function iniciar(IniciarOnboardingRequest $request): JsonResponse
     {
-        $onboarding = $this->gerenciarOnboardingUseCase->iniciar(
-            tenantId: $request->input('tenant_id'),
-            userId: $request->input('user_id'),
-            sessionId: $request->input('session_id') ?? $request->session()->getId(),
-            email: $request->input('email'),
-        );
+        try {
+            // Tentar obter usuário autenticado (pode ser null)
+            $user = $request->user() ?? auth('sanctum')->user();
+            
+            // Criar DTO com dados do request e usuário autenticado
+            $dto = IniciarOnboardingDTO::fromRequest(
+                requestData: $request->validated(),
+                tenantId: $user ? (Tenancy::tenant()?->id ?? null) : null,
+                userId: $user?->id,
+                email: $user?->email,
+            );
 
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'onboarding_id' => $onboarding->id,
-                'progresso_percentual' => $onboarding->progresso_percentual,
-                'onboarding_concluido' => $onboarding->onboarding_concluido,
-                'etapas_concluidas' => $onboarding->etapas_concluidas,
-            ],
-        ]);
+            // Executar Use Case
+            $onboardingDomain = $this->gerenciarOnboardingUseCase->iniciar($dto);
+
+            // Buscar modelo para apresentação (se necessário)
+            $onboardingModel = $this->repository->buscarModeloPorId($onboardingDomain->id);
+
+            if (!$onboardingModel) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Erro ao recuperar dados do onboarding.',
+                ], 500);
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => $this->presenter->present($onboardingModel),
+            ], 201);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        } catch (\Exception $e) {
+            Log::error('OnboardingController::iniciar - Erro inesperado', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao iniciar onboarding.',
+            ], 500);
+        }
     }
 
     /**
      * Marca uma etapa como concluída
-     * Se onboarding_id não fornecido, busca automaticamente pelo usuário autenticado
      */
-    public function marcarEtapa(Request $request): JsonResponse
+    public function marcarEtapa(MarcarEtapaRequest $request): JsonResponse
     {
-        $request->validate([
-            'etapa' => 'required|string|max:100',
-            'onboarding_id' => 'nullable|integer', // Opcional - buscará automaticamente se não fornecido
-        ]);
-
-        // Buscar onboarding_id se não fornecido
-        $onboardingId = $request->input('onboarding_id');
-        
-        if (!$onboardingId) {
-            // Tentar obter usuário autenticado (pode ser null se não houver token)
+        try {
+            // Tentar obter usuário autenticado (pode ser null)
             $user = $request->user() ?? auth('sanctum')->user();
-            
-            $tenantId = $request->input('tenant_id');
-            $userId = $request->input('user_id');
-            $sessionId = $request->input('session_id');
-            $email = $request->input('email');
 
-            // Se temos um usuário autenticado, usar seus dados
-            if ($user) {
-                $tenantId = $tenantId ?? (Tenancy::tenant()?->id ?? null);
-                $userId = $userId ?? $user->id;
-                $email = $email ?? $user->email;
-            }
-
-            if (!$userId && !$sessionId && !$email) {
-                Log::warning('OnboardingController::marcarEtapa - Usuário não identificado', [
-                    'has_token' => $request->bearerToken() !== null,
-                    'has_user' => $user !== null,
-                ]);
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Usuário não identificado. Forneça user_id, session_id ou email, ou faça login.',
-                ], 400);
-            }
-
-            // Buscar progresso atual
-            $onboarding = $this->gerenciarOnboardingUseCase->buscarProgresso(
-                tenantId: $tenantId,
-                userId: $userId,
-                sessionId: $sessionId,
-                email: $email,
+            // Criar DTO com dados do request e usuário autenticado
+            $dto = MarcarEtapaDTO::fromRequest(
+                requestData: $request->validated(),
+                tenantId: $user ? (Tenancy::tenant()?->id ?? null) : null,
+                userId: $user?->id,
+                email: $user?->email,
             );
 
-            if (!$onboarding) {
-                // Criar novo onboarding se não existir
-                $onboarding = $this->gerenciarOnboardingUseCase->iniciar(
-                    tenantId: $tenantId,
-                    userId: $userId,
-                    sessionId: $sessionId,
-                    email: $email,
-                );
+            // Executar Use Case
+            $onboardingDomain = $this->gerenciarOnboardingUseCase->marcarEtapaConcluida($dto);
+
+            // Buscar modelo para apresentação
+            $onboardingModel = $this->repository->buscarModeloPorId($onboardingDomain->id);
+
+            if (!$onboardingModel) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Erro ao recuperar dados do onboarding.',
+                ], 500);
             }
 
-            $onboardingId = $onboarding->id;
+            return response()->json([
+                'success' => true,
+                'data' => $this->presenter->present($onboardingModel),
+            ]);
+        } catch (DomainException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        } catch (\Exception $e) {
+            Log::error('OnboardingController::marcarEtapa - Erro inesperado', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao marcar etapa.',
+            ], 500);
         }
-
-        $onboarding = $this->gerenciarOnboardingUseCase->marcarEtapaConcluida(
-            onboardingId: $onboardingId,
-            etapa: $request->input('etapa'),
-        );
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'onboarding_id' => $onboarding->id,
-                'progresso_percentual' => $onboarding->progresso_percentual,
-                'etapas_concluidas' => $onboarding->etapas_concluidas,
-            ],
-        ]);
     }
 
     /**
      * Marca item do checklist como concluído
-     * Se onboarding_id não fornecido, busca automaticamente pelo usuário autenticado
      */
-    public function marcarChecklistItem(Request $request): JsonResponse
+    public function marcarChecklistItem(MarcarChecklistItemRequest $request): JsonResponse
     {
-        $request->validate([
-            'item' => 'required|string|max:100',
-            'onboarding_id' => 'nullable|integer', // Opcional - buscará automaticamente se não fornecido
-        ]);
-
-        // Buscar onboarding_id se não fornecido
-        $onboardingId = $request->input('onboarding_id');
-        
-        if (!$onboardingId) {
-            // Tentar obter usuário autenticado (pode ser null se não houver token)
+        try {
+            // Tentar obter usuário autenticado (pode ser null)
             $user = $request->user() ?? auth('sanctum')->user();
-            
-            $tenantId = $request->input('tenant_id');
-            $userId = $request->input('user_id');
-            $sessionId = $request->input('session_id');
-            $email = $request->input('email');
 
-            // Se temos um usuário autenticado, usar seus dados
-            if ($user) {
-                $tenantId = $tenantId ?? (Tenancy::tenant()?->id ?? null);
-                $userId = $userId ?? $user->id;
-                $email = $email ?? $user->email;
-            }
-
-            if (!$userId && !$sessionId && !$email) {
-                Log::warning('OnboardingController::marcarEtapa - Usuário não identificado', [
-                    'has_token' => $request->bearerToken() !== null,
-                    'has_user' => $user !== null,
-                ]);
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Usuário não identificado. Forneça user_id, session_id ou email, ou faça login.',
-                ], 400);
-            }
-
-            // Buscar progresso atual
-            $onboarding = $this->gerenciarOnboardingUseCase->buscarProgresso(
-                tenantId: $tenantId,
-                userId: $userId,
-                sessionId: $sessionId,
-                email: $email,
+            // Criar DTO com dados do request e usuário autenticado
+            $dto = MarcarChecklistItemDTO::fromRequest(
+                requestData: $request->validated(),
+                tenantId: $user ? (Tenancy::tenant()?->id ?? null) : null,
+                userId: $user?->id,
+                email: $user?->email,
             );
 
-            if (!$onboarding) {
-                // Criar novo onboarding se não existir
-                $onboarding = $this->gerenciarOnboardingUseCase->iniciar(
-                    tenantId: $tenantId,
-                    userId: $userId,
-                    sessionId: $sessionId,
-                    email: $email,
-                );
+            // Executar Use Case
+            $onboardingDomain = $this->gerenciarOnboardingUseCase->marcarChecklistItem($dto);
+
+            // Buscar modelo para apresentação
+            $onboardingModel = $this->repository->buscarModeloPorId($onboardingDomain->id);
+
+            if (!$onboardingModel) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Erro ao recuperar dados do onboarding.',
+                ], 500);
             }
 
-            $onboardingId = $onboarding->id;
+            return response()->json([
+                'success' => true,
+                'data' => $this->presenter->present($onboardingModel),
+            ]);
+        } catch (DomainException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        } catch (\Exception $e) {
+            Log::error('OnboardingController::marcarChecklistItem - Erro inesperado', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao marcar item do checklist.',
+            ], 500);
         }
-
-        $onboarding = $this->gerenciarOnboardingUseCase->marcarChecklistItem(
-            onboardingId: $onboardingId,
-            item: $request->input('item'),
-        );
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'onboarding_id' => $onboarding->id,
-                'checklist' => $onboarding->checklist,
-            ],
-        ]);
     }
 
     /**
      * Conclui o onboarding
-     * Se onboarding_id não fornecido, busca automaticamente pelo usuário autenticado
      */
-    public function concluir(Request $request): JsonResponse
+    public function concluir(ConcluirOnboardingRequest $request): JsonResponse
     {
-        $request->validate([
-            'onboarding_id' => 'nullable|integer', // Opcional - buscará automaticamente se não fornecido
-        ]);
-
-        // Buscar onboarding_id se não fornecido
-        $onboardingId = $request->input('onboarding_id');
-        
-        if (!$onboardingId) {
-            // Tentar obter usuário autenticado (pode ser null se não houver token)
+        try {
+            // Tentar obter usuário autenticado (pode ser null)
             $user = $request->user() ?? auth('sanctum')->user();
-            
-            $tenantId = $request->input('tenant_id');
-            $userId = $request->input('user_id');
-            $sessionId = $request->input('session_id');
-            $email = $request->input('email');
 
-            // Se temos um usuário autenticado, usar seus dados
-            if ($user) {
-                $tenantId = $tenantId ?? (Tenancy::tenant()?->id ?? null);
-                $userId = $userId ?? $user->id;
-                $email = $email ?? $user->email;
-            }
-
-            if (!$userId && !$sessionId && !$email) {
-                Log::warning('OnboardingController::marcarEtapa - Usuário não identificado', [
-                    'has_token' => $request->bearerToken() !== null,
-                    'has_user' => $user !== null,
-                ]);
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Usuário não identificado. Forneça user_id, session_id ou email, ou faça login.',
-                ], 400);
-            }
-
-            // Buscar progresso atual
-            $onboarding = $this->gerenciarOnboardingUseCase->buscarProgresso(
-                tenantId: $tenantId,
-                userId: $userId,
-                sessionId: $sessionId,
-                email: $email,
+            // Criar DTO com dados do request e usuário autenticado
+            $dto = ConcluirOnboardingDTO::fromRequest(
+                requestData: $request->validated(),
+                tenantId: $user ? (Tenancy::tenant()?->id ?? null) : null,
+                userId: $user?->id,
+                email: $user?->email,
             );
 
-            if (!$onboarding) {
-                // Criar novo onboarding se não existir
-                $onboarding = $this->gerenciarOnboardingUseCase->iniciar(
-                    tenantId: $tenantId,
-                    userId: $userId,
-                    sessionId: $sessionId,
-                    email: $email,
-                );
+            // Executar Use Case
+            $onboardingDomain = $this->gerenciarOnboardingUseCase->concluir($dto);
+
+            // Buscar modelo para apresentação
+            $onboardingModel = $this->repository->buscarModeloPorId($onboardingDomain->id);
+
+            if (!$onboardingModel) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Erro ao recuperar dados do onboarding.',
+                ], 500);
             }
 
-            $onboardingId = $onboarding->id;
+            Log::info('OnboardingController::concluir - Onboarding concluído', [
+                'onboarding_id' => $onboardingDomain->id,
+                'user_id' => $user?->id,
+                'tenant_id' => Tenancy::tenant()?->id,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Onboarding concluído com sucesso!',
+                'data' => $this->presenter->present($onboardingModel),
+            ]);
+        } catch (DomainException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        } catch (\Exception $e) {
+            Log::error('OnboardingController::concluir - Erro inesperado', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao concluir onboarding.',
+            ], 500);
         }
-
-        $onboarding = $this->gerenciarOnboardingUseCase->concluir(
-            onboardingId: $onboardingId,
-        );
-
-        Log::info('OnboardingController::concluir - Onboarding concluído', [
-            'onboarding_id' => $onboarding->id,
-            'user_id' => $request->user()?->id,
-            'tenant_id' => Tenancy::tenant()?->id,
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Onboarding concluído com sucesso!',
-            'data' => [
-                'onboarding_id' => $onboarding->id,
-                'onboarding_concluido' => $onboarding->onboarding_concluido,
-                'concluido_em' => $onboarding->concluido_em,
-            ],
-        ]);
     }
 
     /**
      * Verifica se onboarding está concluído
-     * Retorna status completo do onboarding (incluindo dados completos)
+     * Retorna status completo do onboarding
      */
     public function verificarStatus(Request $request): JsonResponse
     {
-        // Tentar obter usuário autenticado (pode ser null se não houver token)
-        $user = $request->user() ?? auth('sanctum')->user();
-        
-        $tenantId = $request->input('tenant_id');
-        $userId = $request->input('user_id');
-        $sessionId = $request->input('session_id') ?? $request->session()->getId();
-        $email = $request->input('email');
+        try {
+            // Tentar obter usuário autenticado (pode ser null)
+            $user = $request->user() ?? auth('sanctum')->user();
 
-        // Se temos um usuário autenticado, usar seus dados
-        if ($user) {
-            $tenantId = $tenantId ?? (Tenancy::tenant()?->id ?? null);
-            $userId = $userId ?? $user->id;
-            $email = $email ?? $user->email;
-        }
-
-        // Buscar progresso completo
-        $onboarding = $this->gerenciarOnboardingUseCase->buscarProgresso(
-            tenantId: $tenantId,
-            userId: $userId,
-            sessionId: $sessionId,
-            email: $email,
-        );
-
-        if (!$onboarding) {
-            // Se não existe, criar novo onboarding não concluído
-            $onboarding = $this->gerenciarOnboardingUseCase->iniciar(
-                tenantId: $tenantId,
-                userId: $userId,
-                sessionId: $sessionId,
-                email: $email,
+            // Criar DTO
+            $dto = BuscarProgressoDTO::fromRequest(
+                requestData: $request->all(),
+                tenantId: $user ? (Tenancy::tenant()?->id ?? null) : null,
+                userId: $user?->id,
+                email: $user?->email,
             );
-        }
 
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'onboarding_id' => $onboarding->id,
-                'onboarding_concluido' => $onboarding->onboarding_concluido ?? false,
-                'progresso_percentual' => $onboarding->progresso_percentual ?? 0,
-                'etapas_concluidas' => $onboarding->etapas_concluidas ?? [],
-                'checklist' => $onboarding->checklist ?? [],
-                'pode_ver_planos' => $onboarding->onboarding_concluido ?? false, // Se onboarding concluído, pode ver planos
-            ],
-        ]);
+            // Buscar progresso
+            $onboardingDomain = $this->gerenciarOnboardingUseCase->buscarProgresso($dto);
+
+            if (!$onboardingDomain) {
+                // Se não existe, criar novo
+                $iniciarDto = IniciarOnboardingDTO::fromRequest(
+                    requestData: $request->all(),
+                    tenantId: $user ? (Tenancy::tenant()?->id ?? null) : null,
+                    userId: $user?->id,
+                    email: $user?->email,
+                );
+                $onboardingDomain = $this->gerenciarOnboardingUseCase->iniciar($iniciarDto);
+            }
+
+            // Buscar modelo para apresentação
+            $onboardingModel = $this->repository->buscarModeloPorId($onboardingDomain->id);
+
+            if (!$onboardingModel) {
+                // Se não conseguir buscar modelo, usar dados da entidade
+                return response()->json([
+                    'success' => true,
+                    'data' => $this->presenter->presentDomain($onboardingDomain),
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => $this->presenter->present($onboardingModel),
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        } catch (\Exception $e) {
+            Log::error('OnboardingController::verificarStatus - Erro inesperado', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao verificar status do onboarding.',
+            ], 500);
+        }
     }
 
     /**
@@ -335,31 +320,57 @@ class OnboardingController extends Controller
      */
     public function buscarProgresso(Request $request): JsonResponse
     {
-        $onboarding = $this->gerenciarOnboardingUseCase->buscarProgresso(
-            tenantId: $request->input('tenant_id'),
-            userId: $request->input('user_id'),
-            sessionId: $request->input('session_id') ?? $request->session()->getId(),
-            email: $request->input('email'),
-        );
+        try {
+            // Tentar obter usuário autenticado (pode ser null)
+            $user = $request->user() ?? auth('sanctum')->user();
 
-        if (!$onboarding) {
+            // Criar DTO
+            $dto = BuscarProgressoDTO::fromRequest(
+                requestData: $request->all(),
+                tenantId: $user ? (Tenancy::tenant()?->id ?? null) : null,
+                userId: $user?->id,
+                email: $user?->email,
+            );
+
+            // Buscar progresso
+            $onboardingDomain = $this->gerenciarOnboardingUseCase->buscarProgresso($dto);
+
+            if (!$onboardingDomain) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Nenhum progresso de onboarding encontrado.',
+                ], 404);
+            }
+
+            // Buscar modelo para apresentação
+            $onboardingModel = $this->repository->buscarModeloPorId($onboardingDomain->id);
+
+            if (!$onboardingModel) {
+                // Se não conseguir buscar modelo, usar dados da entidade
+                return response()->json([
+                    'success' => true,
+                    'data' => $this->presenter->presentDomain($onboardingDomain),
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => $this->presenter->present($onboardingModel),
+            ]);
+        } catch (\InvalidArgumentException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Nenhum progresso de onboarding encontrado.',
-            ], 404);
+                'message' => $e->getMessage(),
+            ], 400);
+        } catch (\Exception $e) {
+            Log::error('OnboardingController::buscarProgresso - Erro inesperado', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao buscar progresso do onboarding.',
+            ], 500);
         }
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'onboarding_id' => $onboarding->id,
-                'progresso_percentual' => $onboarding->progresso_percentual,
-                'onboarding_concluido' => $onboarding->onboarding_concluido,
-                'etapas_concluidas' => $onboarding->etapas_concluidas,
-                'checklist' => $onboarding->checklist,
-            ],
-        ]);
     }
 }
-
-

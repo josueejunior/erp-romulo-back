@@ -193,6 +193,11 @@ class AppServiceProvider extends ServiceProvider
             \App\Infrastructure\Persistence\Eloquent\ProcessoDocumentoRepository::class
         );
 
+        $this->app->bind(
+            \App\Domain\Onboarding\Repositories\OnboardingProgressRepositoryInterface::class,
+            \App\Infrastructure\Persistence\Eloquent\OnboardingProgressRepository::class
+        );
+
         // Domain Services
         $this->app->bind(
             \App\Domain\Auth\Services\UserRoleServiceInterface::class,

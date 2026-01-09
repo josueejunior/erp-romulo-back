@@ -4,213 +4,197 @@ declare(strict_types=1);
 
 namespace App\Application\Onboarding\UseCases;
 
-use App\Models\OnboardingProgress;
+use App\Domain\Onboarding\Entities\OnboardingProgress;
+use App\Domain\Onboarding\Repositories\OnboardingProgressRepositoryInterface;
+use App\Application\Onboarding\DTOs\IniciarOnboardingDTO;
+use App\Application\Onboarding\DTOs\MarcarEtapaDTO;
+use App\Application\Onboarding\DTOs\MarcarChecklistItemDTO;
+use App\Application\Onboarding\DTOs\ConcluirOnboardingDTO;
+use App\Application\Onboarding\DTOs\BuscarProgressoDTO;
+use App\Domain\Exceptions\DomainException;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 
 /**
  * Use Case: Gerenciar Onboarding
  * 
- * Gerencia o progresso do tutorial/onboarding do usuário
+ * ✅ DDD: Usa Repository Interface em vez de Eloquent direto
+ * ✅ DDD: Usa DTOs para entrada
+ * ✅ DDD: Retorna entidades de domínio
+ * ✅ DDD: Contém apenas lógica de negócio
  */
 final class GerenciarOnboardingUseCase
 {
+    public function __construct(
+        private readonly OnboardingProgressRepositoryInterface $repository,
+    ) {}
+
     /**
      * Inicia ou retoma onboarding
      * 
-     * @param int|null $tenantId
-     * @param int|null $userId
-     * @param string|null $sessionId
-     * @param string|null $email
-     * @return OnboardingProgress
+     * @return OnboardingProgress Entidade de domínio
      */
-    public function iniciar(
-        ?int $tenantId = null,
-        ?int $userId = null,
-        ?string $sessionId = null,
-        ?string $email = null
-    ): OnboardingProgress {
-        // Verificar se já existe
-        $query = OnboardingProgress::query();
-        
-        if ($tenantId) {
-            $query->where('tenant_id', $tenantId);
-        } elseif ($userId) {
-            $query->where('user_id', $userId);
-        } elseif ($sessionId) {
-            $query->where('session_id', $sessionId);
-        } elseif ($email) {
-            $query->where('email', $email);
-        }
-
-        $existente = $query->where('onboarding_concluido', false)->first();
+    public function iniciar(IniciarOnboardingDTO $dto): OnboardingProgress
+    {
+        // Verificar se já existe onboarding não concluído
+        $existente = $this->repository->buscarNaoConcluidoPorCritérios(
+            tenantId: $dto->tenantId,
+            userId: $dto->userId,
+            sessionId: $dto->sessionId,
+            email: $dto->email,
+        );
 
         if ($existente) {
             return $existente;
         }
 
-        // Criar novo
-        return OnboardingProgress::create([
-            'tenant_id' => $tenantId,
-            'user_id' => $userId,
-            'session_id' => $sessionId,
-            'email' => $email,
-            'onboarding_concluido' => false,
-            'etapas_concluidas' => [],
-            'checklist' => [],
-            'progresso_percentual' => 0,
-            'iniciado_em' => now(),
-        ]);
+        // Criar novo onboarding
+        $novoOnboarding = new OnboardingProgress(
+            id: null,
+            tenantId: $dto->tenantId,
+            userId: $dto->userId,
+            sessionId: $dto->sessionId,
+            email: $dto->email,
+            onboardingConcluido: false,
+            etapasConcluidas: [],
+            checklist: [],
+            progressoPercentual: 0,
+            iniciadoEm: Carbon::now(),
+            concluidoEm: null,
+        );
+
+        return $this->repository->criar($novoOnboarding);
     }
 
     /**
      * Marca uma etapa como concluída
      * 
-     * @param int $onboardingId
-     * @param string $etapa Nome da etapa (ex: "processos", "fornecedores", "licitacoes")
-     * @return OnboardingProgress
+     * @return OnboardingProgress Entidade de domínio
      */
-    public function marcarEtapaConcluida(int $onboardingId, string $etapa): OnboardingProgress
+    public function marcarEtapaConcluida(MarcarEtapaDTO $dto): OnboardingProgress
     {
-        $onboarding = OnboardingProgress::findOrFail($onboardingId);
-        
-        $etapas = $onboarding->etapas_concluidas ?? [];
-        
-        if (!in_array($etapa, $etapas)) {
-            $etapas[] = $etapa;
-        }
+        // Buscar onboarding
+        $onboarding = $this->buscarOuFalhar($dto);
 
-        // Calcular progresso (exemplo: 5 etapas = 20% cada)
-        $totalEtapas = 5; // Ajustar conforme necessário
-        $progresso = min(100, (count($etapas) / $totalEtapas) * 100);
+        // Usar método da entidade para adicionar etapa
+        $onboardingAtualizado = $onboarding->adicionarEtapaConcluida($dto->etapa);
 
-        $onboarding->update([
-            'etapas_concluidas' => $etapas,
-            'progresso_percentual' => (int) $progresso,
-        ]);
+        // Persistir alterações
+        $onboardingSalvo = $this->repository->atualizar($onboardingAtualizado);
 
         Log::info('GerenciarOnboardingUseCase - Etapa concluída', [
-            'onboarding_id' => $onboardingId,
-            'etapa' => $etapa,
-            'progresso' => $progresso,
+            'onboarding_id' => $onboardingSalvo->id,
+            'etapa' => $dto->etapa,
+            'progresso' => $onboardingSalvo->progressoPercentual,
         ]);
 
-        return $onboarding->fresh();
+        return $onboardingSalvo;
     }
 
     /**
      * Marca item do checklist como concluído
      * 
-     * @param int $onboardingId
-     * @param string $item Nome do item (ex: "criar_processo", "adicionar_fornecedor")
-     * @return OnboardingProgress
+     * @return OnboardingProgress Entidade de domínio
      */
-    public function marcarChecklistItem(int $onboardingId, string $item): OnboardingProgress
+    public function marcarChecklistItem(MarcarChecklistItemDTO $dto): OnboardingProgress
     {
-        $onboarding = OnboardingProgress::findOrFail($onboardingId);
-        
-        $checklist = $onboarding->checklist ?? [];
-        
-        if (!isset($checklist[$item])) {
-            $checklist[$item] = true;
-        }
+        // Buscar onboarding
+        $onboarding = $this->buscarOuFalhar($dto);
 
-        $onboarding->update([
-            'checklist' => $checklist,
-        ]);
+        // Usar método da entidade para marcar item
+        $onboardingAtualizado = $onboarding->marcarItemChecklist($dto->item);
 
-        return $onboarding->fresh();
+        // Persistir alterações
+        return $this->repository->atualizar($onboardingAtualizado);
     }
 
     /**
      * Conclui o onboarding
      * 
-     * @param int $onboardingId
-     * @return OnboardingProgress
+     * @return OnboardingProgress Entidade de domínio
      */
-    public function concluir(int $onboardingId): OnboardingProgress
+    public function concluir(ConcluirOnboardingDTO $dto): OnboardingProgress
     {
-        $onboarding = OnboardingProgress::findOrFail($onboardingId);
-        
-        $onboarding->update([
-            'onboarding_concluido' => true,
-            'progresso_percentual' => 100,
-            'concluido_em' => now(),
-        ]);
+        // Buscar onboarding
+        $onboarding = $this->buscarOuFalhar($dto);
+
+        // Validar que pode concluir
+        if (!$onboarding->podeConcluir()) {
+            throw new DomainException('Onboarding já está concluído.');
+        }
+
+        // Usar método da entidade para concluir
+        $onboardingConcluido = $onboarding->concluir();
+
+        // Persistir alterações
+        $onboardingSalvo = $this->repository->atualizar($onboardingConcluido);
 
         Log::info('GerenciarOnboardingUseCase - Onboarding concluído', [
-            'onboarding_id' => $onboardingId,
-            'tenant_id' => $onboarding->tenant_id,
-            'user_id' => $onboarding->user_id,
+            'onboarding_id' => $onboardingSalvo->id,
+            'tenant_id' => $onboardingSalvo->tenantId,
+            'user_id' => $onboardingSalvo->userId,
         ]);
 
-        return $onboarding->fresh();
+        return $onboardingSalvo;
     }
 
     /**
      * Verifica se onboarding está concluído
-     * 
-     * @param int|null $tenantId
-     * @param int|null $userId
-     * @param string|null $sessionId
-     * @param string|null $email
-     * @return bool
      */
-    public function estaConcluido(
-        ?int $tenantId = null,
-        ?int $userId = null,
-        ?string $sessionId = null,
-        ?string $email = null
-    ): bool {
-        $query = OnboardingProgress::query();
-        
-        if ($tenantId) {
-            $query->where('tenant_id', $tenantId);
-        } elseif ($userId) {
-            $query->where('user_id', $userId);
-        } elseif ($sessionId) {
-            $query->where('session_id', $sessionId);
-        } elseif ($email) {
-            $query->where('email', $email);
-        } else {
-            return false;
-        }
-
-        $onboarding = $query->where('onboarding_concluido', true)->first();
-        
-        return $onboarding !== null;
+    public function estaConcluido(BuscarProgressoDTO $dto): bool
+    {
+        return $this->repository->existeConcluidoPorCritérios(
+            tenantId: $dto->tenantId,
+            userId: $dto->userId,
+            sessionId: $dto->sessionId,
+            email: $dto->email,
+        );
     }
 
     /**
      * Busca progresso atual
      * 
-     * @param int|null $tenantId
-     * @param int|null $userId
-     * @param string|null $sessionId
-     * @param string|null $email
-     * @return OnboardingProgress|null
+     * @return OnboardingProgress|null Entidade de domínio
      */
-    public function buscarProgresso(
-        ?int $tenantId = null,
-        ?int $userId = null,
-        ?string $sessionId = null,
-        ?string $email = null
-    ): ?OnboardingProgress {
-        $query = OnboardingProgress::query();
-        
-        if ($tenantId) {
-            $query->where('tenant_id', $tenantId);
-        } elseif ($userId) {
-            $query->where('user_id', $userId);
-        } elseif ($sessionId) {
-            $query->where('session_id', $sessionId);
-        } elseif ($email) {
-            $query->where('email', $email);
-        } else {
-            return null;
+    public function buscarProgresso(BuscarProgressoDTO $dto): ?OnboardingProgress
+    {
+        return $this->repository->buscarPorCritérios(
+            tenantId: $dto->tenantId,
+            userId: $dto->userId,
+            sessionId: $dto->sessionId,
+            email: $dto->email,
+        );
+    }
+
+    /**
+     * Helper: Busca onboarding ou lança exceção
+     * 
+     * @param MarcarEtapaDTO|MarcarChecklistItemDTO|ConcluirOnboardingDTO $dto
+     * @throws DomainException se onboarding não encontrado
+     */
+    private function buscarOuFalhar(MarcarEtapaDTO|MarcarChecklistItemDTO|ConcluirOnboardingDTO $dto): OnboardingProgress
+    {
+        // Se tem onboarding_id, buscar por ID
+        if ($dto->onboardingId !== null) {
+            $onboarding = $this->repository->buscarPorId($dto->onboardingId);
+            if (!$onboarding) {
+                throw new DomainException('Onboarding não encontrado.');
+            }
+            return $onboarding;
         }
 
-        return $query->orderBy('created_at', 'desc')->first();
+        // Caso contrário, buscar por critérios
+        $onboarding = $this->repository->buscarPorCritérios(
+            tenantId: $dto->tenantId,
+            userId: $dto->userId,
+            sessionId: $dto->sessionId,
+            email: $dto->email,
+        );
+
+        if (!$onboarding) {
+            throw new DomainException('Onboarding não encontrado. Inicie o onboarding primeiro.');
+        }
+
+        return $onboarding;
     }
 }
-
-
