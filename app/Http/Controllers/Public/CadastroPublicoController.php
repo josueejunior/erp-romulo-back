@@ -8,6 +8,7 @@ use App\Application\Tenant\DTOs\CriarTenantDTO;
 use App\Application\Assinatura\UseCases\CriarAssinaturaUseCase;
 use App\Application\Assinatura\DTOs\CriarAssinaturaDTO;
 use App\Application\Afiliado\UseCases\ValidarCupomAfiliadoUseCase;
+use App\Application\Empresa\UseCases\RegistrarAfiliadoNaEmpresaUseCase;
 use App\Domain\Exceptions\DomainException;
 use App\Services\CnpjConsultaService;
 use App\Modules\Auth\Models\User;
@@ -38,6 +39,7 @@ class CadastroPublicoController extends Controller
         private readonly CriarAssinaturaUseCase $criarAssinaturaUseCase,
         private readonly CnpjConsultaService $cnpjConsultaService,
         private readonly ValidarCupomAfiliadoUseCase $validarCupomAfiliadoUseCase,
+        private readonly RegistrarAfiliadoNaEmpresaUseCase $registrarAfiliadoNaEmpresaUseCase,
     ) {}
 
     /**
@@ -241,16 +243,19 @@ class CadastroPublicoController extends Controller
 
     /**
      * Registrar afiliado na empresa
+     * 
+     * Segue padrão DDD - usa Use Case ao invés de manipular entidade diretamente
      */
     private function registrarAfiliadoNaEmpresa($empresa, array $validated): void
     {
         try {
-            // Atualizar empresa com dados do afiliado
-            $empresa->afiliado_id = $validated['afiliado_id'];
-            $empresa->afiliado_codigo = $validated['cupom_codigo'];
-            $empresa->afiliado_desconto_aplicado = $validated['desconto_afiliado'] ?? 0;
-            $empresa->afiliado_aplicado_em = Carbon::now();
-            $empresa->save();
+            // Usar Use Case para registrar afiliado (seguindo DDD)
+            $this->registrarAfiliadoNaEmpresaUseCase->executar(
+                empresaId: $empresa->id,
+                afiliadoId: $validated['afiliado_id'],
+                codigo: $validated['cupom_codigo'],
+                descontoAplicado: $validated['desconto_afiliado'] ?? 0.0
+            );
 
             // Registrar indicação na tabela central (afiliado_indicacoes)
             // Isso precisa ser feito no contexto central (não no tenant)
@@ -261,6 +266,13 @@ class CadastroPublicoController extends Controller
                 'cupom_codigo' => $validated['cupom_codigo'],
                 'desconto' => $validated['desconto_afiliado'] ?? 0,
             ]);
+        } catch (DomainException $e) {
+            Log::error('Erro de domínio ao registrar afiliado na empresa', [
+                'error' => $e->getMessage(),
+                'empresa_id' => $empresa->id ?? null,
+                'afiliado_id' => $validated['afiliado_id'] ?? null,
+            ]);
+            // Não lança exceção - apenas loga o erro para não bloquear o cadastro
         } catch (\Exception $e) {
             Log::error('Erro ao registrar afiliado na empresa', [
                 'error' => $e->getMessage(),

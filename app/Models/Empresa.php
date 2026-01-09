@@ -40,6 +40,11 @@ class Empresa extends BaseModel
         'cargo_representante',
         'logo',
         'status',
+        // Campos de afiliado
+        'afiliado_id',
+        'afiliado_codigo',
+        'afiliado_desconto_aplicado',
+        'afiliado_aplicado_em',
     ];
 
     protected function casts(): array

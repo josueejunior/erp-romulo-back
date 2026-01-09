@@ -5,6 +5,7 @@ namespace App\Infrastructure\Persistence\Eloquent;
 use App\Application\Tenant\DTOs\CriarTenantDTO;
 use App\Domain\Empresa\Entities\Empresa;
 use App\Domain\Empresa\Repositories\EmpresaRepositoryInterface;
+use App\Domain\Exceptions\DomainException;
 use App\Models\Empresa as EmpresaModel;
 
 /**
@@ -121,6 +122,36 @@ class EmpresaRepository implements EmpresaRepositoryInterface
     public function buscarModeloPorId(int $id): ?EmpresaModel
     {
         return EmpresaModel::find($id);
+    }
+
+    /**
+     * Atualizar dados do afiliado na empresa
+     */
+    public function atualizarAfiliado(
+        int $empresaId,
+        int $afiliadoId,
+        string $codigo,
+        float $descontoAplicado
+    ): void {
+        $model = EmpresaModel::find($empresaId);
+        
+        if (!$model) {
+            throw new DomainException('Empresa não encontrada.');
+        }
+
+        $model->update([
+            'afiliado_id' => $afiliadoId,
+            'afiliado_codigo' => $codigo,
+            'afiliado_desconto_aplicado' => $descontoAplicado,
+            'afiliado_aplicado_em' => now(),
+        ]);
+
+        \Log::info('EmpresaRepository::atualizarAfiliado() - Afiliado registrado na empresa', [
+            'empresa_id' => $empresaId,
+            'afiliado_id' => $afiliadoId,
+            'codigo' => $codigo,
+            'desconto' => $descontoAplicado,
+        ]);
     }
 }
 

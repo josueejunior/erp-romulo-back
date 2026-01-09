@@ -32,6 +32,16 @@ interface EmpresaRepositoryInterface
      * @return \App\Models\Empresa|null
      */
     public function buscarModeloPorId(int $id): ?\App\Models\Empresa;
+
+    /**
+     * Atualizar dados do afiliado na empresa
+     */
+    public function atualizarAfiliado(
+        int $empresaId,
+        int $afiliadoId,
+        string $codigo,
+        float $descontoAplicado
+    ): void;
 }
 
 
