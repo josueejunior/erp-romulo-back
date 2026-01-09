@@ -458,6 +458,15 @@ Route::prefix('admin')->group(function () {
             Route::get('/{id}/detalhes', [\App\Modules\Afiliado\Controllers\AfiliadoController::class, 'detalhes'])->where('id', '[0-9]+');
         });
 
+        // Gerenciamento de comissões de afiliados (admin)
+        Route::prefix('comissoes')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\AdminComissoesController::class, 'index']);
+            Route::post('/{comissaoId}/pagar', [\App\Http\Controllers\Admin\AdminComissoesController::class, 'marcarComoPaga'])
+                ->where('comissaoId', '[0-9]+');
+            Route::post('/pagamento', [\App\Http\Controllers\Admin\AdminComissoesController::class, 'criarPagamento']);
+            Route::get('/pagamentos', [\App\Http\Controllers\Admin\AdminComissoesController::class, 'pagamentos']);
+        });
+
         // Upload de arquivos
         Route::prefix('upload')->group(function () {
             Route::post('/image', [\App\Http\Controllers\UploadController::class, 'uploadImage']);
