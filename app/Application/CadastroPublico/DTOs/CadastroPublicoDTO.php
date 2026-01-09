@@ -45,6 +45,9 @@ final class CadastroPublicoDTO
         
         // Dados de Afiliação (opcional)
         public readonly ?AfiliacaoDTO $afiliacao = null,
+        
+        // Idempotência (opcional - para evitar duplicações)
+        public readonly ?string $idempotencyKey = null,
     ) {}
 
     public static function fromArray(array $data): self
@@ -70,6 +73,7 @@ final class CadastroPublicoDTO
             afiliacao: (!empty($data['cupom_codigo']) && !empty($data['afiliado_id']))
                 ? AfiliacaoDTO::fromArray($data)
                 : null,
+            idempotencyKey: $data['idempotency_key'] ?? $data['idempotencyKey'] ?? null,
         );
     }
 }

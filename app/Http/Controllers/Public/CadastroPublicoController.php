@@ -173,6 +173,9 @@ class CadastroPublicoController extends Controller
             'payer_cpf' => 'nullable|string',
             'card_token' => 'nullable|string|required_if:payment_method,credit_card',
             'installments' => 'nullable|integer|min:1|max:12',
+            
+            // Idempotência (opcional)
+            'idempotency_key' => 'nullable|string|max:255',
         ]);
     }
 

@@ -19,7 +19,10 @@ use App\Domain\Plano\Repositories\PlanoRepositoryInterface;
 use App\Domain\Exceptions\EmailJaCadastradoException;
 use App\Domain\Exceptions\CnpjJaCadastradoException;
 use App\Domain\Payment\ValueObjects\PaymentRequest;
+use App\Jobs\VerificarPagamentoPendenteJob;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 use Carbon\Carbon;
 
 /**
@@ -65,45 +68,105 @@ final class CadastrarEmpresaPublicamenteUseCase
      */
     public function executar(CadastroPublicoDTO $dto): array
     {
-        Log::debug('CadastrarEmpresaPublicamenteUseCase::executar', [
+        // Gerar correlation ID para rastreamento
+        $correlationId = Str::uuid()->toString();
+        $startTime = microtime(true);
+        
+        Log::info('CadastrarEmpresaPublicamenteUseCase::executar iniciado', [
+            'correlation_id' => $correlationId,
+            'idempotency_key' => $dto->idempotencyKey,
             'plano_id' => $dto->planoId,
             'razao_social' => $dto->razaoSocial,
             'admin_email' => $dto->adminEmail,
+            'timestamp' => now()->toIso8601String(),
         ]);
 
-        // 1. Validar duplicidades (regra de negócio)
-        $this->validarDuplicidades($dto);
-
-        // 2. Buscar plano (via repository - não Eloquent direto)
-        $plano = $this->planoRepository->buscarModeloPorId($dto->planoId);
-        if (!$plano) {
-            throw new \DomainException('Plano não encontrado.');
+        // Verificar idempotência (se houver chave)
+        if ($dto->idempotencyKey) {
+            $cacheKey = "cadastro:idempotency:{$dto->idempotencyKey}";
+            $existing = Cache::get($cacheKey);
+            
+            if ($existing) {
+                Log::info('CadastrarEmpresaPublicamenteUseCase - Retornando resultado idempotente', [
+                    'correlation_id' => $correlationId,
+                    'idempotency_key' => $dto->idempotencyKey,
+                    'cached_at' => $existing['cached_at'] ?? null,
+                ]);
+                return $existing['result'];
+            }
         }
 
-        // 3. Criar tenant com empresa e usuário admin
-        $tenantResult = $this->criarTenantEUsuario($dto);
+        try {
+            // 1. Validar duplicidades (regra de negócio)
+            $this->validarDuplicidades($dto);
 
-        // 4. Registrar afiliado na empresa (se aplicável)
-        if ($dto->afiliacao) {
-            $this->registrarAfiliado($tenantResult['empresa'], $dto->afiliacao);
+            // 2. Buscar plano (via repository - não Eloquent direto)
+            $plano = $this->planoRepository->buscarModeloPorId($dto->planoId);
+            if (!$plano) {
+                throw new \DomainException('Plano não encontrado.');
+            }
+
+            // 3. Criar tenant com empresa e usuário admin
+            $tenantResult = $this->criarTenantEUsuario($dto);
+
+            // 4. Registrar afiliado na empresa (se aplicável)
+            if ($dto->afiliacao) {
+                $this->registrarAfiliado($tenantResult['empresa'], $dto->afiliacao);
+            }
+
+            // 5. Processar pagamento e criar assinatura
+            $assinaturaResult = $this->processarPagamentoECriarAssinatura(
+                $tenantResult,
+                $plano,
+                $dto
+            );
+
+            $result = [
+                'tenant' => $tenantResult['tenant'],
+                'empresa' => $tenantResult['empresa'],
+                'admin_user' => $tenantResult['admin_user'],
+                'assinatura' => $assinaturaResult['assinatura'],
+                'plano' => $assinaturaResult['plano'],
+                'data_fim' => $assinaturaResult['data_fim'],
+                'payment_result' => $assinaturaResult['payment_result'] ?? null,
+            ];
+
+            // Salvar resultado no cache para idempotência (1 hora)
+            if ($dto->idempotencyKey) {
+                $cacheKey = "cadastro:idempotency:{$dto->idempotencyKey}";
+                Cache::put($cacheKey, [
+                    'result' => $result,
+                    'cached_at' => now()->toIso8601String(),
+                ], 3600); // 1 hora
+            }
+
+            $duration = (microtime(true) - $startTime) * 1000; // ms
+            
+            Log::info('CadastrarEmpresaPublicamenteUseCase::executar concluído', [
+                'correlation_id' => $correlationId,
+                'duration_ms' => round($duration, 2),
+                'tenant_id' => $result['tenant']->id ?? null,
+                'assinatura_id' => $result['assinatura']->id ?? null,
+                'success' => true,
+            ]);
+
+            return $result;
+            
+        } catch (\Exception $e) {
+            $duration = (microtime(true) - $startTime) * 1000;
+            
+            Log::error('CadastrarEmpresaPublicamenteUseCase::executar falhou', [
+                'correlation_id' => $correlationId,
+                'duration_ms' => round($duration, 2),
+                'error' => $e->getMessage(),
+                'error_class' => get_class($e),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null,
+                'plano_id' => $dto->planoId,
+                'admin_email' => $dto->adminEmail,
+            ]);
+            
+            throw $e;
         }
-
-        // 5. Processar pagamento e criar assinatura
-        $assinaturaResult = $this->processarPagamentoECriarAssinatura(
-            $tenantResult,
-            $plano,
-            $dto
-        );
-
-        return [
-            'tenant' => $tenantResult['tenant'],
-            'empresa' => $tenantResult['empresa'],
-            'admin_user' => $tenantResult['admin_user'],
-            'assinatura' => $assinaturaResult['assinatura'],
-            'plano' => $assinaturaResult['plano'],
-            'data_fim' => $assinaturaResult['data_fim'],
-            'payment_result' => $assinaturaResult['payment_result'] ?? null,
-        ];
     }
 
     /**
@@ -391,6 +454,20 @@ final class CadastrarEmpresaPublicamenteUseCase
             'plano' => $plano,
             'data_fim' => $dataFim,
         ];
+
+        // Se assinatura está pendente, agendar verificação automática
+        if (in_array($assinatura->status, ['suspensa', 'pendente']) && $assinatura->transacao_id) {
+            // Agendar verificação em 5 minutos
+            VerificarPagamentoPendenteJob::dispatch($assinatura->id)
+                ->delay(now()->addMinutes(5))
+                ->onQueue('payments');
+            
+            Log::info('VerificarPagamentoPendenteJob agendado', [
+                'assinatura_id' => $assinatura->id,
+                'status' => $assinatura->status,
+                'transacao_id' => $assinatura->transacao_id,
+            ]);
+        }
 
         // Se for PIX pendente, incluir dados do QR Code
         // TODO: Refatorar ProcessarAssinaturaPlanoUseCase para retornar PaymentResultDTO
