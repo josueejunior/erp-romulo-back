@@ -69,7 +69,9 @@ class SwitchEmpresaAtivaUseCase
             // Por enquanto, lançamos uma exceção específica
             throw new \App\Domain\Exceptions\DomainException(
                 $resultadoAssinatura['message'] ?? 'Esta empresa não possui uma assinatura ativa.',
-                $resultadoAssinatura['code'] ?? 'NO_SUBSCRIPTION'
+                403, // Código HTTP (Forbidden)
+                null, // Previous exception
+                $resultadoAssinatura['code'] ?? 'NO_SUBSCRIPTION' // Código semântico
             );
         }
 

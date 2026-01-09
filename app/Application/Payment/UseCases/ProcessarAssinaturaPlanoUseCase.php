@@ -146,15 +146,27 @@ class ProcessarAssinaturaPlanoUseCase
             $dataInicio = Carbon::now();
             $dataFim = $dataInicio->copy()->addDays($diasValidade);
 
-            // 🔥 NOVO: Buscar empresa do tenant (primeira empresa do tenant)
-            $empresa = \App\Models\Empresa::where('tenant_id', $tenant->id)->first();
+            // 🔥 NOVO: Buscar empresa do tenant
+            // IMPORTANTE: A tabela empresas dentro do tenant NÃO tem coluna tenant_id
+            // Ela já está isolada por banco de dados. Buscar via mapeamento central primeiro.
+            $empresa = null;
+            
+            // 1. Tentar buscar via TenantEmpresa (mapeamento central)
+            $tenantEmpresa = \App\Models\TenantEmpresa::where('tenant_id', $tenant->id)->first();
+            if ($tenantEmpresa) {
+                // Buscar empresa no banco do tenant usando o empresa_id do mapeamento
+                $empresa = \App\Models\Empresa::find($tenantEmpresa->empresa_id);
+            }
+            
+            // 2. Se não encontrou, buscar a primeira empresa do tenant (sem filtro tenant_id)
             if (!$empresa) {
-                // Tentar buscar via TenantEmpresa (mapeamento central)
-                $tenantEmpresa = \App\Models\TenantEmpresa::where('tenant_id', $tenant->id)->first();
-                if ($tenantEmpresa) {
-                    // Buscar empresa no banco do tenant
-                    $empresa = \App\Models\Empresa::find($tenantEmpresa->empresa_id);
-                }
+                $empresa = \App\Models\Empresa::where('excluido_em', null)->first();
+            }
+            
+            if (!$empresa) {
+                Log::warning('ProcessarAssinaturaPlanoUseCase - Nenhuma empresa encontrada no tenant', [
+                    'tenant_id' => $tenant->id,
+                ]);
             }
 
             // CRÍTICO: Cancelar assinaturas ativas antigas antes de criar a nova
@@ -229,15 +241,27 @@ class ProcessarAssinaturaPlanoUseCase
             $dataInicio = Carbon::now();
             $dataFim = $dataInicio->copy()->addDays($diasValidade);
 
-            // 🔥 NOVO: Buscar empresa do tenant (primeira empresa do tenant)
-            $empresa = \App\Models\Empresa::where('tenant_id', $tenant->id)->first();
+            // 🔥 NOVO: Buscar empresa do tenant
+            // IMPORTANTE: A tabela empresas dentro do tenant NÃO tem coluna tenant_id
+            // Ela já está isolada por banco de dados. Buscar via mapeamento central primeiro.
+            $empresa = null;
+            
+            // 1. Tentar buscar via TenantEmpresa (mapeamento central)
+            $tenantEmpresa = \App\Models\TenantEmpresa::where('tenant_id', $tenant->id)->first();
+            if ($tenantEmpresa) {
+                // Buscar empresa no banco do tenant usando o empresa_id do mapeamento
+                $empresa = \App\Models\Empresa::find($tenantEmpresa->empresa_id);
+            }
+            
+            // 2. Se não encontrou, buscar a primeira empresa do tenant (sem filtro tenant_id)
             if (!$empresa) {
-                // Tentar buscar via TenantEmpresa (mapeamento central)
-                $tenantEmpresa = \App\Models\TenantEmpresa::where('tenant_id', $tenant->id)->first();
-                if ($tenantEmpresa) {
-                    // Buscar empresa no banco do tenant
-                    $empresa = \App\Models\Empresa::find($tenantEmpresa->empresa_id);
-                }
+                $empresa = \App\Models\Empresa::where('excluido_em', null)->first();
+            }
+            
+            if (!$empresa) {
+                Log::warning('ProcessarAssinaturaPlanoUseCase - Nenhuma empresa encontrada no tenant', [
+                    'tenant_id' => $tenant->id,
+                ]);
             }
 
             // IMPORTANTE: NÃO atualizar tenant quando está pendente
