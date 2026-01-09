@@ -13,6 +13,7 @@ use App\Application\Payment\UseCases\ProcessarAssinaturaPlanoUseCase;
 use App\Application\Empresa\UseCases\RegistrarAfiliadoNaEmpresaUseCase;
 use App\Application\Afiliado\UseCases\ValidarCupomAfiliadoUseCase;
 use App\Application\Afiliado\UseCases\RastrearReferenciaAfiliadoUseCase;
+use App\Application\Onboarding\UseCases\GerenciarOnboardingUseCase;
 use App\Domain\Assinatura\Services\AssinaturaDomainService;
 use App\Domain\Auth\Repositories\UserRepositoryInterface;
 use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
@@ -49,6 +50,7 @@ final class CadastrarEmpresaPublicamenteUseCase
         private readonly RegistrarAfiliadoNaEmpresaUseCase $registrarAfiliadoNaEmpresaUseCase,
         private readonly ValidarCupomAfiliadoUseCase $validarCupomAfiliadoUseCase,
         private readonly RastrearReferenciaAfiliadoUseCase $rastrearReferenciaAfiliadoUseCase,
+        private readonly GerenciarOnboardingUseCase $gerenciarOnboardingUseCase,
         private readonly AssinaturaDomainService $assinaturaDomainService,
         private readonly UserRepositoryInterface $userRepository,
         private readonly TenantRepositoryInterface $tenantRepository,
@@ -194,6 +196,9 @@ final class CadastrarEmpresaPublicamenteUseCase
                 $plano,
                 $dto
             );
+
+            // 7. Criar registro de onboarding (tutorial não concluído)
+            $this->criarOnboarding($tenantResult['tenant']->id, $tenantResult['admin_user']->id, $dto->adminEmail);
 
             $result = [
                 'tenant' => $tenantResult['tenant'],
@@ -607,6 +612,35 @@ final class CadastrarEmpresaPublicamenteUseCase
         }
 
         return $result;
+    }
+
+    /**
+     * Cria registro de onboarding para o novo usuário
+     */
+    private function criarOnboarding(int $tenantId, int $userId, string $email): void
+    {
+        try {
+            $this->gerenciarOnboardingUseCase->iniciar(
+                tenantId: $tenantId,
+                userId: $userId,
+                sessionId: null,
+                email: $email,
+            );
+
+            Log::info('CadastrarEmpresaPublicamenteUseCase - Onboarding criado', [
+                'tenant_id' => $tenantId,
+                'user_id' => $userId,
+                'email' => $email,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Erro ao criar onboarding durante cadastro público', [
+                'error' => $e->getMessage(),
+                'tenant_id' => $tenantId,
+                'user_id' => $userId,
+                'email' => $email,
+            ]);
+            // Não lança exceção - apenas loga para não bloquear o cadastro
+        }
     }
 }
 

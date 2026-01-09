@@ -11,7 +11,8 @@ return new class extends Migration
         Schema::create('onboarding_progress', function (Blueprint $table) {
             $table->id();
             $table->foreignId('tenant_id')->nullable()->constrained('tenants')->onDelete('cascade');
-            $table->foreignId('user_id')->nullable()->constrained('users')->onDelete('cascade'); // Usuário que está fazendo onboarding
+            // user_id não pode ter foreign key porque a tabela 'users' está no banco do tenant, não no central
+            $table->unsignedBigInteger('user_id')->nullable(); // Usuário que está fazendo onboarding (no banco do tenant)
             $table->string('session_id')->nullable()->index(); // Para rastrear antes do cadastro
             $table->string('email')->nullable()->index(); // Email do lead (antes do cadastro)
             $table->boolean('onboarding_concluido')->default(false)->index();
