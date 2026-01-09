@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Application\Tenant\UseCases\CriarTenantUseCase;
 use App\Application\Tenant\DTOs\CriarTenantDTO;
 use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
+use App\Domain\Tenant\Events\EmpresaCriada;
+use App\Domain\Shared\Events\EventDispatcherInterface;
 use App\Http\Responses\ApiResponse;
 use App\Models\Tenant;
 use Illuminate\Http\Request;
@@ -22,6 +24,7 @@ class AdminTenantController extends Controller
     public function __construct(
         private CriarTenantUseCase $criarTenantUseCase,
         private TenantRepositoryInterface $tenantRepository,
+        private EventDispatcherInterface $eventDispatcher,
     ) {}
 
     /**
@@ -186,6 +189,23 @@ class AdminTenantController extends Controller
 
             // Executar Use Case - cria tenant, banco de dados separado e empresa (SEM criar usuário)
             $result = $this->criarTenantUseCase->executar($dto, requireAdmin: false);
+
+            // Disparar evento de empresa criada para enviar email
+            $this->eventDispatcher->dispatch(
+                new EmpresaCriada(
+                    tenantId: $result['tenant']->id,
+                    razaoSocial: $result['tenant']->razaoSocial ?? $result['tenant']->razao_social,
+                    cnpj: $result['tenant']->cnpj,
+                    email: $result['tenant']->email,
+                    empresaId: $result['empresa']->id,
+                )
+            );
+
+            Log::info('AdminTenantController::store - Empresa criada e evento disparado', [
+                'tenant_id' => $result['tenant']->id,
+                'empresa_id' => $result['empresa']->id,
+                'email' => $result['tenant']->email,
+            ]);
 
             $message = 'Empresa criada com sucesso! Banco de dados separado criado. Agora você pode criar usuários para esta empresa.';
 

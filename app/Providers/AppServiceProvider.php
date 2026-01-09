@@ -266,6 +266,11 @@ class AppServiceProvider extends ServiceProvider
         );
 
         \Illuminate\Support\Facades\Event::listen(
+            \App\Domain\Tenant\Events\EmpresaCriada::class,
+            \App\Listeners\EmpresaCriadaListener::class
+        );
+
+        \Illuminate\Support\Facades\Event::listen(
             \App\Domain\Auth\Events\SenhaAlterada::class,
             \App\Listeners\SenhaAlteradaListener::class
         );
