@@ -46,8 +46,10 @@ class Assinatura
      */
     private function validate(): void
     {
-        // userId é OBRIGATÓRIO
-        if (!$this->userId || $this->userId <= 0) {
+        // userId é OBRIGATÓRIO apenas para novas assinaturas (sem id)
+        // Assinaturas existentes podem ter userId null (compatibilidade com sistema legado)
+        // 🔥 NOVO: Assinatura pertence à empresa, não ao usuário, então userId pode ser null
+        if (!$this->id && (!$this->userId || $this->userId <= 0)) {
             throw new DomainException('O usuário é obrigatório para criar uma assinatura.');
         }
         
