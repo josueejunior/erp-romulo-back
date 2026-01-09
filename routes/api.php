@@ -146,6 +146,8 @@ Route::prefix('v1')->group(function () {
         Route::prefix('planos')->middleware(['onboarding.completo'])->group(function () {
             Route::get('/', [ApiPlanoController::class, 'list']);
             Route::get('/{id}', [ApiPlanoController::class, 'get'])->where('id', '[0-9]+');
+            // Buscar cupom automático de afiliado
+            Route::get('/cupom-automatico', [\App\Http\Controllers\Public\AfiliadoReferenciaController::class, 'buscarCupomAutomatico']);
         });
         
         // Rotas que PRECISAM de assinatura ativa
