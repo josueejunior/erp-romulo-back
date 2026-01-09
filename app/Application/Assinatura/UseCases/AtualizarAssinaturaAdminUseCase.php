@@ -159,13 +159,18 @@ class AtualizarAssinaturaAdminUseCase
         $statusAnterior = $assinaturaOriginal?->getOriginal('status') ?? $assinaturaOriginal?->status ?? 'pendente';
 
         // Disparar evento de assinatura atualizada
+        // 🔥 FIX: status já é string na entidade, não precisa acessar ->value
+        // A entidade Assinatura tem $status como string e $statusEnum como enum
+        // O evento AssinaturaAtualizada espera string, então usamos $status diretamente
+        $statusString = $assinaturaDomain->status;
+        
         $this->eventDispatcher->dispatch(
             new AssinaturaAtualizada(
                 assinaturaId: $assinaturaId,
                 tenantId: $tenantId,
                 empresaId: $assinaturaDomain->empresaId ?? 0,
                 statusAnterior: $statusAnterior,
-                status: $assinaturaDomain->status->value,
+                status: $statusString,
                 userId: $assinaturaDomain->userId,
                 planoId: $assinaturaModel->plano_id,
                 emailDestino: $emailDestino,
