@@ -58,14 +58,26 @@ class OnboardingController extends Controller
         $onboardingId = $request->input('onboarding_id');
         
         if (!$onboardingId) {
-            // Buscar automaticamente pelo usuário autenticado ou pelos parâmetros fornecidos
-            $user = $request->user();
-            $tenantId = $request->input('tenant_id') ?? ($user ? (Tenancy::tenant()?->id ?? null) : null);
-            $userId = $request->input('user_id') ?? ($user?->id ?? null);
+            // Tentar obter usuário autenticado (pode ser null se não houver token)
+            $user = $request->user() ?? auth('sanctum')->user();
+            
+            $tenantId = $request->input('tenant_id');
+            $userId = $request->input('user_id');
             $sessionId = $request->input('session_id');
-            $email = $request->input('email') ?? ($user?->email ?? null);
+            $email = $request->input('email');
+
+            // Se temos um usuário autenticado, usar seus dados
+            if ($user) {
+                $tenantId = $tenantId ?? (Tenancy::tenant()?->id ?? null);
+                $userId = $userId ?? $user->id;
+                $email = $email ?? $user->email;
+            }
 
             if (!$userId && !$sessionId && !$email) {
+                Log::warning('OnboardingController::marcarEtapa - Usuário não identificado', [
+                    'has_token' => $request->bearerToken() !== null,
+                    'has_user' => $user !== null,
+                ]);
                 return response()->json([
                     'success' => false,
                     'message' => 'Usuário não identificado. Forneça user_id, session_id ou email, ou faça login.',
@@ -123,14 +135,26 @@ class OnboardingController extends Controller
         $onboardingId = $request->input('onboarding_id');
         
         if (!$onboardingId) {
-            // Buscar automaticamente pelo usuário autenticado ou pelos parâmetros fornecidos
-            $user = $request->user();
-            $tenantId = $request->input('tenant_id') ?? ($user ? (Tenancy::tenant()?->id ?? null) : null);
-            $userId = $request->input('user_id') ?? ($user?->id ?? null);
+            // Tentar obter usuário autenticado (pode ser null se não houver token)
+            $user = $request->user() ?? auth('sanctum')->user();
+            
+            $tenantId = $request->input('tenant_id');
+            $userId = $request->input('user_id');
             $sessionId = $request->input('session_id');
-            $email = $request->input('email') ?? ($user?->email ?? null);
+            $email = $request->input('email');
+
+            // Se temos um usuário autenticado, usar seus dados
+            if ($user) {
+                $tenantId = $tenantId ?? (Tenancy::tenant()?->id ?? null);
+                $userId = $userId ?? $user->id;
+                $email = $email ?? $user->email;
+            }
 
             if (!$userId && !$sessionId && !$email) {
+                Log::warning('OnboardingController::marcarEtapa - Usuário não identificado', [
+                    'has_token' => $request->bearerToken() !== null,
+                    'has_user' => $user !== null,
+                ]);
                 return response()->json([
                     'success' => false,
                     'message' => 'Usuário não identificado. Forneça user_id, session_id ou email, ou faça login.',
@@ -186,14 +210,26 @@ class OnboardingController extends Controller
         $onboardingId = $request->input('onboarding_id');
         
         if (!$onboardingId) {
-            // Buscar automaticamente pelo usuário autenticado ou pelos parâmetros fornecidos
-            $user = $request->user();
-            $tenantId = $request->input('tenant_id') ?? ($user ? (Tenancy::tenant()?->id ?? null) : null);
-            $userId = $request->input('user_id') ?? ($user?->id ?? null);
+            // Tentar obter usuário autenticado (pode ser null se não houver token)
+            $user = $request->user() ?? auth('sanctum')->user();
+            
+            $tenantId = $request->input('tenant_id');
+            $userId = $request->input('user_id');
             $sessionId = $request->input('session_id');
-            $email = $request->input('email') ?? ($user?->email ?? null);
+            $email = $request->input('email');
+
+            // Se temos um usuário autenticado, usar seus dados
+            if ($user) {
+                $tenantId = $tenantId ?? (Tenancy::tenant()?->id ?? null);
+                $userId = $userId ?? $user->id;
+                $email = $email ?? $user->email;
+            }
 
             if (!$userId && !$sessionId && !$email) {
+                Log::warning('OnboardingController::marcarEtapa - Usuário não identificado', [
+                    'has_token' => $request->bearerToken() !== null,
+                    'has_user' => $user !== null,
+                ]);
                 return response()->json([
                     'success' => false,
                     'message' => 'Usuário não identificado. Forneça user_id, session_id ou email, ou faça login.',
@@ -248,12 +284,20 @@ class OnboardingController extends Controller
      */
     public function verificarStatus(Request $request): JsonResponse
     {
-        // Buscar dados do usuário autenticado se disponível
-        $user = $request->user();
-        $tenantId = $request->input('tenant_id') ?? ($user ? (Tenancy::tenant()?->id ?? null) : null);
-        $userId = $request->input('user_id') ?? ($user?->id ?? null);
+        // Tentar obter usuário autenticado (pode ser null se não houver token)
+        $user = $request->user() ?? auth('sanctum')->user();
+        
+        $tenantId = $request->input('tenant_id');
+        $userId = $request->input('user_id');
         $sessionId = $request->input('session_id') ?? $request->session()->getId();
-        $email = $request->input('email') ?? ($user?->email ?? null);
+        $email = $request->input('email');
+
+        // Se temos um usuário autenticado, usar seus dados
+        if ($user) {
+            $tenantId = $tenantId ?? (Tenancy::tenant()?->id ?? null);
+            $userId = $userId ?? $user->id;
+            $email = $email ?? $user->email;
+        }
 
         // Buscar progresso completo
         $onboarding = $this->gerenciarOnboardingUseCase->buscarProgresso(

@@ -20,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             // 🔥 Nova arquitetura (em uso)
             'jwt.auth' => \App\Http\Middleware\AuthenticateJWT::class,
+            'auth.optional' => \App\Http\Middleware\OptionalAuthenticate::class, // Autenticação opcional - tenta autenticar se houver token, mas não bloqueia
             'auth.context' => \App\Http\Middleware\BuildAuthContext::class,
             'tenant.context' => \App\Http\Middleware\ResolveTenantContext::class,
             'bootstrap.context' => \App\Http\Middleware\BootstrapApplicationContext::class,

@@ -492,20 +492,15 @@ Route::prefix('v1')->group(function () {
             ->middleware(['throttle:30,1']);
     });
     
-    // Onboarding
-    Route::prefix('onboarding')->group(function () {
-        Route::post('/iniciar', [\App\Http\Controllers\Public\OnboardingController::class, 'iniciar'])
-            ->middleware(['throttle:30,1']);
-        Route::post('/marcar-etapa', [\App\Http\Controllers\Public\OnboardingController::class, 'marcarEtapa'])
-            ->middleware(['throttle:60,1']);
-        Route::post('/marcar-checklist', [\App\Http\Controllers\Public\OnboardingController::class, 'marcarChecklistItem'])
-            ->middleware(['throttle:60,1']);
-        Route::post('/concluir', [\App\Http\Controllers\Public\OnboardingController::class, 'concluir'])
-            ->middleware(['throttle:10,1']);
-        Route::get('/verificar-status', [\App\Http\Controllers\Public\OnboardingController::class, 'verificarStatus'])
-            ->middleware(['throttle:30,1']);
-        Route::get('/progresso', [\App\Http\Controllers\Public\OnboardingController::class, 'buscarProgresso'])
-            ->middleware(['throttle:30,1']);
+    // Onboarding (rotas públicas - suportam autenticação opcional)
+    // Se houver token, autentica o usuário. Caso contrário, funciona sem autenticação (usa user_id/session_id/email)
+    Route::prefix('onboarding')->middleware(['auth.optional', 'throttle:60,1'])->group(function () {
+        Route::post('/iniciar', [\App\Http\Controllers\Public\OnboardingController::class, 'iniciar']);
+        Route::post('/marcar-etapa', [\App\Http\Controllers\Public\OnboardingController::class, 'marcarEtapa']);
+        Route::post('/marcar-checklist', [\App\Http\Controllers\Public\OnboardingController::class, 'marcarChecklistItem']);
+        Route::post('/concluir', [\App\Http\Controllers\Public\OnboardingController::class, 'concluir']);
+        Route::get('/verificar-status', [\App\Http\Controllers\Public\OnboardingController::class, 'verificarStatus']);
+        Route::get('/progresso', [\App\Http\Controllers\Public\OnboardingController::class, 'buscarProgresso']);
     });
 });
 
