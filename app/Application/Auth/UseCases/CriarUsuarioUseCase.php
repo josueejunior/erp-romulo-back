@@ -12,7 +12,7 @@ use App\Domain\Shared\ValueObjects\Email;
 use App\Domain\Shared\ValueObjects\Senha;
 use App\Domain\Shared\ValueObjects\TenantContext;
 use App\Domain\Auth\Events\UsuarioCriado;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Criar Usuário

@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Database\QueryException;
 
 /**
  * Controller para cadastro público de afiliados
@@ -98,6 +99,65 @@ final class CadastroAfiliadoController extends Controller
                 'message' => $e->getMessage(),
                 'success' => false,
             ], 422);
+        } catch (QueryException $e) {
+            // Capturar erros de constraint única do banco de dados
+            $errorCode = $e->getCode();
+            $errorMessage = $e->getMessage();
+            
+            Log::warning('CadastroAfiliadoController::store - Erro de banco de dados', [
+                'error_code' => $errorCode,
+                'error' => $errorMessage,
+                'sql_state' => $e->errorInfo[0] ?? null,
+            ]);
+
+            // Verificar se é violação de constraint única
+            if ($errorCode === '23505' || str_contains($errorMessage, 'duplicate key') || str_contains($errorMessage, 'unique constraint')) {
+                // Tentar identificar qual campo causou o erro
+                if (str_contains($errorMessage, 'documento') || str_contains($errorMessage, 'afiliados_documento_unique')) {
+                    return response()->json([
+                        'message' => 'Já existe um afiliado cadastrado com este documento (CPF/CNPJ).',
+                        'errors' => [
+                            'documento' => ['Este documento já está cadastrado no sistema.'],
+                        ],
+                        'success' => false,
+                    ], 422);
+                }
+                
+                if (str_contains($errorMessage, 'email') || str_contains($errorMessage, 'afiliados_email_unique')) {
+                    return response()->json([
+                        'message' => 'Já existe um afiliado cadastrado com este e-mail.',
+                        'errors' => [
+                            'email' => ['Este e-mail já está cadastrado no sistema.'],
+                        ],
+                        'success' => false,
+                    ], 422);
+                }
+                
+                if (str_contains($errorMessage, 'codigo') || str_contains($errorMessage, 'afiliados_codigo_unique')) {
+                    return response()->json([
+                        'message' => 'Já existe um afiliado com este código. Tente novamente.',
+                        'success' => false,
+                    ], 422);
+                }
+                
+                // Erro genérico de duplicação
+                return response()->json([
+                    'message' => 'Já existe um cadastro com estes dados. Verifique se você já não está cadastrado.',
+                    'success' => false,
+                ], 422);
+            }
+
+            // Outros erros de banco de dados
+            Log::error('CadastroAfiliadoController::store - Erro de banco de dados não tratado', [
+                'error_code' => $errorCode,
+                'error' => $errorMessage,
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'message' => 'Erro ao realizar cadastro. Tente novamente mais tarde.',
+                'success' => false,
+            ], 500);
         } catch (\Exception $e) {
             Log::error('CadastroAfiliadoController::store - Erro inesperado', [
                 'error' => $e->getMessage(),
