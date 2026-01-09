@@ -167,28 +167,27 @@ class UserReadRepository implements UserReadRepositoryInterface
 
         // Transformar Collection para array
         // IMPORTANTE: Incluir todos os campos que o frontend espera
+        // 🔥 PERFORMANCE: Relacionamentos já estão carregados via with(['empresas', 'roles'])
+        // Não precisa verificar ou carregar novamente
         $items = $paginator->getCollection()->map(function ($user) {
-            // Carregar relacionamentos se não estiverem carregados
-            if (!$user->relationLoaded('roles')) {
-                $user->load('roles');
-            }
-            if (!$user->relationLoaded('empresas')) {
-                $user->load('empresas');
-            }
+            // Relacionamentos já estão carregados via eager loading (with())
+            // Não precisa verificar relationLoaded nem fazer load() adicional
             
             // Calcular total de empresas para tag de multi-vínculo
             $totalEmpresas = $user->empresas->count();
+            $rolesArray = $user->roles->pluck('name')->toArray();
+            $empresasArray = $user->empresas->map(fn($e) => ['id' => $e->id, 'razao_social' => $e->razao_social])->toArray();
             
             return [
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
                 'empresa_ativa_id' => $user->empresa_ativa_id,
-                'roles' => $user->roles->pluck('name')->toArray(),
-                'roles_list' => $user->roles->pluck('name')->toArray(), // Frontend espera isso
-                'empresas' => $user->empresas->map(fn($e) => ['id' => $e->id, 'razao_social' => $e->razao_social])->toArray(),
-                'empresas_list' => $user->empresas->map(fn($e) => ['id' => $e->id, 'razao_social' => $e->razao_social])->toArray(), // Frontend espera isso
-                'total_empresas' => $totalEmpresas, // 🔥 Tag de multi-vínculo: +2 empresas
+                'roles' => $rolesArray,
+                'roles_list' => $rolesArray, // Frontend espera isso
+                'empresas' => $empresasArray,
+                'empresas_list' => $empresasArray, // Frontend espera isso
+                'total_empresas' => $totalEmpresas,
                 'is_multi_empresa' => $totalEmpresas > 1, // Flag para facilitar no frontend
                 'deleted_at' => $user->deleted_at?->toISOString() ?? null,
             ];

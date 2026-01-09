@@ -146,6 +146,61 @@ class Tenant
     {
         return $this->status === 'ativa';
     }
+
+    /**
+     * 🔥 DDD: Método imutável para atualizar tenant
+     * Retorna nova instância com campos atualizados
+     * 
+     * @param array $updates Array com campos a atualizar (snake_case ou camelCase)
+     * @return self Nova instância com atualizações
+     */
+    /**
+     * 🔥 DDD: Método imutável para atualizar tenant
+     * Retorna nova instância com campos atualizados
+     * 
+     * @param array $updates Array com campos a atualizar (snake_case ou camelCase)
+     * @return self Nova instância com atualizações
+     */
+    public function withUpdates(array $updates): self
+    {
+        // Função helper para converter snake_case para camelCase
+        $toCamelCase = function(string $string): string {
+            return lcfirst(str_replace('_', '', ucwords($string, '_')));
+        };
+
+        // Normalizar keys - aceita tanto snake_case quanto camelCase
+        $normalized = [];
+        foreach ($updates as $key => $value) {
+            // Converter snake_case para camelCase
+            $camelKey = $toCamelCase($key);
+            $normalized[$camelKey] = $value;
+            // Manter também a key original (pode ser snake_case ou camelCase)
+            $normalized[$key] = $value;
+        }
+
+        return new self(
+            id: $this->id,
+            razaoSocial: $normalized['razaoSocial'] ?? $normalized['razao_social'] ?? $this->razaoSocial,
+            cnpj: $normalized['cnpj'] ?? $this->cnpj,
+            email: $normalized['email'] ?? $this->email,
+            status: $normalized['status'] ?? $this->status,
+            endereco: $normalized['endereco'] ?? $this->endereco,
+            cidade: $normalized['cidade'] ?? $this->cidade,
+            estado: $normalized['estado'] ?? $this->estado,
+            cep: $normalized['cep'] ?? $this->cep,
+            telefones: $normalized['telefones'] ?? $this->telefones,
+            emailsAdicionais: $normalized['emailsAdicionais'] ?? $normalized['emails_adicionais'] ?? $this->emailsAdicionais,
+            banco: $normalized['banco'] ?? $this->banco,
+            agencia: $normalized['agencia'] ?? $this->agencia,
+            conta: $normalized['conta'] ?? $this->conta,
+            tipoConta: $normalized['tipoConta'] ?? $normalized['tipo_conta'] ?? $this->tipoConta,
+            pix: $normalized['pix'] ?? $this->pix,
+            representanteLegalNome: $normalized['representanteLegalNome'] ?? $normalized['representante_legal_nome'] ?? $this->representanteLegalNome,
+            representanteLegalCpf: $normalized['representanteLegalCpf'] ?? $normalized['representante_legal_cpf'] ?? $this->representanteLegalCpf,
+            representanteLegalCargo: $normalized['representanteLegalCargo'] ?? $normalized['representante_legal_cargo'] ?? $this->representanteLegalCargo,
+            logo: $normalized['logo'] ?? $this->logo,
+        );
+    }
 }
 
 

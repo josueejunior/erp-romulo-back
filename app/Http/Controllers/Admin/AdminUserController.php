@@ -174,23 +174,36 @@ class AdminUserController extends Controller
         try {
             \Log::info('AdminUserController::showGlobal - Buscando usuário', ['userId' => $userId]);
             
-            // Buscar todos os tenants ativos usando repository (Domain, não Eloquent)
+            // 🔥 PERFORMANCE: Limitar busca a 100 tenants (razoável para admin)
+            // Se houver mais de 100 tenants, será necessário paginação ou filtros adicionais
             $tenantsPaginator = $this->tenantRepository->buscarComFiltros([
                 'status' => 'ativa',
-                'per_page' => 1000, // Buscar todos para admin
+                'per_page' => 100, // Reduzido de 1000 para 100 (razoável)
             ]);
             
             $userData = null;
             $todasEmpresas = [];
             $todosTenantsDoUsuario = [];
+            $tenantsProcessados = 0;
+            $maxTenants = 100; // Limite máximo de segurança
             
-            // 🔥 ARQUITETURA LIMPA: AdminTenancyRunner isola toda lógica de tenancy
+            // 🔥 PERFORMANCE: Processar apenas tenants retornados (máximo 100)
+            // AdminTenancyRunner isola toda lógica de tenancy
             foreach ($tenantsPaginator->items() as $tenantDomain) {
+                // Limite de segurança adicional
+                if ($tenantsProcessados >= $maxTenants) {
+                    \Log::warning('AdminUserController::showGlobal - Limite de tenants atingido', [
+                        'userId' => $userId,
+                        'tenants_processados' => $tenantsProcessados,
+                    ]);
+                    break;
+                }
+                
                 try {
                     $resultado = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($userId) {
-                        // Usar eager loading para evitar N+1 dentro do tenant
-                        // Já carrega empresas e roles em uma única query
-                        $user = \App\Modules\Auth\Models\User::with([
+                        // 🔥 PERFORMANCE: Usar eager loading para evitar N+1 dentro do tenant
+                        // Já carrega empresas e roles em uma única query por tenant
+                        return \App\Modules\Auth\Models\User::with([
                             'empresas' => function($query) {
                                 // Carregar apenas campos necessários
                                 $query->select('id', 'razao_social', 'cnpj');
@@ -203,8 +216,6 @@ class AdminUserController extends Controller
                         ->withTrashed()
                         ->select('id', 'name', 'email', 'empresa_ativa_id', 'deleted_at')
                         ->find($userId);
-                        
-                        return $user;
                     });
                     
                     if ($resultado) {
@@ -238,6 +249,8 @@ class AdminUserController extends Controller
                             'razao_social' => $tenantDomain->razaoSocial,
                         ];
                     }
+                    
+                    $tenantsProcessados++;
                 } catch (\Exception $e) {
                     \Log::warning('Erro ao buscar usuário no tenant', [
                         'tenant_id' => $tenantDomain->id,
@@ -245,6 +258,7 @@ class AdminUserController extends Controller
                         'error' => $e->getMessage(),
                     ]);
                     // AdminTenancyRunner já garantiu finalização do tenancy no finally
+                    $tenantsProcessados++; // Contar mesmo em caso de erro para não travar
                 }
             }
             
@@ -261,6 +275,7 @@ class AdminUserController extends Controller
                 'userId' => $userId,
                 'totalEmpresas' => count($todasEmpresas),
                 'totalTenants' => count($todosTenantsDoUsuario),
+                'tenants_processados' => $tenantsProcessados,
             ]);
             
             return ApiResponse::item($userData);

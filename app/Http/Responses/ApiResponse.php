@@ -6,8 +6,13 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 /**
- * ResponseBuilder: Padroniza todas as respostas da API
+ * 🔥 DDD: ResponseBuilder padronizado
  * Garante contrato consistente entre backend e frontend
+ * 
+ * Padrão:
+ * - success: { message, success: true, data? }
+ * - error: { message, success: false, error?, errors? }
+ * - paginated: { data: [], current_page, per_page, total, ... }
  */
 class ApiResponse
 {
@@ -17,7 +22,6 @@ class ApiResponse
      */
     public static function collection(array $data, ?array $meta = null): JsonResponse
     {
-        // Garantir que seja sempre array
         $data = is_array($data) ? $data : [];
 
         $response = ['data' => $data];
@@ -35,9 +39,7 @@ class ApiResponse
      */
     public static function item($item): JsonResponse
     {
-        // Sempre retornar como array com 1 item
         $data = $item ? [$item] : [];
-
         return response()->json(['data' => $data]);
     }
 
@@ -55,23 +57,18 @@ class ApiResponse
      */
     public static function paginated(LengthAwarePaginator $paginator, ?callable $transformer = null): JsonResponse
     {
-        // Obter items - pode ser Collection ou array
         $items = $paginator->items();
         
-        // Se for Collection, converter para array
         if ($items instanceof \Illuminate\Support\Collection) {
             $items = $items->toArray();
         }
         
-        // Garantir que seja array
         $itemsArray = is_array($items) ? $items : [];
 
-        // Aplicar transformer se fornecido
         if ($transformer && is_callable($transformer)) {
             $itemsArray = array_map($transformer, $itemsArray);
         }
 
-        // Garantir que seja array indexado numericamente
         $itemsArray = array_values($itemsArray);
 
         return response()->json([
@@ -86,7 +83,12 @@ class ApiResponse
     }
 
     /**
-     * Retornar sucesso com mensagem
+     * 🔥 DDD: Retornar sucesso padronizado
+     * 
+     * @param string $message Mensagem de sucesso
+     * @param mixed $data Dados a retornar (opcional)
+     * @param int $status Código HTTP (padrão: 200)
+     * @return JsonResponse
      */
     public static function success(string $message, $data = null, int $status = 200): JsonResponse
     {
@@ -96,7 +98,6 @@ class ApiResponse
         ];
 
         if ($data !== null) {
-            // Se for array, usar diretamente; se for objeto, converter para array
             $response['data'] = is_array($data) ? $data : (is_object($data) ? [$data] : $data);
         }
 
@@ -104,14 +105,24 @@ class ApiResponse
     }
 
     /**
-     * Retornar erro
+     * 🔥 DDD: Retornar erro padronizado
+     * 
+     * @param string $message Mensagem de erro para o usuário
+     * @param int $status Código HTTP (padrão: 400)
+     * @param string|null $error Detalhes técnicos do erro (apenas em debug)
+     * @param array $errors Array de erros de validação (opcional)
+     * @return JsonResponse
      */
-    public static function error(string $message, array $errors = [], int $status = 400): JsonResponse
+    public static function error(string $message, int $status = 400, ?string $error = null, array $errors = []): JsonResponse
     {
         $response = [
             'message' => $message,
             'success' => false,
         ];
+
+        if ($error && config('app.debug')) {
+            $response['error'] = $error;
+        }
 
         if (!empty($errors)) {
             $response['errors'] = $errors;
@@ -120,4 +131,3 @@ class ApiResponse
         return response()->json($response, $status);
     }
 }
-

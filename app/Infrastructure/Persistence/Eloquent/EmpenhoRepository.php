@@ -129,50 +129,19 @@ class EmpenhoRepository implements EmpenhoRepositoryInterface
             },
         ]);
 
-        // Verificações diretas no banco (para debug)
-        $directCount = DB::table('empenhos')
-            ->where('empresa_id', $filtros['empresa_id'] ?? 0)
-            ->where('processo_id', $filtros['processo_id'] ?? 0)
-            ->whereNull('excluido_em')
-            ->count();
-        
-        // Verificar se há empenhos para esse processo (sem filtro de empresa)
-        $countPorProcesso = DB::table('empenhos')
-            ->where('processo_id', $filtros['processo_id'] ?? 0)
-            ->whereNull('excluido_em')
-            ->count();
-        
-        // Verificar se há empenhos para essa empresa (sem filtro de processo)
-        $countPorEmpresa = DB::table('empenhos')
-            ->where('empresa_id', $filtros['empresa_id'] ?? 0)
-            ->whereNull('excluido_em')
-            ->count();
-        
-        // Verificar total de empenhos (sem filtros)
-        $totalEmpenhos = DB::table('empenhos')
-            ->whereNull('excluido_em')
-            ->count();
-        
-        // Listar alguns empenhos para debug
-        $sampleEmpenhos = DB::table('empenhos')
-            ->whereNull('excluido_em')
-            ->select('id', 'empresa_id', 'processo_id', 'numero', 'excluido_em')
-            ->limit(10)
-            ->get();
-        
-        // Verificar quantos registros existem antes de paginar (para debug)
-        $countBeforePaginate = $query->count();
-        \Log::debug('EmpenhoRepository::buscarComFiltros() - Count antes de paginar', [
-            'count' => $countBeforePaginate,
-            'direct_db_count' => $directCount,
-            'count_por_processo' => $countPorProcesso,
-            'count_por_empresa' => $countPorEmpresa,
-            'total_empenhos' => $totalEmpenhos,
-            'sample_empenhos' => $sampleEmpenhos->toArray(),
-            'sql' => $query->toSql(),
-            'bindings' => $query->getBindings(),
-            'filtros' => $filtros,
-        ]);
+        // 🔥 PERFORMANCE: Queries de debug apenas em ambiente de desenvolvimento
+        // Em produção, essas queries extras causam overhead desnecessário
+        if (config('app.debug')) {
+            // Verificações diretas no banco (apenas em debug)
+            $countBeforePaginate = $query->count();
+            
+            \Log::debug('EmpenhoRepository::buscarComFiltros() - Debug info', [
+                'count' => $countBeforePaginate,
+                'sql' => $query->toSql(),
+                'bindings' => $query->getBindings(),
+                'filtros' => $filtros,
+            ]);
+        }
 
         $perPage = $filtros['per_page'] ?? 15;
         $page = $filtros['page'] ?? 1;
