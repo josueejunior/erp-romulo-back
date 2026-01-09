@@ -20,9 +20,16 @@ class UsuarioCriadoListener
      */
     public function handle(UsuarioCriado $event): void
     {
+        Log::info('UsuarioCriadoListener::handle iniciado', [
+            'user_id' => $event->userId,
+            'email' => $event->email,
+            'tenant_id' => $event->tenantId,
+            'empresa_id' => $event->empresaId,
+        ]);
+
         try {
             // Log de auditoria
-            Log::info('Usuário criado', [
+            Log::info('Usuário criado - Evento recebido', [
                 'user_id' => $event->userId,
                 'email' => $event->email,
                 'tenant_id' => $event->tenantId,
@@ -69,6 +76,11 @@ class UsuarioCriadoListener
             
             // Enviar e-mail de boas-vindas
             if ($event->email) {
+                Log::info('UsuarioCriadoListener - Tentando enviar email', [
+                    'email' => $event->email,
+                    'mail_driver' => config('mail.default'),
+                ]);
+
                 Mail::to($event->email)->send(new BemVindoEmail($userData, $tenantData, $assinatura));
                 
                 Log::info('Email de boas-vindas enviado após cadastro', [
@@ -76,6 +88,11 @@ class UsuarioCriadoListener
                     'email' => $event->email,
                     'tenant_id' => $tenant?->id,
                     'assinatura_id' => $assinatura?->id,
+                    'mail_driver' => config('mail.default'),
+                ]);
+            } else {
+                Log::warning('UsuarioCriadoListener - Email não fornecido no evento', [
+                    'user_id' => $event->userId,
                 ]);
             }
             

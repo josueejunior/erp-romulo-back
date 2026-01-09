@@ -48,6 +48,10 @@ final class CadastroPublicoDTO
         
         // Idempotência (opcional - para evitar duplicações)
         public readonly ?string $idempotencyKey = null,
+        
+        // Referência de Afiliado (opcional - para rastreamento automático)
+        public readonly ?string $referenciaAfiliado = null, // Código do afiliado (?ref=code)
+        public readonly ?string $sessionId = null, // ID da sessão do navegador
     ) {}
 
     public static function fromArray(array $data): self
@@ -74,6 +78,8 @@ final class CadastroPublicoDTO
                 ? AfiliacaoDTO::fromArray($data)
                 : null,
             idempotencyKey: $data['idempotency_key'] ?? $data['idempotencyKey'] ?? null,
+            referenciaAfiliado: $data['ref'] ?? $data['referencia_afiliado'] ?? $data['referenciaAfiliado'] ?? null,
+            sessionId: $data['session_id'] ?? $data['sessionId'] ?? null,
         );
     }
 }

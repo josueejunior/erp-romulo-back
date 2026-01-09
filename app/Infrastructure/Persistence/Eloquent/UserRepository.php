@@ -65,12 +65,30 @@ class UserRepository implements UserRepositoryInterface
 
     public function criar(User $user, int $empresaId, string $role): User
     {
+        \Log::info('UserRepository::criar iniciado', [
+            'email' => $user->email,
+            'empresa_id' => $empresaId,
+            'role' => $role,
+        ]);
+
         $model = UserModel::create($this->toArray($user));
+
+        \Log::info('UserRepository::criar - Model criado', [
+            'user_id' => $model->id,
+            'email' => $model->email,
+        ]);
 
         $model->assignRole($role);
         $model->empresas()->attach($empresaId, ['perfil' => strtolower($role)]);
 
-        return $this->toDomain($model->fresh(), $user->tenantId);
+        $userDomain = $this->toDomain($model->fresh(), $user->tenantId);
+
+        \Log::info('UserRepository::criar concluído', [
+            'user_id' => $userDomain->id,
+            'email' => $userDomain->email,
+        ]);
+
+        return $userDomain;
     }
 
     public function buscarPorId(int $id): ?User

@@ -176,6 +176,11 @@ class CadastroPublicoController extends Controller
             
             // Idempotência (opcional)
             'idempotency_key' => 'nullable|string|max:255',
+            
+            // Referência de afiliado (opcional - para rastreamento automático)
+            'ref' => 'nullable|string|max:50',
+            'referencia_afiliado' => 'nullable|string|max:50',
+            'session_id' => 'nullable|string|max:255',
         ]);
     }
 

@@ -438,10 +438,37 @@ Route::prefix('admin')->group(function () {
     });
 });
 
-// 🆕 Rota pública para validar cupom de afiliado (usada no checkout do site)
+// 🆕 Rotas públicas para afiliados e onboarding
 Route::prefix('v1')->group(function () {
+    // Validar cupom de afiliado
     Route::post('/cupom/validar', [\App\Modules\Afiliado\Controllers\AfiliadoController::class, 'validarCupom'])
         ->middleware(['throttle:20,1']); // 20 validações por minuto
+    
+    // Rastreamento de referência de afiliado
+    Route::prefix('afiliado-referencia')->group(function () {
+        Route::post('/rastrear', [\App\Http\Controllers\Public\AfiliadoReferenciaController::class, 'rastrear'])
+            ->middleware(['throttle:30,1']);
+        Route::post('/verificar-cnpj', [\App\Http\Controllers\Public\AfiliadoReferenciaController::class, 'verificarCnpjJaUsouCupom'])
+            ->middleware(['throttle:20,1']);
+        Route::get('/buscar-ativa', [\App\Http\Controllers\Public\AfiliadoReferenciaController::class, 'buscarReferenciaAtiva'])
+            ->middleware(['throttle:30,1']);
+    });
+    
+    // Onboarding
+    Route::prefix('onboarding')->group(function () {
+        Route::post('/iniciar', [\App\Http\Controllers\Public\OnboardingController::class, 'iniciar'])
+            ->middleware(['throttle:30,1']);
+        Route::post('/marcar-etapa', [\App\Http\Controllers\Public\OnboardingController::class, 'marcarEtapa'])
+            ->middleware(['throttle:60,1']);
+        Route::post('/marcar-checklist', [\App\Http\Controllers\Public\OnboardingController::class, 'marcarChecklistItem'])
+            ->middleware(['throttle:60,1']);
+        Route::post('/concluir', [\App\Http\Controllers\Public\OnboardingController::class, 'concluir'])
+            ->middleware(['throttle:10,1']);
+        Route::get('/verificar-status', [\App\Http\Controllers\Public\OnboardingController::class, 'verificarStatus'])
+            ->middleware(['throttle:30,1']);
+        Route::get('/progresso', [\App\Http\Controllers\Public\OnboardingController::class, 'buscarProgresso'])
+            ->middleware(['throttle:30,1']);
+    });
 });
 
 // Fallback para 404 em JSON

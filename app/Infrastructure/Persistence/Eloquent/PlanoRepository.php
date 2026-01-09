@@ -98,6 +98,10 @@ class PlanoRepository implements PlanoRepositoryInterface
             $model->save();
         } else {
             // Criar
+            \Log::info('PlanoRepository::salvar - Criando novo plano', [
+                'nome' => $plano->nome,
+            ]);
+
             $model = PlanoModel::create([
                 'nome' => $plano->nome,
                 'descricao' => $plano->descricao,
@@ -110,9 +114,20 @@ class PlanoRepository implements PlanoRepositoryInterface
                 'ativo' => $plano->ativo,
                 'ordem' => $plano->ordem,
             ]);
+
+            \Log::info('PlanoRepository::salvar - Plano criado', [
+                'plano_id' => $model->id,
+                'nome' => $model->nome,
+            ]);
         }
 
-        return $this->toDomain($model);
+        $planoDomain = $this->toDomain($model);
+
+        \Log::info('PlanoRepository::salvar - Retornando plano domain', [
+            'plano_id' => $planoDomain->id,
+        ]);
+
+        return $planoDomain;
     }
 
     /**

@@ -42,6 +42,13 @@ final class AssinaturaDomainService
 
     /**
      * Calcula a data de término da assinatura
+     * 
+     * IMPORTANTE: ADDSIMP usa ciclo individual de 30 dias corridos
+     * O cliente é faturado a partir da data de contratação
+     * O período contratado é sempre de 30 dias corridos
+     * O ciclo de cobrança não depende do mês calendário
+     * 
+     * Exemplo: Cliente contrata em 18/03 → período vai de 18/03 a 17/04
      */
     public function calcularDataFim(Plano $plano, string $periodo = 'mensal', ?Carbon $dataInicio = null): Carbon
     {
@@ -52,10 +59,10 @@ final class AssinaturaDomainService
             return $dataInicio->copy()->addDays(3);
         }
 
-        return match ($periodo) {
-            'anual' => $dataInicio->copy()->addYear(),
-            default => $dataInicio->copy()->addMonth(),
-        };
+        // ADDSIMP: Sempre 30 dias corridos a partir da data de contratação
+        // Independente do período (mensal/anual), o ciclo é sempre de 30 dias
+        // Para planos anuais, serão múltiplos ciclos de 30 dias
+        return $dataInicio->copy()->addDays(30);
     }
 
     /**

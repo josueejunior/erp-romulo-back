@@ -12,6 +12,7 @@ use App\Application\Assinatura\DTOs\CriarAssinaturaDTO;
 use App\Application\Payment\UseCases\ProcessarAssinaturaPlanoUseCase;
 use App\Application\Empresa\UseCases\RegistrarAfiliadoNaEmpresaUseCase;
 use App\Application\Afiliado\UseCases\ValidarCupomAfiliadoUseCase;
+use App\Application\Afiliado\UseCases\RastrearReferenciaAfiliadoUseCase;
 use App\Domain\Assinatura\Services\AssinaturaDomainService;
 use App\Domain\Auth\Repositories\UserRepositoryInterface;
 use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
@@ -47,6 +48,7 @@ final class CadastrarEmpresaPublicamenteUseCase
         private readonly ProcessarAssinaturaPlanoUseCase $processarAssinaturaPlanoUseCase,
         private readonly RegistrarAfiliadoNaEmpresaUseCase $registrarAfiliadoNaEmpresaUseCase,
         private readonly ValidarCupomAfiliadoUseCase $validarCupomAfiliadoUseCase,
+        private readonly RastrearReferenciaAfiliadoUseCase $rastrearReferenciaAfiliadoUseCase,
         private readonly AssinaturaDomainService $assinaturaDomainService,
         private readonly UserRepositoryInterface $userRepository,
         private readonly TenantRepositoryInterface $tenantRepository,
@@ -97,6 +99,64 @@ final class CadastrarEmpresaPublicamenteUseCase
         }
 
         try {
+            // 0. Rastrear referência de afiliado (se houver)
+            $referenciaAfiliado = null;
+            if ($dto->referenciaAfiliado) {
+                $referenciaAfiliado = $this->rastrearReferenciaAfiliadoUseCase->executar(
+                    referenciaCode: $dto->referenciaAfiliado,
+                    sessionId: $dto->sessionId,
+                    ipAddress: request()->ip(),
+                    userAgent: request()->userAgent(),
+                    email: $dto->adminEmail,
+                );
+                
+                // Se encontrou referência e não tem afiliação no DTO, aplicar automaticamente
+                if ($referenciaAfiliado && !$dto->afiliacao) {
+                    Log::info('CadastrarEmpresaPublicamenteUseCase - Aplicando cupom automático via referência', [
+                        'afiliado_id' => $referenciaAfiliado->afiliado_id,
+                        'referencia_code' => $dto->referenciaAfiliado,
+                    ]);
+                    
+                    // Verificar se CNPJ já usou cupom
+                    if ($dto->cnpj && $this->rastrearReferenciaAfiliadoUseCase->cnpjJaUsouCupom($dto->cnpj)) {
+                        Log::warning('CadastrarEmpresaPublicamenteUseCase - CNPJ já usou cupom anteriormente', [
+                            'cnpj' => $dto->cnpj,
+                        ]);
+                    } else {
+                        // Buscar afiliado para criar DTO de afiliação
+                        $afiliado = $referenciaAfiliado->afiliado;
+                        if ($afiliado) {
+                            // Criar AfiliacaoDTO automaticamente
+                            $dto = new \App\Application\CadastroPublico\DTOs\CadastroPublicoDTO(
+                                planoId: $dto->planoId,
+                                periodo: $dto->periodo,
+                                razaoSocial: $dto->razaoSocial,
+                                cnpj: $dto->cnpj,
+                                email: $dto->email,
+                                endereco: $dto->endereco,
+                                cidade: $dto->cidade,
+                                estado: $dto->estado,
+                                cep: $dto->cep,
+                                telefones: $dto->telefones,
+                                logo: $dto->logo,
+                                adminName: $dto->adminName,
+                                adminEmail: $dto->adminEmail,
+                                adminPassword: $dto->adminPassword,
+                                pagamento: $dto->pagamento,
+                                afiliacao: new \App\Application\CadastroPublico\DTOs\AfiliacaoDTO(
+                                    codigo: $afiliado->codigo,
+                                    afiliadoId: $afiliado->id,
+                                    descontoAplicado: null, // Será calculado
+                                ),
+                                idempotencyKey: $dto->idempotencyKey,
+                                referenciaAfiliado: $dto->referenciaAfiliado,
+                                sessionId: $dto->sessionId,
+                            );
+                        }
+                    }
+                }
+            }
+
             // 1. Validar duplicidades (regra de negócio)
             $this->validarDuplicidades($dto);
 
@@ -109,12 +169,26 @@ final class CadastrarEmpresaPublicamenteUseCase
             // 3. Criar tenant com empresa e usuário admin
             $tenantResult = $this->criarTenantEUsuario($dto);
 
-            // 4. Registrar afiliado na empresa (se aplicável)
-            if ($dto->afiliacao) {
-                $this->registrarAfiliado($tenantResult['empresa'], $dto->afiliacao);
+            // 4. Marcar referência como concluída (se houver)
+            if ($referenciaAfiliado) {
+                $this->rastrearReferenciaAfiliadoUseCase->marcarComoConcluida(
+                    referenciaId: $referenciaAfiliado->id,
+                    tenantId: $tenantResult['tenant']->id,
+                    cnpj: $dto->cnpj
+                );
             }
 
-            // 5. Processar pagamento e criar assinatura
+            // 5. Registrar afiliado na empresa (se aplicável)
+            if ($dto->afiliacao) {
+                $this->registrarAfiliado($tenantResult['empresa'], $dto->afiliacao);
+                
+                // Marcar cupom como aplicado na referência
+                if ($referenciaAfiliado) {
+                    $referenciaAfiliado->update(['cupom_aplicado' => true]);
+                }
+            }
+
+            // 6. Processar pagamento e criar assinatura
             $assinaturaResult = $this->processarPagamentoECriarAssinatura(
                 $tenantResult,
                 $plano,
