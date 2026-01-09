@@ -295,5 +295,16 @@ class AppServiceProvider extends ServiceProvider
             \App\Domain\Assinatura\Events\AssinaturaAtualizada::class,
             [\App\Listeners\AssinaturaNotificacaoListener::class, 'handleAssinaturaAtualizada']
         );
+
+        // Listeners para comissões de afiliados
+        \Illuminate\Support\Facades\Event::listen(
+            \App\Domain\Assinatura\Events\AssinaturaCriada::class,
+            [\App\Listeners\GerarComissaoAfiliadoListener::class, 'handleAssinaturaCriada']
+        );
+
+        \Illuminate\Support\Facades\Event::listen(
+            \App\Domain\Assinatura\Events\AssinaturaAtualizada::class,
+            [\App\Listeners\GerarComissaoAfiliadoListener::class, 'handleAssinaturaAtualizada']
+        );
     }
 }

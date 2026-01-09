@@ -13,6 +13,7 @@ use App\Application\Payment\UseCases\ProcessarAssinaturaPlanoUseCase;
 use App\Application\Empresa\UseCases\RegistrarAfiliadoNaEmpresaUseCase;
 use App\Application\Afiliado\UseCases\ValidarCupomAfiliadoUseCase;
 use App\Application\Afiliado\UseCases\RastrearReferenciaAfiliadoUseCase;
+use App\Application\Afiliado\UseCases\CriarIndicacaoAfiliadoUseCase;
 use App\Application\Onboarding\UseCases\GerenciarOnboardingUseCase;
 use App\Domain\Assinatura\Services\AssinaturaDomainService;
 use App\Domain\Auth\Repositories\UserRepositoryInterface;
@@ -50,6 +51,7 @@ final class CadastrarEmpresaPublicamenteUseCase
         private readonly RegistrarAfiliadoNaEmpresaUseCase $registrarAfiliadoNaEmpresaUseCase,
         private readonly ValidarCupomAfiliadoUseCase $validarCupomAfiliadoUseCase,
         private readonly RastrearReferenciaAfiliadoUseCase $rastrearReferenciaAfiliadoUseCase,
+        private readonly CriarIndicacaoAfiliadoUseCase $criarIndicacaoAfiliadoUseCase,
         private readonly GerenciarOnboardingUseCase $gerenciarOnboardingUseCase,
         private readonly AssinaturaDomainService $assinaturaDomainService,
         private readonly UserRepositoryInterface $userRepository,
@@ -196,6 +198,17 @@ final class CadastrarEmpresaPublicamenteUseCase
                 $plano,
                 $dto
             );
+
+            // 6.1. Criar indicação de afiliado (se aplicável e pagamento confirmado)
+            if ($dto->afiliacao && $assinaturaResult['assinatura']->status === 'ativa') {
+                $this->criarIndicacaoAfiliado(
+                    $dto->afiliacao,
+                    $tenantResult['tenant']->id,
+                    $tenantResult['empresa']->id,
+                    $plano,
+                    $assinaturaResult
+                );
+            }
 
             // 7. Criar registro de onboarding (tutorial não concluído)
             $this->criarOnboarding($tenantResult['tenant']->id, $tenantResult['admin_user']->id, $dto->adminEmail);

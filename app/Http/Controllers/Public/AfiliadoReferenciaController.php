@@ -108,5 +108,61 @@ class AfiliadoReferenciaController extends Controller
             ],
         ]);
     }
+
+    /**
+     * Busca cupom automático para usuário autenticado
+     * Verifica se há referência de afiliado vinculada ao tenant
+     */
+    public function buscarCupomAutomatico(Request $request): JsonResponse
+    {
+        $tenantId = tenancy()->tenant?->id;
+        
+        if (!$tenantId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tenant não encontrado.',
+            ], 404);
+        }
+
+        // Buscar referência de afiliado vinculada ao tenant
+        $referencia = \App\Models\AfiliadoReferencia::where('tenant_id', $tenantId)
+            ->where('cadastro_concluido', true)
+            ->where('cupom_aplicado', false)
+            ->with('afiliado')
+            ->first();
+
+        if (!$referencia || !$referencia->afiliado) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Nenhum cupom disponível.',
+            ], 404);
+        }
+
+        // Verificar se CNPJ já usou cupom
+        $empresa = \App\Models\Empresa::first();
+        if ($empresa && $empresa->cnpj) {
+            $cnpjLimpo = preg_replace('/\D/', '', $empresa->cnpj);
+            $jaUsou = \App\Models\AfiliadoReferencia::where('cnpj', $cnpjLimpo)
+                ->where('cupom_aplicado', true)
+                ->exists();
+            
+            if ($jaUsou) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cupom já foi utilizado para este CNPJ.',
+                ], 400);
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'cupom_codigo' => $referencia->afiliado->codigo,
+                'afiliado_nome' => $referencia->afiliado->nome,
+                'desconto_percentual' => $referencia->afiliado->percentual_desconto ?? 30,
+                'mensagem' => "Você recebeu um cupom exclusivo de {$referencia->afiliado->percentual_desconto}% por indicação de {$referencia->afiliado->nome}.",
+            ],
+        ]);
+    }
 }
 

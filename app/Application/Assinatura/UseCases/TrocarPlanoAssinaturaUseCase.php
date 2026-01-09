@@ -5,6 +5,7 @@ namespace App\Application\Assinatura\UseCases;
 use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
 use App\Domain\Plano\Repositories\PlanoRepositoryInterface;
 use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
+use App\Application\Afiliado\UseCases\AtualizarComissaoIndicacaoUseCase;
 use App\Modules\Assinatura\Models\Assinatura;
 use App\Domain\Exceptions\DomainException;
 use Illuminate\Support\Facades\DB;
@@ -29,6 +30,7 @@ class TrocarPlanoAssinaturaUseCase
         private AssinaturaRepositoryInterface $assinaturaRepository,
         private PlanoRepositoryInterface $planoRepository,
         private TenantRepositoryInterface $tenantRepository,
+        private AtualizarComissaoIndicacaoUseCase $atualizarComissaoIndicacaoUseCase,
     ) {}
 
     /**

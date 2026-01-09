@@ -26,6 +26,12 @@ class VerificarAssinaturasExpiradas extends Command
 
     protected $description = 'Verifica assinaturas expiradas e processa bloqueios/cobranças';
 
+    public function __construct(
+        private readonly AtualizarComissaoIndicacaoUseCase $atualizarComissaoIndicacaoUseCase,
+    ) {
+        parent::__construct();
+    }
+
     public function handle()
     {
         $this->info('🔍 Verificando assinaturas expiradas...');
@@ -113,6 +119,21 @@ class VerificarAssinaturasExpiradas extends Command
                                     'assinatura_id' => $assinatura->id,
                                     'dias_expirado' => $diasExpirado,
                                 ]);
+
+                                // Atualizar status da indicação de afiliado
+                                if ($assinatura->empresa_id) {
+                                    try {
+                                        $this->atualizarComissaoIndicacaoUseCase->atualizarStatus(
+                                            tenantId: $tenant->id,
+                                            empresaId: $assinatura->empresa_id,
+                                            status: 'expirada'
+                                        );
+                                    } catch (\Exception $e) {
+                                        Log::warning('Erro ao atualizar status de indicação de afiliado', [
+                                            'error' => $e->getMessage(),
+                                        ]);
+                                    }
+                                }
                             }
                         }
 
