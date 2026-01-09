@@ -5,6 +5,8 @@ namespace App\Application\Payment\UseCases;
 use App\Domain\Payment\Repositories\PaymentProviderInterface;
 use App\Domain\Payment\ValueObjects\PaymentRequest;
 use App\Domain\Payment\Entities\PaymentResult;
+use App\Domain\Payment\Events\PagamentoProcessado;
+use App\Domain\Shared\Events\EventDispatcherInterface;
 use App\Modules\Assinatura\Models\Plano;
 use App\Models\Tenant;
 use App\Modules\Assinatura\Models\Assinatura;
@@ -24,6 +26,7 @@ class ProcessarAssinaturaPlanoUseCase
 {
     public function __construct(
         private PaymentProviderInterface $paymentProvider,
+        private EventDispatcherInterface $eventDispatcher,
     ) {}
 
     /**
@@ -123,9 +126,29 @@ class ProcessarAssinaturaPlanoUseCase
                 'dados_resposta' => $dadosResposta,
             ]);
 
+            // 🔥 DDD: Disparar Domain Event após pagamento processado
+            $event = new PagamentoProcessado(
+                paymentLogId: $paymentLog->id,
+                tenantId: $tenant->id,
+                assinaturaId: null, // Será preenchido após criar assinatura
+                planoId: $plano->id,
+                status: $paymentResult->status,
+                valor: $valor,
+                metodoPagamento: $paymentRequest->paymentMethodId ?? 'credit_card',
+                externalId: $paymentResult->externalId,
+                idempotencyKey: $idempotencyKey,
+                userId: auth()->id(),
+            );
+            $this->eventDispatcher->dispatch($event);
+
             // Se aprovado, criar assinatura
             if ($paymentResult->isApproved()) {
-                return $this->criarAssinatura($tenant, $plano, $paymentResult, $diasValidade, $periodo);
+                $assinatura = $this->criarAssinatura($tenant, $plano, $paymentResult, $diasValidade, $periodo);
+                
+                // Atualizar evento com assinaturaId criado (se necessário para listeners)
+                // Por enquanto, o evento já foi disparado, mas listeners podem buscar depois
+                
+                return $assinatura;
             }
 
             // Se pendente (ex: PIX), criar assinatura pendente

@@ -7,6 +7,7 @@ use App\Domain\Payment\Entities\PaymentResult;
 use App\Domain\Payment\ValueObjects\PaymentRequest;
 use App\Domain\Exceptions\DomainException;
 use App\Domain\Exceptions\NotFoundException;
+use App\Services\CircuitBreaker;
 use Illuminate\Support\Facades\Log;
 use MercadoPago\MercadoPagoConfig;
 use MercadoPago\Client\Payment\PaymentClient;
@@ -65,11 +66,43 @@ class MercadoPagoGateway implements PaymentProviderInterface
 
     /**
      * Processa um pagamento
+     * 
+     * 🔥 ROBUSTEZ: Protegido por Circuit Breaker para evitar travamentos quando API está instável
      */
     public function processPayment(PaymentRequest $request, string $idempotencyKey): PaymentResult
     {
         $this->initialize();
         
+        // Criar circuit breaker para Mercado Pago
+        $circuitBreaker = new CircuitBreaker(
+            serviceName: 'mercadopago',
+            failureThreshold: 5,
+            timeout: 60, // 1 minuto
+            halfOpenTimeout: 30 // 30 segundos
+        );
+
+        // Executar com circuit breaker
+        return $circuitBreaker->call(
+            operation: function () use ($request, $idempotencyKey) {
+                return $this->executarProcessamentoPagamento($request, $idempotencyKey);
+            },
+            fallback: function () use ($request) {
+                Log::error('Circuit breaker aberto - Mercado Pago indisponível', [
+                    'payer_email' => $request->payerEmail,
+                ]);
+                throw new DomainException(
+                    'O serviço de pagamento está temporariamente indisponível. ' .
+                    'Por favor, tente novamente em alguns instantes. Se o problema persistir, entre em contato com o suporte.'
+                );
+            }
+        );
+    }
+
+    /**
+     * Executa o processamento real do pagamento (isolado para circuit breaker)
+     */
+    private function executarProcessamentoPagamento(PaymentRequest $request, string $idempotencyKey): PaymentResult
+    {
         try {
             // Detectar método de pagamento
             $isPix = $request->paymentMethodId === 'pix';
@@ -303,30 +336,52 @@ class MercadoPagoGateway implements PaymentProviderInterface
 
     /**
      * Consulta o status de um pagamento
+     * 
+     * 🔥 ROBUSTEZ: Protegido por Circuit Breaker
      */
     public function getPaymentStatus(string $externalId): PaymentResult
     {
         $this->initialize();
         
-        try {
-            $payment = $this->paymentClient->get($externalId);
+        $circuitBreaker = new CircuitBreaker(
+            serviceName: 'mercadopago',
+            failureThreshold: 5,
+            timeout: 60,
+            halfOpenTimeout: 30
+        );
 
-            if (!$payment || isset($payment['error'])) {
-                throw new NotFoundException("Pagamento não encontrado: {$externalId}");
+        return $circuitBreaker->call(
+            operation: function () use ($externalId) {
+                try {
+                    $payment = $this->paymentClient->get($externalId);
+
+                    if (!$payment || isset($payment['error'])) {
+                        throw new NotFoundException("Pagamento não encontrado: {$externalId}");
+                    }
+
+                    return $this->mapPaymentToResult($payment);
+
+                } catch (NotFoundException $e) {
+                    throw $e; // NotFoundException não conta como falha para circuit breaker
+                } catch (\Exception $e) {
+                    Log::error('Erro ao consultar status do pagamento no Mercado Pago', [
+                        'external_id' => $externalId,
+                        'exception' => $e->getMessage(),
+                    ]);
+
+                    throw new DomainException("Erro ao consultar pagamento: {$e->getMessage()}");
+                }
+            },
+            fallback: function () use ($externalId) {
+                Log::error('Circuit breaker aberto - não foi possível consultar status do pagamento', [
+                    'external_id' => $externalId,
+                ]);
+                throw new DomainException(
+                    'O serviço de pagamento está temporariamente indisponível para consultas. ' .
+                    'Tente novamente em alguns instantes.'
+                );
             }
-
-            return $this->mapPaymentToResult($payment);
-
-        } catch (NotFoundException $e) {
-            throw $e;
-        } catch (\Exception $e) {
-            Log::error('Erro ao consultar status do pagamento no Mercado Pago', [
-                'external_id' => $externalId,
-                'exception' => $e->getMessage(),
-            ]);
-
-            throw new DomainException("Erro ao consultar pagamento: {$e->getMessage()}");
-        }
+        );
     }
 
     /**

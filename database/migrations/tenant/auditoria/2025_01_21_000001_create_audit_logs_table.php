@@ -16,7 +16,9 @@ return new class extends Migration
         Schema::create('audit_logs', function (Blueprint $table) {
             $table->id();
             $table->foreignUsuario(true);
-            $table->string('action', Blueprint::VARCHAR_TINY); // created, updated, deleted, status_changed
+            $table->unsignedBigInteger('tenant_id')->nullable();
+            $table->foreign('tenant_id')->references('id')->on('tenants')->onDelete('cascade');
+            $table->string('action', Blueprint::VARCHAR_TINY); // created, updated, deleted, status_changed, payment_processed, etc
             $table->string('model_type', Blueprint::VARCHAR_DEFAULT); // App\Models\Processo
             $table->unsignedBigInteger('model_id');
             $table->json('old_values')->nullable();
@@ -30,8 +32,10 @@ return new class extends Migration
             // ⚡ Índices para melhor performance
             $table->index(['model_type', 'model_id']);
             $table->index('usuario_id');
+            $table->index('tenant_id');
             $table->index('action');
             $table->index(Blueprint::CREATED_AT);
+            $table->index(['tenant_id', 'action']); // Para buscar operações críticas por tenant
         });
     }
 

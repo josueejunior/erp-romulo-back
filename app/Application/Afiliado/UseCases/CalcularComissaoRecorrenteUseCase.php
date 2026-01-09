@@ -8,6 +8,8 @@ use App\Modules\Afiliado\Models\AfiliadoIndicacao;
 use App\Modules\Assinatura\Models\Assinatura;
 use App\Models\AfiliadoComissaoRecorrente;
 use App\Models\Tenant;
+use App\Domain\Afiliado\Events\ComissaoGerada;
+use App\Domain\Shared\Events\EventDispatcherInterface;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -21,6 +23,10 @@ use Stancl\Tenancy\Facades\Tenancy;
  */
 final class CalcularComissaoRecorrenteUseCase
 {
+    public function __construct(
+        private readonly EventDispatcherInterface $eventDispatcher,
+    ) {}
+
     /**
      * Calcula e registra comissão recorrente para uma assinatura
      * 
@@ -128,6 +134,19 @@ final class CalcularComissaoRecorrenteUseCase
                     'comissao_id' => $comissao->id,
                     'valor_comissao' => $valorComissao,
                 ]);
+
+                // 🔥 DDD: Disparar Domain Event após comissão gerada
+                $event = new ComissaoGerada(
+                    comissaoId: $comissao->id,
+                    afiliadoId: $indicacao->afiliado_id,
+                    tenantId: $tenantId,
+                    assinaturaId: $assinaturaId,
+                    valor: $valorComissao,
+                    tipo: 'recorrente',
+                    status: 'pendente',
+                    periodoCompetencia: $dataInicioCiclo->format('Y-m') . ' a ' . $dataFimCiclo->format('Y-m'),
+                );
+                $this->eventDispatcher->dispatch($event);
 
                 return $comissao;
 

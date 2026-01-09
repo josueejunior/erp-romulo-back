@@ -154,15 +154,20 @@ class AtualizarAssinaturaAdminUseCase
             }
         }
 
+        // Buscar assinatura original para obter status anterior
+        $assinaturaOriginal = \App\Modules\Assinatura\Models\Assinatura::find($assinaturaId);
+        $statusAnterior = $assinaturaOriginal?->getOriginal('status') ?? $assinaturaOriginal?->status ?? 'pendente';
+
         // Disparar evento de assinatura atualizada
         $this->eventDispatcher->dispatch(
             new AssinaturaAtualizada(
                 assinaturaId: $assinaturaId,
                 tenantId: $tenantId,
                 empresaId: $assinaturaDomain->empresaId ?? 0,
+                statusAnterior: $statusAnterior,
+                status: $assinaturaDomain->status->value,
                 userId: $assinaturaDomain->userId,
                 planoId: $assinaturaModel->plano_id,
-                status: $assinaturaModel->status,
                 emailDestino: $emailDestino,
             )
         );

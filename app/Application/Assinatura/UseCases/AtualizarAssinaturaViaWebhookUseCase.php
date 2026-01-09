@@ -3,8 +3,10 @@
 namespace App\Application\Assinatura\UseCases;
 
 use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
+use App\Domain\Assinatura\Events\AssinaturaAtualizada;
 use App\Domain\Payment\Entities\PaymentResult;
 use App\Domain\Payment\Repositories\PaymentLogRepositoryInterface;
+use App\Domain\Shared\Events\EventDispatcherInterface;
 use App\Domain\Exceptions\NotFoundException;
 use App\Models\AfiliadoReferencia;
 use Illuminate\Support\Facades\Log;
@@ -18,6 +20,7 @@ class AtualizarAssinaturaViaWebhookUseCase
     public function __construct(
         private AssinaturaRepositoryInterface $assinaturaRepository,
         private PaymentLogRepositoryInterface $paymentLogRepository,
+        private EventDispatcherInterface $eventDispatcher,
     ) {}
 
     /**
@@ -59,6 +62,9 @@ class AtualizarAssinaturaViaWebhookUseCase
                     ]);
                 }
 
+                // Guardar status anterior para evento
+                $statusAnterior = $assinatura->status;
+
                 // Ativar assinatura
                 $assinatura->update([
                     'status' => 'ativa',
@@ -90,6 +96,17 @@ class AtualizarAssinaturaViaWebhookUseCase
                     'external_id' => $transacaoId,
                     'assinaturas_antigas_canceladas' => $assinaturasAntigas->count(),
                 ]);
+
+                // 🔥 DDD: Disparar Domain Event após atualização de assinatura via webhook
+                $event = new AssinaturaAtualizada(
+                    assinaturaId: $assinatura->id,
+                    tenantId: $assinatura->tenant_id,
+                    empresaId: $assinatura->empresa_id,
+                    statusAnterior: $statusAnterior,
+                    status: 'ativa',
+                    userId: null, // Webhook não tem usuário associado
+                );
+                $this->eventDispatcher->dispatch($event);
                 
                 // Marcar flag cupom_aplicado se houver referência de afiliado pendente
                 // Usar lock para evitar race condition (múltiplas requisições de webhook)
@@ -123,6 +140,9 @@ class AtualizarAssinaturaViaWebhookUseCase
                     }
                 }
             } elseif ($paymentResult->isRejected()) {
+                // Guardar status anterior para evento
+                $statusAnterior = $assinatura->status;
+
                 // Marcar como suspensa se rejeitado
                 $assinatura->update([
                     'status' => 'suspensa',
@@ -134,6 +154,17 @@ class AtualizarAssinaturaViaWebhookUseCase
                     'external_id' => $transacaoId,
                     'error' => $paymentResult->errorMessage,
                 ]);
+
+                // 🔥 DDD: Disparar Domain Event após rejeição
+                $event = new AssinaturaAtualizada(
+                    assinaturaId: $assinatura->id,
+                    tenantId: $assinatura->tenant_id,
+                    empresaId: $assinatura->empresa_id,
+                    statusAnterior: $statusAnterior,
+                    status: 'suspensa',
+                    userId: null,
+                );
+                $this->eventDispatcher->dispatch($event);
             } elseif ($paymentResult->isPending()) {
                 // PIX ou outro método pendente - apenas logar
                 Log::info('Pagamento pendente via webhook', [

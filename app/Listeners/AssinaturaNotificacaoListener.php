@@ -74,11 +74,24 @@ class AssinaturaNotificacaoListener
                     return;
                 }
 
-                // Buscar plano
-                $plano = Plano::find($event->planoId);
+                // Buscar plano (pode ser null em alguns eventos)
+                $plano = null;
+                if ($event->planoId) {
+                    $plano = Plano::find($event->planoId);
+                    if (!$plano) {
+                        Log::warning('AssinaturaNotificacaoListener - Plano não encontrado', [
+                            'plano_id' => $event->planoId,
+                        ]);
+                        // Continuar sem plano se não for encontrado
+                    }
+                } else {
+                    // Se planoId não foi fornecido, buscar da assinatura
+                    $plano = $assinaturaModel->plano;
+                }
+                
                 if (!$plano) {
-                    Log::warning('AssinaturaNotificacaoListener - Plano não encontrado', [
-                        'plano_id' => $event->planoId,
+                    Log::warning('AssinaturaNotificacaoListener - Plano não encontrado e não disponível na assinatura', [
+                        'assinatura_id' => $event->assinaturaId,
                     ]);
                     return;
                 }

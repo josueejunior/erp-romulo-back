@@ -198,6 +198,12 @@ class AppServiceProvider extends ServiceProvider
             \App\Infrastructure\Persistence\Eloquent\OnboardingProgressRepository::class
         );
 
+        // Auditoria Repository
+        $this->app->bind(
+            \App\Domain\Auditoria\Repositories\AuditLogRepositoryInterface::class,
+            \App\Infrastructure\Persistence\Eloquent\AuditLogRepository::class
+        );
+
         // Domain Services
         $this->app->bind(
             \App\Domain\Auth\Services\UserRoleServiceInterface::class,
@@ -310,6 +316,27 @@ class AppServiceProvider extends ServiceProvider
         \Illuminate\Support\Facades\Event::listen(
             \App\Domain\Assinatura\Events\AssinaturaAtualizada::class,
             [\App\Listeners\GerarComissaoAfiliadoListener::class, 'handleAssinaturaAtualizada']
+        );
+
+        // 🔥 DDD: Listeners para auditoria de operações críticas
+        \Illuminate\Support\Facades\Event::listen(
+            \App\Domain\Assinatura\Events\AssinaturaCriada::class,
+            [\App\Listeners\RegistrarAuditoriaListener::class, 'handleAssinaturaCriada']
+        );
+
+        \Illuminate\Support\Facades\Event::listen(
+            \App\Domain\Assinatura\Events\AssinaturaAtualizada::class,
+            [\App\Listeners\RegistrarAuditoriaListener::class, 'handleAssinaturaAtualizada']
+        );
+
+        \Illuminate\Support\Facades\Event::listen(
+            \App\Domain\Payment\Events\PagamentoProcessado::class,
+            [\App\Listeners\RegistrarAuditoriaListener::class, 'handlePagamentoProcessado']
+        );
+
+        \Illuminate\Support\Facades\Event::listen(
+            \App\Domain\Afiliado\Events\ComissaoGerada::class,
+            [\App\Listeners\RegistrarAuditoriaListener::class, 'handleComissaoGerada']
         );
     }
 }

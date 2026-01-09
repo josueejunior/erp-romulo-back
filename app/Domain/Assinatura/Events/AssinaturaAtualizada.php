@@ -17,9 +17,10 @@ readonly class AssinaturaAtualizada implements DomainEvent
         public int $assinaturaId,
         public int $tenantId,
         public int $empresaId,
-        public ?int $userId,
-        public int $planoId,
+        public string $statusAnterior,
         public string $status,
+        public ?int $userId = null,
+        public ?int $planoId = null,
         public ?string $emailDestino = null,
         public DateTimeImmutable $ocorreuEm = new DateTimeImmutable()
     ) {}

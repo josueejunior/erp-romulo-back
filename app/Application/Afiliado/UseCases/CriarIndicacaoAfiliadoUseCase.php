@@ -7,6 +7,8 @@ namespace App\Application\Afiliado\UseCases;
 use App\Modules\Afiliado\Models\Afiliado;
 use App\Modules\Afiliado\Models\AfiliadoIndicacao;
 use App\Modules\Assinatura\Models\Plano;
+use App\Domain\Afiliado\Events\ComissaoGerada;
+use App\Domain\Shared\Events\EventDispatcherInterface;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 
@@ -17,6 +19,10 @@ use Illuminate\Support\Facades\DB;
  */
 final class CriarIndicacaoAfiliadoUseCase
 {
+    public function __construct(
+        private readonly EventDispatcherInterface $eventDispatcher,
+    ) {}
+
     /**
      * Cria indicação de afiliado
      * 
@@ -125,6 +131,20 @@ final class CriarIndicacaoAfiliadoUseCase
                 'indicacao_id' => $indicacao->id,
                 'valor_comissao' => $valorComissao,
             ]);
+
+            // 🔥 DDD: Disparar Domain Event se houver comissão inicial (quando valor_comissao > 0)
+            if ($valorComissao > 0) {
+                $event = new ComissaoGerada(
+                    comissaoId: $indicacao->id, // Usar ID da indicação como identificador
+                    afiliadoId: $afiliadoId,
+                    tenantId: $tenantId,
+                    assinaturaId: null, // Será preenchido quando assinatura for criada
+                    valor: $valorComissao,
+                    tipo: 'inicial',
+                    status: 'pendente',
+                );
+                $this->eventDispatcher->dispatch($event);
+            }
 
             return $indicacao;
         });

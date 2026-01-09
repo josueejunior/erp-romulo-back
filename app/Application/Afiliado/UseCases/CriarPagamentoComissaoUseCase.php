@@ -7,6 +7,9 @@ namespace App\Application\Afiliado\UseCases;
 use App\Application\Afiliado\DTOs\CriarPagamentoComissaoDTO;
 use App\Models\AfiliadoComissaoRecorrente;
 use App\Models\AfiliadoPagamentoComissao;
+use App\Application\Auditoria\UseCases\RegistrarAuditoriaUseCase;
+use App\Domain\Auditoria\Enums\AuditAction;
+use App\Domain\Shared\ValueObjects\RequestContext;
 use App\Domain\Exceptions\DomainException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +22,10 @@ use Carbon\Carbon;
  */
 final class CriarPagamentoComissaoUseCase
 {
+    public function __construct(
+        private readonly RegistrarAuditoriaUseCase $registrarAuditoriaUseCase,
+    ) {}
+
     /**
      * Executa o use case
      */
@@ -67,6 +74,23 @@ final class CriarPagamentoComissaoUseCase
                 'valor_total' => $valorTotal,
                 'quantidade_comissoes' => $comissoes->count(),
             ]);
+
+            // 🔥 DDD: Registrar auditoria do pagamento de comissões
+            $this->registrarAuditoriaUseCase->executar(
+                action: AuditAction::COMMISSION_GENERATED,
+                modelType: 'App\\Models\\AfiliadoPagamentoComissao',
+                modelId: $pagamento->id,
+                newValues: [
+                    'id' => $pagamento->id,
+                    'afiliado_id' => $dto->afiliadoId,
+                    'valor_total' => $valorTotal,
+                    'quantidade_comissoes' => $comissoes->count(),
+                    'periodo_competencia' => $dto->periodoCompetencia,
+                    'status' => 'pago',
+                ],
+                description: "Pagamento de comissões criado: R$ " . number_format($valorTotal, 2, ',', '.') . " para {$comissoes->count()} comissão(ões)",
+                context: RequestContext::fromRequest(),
+            );
 
             return $pagamento->load('afiliado');
         });
