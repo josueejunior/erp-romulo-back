@@ -36,6 +36,12 @@ class AuthenticateJWT
     {
         Log::debug('➡ AuthenticateJWT entrou', ['path' => $request->path()]);
 
+        // 🔥 Verificar se é rota pública (não requer autenticação)
+        if ($this->isPublicRoute($request)) {
+            Log::debug('⬅ AuthenticateJWT: rota pública, pulando autenticação', ['path' => $request->path()]);
+            return $next($request);
+        }
+
         // 1. Obter token do header Authorization
         $token = $request->bearerToken();
 
@@ -88,6 +94,53 @@ class AuthenticateJWT
                 'message' => $e->getMessage() ?: 'Token inválido ou expirado.',
             ], 401);
         }
+    }
+
+    /**
+     * Verificar se a rota é pública (não requer autenticação)
+     */
+    private function isPublicRoute(Request $request): bool
+    {
+        $path = $request->path();
+        $method = $request->method();
+
+        // Rotas públicas que não requerem autenticação
+        // 🔥 IMPORTANTE: GET /api/v1/planos e GET /api/v1/planos/{id} devem ser públicas
+        // para permitir que a tela de cadastro funcione sem autenticação
+        
+        // Rotas de planos públicas (apenas GET - listagem e detalhe)
+        if (preg_match('#^api/v1/planos(/\d+)?$#', $path) && $method === 'GET') {
+            return true;
+        }
+
+        // Outras rotas públicas
+        $publicPaths = [
+            'api/v1/auth/login',
+            'api/v1/auth/register',
+            'api/v1/auth/forgot-password',
+            'api/v1/auth/reset-password',
+            'api/v1/cadastro-publico',
+            'api/v1/afiliados/cadastro-publico',
+            'api/v1/upload/image',
+        ];
+
+        foreach ($publicPaths as $publicPath) {
+            if ($path === $publicPath || str_starts_with($path, $publicPath . '/')) {
+                return true;
+            }
+        }
+
+        // Rotas de tenants (apenas algumas são públicas)
+        if (preg_match('#^api/v1/tenants#', $path) && in_array($method, ['GET', 'POST'])) {
+            return true;
+        }
+
+        // Rotas de consulta CNPJ
+        if (preg_match('#^api/v1/cadastro-publico/consultar-cnpj/#', $path) && $method === 'GET') {
+            return true;
+        }
+
+        return false;
     }
 
     /**

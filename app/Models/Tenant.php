@@ -512,8 +512,29 @@ class Tenant extends BaseTenant implements TenantWithDatabase
      */
     public function temAcessoDashboard(): bool
     {
-        // Dashboard está disponível apenas para planos Profissional, Master e Ilimitado
-        // Essencial não tem dashboard
+        // Se não tem assinatura ativa, não tem acesso
+        if (!$this->temAssinaturaAtiva()) {
+            return false;
+        }
+
+        $plano = $this->planoAtual;
+        
+        if (!$plano) {
+            return false;
+        }
+
+        // Planos ilimitados (sem limite de processos ou usuários) têm acesso total ao dashboard
+        // Verificar se é plano ilimitado verificando os limites
+        $temLimiteProcessos = $plano->limite_processos !== null;
+        $temLimiteUsuarios = $plano->limite_usuarios !== null;
+        
+        // Se não tem limites, é plano ilimitado - permite acesso ao dashboard
+        if (!$temLimiteProcessos && !$temLimiteUsuarios) {
+            return true;
+        }
+
+        // Para outros planos, verificar recursos disponíveis
+        // Dashboard está disponível para planos com 'relatorios' ou 'dashboard_analytics'
         return $this->temRecurso('relatorios') || $this->temRecurso('dashboard_analytics');
     }
 }

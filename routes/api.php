@@ -61,8 +61,12 @@ Route::prefix('v1')->group(function () {
 
     // Rotas públicas - Planos (podem ser visualizados sem autenticação)
     // IMPORTANTE: Estas rotas devem ser públicas para a tela de cadastro funcionar
-    Route::get('/planos', [ApiPlanoController::class, 'list']);
-    Route::get('/planos/{id}', [ApiPlanoController::class, 'get'])->where('id', '[0-9]+');
+    // Garantir explicitamente que não passem por middleware de autenticação
+    Route::withoutMiddleware(['jwt.auth', 'auth.context', 'auth.sanctum'])
+        ->group(function () {
+            Route::get('/planos', [ApiPlanoController::class, 'list']);
+            Route::get('/planos/{id}', [ApiPlanoController::class, 'get'])->where('id', '[0-9]+');
+        });
 
     // Rotas públicas (autenticação)
     // Rate limiting: aumentado para desenvolvimento/testes

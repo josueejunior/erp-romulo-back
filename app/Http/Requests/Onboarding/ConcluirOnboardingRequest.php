@@ -46,6 +46,10 @@ class ConcluirOnboardingRequest extends FormRequest
 
     /**
      * Validação customizada: se não tem onboarding_id, precisa de pelo menos um identificador
+     * 
+     * 🔥 IMPORTANTE: Se o usuário está autenticado, usar dados do contexto automaticamente
+     * Verifica dados do request body, usuário autenticado, atributos do request (setados por middlewares)
+     * e contexto de tenancy.
      */
     public function withValidator($validator): void
     {
@@ -54,7 +58,47 @@ class ConcluirOnboardingRequest extends FormRequest
             
             // Se não tem onboarding_id, precisa de pelo menos um identificador
             if (empty($data['onboarding_id'])) {
-                if (empty($data['tenant_id']) && empty($data['user_id']) && empty($data['session_id']) && empty($data['email'])) {
+                // Verificar dados do request body
+                $temTenantIdNoBody = !empty($data['tenant_id']);
+                $temUserIdNoBody = !empty($data['user_id']);
+                $temSessionIdNoBody = !empty($data['session_id']);
+                $temEmailNoBody = !empty($data['email']);
+                
+                // Verificar dados do contexto autenticado (middleware)
+                $user = $this->user(); // Usuário autenticado via middleware (auth.optional ou jwt.auth)
+                $userId = $user?->id ?? null;
+                $email = $user?->email ?? null;
+                
+                // Verificar atributos do request (setados por OptionalAuthenticate ou AuthenticateJWT)
+                $tenantIdFromAttributes = $this->attributes->get('tenant_id') ?? null;
+                $userIdFromAttributes = $this->attributes->get('user_id') ?? null;
+                
+                // Verificar contexto de tenancy (pode estar inicializado pelo middleware)
+                $tenantIdFromTenancy = null;
+                try {
+                    $tenantIdFromTenancy = tenancy()->tenant?->id ?? null;
+                } catch (\Exception $e) {
+                    // Tenancy pode não estar inicializado, isso é OK
+                }
+                
+                // Combinar todas as fontes de identificação
+                $tenantId = $temTenantIdNoBody 
+                    ? (int) $data['tenant_id'] 
+                    : ($tenantIdFromAttributes ?? $tenantIdFromTenancy);
+                    
+                $userIdFinal = $temUserIdNoBody 
+                    ? (int) $data['user_id'] 
+                    : ($userIdFromAttributes ?? $userId);
+                
+                $emailFinal = $temEmailNoBody ? $data['email'] : $email;
+                
+                // Verificar se temos pelo menos um identificador
+                $temIdentificacao = !empty($tenantId) 
+                    || !empty($userIdFinal) 
+                    || $temSessionIdNoBody
+                    || !empty($emailFinal);
+                
+                if (!$temIdentificacao) {
                     $validator->errors()->add('base', 'É necessário fornecer onboarding_id ou pelo menos uma forma de identificação (tenant_id, user_id, session_id ou email).');
                 }
             }
