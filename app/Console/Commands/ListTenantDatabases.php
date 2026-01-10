@@ -5,7 +5,6 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use App\Models\Tenant;
 use Illuminate\Support\Facades\DB;
-use Stancl\Tenancy\Facades\Tenancy;
 
 class ListTenantDatabases extends Command
 {
@@ -118,7 +117,9 @@ class ListTenantDatabases extends Command
                         $this->showTablesList($tables);
                     }
                 } finally {
-                    tenancy()->end();
+                    if (tenancy()->initialized) {
+                        tenancy()->end();
+                    }
                 }
             }
         } catch (\Exception $e) {

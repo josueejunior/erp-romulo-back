@@ -9,7 +9,6 @@ use App\Modules\Auth\Models\User;
 use App\Services\TenantService;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
-use Stancl\Tenancy\Facades\Tenancy;
 use Stancl\Tenancy\Jobs\CreateDatabase;
 use Stancl\Tenancy\Jobs\MigrateDatabase;
 use Database\Seeders\RolesPermissionsSeeder;

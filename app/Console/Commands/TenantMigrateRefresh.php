@@ -4,7 +4,6 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use App\Models\Tenant;
-use Stancl\Tenancy\Facades\Tenancy;
 
 class TenantMigrateRefresh extends Command
 {
@@ -69,11 +68,15 @@ class TenantMigrateRefresh extends Command
                     ]);
                 }
                 
-                tenancy()->end();
+                if (tenancy()->initialized) {
+                    tenancy()->end();
+                }
                 
                 $this->info("  ✅ Tenant {$tenant->id} concluído!");
             } catch (\Exception $e) {
-                tenancy()->end();
+                if (tenancy()->initialized) {
+                    tenancy()->end();
+                }
                 $this->error("  ❌ Erro no tenant {$tenant->id}: " . $e->getMessage());
             }
         }

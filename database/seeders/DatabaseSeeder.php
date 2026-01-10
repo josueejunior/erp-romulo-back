@@ -8,7 +8,6 @@ use App\Models\Empresa;
 use App\Models\Orgao;
 use App\Modules\Orgao\Models\Setor;
 use Illuminate\Support\Facades\Hash;
-use Stancl\Tenancy\Facades\Tenancy;
 use Stancl\Tenancy\Jobs\CreateDatabase;
 use Stancl\Tenancy\Jobs\MigrateDatabase;
 use Database\Seeders\AdminUserSeeder;

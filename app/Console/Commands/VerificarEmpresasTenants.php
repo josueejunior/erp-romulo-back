@@ -73,7 +73,9 @@ class VerificarEmpresasTenants extends Command
                         return "ID: {$empresa->id} - {$empresa->razao_social}";
                     })->join("\n");
                     
-                    tenancy()->end();
+                    if (tenancy()->initialized) {
+                        tenancy()->end();
+                    }
                     
                     return [
                         $tenant->id,
@@ -82,7 +84,9 @@ class VerificarEmpresasTenants extends Command
                         $empresasInfo ?: 'Nenhuma',
                     ];
                 } catch (\Exception $e) {
-                    tenancy()->end();
+                    if (tenancy()->initialized) {
+                        tenancy()->end();
+                    }
                     return [
                         $tenant->id,
                         $tenant->razao_social ?? 'N/A',
@@ -132,10 +136,14 @@ class VerificarEmpresasTenants extends Command
                     ];
                 }
                 
-                tenancy()->end();
+                if (tenancy()->initialized) {
+                    tenancy()->end();
+                }
             } catch (\Exception $e) {
                 $this->warn("Erro ao acessar tenant {$tenant->id}: " . $e->getMessage());
-                tenancy()->end();
+                if (tenancy()->initialized) {
+                    tenancy()->end();
+                }
             }
         }
 

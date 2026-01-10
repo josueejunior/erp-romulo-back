@@ -67,7 +67,9 @@ class NotificarProcessosJulgamento extends Command
                         }
                     }
 
-                    tenancy()->end();
+                    if (tenancy()->initialized) {
+                        tenancy()->end();
+                    }
                 } catch (\Exception $e) {
                     Log::error('Erro ao processar tenant no comando de notificação de julgamento', [
                         'tenant_id' => $tenant->id,

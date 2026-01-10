@@ -73,7 +73,9 @@ class AtualizarVigenciaContratosAFs extends Command
                         ]);
                     }
 
-                    tenancy()->end();
+                    if (tenancy()->initialized) {
+                        tenancy()->end();
+                    }
                 } catch (\Exception $e) {
                     Log::error('Erro ao processar tenant no comando de atualização de vigência', [
                         'tenant_id' => $tenant->id,

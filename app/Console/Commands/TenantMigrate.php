@@ -129,13 +129,17 @@ class TenantMigrate extends Command
                     }
                 }
                 
-                tenancy()->end();
+                if (tenancy()->initialized) {
+                    tenancy()->end();
+                }
                 
                 if (!$this->option('status')) {
                     $this->info("  ✅ Tenant {$tenant->id} concluído!");
                 }
             } catch (\Exception $e) {
-                tenancy()->end();
+                if (tenancy()->initialized) {
+                    tenancy()->end();
+                }
                 $this->error("  ❌ Erro no tenant {$tenant->id}: " . $e->getMessage());
                 if ($this->option('verbose')) {
                     $this->error("  Trace: " . $e->getTraceAsString());

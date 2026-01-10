@@ -61,7 +61,9 @@ class VerificarAssinaturasExpiradas extends Command
                 
                 if ($assinaturas->isEmpty()) {
                     $this->warn("  ⚠️  Tenant {$tenant->razao_social} (ID: {$tenant->id}) - Sem assinaturas ativas");
-                    tenancy()->end();
+                    if (tenancy()->initialized) {
+                        tenancy()->end();
+                    }
                     continue;
                 }
                 
@@ -183,7 +185,9 @@ class VerificarAssinaturasExpiradas extends Command
                 }
                 
                 $totalProcessados++;
-                tenancy()->end();
+                if (tenancy()->initialized) {
+                    tenancy()->end();
+                }
 
             } catch (\Exception $e) {
                 $this->error("  ❌ Erro ao processar tenant {$tenant->id}: {$e->getMessage()}");
@@ -192,7 +196,9 @@ class VerificarAssinaturasExpiradas extends Command
                     'error' => $e->getMessage(),
                     'trace' => $e->getTraceAsString(),
                 ]);
-                tenancy()->end();
+                if (tenancy()->initialized) {
+                    tenancy()->end();
+                }
             }
         }
 

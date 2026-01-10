@@ -69,7 +69,9 @@ class NotificarProcessosDisputas extends Command
                         $totalNotificacoes++;
                     }
 
-                    tenancy()->end();
+                    if (tenancy()->initialized) {
+                        tenancy()->end();
+                    }
                 } catch (\Exception $e) {
                     Log::error('Erro ao processar tenant no comando de notificação de disputas', [
                         'tenant_id' => $tenant->id,

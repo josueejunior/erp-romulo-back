@@ -60,7 +60,9 @@ class RecalcularSaldos extends Command
                     $processosExecucao = Processo::where('status', 'execucao')->count();
                     $totalProcessos += $processosExecucao;
 
-                    tenancy()->end();
+                    if (tenancy()->initialized) {
+                        tenancy()->end();
+                    }
                 } catch (\Exception $e) {
                     Log::error('Erro ao processar tenant no comando de recálculo de saldos', [
                         'tenant_id' => $tenant->id,

@@ -4,7 +4,6 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use App\Models\Tenant;
-use Stancl\Tenancy\Facades\Tenancy;
 
 class TenantMigrateRollback extends Command
 {
@@ -62,11 +61,15 @@ class TenantMigrateRollback extends Command
                 
                 \Artisan::call('migrate:rollback', $params);
                 
-                tenancy()->end();
+                if (tenancy()->initialized) {
+                    tenancy()->end();
+                }
                 
                 $this->info("  ✅ Tenant {$tenant->id} concluído!");
             } catch (\Exception $e) {
-                tenancy()->end();
+                if (tenancy()->initialized) {
+                    tenancy()->end();
+                }
                 $this->error("  ❌ Erro no tenant {$tenant->id}: " . $e->getMessage());
             }
         }

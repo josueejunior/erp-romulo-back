@@ -130,7 +130,9 @@ class PopularTenantEmpresasMapping extends Command
                     $mapeamentos++;
                 }
             } finally {
-                tenancy()->end();
+                if (tenancy()->initialized) {
+                    tenancy()->end();
+                }
             }
         } catch (\Exception $e) {
             if (tenancy()->initialized) {

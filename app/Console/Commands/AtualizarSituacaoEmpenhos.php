@@ -64,7 +64,9 @@ class AtualizarSituacaoEmpenhos extends Command
                         }
                     }
 
-                    tenancy()->end();
+                    if (tenancy()->initialized) {
+                        tenancy()->end();
+                    }
                 } catch (\Exception $e) {
                     Log::error('Erro ao processar tenant no comando de atualização de situação de empenhos', [
                         'tenant_id' => $tenant->id,

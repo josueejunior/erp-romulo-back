@@ -3,7 +3,6 @@
 namespace Database\Seeders\Traits;
 
 use App\Models\Tenant;
-use Stancl\Tenancy\Facades\Tenancy;
 
 /**
  * Trait para seeders que precisam trabalhar no contexto de tenants
