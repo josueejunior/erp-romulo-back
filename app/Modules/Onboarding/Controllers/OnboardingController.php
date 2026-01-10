@@ -17,7 +17,6 @@ use App\Http\Requests\Onboarding\MarcarEtapaRequest;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
-use Stancl\Tenancy\Facades\Tenancy;
 use App\Domain\Exceptions\DomainException;
 
 /**
@@ -57,7 +56,7 @@ class OnboardingController extends BaseApiController
             // Criar DTO usando dados do usuário autenticado
             $dto = BuscarProgressoDTO::fromRequest(
                 requestData: [],
-                tenantId: Tenancy::tenant()?->id ?? null,
+                tenantId: tenancy()->tenant?->id ?? null,
                 userId: $user->id,
                 email: $user->email,
             );
@@ -69,7 +68,7 @@ class OnboardingController extends BaseApiController
                 // Se não existe, criar um novo
                 $iniciarDto = IniciarOnboardingDTO::fromRequest(
                     requestData: [],
-                    tenantId: Tenancy::tenant()?->id ?? null,
+                    tenantId: tenancy()->tenant?->id ?? null,
                     userId: $user->id,
                     email: $user->email,
                 );
@@ -121,7 +120,7 @@ class OnboardingController extends BaseApiController
             // Criar DTO usando dados do usuário autenticado
             $dto = MarcarEtapaDTO::fromRequest(
                 requestData: $request->validated(),
-                tenantId: Tenancy::tenant()?->id ?? null,
+                tenantId: tenancy()->tenant?->id ?? null,
                 userId: $user->id,
                 email: $user->email,
             );
@@ -178,7 +177,7 @@ class OnboardingController extends BaseApiController
             // Criar DTO usando dados do usuário autenticado
             $dto = ConcluirOnboardingDTO::fromRequest(
                 requestData: $request->all(),
-                tenantId: Tenancy::tenant()?->id ?? null,
+                tenantId: tenancy()->tenant?->id ?? null,
                 userId: $user->id,
                 email: $user->email,
             );
@@ -198,7 +197,7 @@ class OnboardingController extends BaseApiController
 
             Log::info('OnboardingController - Onboarding concluído', [
                 'user_id' => $user->id,
-                'tenant_id' => Tenancy::tenant()?->id,
+                'tenant_id' => tenancy()->tenant?->id,
                 'onboarding_id' => $onboardingDomain->id,
             ]);
 

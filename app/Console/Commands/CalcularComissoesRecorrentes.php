@@ -8,7 +8,6 @@ use App\Modules\Afiliado\Models\AfiliadoIndicacao;
 use App\Models\Tenant;
 use App\Modules\Assinatura\Models\Assinatura;
 use Illuminate\Support\Facades\Log;
-use Stancl\Tenancy\Facades\Tenancy;
 use Carbon\Carbon;
 
 /**
@@ -63,7 +62,7 @@ class CalcularComissoesRecorrentes extends Command
                         continue;
                     }
 
-                    Tenancy::initialize($tenant);
+                    tenancy()->initialize($tenant);
 
                     try {
                         // Buscar assinatura ativa da empresa
@@ -123,8 +122,8 @@ class CalcularComissoesRecorrentes extends Command
                         }
 
                     } finally {
-                        if (Tenancy::initialized()) {
-                            Tenancy::end();
+                        if (tenancy()->initialized) {
+                            tenancy()->end();
                         }
                     }
 

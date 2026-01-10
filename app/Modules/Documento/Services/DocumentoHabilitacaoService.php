@@ -59,8 +59,8 @@ class DocumentoHabilitacaoService extends BaseService
                   ->where('ativo', true);
         }
 
-        // Filtro por ativo
-        if (isset($params['ativo'])) {
+        // Filtro por ativo (só aplicar se não estiver usando filtros de vencimento, que já forçam ativo=true)
+        if (isset($params['ativo']) && $params['ativo'] !== null && !isset($params['vencidos']) && !isset($params['vencendo'])) {
             $builder->where('ativo', $params['ativo']);
         }
 

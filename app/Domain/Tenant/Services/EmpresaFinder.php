@@ -6,7 +6,6 @@ use App\Models\TenantEmpresa;
 use App\Models\Tenant;
 use App\Models\Empresa;
 use Illuminate\Support\Facades\Log;
-use Stancl\Tenancy\Facades\Tenancy;
 
 /**
  * 🔥 DDD: Domain Service para buscar empresa principal de um tenant
@@ -91,7 +90,7 @@ class EmpresaFinder
         }
 
         try {
-            Tenancy::initialize($tenantModel);
+            tenancy()->initialize($tenantModel);
             
             try {
                 $empresa = Empresa::find($empresaId);
@@ -104,7 +103,7 @@ class EmpresaFinder
                     ];
                 }
             } finally {
-                Tenancy::end();
+                tenancy()->end();
             }
         } catch (\Exception $e) {
             Log::warning('EmpresaFinder: Erro ao buscar empresa no tenant', [
@@ -113,8 +112,8 @@ class EmpresaFinder
                 'error' => $e->getMessage(),
             ]);
             
-            if (Tenancy::initialized) {
-                Tenancy::end();
+            if (tenancy()->initialized) {
+                tenancy()->end();
             }
         }
 
@@ -132,7 +131,7 @@ class EmpresaFinder
         }
 
         try {
-            Tenancy::initialize($tenantModel);
+            tenancy()->initialize($tenantModel);
             
             try {
                 $empresa = Empresa::first();
@@ -145,7 +144,7 @@ class EmpresaFinder
                     ];
                 }
             } finally {
-                Tenancy::end();
+                tenancy()->end();
             }
         } catch (\Exception $e) {
             Log::warning('EmpresaFinder: Erro ao buscar primeira empresa do tenant', [
@@ -153,8 +152,8 @@ class EmpresaFinder
                 'error' => $e->getMessage(),
             ]);
             
-            if (Tenancy::initialized) {
-                Tenancy::end();
+            if (tenancy()->initialized) {
+                tenancy()->end();
             }
         }
 

@@ -9,7 +9,6 @@ use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Support\Facades\Log;
-use Stancl\Tenancy\Facades\Tenancy;
 
 /**
  * Middleware de autenticação opcional
@@ -68,19 +67,19 @@ class OptionalAuthenticate
 
         if ($isAdmin) {
             // Admin não precisa de tenancy - garantir que não há tenancy ativo
-            if (Tenancy::initialized()) {
-                Tenancy::end();
+            if (tenancy()->initialized) {
+                tenancy()->end();
             }
             return \App\Modules\Auth\Models\AdminUser::find($userId);
         }
 
         // Para usuário comum, tentar inicializar tenancy se tivermos tenant_id
         // Isso é necessário porque o modelo User pode estar no banco do tenant
-        if ($tenantId && !Tenancy::initialized()) {
+        if ($tenantId && !tenancy()->initialized) {
             try {
                 $tenant = \App\Models\Tenant::find($tenantId);
                 if ($tenant) {
-                    Tenancy::initialize($tenant);
+                    tenancy()->initialize($tenant);
                 }
             } catch (\Exception $e) {
                 Log::debug('OptionalAuthenticate: erro ao inicializar tenancy', [

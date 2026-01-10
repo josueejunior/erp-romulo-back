@@ -20,7 +20,6 @@ use App\Http\Requests\Onboarding\ConcluirOnboardingRequest;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
-use Stancl\Tenancy\Facades\Tenancy;
 use App\Domain\Exceptions\DomainException;
 
 /**
@@ -52,7 +51,7 @@ class OnboardingController extends Controller
             // Criar DTO com dados do request e usuário autenticado
             $dto = IniciarOnboardingDTO::fromRequest(
                 requestData: $request->validated(),
-                tenantId: $user ? (Tenancy::tenant()?->id ?? null) : null,
+                tenantId: $user ? (tenancy()->tenant?->id ?? null) : null,
                 userId: $user?->id,
                 email: $user?->email,
             );
@@ -103,7 +102,7 @@ class OnboardingController extends Controller
             // Criar DTO com dados do request e usuário autenticado
             $dto = MarcarEtapaDTO::fromRequest(
                 requestData: $request->validated(),
-                tenantId: $user ? (Tenancy::tenant()?->id ?? null) : null,
+                tenantId: $user ? (tenancy()->tenant?->id ?? null) : null,
                 userId: $user?->id,
                 email: $user?->email,
             );
@@ -154,7 +153,7 @@ class OnboardingController extends Controller
             // Criar DTO com dados do request e usuário autenticado
             $dto = MarcarChecklistItemDTO::fromRequest(
                 requestData: $request->validated(),
-                tenantId: $user ? (Tenancy::tenant()?->id ?? null) : null,
+                tenantId: $user ? (tenancy()->tenant?->id ?? null) : null,
                 userId: $user?->id,
                 email: $user?->email,
             );
@@ -205,7 +204,7 @@ class OnboardingController extends Controller
             // Criar DTO com dados do request e usuário autenticado
             $dto = ConcluirOnboardingDTO::fromRequest(
                 requestData: $request->validated(),
-                tenantId: $user ? (Tenancy::tenant()?->id ?? null) : null,
+                tenantId: $user ? (tenancy()->tenant?->id ?? null) : null,
                 userId: $user?->id,
                 email: $user?->email,
             );
@@ -226,7 +225,7 @@ class OnboardingController extends Controller
             Log::info('OnboardingController::concluir - Onboarding concluído', [
                 'onboarding_id' => $onboardingDomain->id,
                 'user_id' => $user?->id,
-                'tenant_id' => Tenancy::tenant()?->id,
+                'tenant_id' => tenancy()->tenant?->id,
             ]);
 
             return response()->json([
@@ -264,7 +263,7 @@ class OnboardingController extends Controller
             // Criar DTO
             $dto = BuscarProgressoDTO::fromRequest(
                 requestData: $request->all(),
-                tenantId: $user ? (Tenancy::tenant()?->id ?? null) : null,
+                tenantId: $user ? (tenancy()->tenant?->id ?? null) : null,
                 userId: $user?->id,
                 email: $user?->email,
             );
@@ -276,7 +275,7 @@ class OnboardingController extends Controller
                 // Se não existe, criar novo
                 $iniciarDto = IniciarOnboardingDTO::fromRequest(
                     requestData: $request->all(),
-                    tenantId: $user ? (Tenancy::tenant()?->id ?? null) : null,
+                    tenantId: $user ? (tenancy()->tenant?->id ?? null) : null,
                     userId: $user?->id,
                     email: $user?->email,
                 );
@@ -327,7 +326,7 @@ class OnboardingController extends Controller
             // Criar DTO
             $dto = BuscarProgressoDTO::fromRequest(
                 requestData: $request->all(),
-                tenantId: $user ? (Tenancy::tenant()?->id ?? null) : null,
+                tenantId: $user ? (tenancy()->tenant?->id ?? null) : null,
                 userId: $user?->id,
                 email: $user?->email,
             );
