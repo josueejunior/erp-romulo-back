@@ -304,14 +304,20 @@ final class CadastrarEmpresaPublicamenteUseCase
             ]);
             
             foreach ($tenants as $tenantDomain) {
+                $tenancyInitialized = false;
                 try {
                     // Buscar modelo Eloquent para inicializar tenancy
                     $tenant = $this->tenantRepository->buscarModeloPorId($tenantDomain->id);
                     if (!$tenant) {
+                        Log::debug('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Tenant não encontrado como modelo', [
+                            'tenant_id' => $tenantDomain->id,
+                            'email' => $dto->adminEmail,
+                        ]);
                         continue;
                     }
                     
                     tenancy()->initialize($tenant);
+                    $tenancyInitialized = true;
                     
                     // 🔥 VALIDAÇÃO ROBUSTA: Verificar email incluindo usuários inativos (soft deleted)
                     // Usar query direta para ter controle total
@@ -325,7 +331,9 @@ final class CadastrarEmpresaPublicamenteUseCase
                         // 2. Se usuário está ativo MAS NÃO está vinculado a empresa ativa → permitir novo cadastro
                         // 3. Se usuário está ativo E está vinculado a empresa ativa → bloquear
                         
-                        $usuarioAtivo = $userModel->deleted_at === null;
+                        // NOTA: Usar trashed() para verificar soft delete é mais seguro do que acessar a coluna diretamente
+                        // pois o nome da coluna pode variar (deleted_at vs excluido_em)
+                        $usuarioAtivo = !$userModel->trashed();
                         
                         // 🔥 CORREÇÃO: Verificar se o USUÁRIO está vinculado a empresa ativa
                         // Não verificar apenas se o tenant tem empresa ativa (pode ter empresa de teste)
@@ -334,10 +342,11 @@ final class CadastrarEmpresaPublicamenteUseCase
                         Log::debug('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email encontrado, analisando condições', [
                             'email' => $dto->adminEmail,
                             'tenant_id' => $tenant->id,
+                            'tenant_razao_social' => $tenantDomain->razaoSocial ?? 'N/A',
                             'usuario_id' => $userModel->id,
                             'usuario_ativo' => $usuarioAtivo,
                             'usuario_tem_empresa_ativa' => $usuarioTemEmpresaAtiva,
-                            'deleted_at' => $userModel->deleted_at,
+                            'is_trashed' => $userModel->trashed(),
                         ]);
                         
                         if ($usuarioAtivo && $usuarioTemEmpresaAtiva) {
@@ -346,11 +355,10 @@ final class CadastrarEmpresaPublicamenteUseCase
                             Log::warning('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email já cadastrado (usuário ativo + vinculado a empresa ativa)', [
                                 'email' => $dto->adminEmail,
                                 'tenant_id' => $tenant->id,
-                                'tenant_razao_social' => $tenantDomain->razaoSocial,
+                                'tenant_razao_social' => $tenantDomain->razaoSocial ?? 'N/A',
                                 'usuario_id' => $userModel->id,
                             ]);
-                            tenancy()->end();
-                            break;
+                            break; // Não precisa continuar verificando outros tenants
                         } else {
                             // Usuário inativo OU não vinculado a empresa ativa = permitir novo cadastro
                             $motivo = !$usuarioAtivo 
@@ -360,7 +368,7 @@ final class CadastrarEmpresaPublicamenteUseCase
                             Log::info('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email encontrado mas permitindo novo cadastro', [
                                 'email' => $dto->adminEmail,
                                 'tenant_id' => $tenant->id,
-                                'tenant_razao_social' => $tenantDomain->razaoSocial,
+                                'tenant_razao_social' => $tenantDomain->razaoSocial ?? 'N/A',
                                 'motivo' => $motivo,
                                 'usuario_ativo' => $usuarioAtivo,
                                 'usuario_tem_empresa_ativa' => $usuarioTemEmpresaAtiva,
@@ -368,16 +376,28 @@ final class CadastrarEmpresaPublicamenteUseCase
                         }
                     }
                     
-                    tenancy()->end();
                 } catch (\Exception $e) {
-                    if (tenancy()->initialized) {
-                        tenancy()->end();
-                    }
                     Log::warning('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Erro ao verificar email no tenant', [
                         'tenant_id' => $tenantDomain->id,
+                        'tenant_razao_social' => $tenantDomain->razaoSocial ?? 'N/A',
                         'email' => $dto->adminEmail,
                         'error' => $e->getMessage(),
+                        'error_class' => get_class($e),
+                        'trace' => config('app.debug') ? $e->getTraceAsString() : null,
                     ]);
+                    // Continuar verificando outros tenants mesmo se um falhar
+                } finally {
+                    // Garantir que o tenancy sempre seja finalizado
+                    if ($tenancyInitialized && tenancy()->initialized) {
+                        try {
+                            tenancy()->end();
+                        } catch (\Exception $e) {
+                            Log::error('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Erro ao finalizar tenancy', [
+                                'tenant_id' => $tenantDomain->id,
+                                'error' => $e->getMessage(),
+                            ]);
+                        }
+                    }
                 }
             }
             
@@ -393,16 +413,19 @@ final class CadastrarEmpresaPublicamenteUseCase
             ]);
             
         } catch (EmailJaCadastradoException $e) {
-            // Re-lançar a exceção se já foi lançada
+            // Re-lançar a exceção se já foi lançada (foi lançada dentro do loop)
             throw $e;
         } catch (\Exception $e) {
-            Log::error('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Erro ao validar email', [
+            // Erro inesperado durante validação - logar mas não bloquear
+            // A validação final acontecerá ao tentar criar o usuário no tenant
+            Log::error('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Erro inesperado ao validar email', [
                 'email' => $dto->adminEmail,
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
+                'error_class' => get_class($e),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null,
             ]);
-            // Em caso de erro na validação, bloquear o cadastro por segurança
-            throw new EmailJaCadastradoException($dto->adminEmail);
+            // Continuar o processo - a validação final acontecerá ao criar o usuário
+            // Se realmente houver duplicidade, será detectada na criação do usuário
         }
 
         // Validar CNPJ (obrigatório agora)

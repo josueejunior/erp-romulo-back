@@ -149,11 +149,12 @@ class UserRepository implements UserRepositoryInterface
             $userFound = $query->first();
             
             // Verificar explicitamente se está deletado (por segurança)
-            if ($userFound && $userFound->deleted_at) {
+            // Usar trashed() é mais seguro pois funciona independente do nome da coluna (deleted_at vs excluido_em)
+            if ($userFound && $userFound->trashed()) {
                 \Log::warning('UserRepository::emailExiste - Email encontrado mas usuário está deletado (soft delete), ignorando', [
                     'email' => $email,
                     'user_id' => $userFound->id,
-                    'deleted_at' => $userFound->deleted_at,
+                    'is_trashed' => true,
                     'tenant_id' => $tenantId,
                 ]);
                 return false; // Usuário deletado não conta como existente

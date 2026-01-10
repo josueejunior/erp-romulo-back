@@ -16,10 +16,13 @@ final class EmailJaCadastradoException extends DomainException
 
     public function __construct(
         string $email,
+        ?string $customMessage = null,
         ?\Throwable $previous = null
     ) {
+        $message = $customMessage ?? "Este e-mail ({$email}) já está cadastrado no sistema. Faça login para acessar sua conta.";
+        
         parent::__construct(
-            message: "Este e-mail ({$email}) já está cadastrado no sistema. Faça login para acessar sua conta.",
+            message: $message,
             code: 409,
             previous: $previous,
             errorCode: 'EMAIL_EXISTS'

@@ -189,7 +189,8 @@ class UserReadRepository implements UserReadRepositoryInterface
                 'empresas_list' => $empresasArray, // Frontend espera isso
                 'total_empresas' => $totalEmpresas,
                 'is_multi_empresa' => $totalEmpresas > 1, // Flag para facilitar no frontend
-                'deleted_at' => $user->deleted_at?->toISOString() ?? null,
+                // Usar getDeletedAtColumn() para acessar a coluna correta (excluido_em)
+                'deleted_at' => $user->{$user->getDeletedAtColumn()}?->toISOString() ?? null,
             ];
         })->values()->toArray();
 
