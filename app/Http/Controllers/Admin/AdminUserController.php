@@ -130,7 +130,7 @@ class AdminUserController extends Controller
                                 'roles_list' => $user->roles->pluck('name')->toArray(),
                                 'empresas' => $empresasComTenant,
                                 'empresa_ativa_id' => $user->empresa_ativa_id,
-                                'deleted_at' => $user->deleted_at,
+                                'deleted_at' => $user->excluido_em,
                                 'tenants' => [[
                                     'id' => $tenantDomain->id,
                                     'razao_social' => $tenantDomain->razaoSocial,
@@ -228,7 +228,7 @@ class AdminUserController extends Controller
                             }
                         ])
                         ->withTrashed()
-                        ->select('id', 'name', 'email', 'empresa_ativa_id', 'deleted_at')
+                        ->select('id', 'name', 'email', 'empresa_ativa_id', 'excluido_em')
                         ->find($userId);
                     });
                     
@@ -243,7 +243,7 @@ class AdminUserController extends Controller
                                 'email' => $user->email,
                                 'roles_list' => $user->roles->pluck('name')->toArray(),
                                 'empresa_ativa_id' => $user->empresa_ativa_id,
-                                'deleted_at' => $user->deleted_at,
+                                'deleted_at' => $user->excluido_em,
                             ];
                         }
                         
