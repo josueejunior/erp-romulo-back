@@ -109,41 +109,67 @@ class UserReadRepository implements UserReadRepositoryInterface
 
     /**
      * Obtém query builder do User usando a conexão correta
-     * Garante que a conexão 'tenant' seja usada quando disponível
+     * 🔥 CRÍTICO: Configura manualmente a conexão 'tenant' para usar o banco correto
+     * O DatabaseTenancyBootstrapper deveria fazer isso, mas se não estiver funcionando,
+     * configuramos manualmente para garantir isolamento de dados
      */
     private function getUserQuery()
     {
-        if (tenancy()->initialized) {
+        if (tenancy()->initialized && tenancy()->tenant) {
             try {
-                // Verificar se a conexão 'tenant' existe e está configurada
+                $tenant = tenancy()->tenant;
+                $expectedDbName = $tenant->database()->getName(); // Deveria ser 'tenant_2' por exemplo
+                
+                // Verificar se a conexão 'tenant' existe
                 $tenantConnection = DB::connection('tenant');
-                $dbName = $tenantConnection->getDatabaseName();
+                $currentDbName = $tenantConnection->getDatabaseName();
                 
-                Log::info('UserReadRepository: Usando conexão tenant', [
-                    'connection' => 'tenant',
-                    'database_name' => $dbName,
-                    'tenant_id' => tenancy()->tenant?->id,
-                ]);
+                // Se a conexão tenant está apontando para o banco errado, configurar corretamente
+                if ($currentDbName !== $expectedDbName) {
+                    Log::warning('UserReadRepository: Conexão tenant apontando para banco errado, reconfigurando', [
+                        'current_database' => $currentDbName,
+                        'expected_database' => $expectedDbName,
+                        'tenant_id' => $tenant->id,
+                    ]);
+                    
+                    // Reconfigurar a conexão tenant para usar o banco correto
+                    config(["database.connections.tenant.database" => $expectedDbName]);
+                    DB::purge('tenant'); // Limpar cache da conexão
+                    $tenantConnection = DB::connection('tenant'); // Reconectar
+                    
+                    Log::info('UserReadRepository: Conexão tenant reconfigurada', [
+                        'connection' => 'tenant',
+                        'database_name' => $tenantConnection->getDatabaseName(),
+                        'tenant_id' => $tenant->id,
+                    ]);
+                } else {
+                    Log::info('UserReadRepository: Conexão tenant configurada corretamente', [
+                        'connection' => 'tenant',
+                        'database_name' => $currentDbName,
+                        'tenant_id' => $tenant->id,
+                    ]);
+                }
                 
-                // Se a conexão existe, criar instância do modelo com essa conexão
+                // Criar instância do modelo com a conexão tenant configurada corretamente
                 $userInstance = new UserModel();
                 $userInstance->setConnection('tenant');
                 return $userInstance->newQuery()->withTrashed();
             } catch (\Exception $e) {
-                // Se não existir, usar conexão padrão (pode ser um problema de configuração)
-                Log::warning('UserReadRepository: Conexão tenant não disponível, usando padrão', [
+                // Se houver erro, logar e usar fallback
+                Log::error('UserReadRepository: Erro ao configurar conexão tenant', [
                     'error' => $e->getMessage(),
-                    'default_connection' => DB::connection()->getName(),
-                    'default_database' => DB::connection()->getDatabaseName(),
+                    'trace' => $e->getTraceAsString(),
+                    'tenant_id' => tenancy()->tenant?->id,
                 ]);
             }
         }
         
-        // Fallback: usar conexão padrão do modelo
-        Log::info('UserReadRepository: Usando conexão padrão', [
+        // Fallback: usar conexão padrão (NÃO IDEAL - pode causar vazamento de dados)
+        Log::warning('UserReadRepository: Usando conexão padrão (FALLBACK)', [
             'connection' => DB::connection()->getName(),
             'database_name' => DB::connection()->getDatabaseName(),
             'tenancy_initialized' => tenancy()->initialized,
+            'tenant_id' => tenancy()->tenant?->id,
         ]);
         return UserModel::withTrashed();
     }
