@@ -105,6 +105,32 @@ class GetUserUseCase
         // Buscar modelo completo do usuário para garantir que temos todos os dados
         $userModel = $this->userRepository->buscarModeloPorId($user->id);
         
+        // Montar dados completos do tenant (usando modelo se disponível para ter todos os campos)
+        $tenantResponse = null;
+        if ($tenantDomain && $tenantModel) {
+            $tenantResponse = [
+                'id' => $tenantModel->id,
+                'razao_social' => $tenantModel->razao_social ?? $tenantDomain->razaoSocial ?? '',
+                'cnpj' => $tenantModel->cnpj ?? $tenantDomain->cnpj ?? null,
+                'email' => $tenantModel->email ?? null,
+                'endereco' => $tenantModel->endereco ?? null,
+                'cidade' => $tenantModel->cidade ?? null,
+                'estado' => $tenantModel->estado ?? null,
+                'uf' => $tenantModel->estado ?? null, // Alias para compatibilidade
+                'cep' => $tenantModel->cep ?? null,
+                'telefones' => $tenantModel->telefones ?? null,
+                'telefone' => $tenantModel->telefones ?? null, // Alias para compatibilidade
+                'emails_adicionais' => $tenantModel->emails_adicionais ?? null,
+            ];
+        } elseif ($tenantDomain) {
+            // Fallback: usar apenas dados do domain se não tiver modelo
+            $tenantResponse = [
+                'id' => $tenantDomain->id,
+                'razao_social' => $tenantDomain->razaoSocial,
+                'cnpj' => $tenantDomain->cnpj ?? null,
+            ];
+        }
+        
         return [
             'user' => [
                 'id' => $user->id,
@@ -114,11 +140,7 @@ class GetUserUseCase
                 'foto_perfil' => $userModel?->foto_perfil ?? $user->foto_perfil ?? null,
                 'empresas_list' => $empresasList, // Lista de empresas para o seletor
             ],
-            'tenant' => $tenantDomain ? [
-                'id' => $tenantDomain->id,
-                'razao_social' => $tenantDomain->razaoSocial,
-                'cnpj' => $tenantDomain->cnpj ?? null,
-            ] : null,
+            'tenant' => $tenantResponse,
             'empresa' => $empresaAtiva ? [
                 'id' => $empresaAtiva->id,
                 'razao_social' => $empresaAtiva->razaoSocial ?? '',
