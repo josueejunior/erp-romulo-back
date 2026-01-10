@@ -5,6 +5,7 @@ namespace App\Application\Auth\UseCases;
 use App\Domain\Auth\Repositories\UserRepositoryInterface;
 use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
 use App\Domain\Auth\Repositories\AdminUserRepositoryInterface;
+
 use App\Domain\Exceptions\DomainException;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;

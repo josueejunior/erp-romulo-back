@@ -39,8 +39,9 @@ return [
 
         'smtp' => [
             'transport' => 'smtp',
-            'host' => env('MAIL_HOST', 'smtp.hostinger.com'),
-            'port' => env('MAIL_PORT', 465),
+            // 🔥 PRODUÇÃO: Valores validados para garantir SMTP de produção
+            'host' => $mailHost,
+            'port' => $mailPort,
             'encryption' => env('MAIL_ENCRYPTION', 'ssl'),
             'username' => env('MAIL_USERNAME', 'naoresponda@addsimp.com'),
             'password' => env('MAIL_PASSWORD' , 'C/k6@!S0'),
