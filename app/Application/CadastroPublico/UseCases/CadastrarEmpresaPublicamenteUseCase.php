@@ -475,9 +475,15 @@ final class CadastrarEmpresaPublicamenteUseCase
         // Normalizar CNPJ (remover formatação para busca e comparação)
         $cnpjLimpo = preg_replace('/\D/', '', $dto->cnpj);
         
-        // Validar formato básico
+        // 🔥 VALIDAÇÃO DE FORMATO: Verificar tamanho
         if (strlen($cnpjLimpo) !== 14) {
             throw new DomainException('CNPJ deve ter 14 dígitos.');
+        }
+
+        // 🔥 VALIDAÇÃO DE DÍGITOS VERIFICADORES: Validar CNPJ usando a mesma lógica da Rule
+        // Isso garante que mesmo se a validação do Form Request for contornada, o CNPJ é válido
+        if (!$this->validarCnpjComDigitosVerificadores($cnpjLimpo)) {
+            throw new DomainException('CNPJ inválido: dígitos verificadores incorretos.');
         }
 
         // 🔥 VALIDAÇÃO INTELIGENTE DE CNPJ
@@ -850,12 +856,33 @@ final class CadastrarEmpresaPublicamenteUseCase
             );
         }
 
+        // 🔥 VALIDAÇÃO: Validar CPF se fornecido (obrigatório para PIX, opcional para cartão)
+        $payerCpf = null;
+        if ($dto->pagamento->payerCpf) {
+            $cpfLimpo = preg_replace('/\D/', '', $dto->pagamento->payerCpf);
+            
+            // Validar formato básico
+            if (strlen($cpfLimpo) !== 11) {
+                throw new DomainException('CPF deve ter 11 dígitos.');
+            }
+            
+            // Validar dígitos verificadores
+            if (!$this->validarCpfComDigitosVerificadores($cpfLimpo)) {
+                throw new DomainException('CPF inválido: dígitos verificadores incorretos.');
+            }
+            
+            $payerCpf = $cpfLimpo; // Usar CPF limpo
+        } elseif ($dto->pagamento->isPix()) {
+            // PIX requer CPF obrigatoriamente
+            throw new DomainException('CPF é obrigatório para pagamento via PIX.');
+        }
+
         // Criar PaymentRequest
         $paymentRequestData = [
             'amount' => $valorFinal,
             'description' => "Plano {$plano->nome} - {$dto->periodo} - Sistema Rômulo",
             'payer_email' => $dto->pagamento->payerEmail,
-            'payer_cpf' => $dto->pagamento->payerCpf,
+            'payer_cpf' => $payerCpf,
             'payment_method_id' => $dto->pagamento->isPix() ? 'pix' : null,
             'external_reference' => "tenant_{$tenant->id}_plano_{$plano->id}_cadastro",
             'metadata' => [
@@ -1138,6 +1165,86 @@ final class CadastrarEmpresaPublicamenteUseCase
         }
     }
     
+    /**
+     * Valida CNPJ com dígitos verificadores
+     * 
+     * 🔥 VALIDAÇÃO: Usa a mesma lógica da Rule CnpjValido para garantir consistência
+     * 
+     * @param string $cnpj CNPJ sem formatação (14 dígitos)
+     * @return bool True se CNPJ é válido
+     */
+    private function validarCnpjComDigitosVerificadores(string $cnpj): bool
+    {
+        // Verificar se todos os dígitos são iguais (CNPJs inválidos conhecidos)
+        if (preg_match('/^(\d)\1{13}$/', $cnpj)) {
+            return false;
+        }
+
+        // Validar primeiro dígito verificador
+        $soma = 0;
+        $peso = 5;
+        for ($i = 0; $i < 12; $i++) {
+            $soma += intval($cnpj[$i]) * $peso;
+            $peso = ($peso === 2) ? 9 : $peso - 1;
+        }
+        $digito1 = ($soma % 11 < 2) ? 0 : 11 - ($soma % 11);
+        if ($digito1 !== intval($cnpj[12])) {
+            return false;
+        }
+
+        // Validar segundo dígito verificador
+        $soma = 0;
+        $peso = 6;
+        for ($i = 0; $i < 13; $i++) {
+            $soma += intval($cnpj[$i]) * $peso;
+            $peso = ($peso === 2) ? 9 : $peso - 1;
+        }
+        $digito2 = ($soma % 11 < 2) ? 0 : 11 - ($soma % 11);
+        if ($digito2 !== intval($cnpj[13])) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Valida CPF com dígitos verificadores
+     * 
+     * 🔥 VALIDAÇÃO: Usa a mesma lógica da Rule CpfValido para garantir consistência
+     * 
+     * @param string $cpf CPF sem formatação (11 dígitos)
+     * @return bool True se CPF é válido
+     */
+    private function validarCpfComDigitosVerificadores(string $cpf): bool
+    {
+        // Verificar se todos os dígitos são iguais (CPFs inválidos conhecidos)
+        if (preg_match('/^(\d)\1{10}$/', $cpf)) {
+            return false;
+        }
+
+        // Validar primeiro dígito verificador
+        $soma = 0;
+        for ($i = 0; $i < 9; $i++) {
+            $soma += intval($cpf[$i]) * (10 - $i);
+        }
+        $digito1 = ($soma % 11 < 2) ? 0 : 11 - ($soma % 11);
+        if ($digito1 !== intval($cpf[9])) {
+            return false;
+        }
+
+        // Validar segundo dígito verificador
+        $soma = 0;
+        for ($i = 0; $i < 10; $i++) {
+            $soma += intval($cpf[$i]) * (11 - $i);
+        }
+        $digito2 = ($soma % 11 < 2) ? 0 : 11 - ($soma % 11);
+        if ($digito2 !== intval($cpf[10])) {
+            return false;
+        }
+
+        return true;
+    }
+
     /**
      * Verifica se a razão social parece ser de uma empresa de teste/exemplo
      */

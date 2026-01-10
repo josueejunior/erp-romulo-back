@@ -254,11 +254,38 @@ class CriarTenantUseCase
         } catch (\Exception $e) {
             tenancy()->end();
             
-            Log::error('Erro ao criar empresa/usuário no tenant', [
+            Log::error('Erro ao criar empresa/usuário no tenant - iniciando rollback', [
                 'tenant_id' => $tenant->id,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
+            
+            // 🔥 ROLLBACK: Se houver erro na criação da empresa/usuário, deletar tenant criado
+            // Isso garante que não fiquem tenants órfãos no sistema
+            // Nota: O banco de dados do tenant pode ficar órfão temporariamente, mas será detectado e limpo depois
+            try {
+                Log::info('CriarTenantUseCase::executar - Deletando tenant após erro na criação da empresa/usuário', [
+                    'tenant_id' => $tenant->id,
+                ]);
+                
+                // Deletar tenant do banco central (o banco de dados pode ficar órfão temporariamente)
+                // Para deletar o banco, seria necessário usar o DeletarTenantIncompletoUseCase, mas isso criaria dependência circular
+                // O banco órfão será detectado e limpo pelos processos de manutenção
+                $this->tenantRepository->deletar($tenant->id);
+                
+                Log::info('CriarTenantUseCase::executar - Tenant deletado com sucesso após erro', [
+                    'tenant_id' => $tenant->id,
+                    'note' => 'Banco de dados do tenant pode ter ficado órfão e será limpo depois',
+                ]);
+            } catch (\Exception $rollbackException) {
+                Log::error('CriarTenantUseCase::executar - Erro ao fazer rollback (deletar tenant)', [
+                    'tenant_id' => $tenant->id,
+                    'rollback_error' => $rollbackException->getMessage(),
+                    'original_error' => $e->getMessage(),
+                    'trace' => $rollbackException->getTraceAsString(),
+                ]);
+                // Continuar mesmo se falhar o rollback - o tenant ficará órfão mas será detectado depois
+            }
             
             throw new DomainException('Erro ao criar empresa ou usuário administrador: ' . $e->getMessage());
         }

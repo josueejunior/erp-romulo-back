@@ -170,7 +170,7 @@ class CadastroPublicoController extends Controller
             // Dados de pagamento (opcional - obrigatório se plano não for gratuito)
             'payment_method' => 'nullable|string|in:credit_card,pix',
             'payer_email' => 'nullable|email',
-            'payer_cpf' => 'nullable|string',
+            'payer_cpf' => ['nullable', 'string', new \App\Rules\CpfValido()], // Validar CPF se fornecido
             'card_token' => 'nullable|string|required_if:payment_method,credit_card',
             'installments' => 'nullable|integer|min:1|max:12',
             

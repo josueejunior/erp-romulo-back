@@ -31,7 +31,7 @@ class TenantCreateRequest extends FormRequest
             'tipo_conta' => 'nullable|string|in:corrente,poupanca',
             'pix' => 'nullable|string|max:255',
             'representante_legal_nome' => 'nullable|string|max:255',
-            'representante_legal_cpf' => 'nullable|string|max:14',
+            'representante_legal_cpf' => ['nullable', 'string', 'max:14', new \App\Rules\CpfValido()],
             'representante_legal_cargo' => 'nullable|string|max:255',
             'logo' => 'nullable|string|max:255',
             'admin_name' => 'required|string|max:255',
