@@ -337,18 +337,21 @@ final class CadastrarEmpresaPublicamenteUseCase
                         $usuarioEstaDesativado = $userModel->trashed();
                         $usuarioAtivo = !$usuarioEstaDesativado;
                         
-                        // 🔥 VALIDAÇÃO: Se usuário está desativado, já pode permitir novo cadastro
-                        // Não precisa verificar empresas se o usuário está desativado
+                        // 🔥 VALIDAÇÃO: Se usuário está desativado (soft deleted), NÃO bloquear cadastro
+                        // Usuário desativado não tem empresa ativa por definição
                         if ($usuarioEstaDesativado) {
-                            Log::info('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email encontrado mas usuário está desativado, permitindo novo cadastro', [
+                            Log::info('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email encontrado mas usuário está DESATIVADO (soft deleted), permitindo novo cadastro', [
                                 'email' => $dto->adminEmail,
                                 'tenant_id' => $tenant->id,
                                 'tenant_razao_social' => $tenantDomain->razaoSocial ?? 'N/A',
                                 'usuario_id' => $userModel->id,
                                 'usuario_desativado' => true,
                                 'excluido_em' => $userModel->excluido_em?->toDateTimeString(),
+                                'is_trashed' => $userModel->trashed(),
                             ]);
-                            // Continuar verificando outros tenants (não bloquear)
+                            // IMPORTANTE: NÃO setar $emailEncontrado = true aqui
+                            // Continuar verificando outros tenants (pode haver outro tenant onde o usuário está ativo)
+                            // Mas se este usuário está desativado, não bloqueia o cadastro
                             continue;
                         }
                         
@@ -367,26 +370,38 @@ final class CadastrarEmpresaPublicamenteUseCase
                             'is_trashed' => $userModel->trashed(),
                         ]);
                         
+                        // 🔥 VALIDAÇÃO: Só bloquear se usuário está ATIVO E vinculado a empresa ATIVA
+                        // Se usuário está ativo mas não tem empresa ativa, permitir novo cadastro
                         if ($usuarioAtivo && $usuarioTemEmpresaAtiva) {
                             // Usuário ativo + vinculado a empresa ativa = bloquear cadastro
                             $emailEncontrado = true;
-                            Log::warning('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email já cadastrado (usuário ativo + vinculado a empresa ativa)', [
+                            Log::warning('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email já cadastrado (usuário ATIVO + vinculado a empresa ATIVA), BLOQUEANDO cadastro', [
                                 'email' => $dto->adminEmail,
                                 'tenant_id' => $tenant->id,
                                 'tenant_razao_social' => $tenantDomain->razaoSocial ?? 'N/A',
                                 'usuario_id' => $userModel->id,
+                                'usuario_ativo' => true,
+                                'usuario_tem_empresa_ativa' => true,
                             ]);
                             break; // Não precisa continuar verificando outros tenants
                         } else {
                             // Usuário ativo mas não vinculado a empresa ativa = permitir novo cadastro
-                            Log::info('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email encontrado mas permitindo novo cadastro (usuário ativo mas sem empresa ativa)', [
+                            $motivoBloqueio = !$usuarioAtivo 
+                                ? 'usuario_desativado' 
+                                : 'usuario_sem_empresa_ativa';
+                            
+                            Log::info('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email encontrado mas PERMITINDO novo cadastro', [
                                 'email' => $dto->adminEmail,
                                 'tenant_id' => $tenant->id,
                                 'tenant_razao_social' => $tenantDomain->razaoSocial ?? 'N/A',
-                                'motivo' => 'usuario_sem_empresa_ativa',
+                                'usuario_id' => $userModel->id,
+                                'motivo' => $motivoBloqueio,
                                 'usuario_ativo' => $usuarioAtivo,
                                 'usuario_tem_empresa_ativa' => $usuarioTemEmpresaAtiva,
+                                'is_trashed' => $userModel->trashed(),
                             ]);
+                            // IMPORTANTE: NÃO setar $emailEncontrado = true aqui
+                            // Continuar verificando outros tenants
                         }
                     }
                     
@@ -415,15 +430,25 @@ final class CadastrarEmpresaPublicamenteUseCase
                 }
             }
             
+            // 🔥 VALIDAÇÃO FINAL: Só bloquear se encontramos usuário ATIVO com empresa ATIVA em algum tenant
+            // Se todos os usuários encontrados estão desativados ou sem empresa ativa, permitir cadastro
+            Log::info('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Finalizando validação de email', [
+                'email' => $dto->adminEmail,
+                'email_encontrado' => $emailEncontrado,
+                'motivo_final' => $emailEncontrado ? 'usuario_ativo_com_empresa_ativa_encontrado' : 'email_nao_encontrado_ou_apenas_usuarios_desativados_sem_empresa_ativa',
+            ]);
+            
             if ($emailEncontrado) {
-                Log::info('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email já existe, bloqueando cadastro', [
+                Log::warning('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email já existe (usuário ATIVO com empresa ATIVA encontrado), BLOQUEANDO cadastro', [
                     'email' => $dto->adminEmail,
+                    'motivo' => 'usuario_ativo_com_empresa_ativa_encontrado',
                 ]);
                 throw new EmailJaCadastradoException($dto->adminEmail);
             }
             
-            Log::info('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email não encontrado em nenhum tenant, permitindo cadastro', [
+            Log::info('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email validado, PERMITINDO cadastro', [
                 'email' => $dto->adminEmail,
+                'motivo' => 'email_nao_encontrado_ou_apenas_usuarios_desativados_sem_empresa_ativa',
             ]);
             
         } catch (EmailJaCadastradoException $e) {
@@ -1045,22 +1070,44 @@ final class CadastrarEmpresaPublicamenteUseCase
                 $status = $empresa->status ?? 'inativa';
                 $cnpj = $empresa->cnpj ?? '';
                 
-                // Empresa válida = ativa + tem razão social + tem CNPJ (não é empresa de teste)
-                // OU ativa + razão social não é genérica
-                $empresaAtiva = $status === 'ativa';
+                // 🔥 VALIDAÇÃO ESTRITA: Empresa válida = ativa + tem razão social + tem CNPJ + não é empresa de teste + não está deletada
+                // IMPORTANTE: Verificamos trashed() acima, mas vamos garantir novamente aqui por segurança
+                $empresaAtiva = ($status === 'ativa') && !$empresa->trashed();
                 $temRazaoSocial = !empty(trim($razaoSocial));
                 $temCnpj = !empty(trim($cnpj));
                 $naoEhEmpresaTeste = !$this->ehEmpresaDeTeste($razaoSocial);
                 
+                // 🔥 CRÍTICO: Só considerar empresa válida se TODAS as condições forem verdadeiras:
+                // 1. Empresa está ativa (status = 'ativa' E não está deletada)
+                // 2. Tem razão social preenchida
+                // 3. Tem CNPJ OU não é empresa de teste
                 if ($empresaAtiva && $temRazaoSocial && ($temCnpj || $naoEhEmpresaTeste)) {
-                    Log::debug('CadastrarEmpresaPublicamenteUseCase::verificarSeUsuarioTemEmpresaAtiva - Usuário vinculado a empresa ativa', [
+                    Log::info('CadastrarEmpresaPublicamenteUseCase::verificarSeUsuarioTemEmpresaAtiva - Usuário vinculado a empresa ATIVA E VÁLIDA', [
                         'usuario_id' => $userModel->id,
                         'empresa_id' => $empresa->id,
                         'razao_social' => $razaoSocial,
                         'status' => $status,
                         'cnpj' => $cnpj,
+                        'empresa_ativa' => true,
+                        'empresa_deletada' => false,
+                        'tem_razao_social' => true,
+                        'tem_cnpj' => $temCnpj,
+                        'nao_eh_empresa_teste' => $naoEhEmpresaTeste,
                     ]);
                     return true;
+                } else {
+                    Log::debug('CadastrarEmpresaPublicamenteUseCase::verificarSeUsuarioTemEmpresaAtiva - Empresa encontrada mas não é válida/ativa', [
+                        'usuario_id' => $userModel->id,
+                        'empresa_id' => $empresa->id,
+                        'razao_social' => $razaoSocial,
+                        'status' => $status,
+                        'cnpj' => $cnpj,
+                        'empresa_ativa' => $empresaAtiva,
+                        'empresa_deletada' => $empresa->trashed(),
+                        'tem_razao_social' => $temRazaoSocial,
+                        'tem_cnpj' => $temCnpj,
+                        'nao_eh_empresa_teste' => $naoEhEmpresaTeste,
+                    ]);
                 }
             }
             
