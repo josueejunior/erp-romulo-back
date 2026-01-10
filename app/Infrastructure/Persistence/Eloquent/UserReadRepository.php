@@ -96,7 +96,9 @@ class UserReadRepository implements UserReadRepositoryInterface
             'empresas_list' => $empresas,
             'total_empresas' => $totalEmpresas,
             'is_multi_empresa' => $totalEmpresas > 1,
-            'deleted_at' => $user->deleted_at?->toISOString() ?? null,
+            'deleted_at' => ($user->trashed() && ($deletedAt = $user->getAttribute($user->getDeletedAtColumn()))) 
+                ? $deletedAt->toISOString() 
+                : null,
         ];
     }
 
