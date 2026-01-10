@@ -35,8 +35,14 @@ class ResetPasswordNotification extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         // URL do frontend para redefinir senha
-        // Priorizar config, depois env, depois fallback
+        // 🔥 GARANTIR: Sempre usar gestor.addsimp.com (domínio correto)
         $frontendUrl = config('app.frontend_url') ?? env('FRONTEND_URL') ?? 'https://gestor.addsimp.com';
+        
+        // Se a URL não contém 'gestor.', forçar uso de gestor.addsimp.com
+        if (!str_contains($frontendUrl, 'gestor.')) {
+            $frontendUrl = 'https://gestor.addsimp.com';
+        }
+        
         $resetUrl = "{$frontendUrl}/resetar-senha?token={$this->token}&email=" . urlencode($notifiable->email);
 
         return (new MailMessage)

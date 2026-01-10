@@ -71,11 +71,16 @@ class SolicitarResetSenhaUseCase
                 
                 // Enviar email para admin (via Mail facade direto já que não temos modelo User para admin)
                 try {
+                    // 🔥 GARANTIR: Sempre usar gestor.addsimp.com (domínio correto)
+                    $frontendUrl = config('app.frontend_url') ?? env('FRONTEND_URL') ?? 'https://gestor.addsimp.com';
+                    if (!str_contains($frontendUrl, 'gestor.')) {
+                        $frontendUrl = 'https://gestor.addsimp.com';
+                    }
+                    
                     Mail::raw(
                         "Você solicitou uma redefinição de senha.\n\n" .
                         "Clique no link abaixo para redefinir sua senha:\n" .
-                        (config('app.frontend_url') ?? env('FRONTEND_URL') ?? 'https://gestor.addsimp.com') . 
-                        "/resetar-senha?token={$token}&email=" . urlencode($email) . "\n\n" .
+                        "{$frontendUrl}/resetar-senha?token={$token}&email=" . urlencode($email) . "\n\n" .
                         "Este link expira em 60 minutos.\n\n" .
                         "Se você não solicitou esta redefinição, ignore este e-mail.",
                         function ($message) use ($email) {
