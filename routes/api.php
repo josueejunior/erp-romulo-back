@@ -87,12 +87,14 @@ Route::prefix('v1')->group(function () {
         ->middleware(['throttle:10,1']); // 10 uploads por minuto
     
     // Cadastro público (cria tenant + assinatura + usuário)
+    // Rate limiting aumentado para desenvolvimento/testes
     Route::post('/cadastro-publico', [\App\Http\Controllers\Public\CadastroPublicoController::class, 'store'])
-        ->middleware(['throttle:5,1', 'throttle:10,60', 'sanitize.inputs']); // 5/min, 10/hora + sanitização
+        ->middleware(['throttle:10,1', 'throttle:50,60', 'sanitize.inputs']); // 10/min, 50/hora (aumentado para testes) + sanitização
     
     // Consulta pública de CNPJ (para cadastro público)
+    // Rate limiting aumentado para desenvolvimento/testes
     Route::get('/cadastro-publico/consultar-cnpj/{cnpj}', [\App\Http\Controllers\Public\CadastroPublicoController::class, 'consultarCnpj'])
-        ->middleware(['throttle:10,1']); // 10 consultas por minuto
+        ->middleware(['throttle:30,1', 'throttle:100,60']); // 30/min, 100/hora (aumentado para testes)
 
     // Cadastro público de afiliados (sem autenticação)
     Route::post('/afiliados/cadastro-publico', [\App\Http\Controllers\Public\CadastroAfiliadoController::class, 'store'])
