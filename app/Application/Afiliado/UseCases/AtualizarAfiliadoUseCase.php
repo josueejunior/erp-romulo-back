@@ -72,13 +72,19 @@ final class AtualizarAfiliadoUseCase
         $data = $dto->toArray();
         
         // Se não há contas_bancarias mas há dados bancários antigos, migrar
-        if (empty($data['contas_bancarias']) && ($data['banco'] || $data['agencia'] || $data['conta'] || $data['pix'])) {
+        // 🔥 CORREÇÃO: Usar ?? para evitar "Undefined array key" quando campos não existem
+        $banco = $data['banco'] ?? null;
+        $agencia = $data['agencia'] ?? null;
+        $conta = $data['conta'] ?? null;
+        $pix = $data['pix'] ?? null;
+        
+        if (empty($data['contas_bancarias']) && ($banco || $agencia || $conta || $pix)) {
             $data['contas_bancarias'] = [[
-                'banco' => $data['banco'] ?? '',
-                'agencia' => $data['agencia'] ?? '',
-                'conta' => $data['conta'] ?? '',
+                'banco' => $banco ?? '',
+                'agencia' => $agencia ?? '',
+                'conta' => $conta ?? '',
                 'tipo_conta' => $data['tipo_conta'] ?? '',
-                'pix' => $data['pix'] ?? '',
+                'pix' => $pix ?? '',
             ]];
         }
 

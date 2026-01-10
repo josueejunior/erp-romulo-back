@@ -65,25 +65,43 @@ final class CriarIndicacaoAfiliadoUseCase
                 throw new \DomainException('Afiliado não encontrado.');
             }
 
-            // Buscar plano para obter nome
+            // Buscar plano para obter nome e percentual de comissão
             $plano = Plano::find($planoId);
             if (!$plano) {
                 throw new \DomainException('Plano não encontrado.');
             }
 
-            // Calcular comissão baseada no valor EFETIVAMENTE PAGO (com desconto)
-            $comissaoPercentual = $afiliado->percentual_comissao ?? 0;
-            $valorComissao = ($valorPlanoComDesconto * $comissaoPercentual) / 100;
+            // 🔥 NOVA LÓGICA DE CÁLCULO DE COMISSÃO:
+            // Base fixa: 30%
+            // Percentual do plano (peso): vem do campo percentual_comissao_afiliado (40%, 60%, 100%)
+            // Comissão real = (30% × percentual_do_plano) / 100
+            // Valor da comissão = (valor_do_plano × comissão_real) / 100
+            // 
+            // Exemplos:
+            // - Plano Básico (40%): Comissão real = 30% × 40% = 12%
+            // - Plano Intermediário (60%): Comissão real = 30% × 60% = 18%
+            // - Plano Avançado/Premium (100%): Comissão real = 30% × 100% = 30%
+            $baseComissao = 30.0; // Base fixa de 30%
+            $percentualPlano = (float) ($plano->percentual_comissao_afiliado ?? 100.0); // Padrão: 100% (Premium)
+            $comissaoReal = ($baseComissao * $percentualPlano) / 100; // Comissão real: 12%, 18% ou 30%
+            $valorComissao = ($valorPlanoComDesconto * $comissaoReal) / 100; // Valor final da comissão
 
-            Log::info('CriarIndicacaoAfiliadoUseCase - Criando indicação', [
+            // Manter percentual original do afiliado para histórico (não usado no cálculo)
+            $comissaoPercentual = $afiliado->percentual_comissao ?? 0;
+
+            Log::info('CriarIndicacaoAfiliadoUseCase - Criando indicação com nova lógica de comissão', [
                 'afiliado_id' => $afiliadoId,
                 'tenant_id' => $tenantId,
                 'empresa_id' => $empresaId,
                 'plano_id' => $planoId,
+                'plano_nome' => $plano->nome,
                 'valor_original' => $valorPlanoOriginal,
                 'valor_com_desconto' => $valorPlanoComDesconto,
-                'comissao_percentual' => $comissaoPercentual,
-                'valor_comissao' => $valorComissao,
+                'base_comissao' => $baseComissao, // 30%
+                'percentual_plano' => $percentualPlano, // 40%, 60% ou 100%
+                'comissao_real' => round($comissaoReal, 2), // 12%, 18% ou 30%
+                'comissao_percentual_historico' => $comissaoPercentual, // Percentual do afiliado (histórico)
+                'valor_comissao' => round($valorComissao, 2),
             ]);
 
             // Verificar se já existe indicação para esta empresa/afiliado
@@ -103,7 +121,8 @@ final class CriarIndicacaoAfiliadoUseCase
                     'plano_nome' => $plano->nome,
                     'valor_plano_original' => $valorPlanoOriginal,
                     'valor_plano_com_desconto' => $valorPlanoComDesconto,
-                    'valor_comissao' => $valorComissao,
+                    'comissao_percentual' => round($comissaoReal, 2), // Atualizar comissão REAL calculada
+                    'valor_comissao' => round($valorComissao, 2),
                     'status' => 'ativa',
                     'primeira_assinatura_em' => now(),
                 ]);
@@ -119,7 +138,7 @@ final class CriarIndicacaoAfiliadoUseCase
                 'empresa_nome' => $empresaNome, // 🔥 Salvar nome da empresa para exibição na UI
                 'codigo_usado' => strtoupper(trim($codigoUsado)),
                 'desconto_aplicado' => $descontoAplicado,
-                'comissao_percentual' => $comissaoPercentual,
+                'comissao_percentual' => round($comissaoReal, 2), // Salvar comissão REAL calculada (12%, 18% ou 30%)
                 'plano_id' => $planoId,
                 'plano_nome' => $plano->nome,
                 'valor_plano_original' => $valorPlanoOriginal,

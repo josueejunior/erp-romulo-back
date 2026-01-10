@@ -16,6 +16,7 @@ class Plano extends BaseModel
         'descricao',
         'preco_mensal',
         'preco_anual',
+        'percentual_comissao_afiliado', // Percentual de comissão do afiliado (40%, 60%, 100%)
         'limite_processos',
         'restricao_diaria',
         'limite_usuarios',
@@ -30,6 +31,7 @@ class Plano extends BaseModel
         return array_merge($this->getTimestampsCasts(), [
             'preco_mensal' => 'decimal:2',
             'preco_anual' => 'decimal:2',
+            'percentual_comissao_afiliado' => 'decimal:2',
             'limite_processos' => 'integer',
             'restricao_diaria' => 'boolean',
             'limite_usuarios' => 'integer',

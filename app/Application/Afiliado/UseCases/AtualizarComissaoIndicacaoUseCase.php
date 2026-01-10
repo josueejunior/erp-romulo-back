@@ -45,7 +45,7 @@ final class AtualizarComissaoIndicacaoUseCase
                 return null;
             }
 
-            // Buscar plano para obter nome
+            // Buscar plano para obter nome e percentual de comissão
             $plano = \App\Modules\Assinatura\Models\Plano::find($novoPlanoId);
             if (!$plano) {
                 Log::warning('AtualizarComissaoIndicacaoUseCase - Plano não encontrado', [
@@ -54,18 +54,31 @@ final class AtualizarComissaoIndicacaoUseCase
                 return $indicacao;
             }
 
-            // Calcular nova comissão baseada no novo valor pago
-            $comissaoPercentual = $indicacao->comissao_percentual ?? 0;
-            $novoValorComissao = ($novoValorPago * $comissaoPercentual) / 100;
+            // 🔥 NOVA LÓGICA DE CÁLCULO DE COMISSÃO:
+            // Recalcular comissão usando nova fórmula baseada no novo plano
+            // Base fixa: 30%
+            // Percentual do plano (peso): vem do campo percentual_comissao_afiliado (40%, 60%, 100%)
+            // Comissão real = (30% × percentual_do_plano) / 100
+            // Valor da comissão = (valor_do_plano × comissão_real) / 100
+            $baseComissao = 30.0; // Base fixa de 30%
+            $percentualPlano = (float) ($plano->percentual_comissao_afiliado ?? 100.0); // Padrão: 100% (Premium)
+            $novaComissaoReal = ($baseComissao * $percentualPlano) / 100; // Comissão real: 12%, 18% ou 30%
+            $novoValorComissao = ($novoValorPago * $novaComissaoReal) / 100; // Valor final da comissão
 
-            Log::info('AtualizarComissaoIndicacaoUseCase - Atualizando comissão', [
+            Log::info('AtualizarComissaoIndicacaoUseCase - Atualizando comissão com nova lógica', [
                 'indicacao_id' => $indicacao->id,
                 'plano_antigo_id' => $indicacao->plano_id,
                 'plano_novo_id' => $novoPlanoId,
+                'plano_nome' => $plano->nome,
                 'valor_antigo' => $indicacao->valor_plano_com_desconto,
                 'valor_novo' => $novoValorPago,
+                'base_comissao' => $baseComissao, // 30%
+                'percentual_plano_antigo' => $indicacao->comissao_percentual ?? 0,
+                'percentual_plano_novo' => $percentualPlano, // 40%, 60% ou 100%
+                'comissao_real_antiga' => $indicacao->comissao_percentual ?? 0,
+                'comissao_real_nova' => round($novaComissaoReal, 2), // 12%, 18% ou 30%
                 'comissao_antiga' => $indicacao->valor_comissao,
-                'comissao_nova' => $novoValorComissao,
+                'comissao_nova' => round($novoValorComissao, 2),
             ]);
 
             // Atualizar indicação
@@ -74,7 +87,8 @@ final class AtualizarComissaoIndicacaoUseCase
                 'plano_nome' => $plano->nome,
                 'valor_plano_original' => $plano->preco_mensal ?? 0,
                 'valor_plano_com_desconto' => $novoValorPago,
-                'valor_comissao' => $novoValorComissao,
+                'comissao_percentual' => round($novaComissaoReal, 2), // Atualizar comissão REAL calculada
+                'valor_comissao' => round($novoValorComissao, 2),
             ]);
 
             return $indicacao->fresh();
