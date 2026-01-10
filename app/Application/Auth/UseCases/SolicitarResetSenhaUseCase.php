@@ -5,8 +5,10 @@ namespace App\Application\Auth\UseCases;
 use App\Domain\Auth\Repositories\UserRepositoryInterface;
 use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
 use App\Domain\Auth\Repositories\AdminUserRepositoryInterface;
+use App\Domain\Exceptions\DomainException;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use App\Notifications\ResetPasswordNotification;
@@ -15,10 +17,12 @@ use App\Notifications\ResetPasswordNotification;
  * Use Case para solicitar reset de senha
  * 
  * Responsabilidades:
+ * - Validar se email existe no sistema
  * - Buscar usuário em todos os tenants (multi-tenancy)
  * - Gerar token de reset
- * - Enviar notificação
- * - Prevenir enumeração de emails
+ * - Enviar notificação via SMTP
+ * 
+ * 🔥 IMPORTANTE: Valida se email existe antes de enviar (segurança)
  */
 class SolicitarResetSenhaUseCase
 {
@@ -32,25 +36,83 @@ class SolicitarResetSenhaUseCase
      * Executa o use case
      * 
      * @param string $email Email do usuário
-     * @return bool Sempre retorna true (prevenir enumeração)
+     * @return array Array com 'success' e 'message'
+     * @throws DomainException Se email não existir
      */
-    public function executar(string $email): bool
+    public function executar(string $email): array
     {
+        $email = strtolower(trim($email));
         $userFound = false;
+        $userModel = null;
+        $tenantFound = null;
+
+        Log::info('SolicitarResetSenhaUseCase - Iniciando busca de usuário', ['email' => $email]);
 
         // 1. Tentar buscar no banco central (admin users)
-        $adminUser = $this->adminUserRepository->buscarPorEmail($email);
-        if ($adminUser) {
-            $userFound = true;
-            // Para admin, usar o sistema padrão do Laravel (se configurado)
-            // Por enquanto, vamos usar a mesma abordagem para todos
+        try {
+            $adminUser = $this->adminUserRepository->buscarPorEmail($email);
+            if ($adminUser) {
+                $userFound = true;
+                Log::info('SolicitarResetSenhaUseCase - Usuário admin encontrado', ['email' => $email]);
+                // Para admin, criar token e enviar email
+                $token = Str::random(64);
+                $hashedToken = Hash::make($token);
+                
+                DB::connection()->table('password_reset_tokens')
+                    ->updateOrInsert(
+                        ['email' => $email],
+                        [
+                            'token' => $hashedToken,
+                            'created_at' => now(),
+                        ]
+                    );
+                
+                // Enviar email para admin (via Mail facade direto já que não temos modelo User para admin)
+                try {
+                    Mail::raw(
+                        "Você solicitou uma redefinição de senha.\n\n" .
+                        "Clique no link abaixo para redefinir sua senha:\n" .
+                        config('app.frontend_url', env('FRONTEND_URL', 'https://gestor.addsimp.com')) . 
+                        "/resetar-senha?token={$token}&email=" . urlencode($email) . "\n\n" .
+                        "Este link expira em 60 minutos.\n\n" .
+                        "Se você não solicitou esta redefinição, ignore este e-mail.",
+                        function ($message) use ($email) {
+                            $message->to($email)
+                                ->subject('Redefinição de Senha - Sistema ERP');
+                        }
+                    );
+                    
+                    Log::info('SolicitarResetSenhaUseCase - Email enviado para admin via SMTP', ['email' => $email]);
+                } catch (\Exception $mailError) {
+                    Log::error('SolicitarResetSenhaUseCase - Erro ao enviar email para admin', [
+                        'email' => $email,
+                        'error' => $mailError->getMessage(),
+                    ]);
+                    throw new DomainException('Erro ao enviar email de redefinição de senha. Tente novamente mais tarde.', 500);
+                }
+                
+                return [
+                    'success' => true,
+                    'message' => 'Instruções de redefinição de senha enviadas para seu e-mail.',
+                ];
+            }
+        } catch (\Exception $e) {
+            Log::warning('SolicitarResetSenhaUseCase - Erro ao buscar admin user', [
+                'email' => $email,
+                'error' => $e->getMessage(),
+            ]);
         }
 
         // 2. Buscar em todos os tenants (multi-tenancy)
-        if (!$userFound) {
+        try {
             // Buscar todos os tenants (per_page alto)
             $tenantsPaginator = $this->tenantRepository->buscarComFiltros(['per_page' => 10000]);
             $tenants = $tenantsPaginator->getCollection();
+            
+            Log::info('SolicitarResetSenhaUseCase - Buscando em tenants', [
+                'email' => $email,
+                'total_tenants' => $tenants->count(),
+            ]);
             
             foreach ($tenants as $tenantDomain) {
                 try {
@@ -66,27 +128,16 @@ class SolicitarResetSenhaUseCase
                     
                     if ($user) {
                         $userFound = true;
-                        tenancy()->end(); // Finalizar tenancy antes de criar token
-                        
-                        // Gerar token
-                        $token = Str::random(64);
-                        $hashedToken = Hash::make($token);
-                        
-                        // Salvar token no banco central
-                        DB::connection()->table('password_reset_tokens')
-                            ->updateOrInsert(
-                                ['email' => $email],
-                                [
-                                    'token' => $hashedToken,
-                                    'created_at' => now(),
-                                ]
-                            );
+                        $tenantFound = $tenant;
                         
                         // Buscar modelo Eloquent para enviar notificação
                         $userModel = \App\Modules\Auth\Models\User::where('email', $email)->first();
-                        if ($userModel) {
-                            $userModel->notify(new ResetPasswordNotification($token));
-                        }
+                        
+                        Log::info('SolicitarResetSenhaUseCase - Usuário encontrado no tenant', [
+                            'email' => $email,
+                            'tenant_id' => $tenant->id,
+                            'user_id' => $userModel?->id,
+                        ]);
                         
                         break;
                     }
@@ -96,17 +147,85 @@ class SolicitarResetSenhaUseCase
                     if (tenancy()->initialized) {
                         tenancy()->end();
                     }
-                    Log::warning('Erro ao buscar usuário no tenant para reset de senha', [
-                        'tenant_id' => $tenant->id,
+                    Log::warning('SolicitarResetSenhaUseCase - Erro ao buscar usuário no tenant', [
+                        'tenant_id' => $tenantDomain->id,
                         'email' => $email,
                         'error' => $e->getMessage(),
                     ]);
                 }
             }
+        } catch (\Exception $e) {
+            Log::error('SolicitarResetSenhaUseCase - Erro ao buscar em tenants', [
+                'email' => $email,
+                'error' => $e->getMessage(),
+            ]);
+            throw new DomainException('Erro ao processar solicitação. Tente novamente mais tarde.', 500);
         }
 
-        // Sempre retornar true para prevenir enumeração de emails
-        return true;
+        // Se não encontrou usuário, retornar erro
+        if (!$userFound || !$userModel) {
+            Log::info('SolicitarResetSenhaUseCase - Email não encontrado no sistema', ['email' => $email]);
+            throw new DomainException('O e-mail informado não está cadastrado no sistema.', 404);
+        }
+
+        // Gerar token de reset
+        $token = Str::random(64);
+        $hashedToken = Hash::make($token);
+        
+        try {
+            // Finalizar tenancy antes de criar token no banco central
+            if (tenancy()->initialized) {
+                tenancy()->end();
+            }
+            
+            // Salvar token no banco central
+            DB::connection()->table('password_reset_tokens')
+                ->updateOrInsert(
+                    ['email' => $email],
+                    [
+                        'token' => $hashedToken,
+                        'created_at' => now(),
+                    ]
+                );
+            
+            // Reinicializar tenancy para enviar notificação
+            if ($tenantFound) {
+                tenancy()->initialize($tenantFound);
+            }
+            
+            // Enviar notificação via SMTP usando Laravel Notifications
+            // Isso garante que o email será enviado usando a configuração SMTP
+            $userModel->notify(new ResetPasswordNotification($token));
+            
+            Log::info('SolicitarResetSenhaUseCase - Email de reset enviado com sucesso via SMTP', [
+                'email' => $email,
+                'tenant_id' => $tenantFound?->id,
+            ]);
+            
+            // Finalizar tenancy após enviar email
+            if (tenancy()->initialized) {
+                tenancy()->end();
+            }
+            
+        } catch (\Exception $e) {
+            // Garantir que tenancy seja finalizado em caso de erro
+            if (tenancy()->initialized) {
+                tenancy()->end();
+            }
+            
+            Log::error('SolicitarResetSenhaUseCase - Erro ao gerar token ou enviar email', [
+                'email' => $email,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            
+            throw new DomainException('Erro ao enviar email de redefinição de senha. Verifique as configurações de SMTP ou tente novamente mais tarde.', 500);
+        }
+
+        return [
+            'success' => true,
+            'message' => 'Instruções de redefinição de senha enviadas para seu e-mail.',
+        ];
     }
 }
 

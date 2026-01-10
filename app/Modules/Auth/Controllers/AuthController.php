@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 use OpenApi\Annotations as OA;
 
 /**
@@ -311,14 +311,12 @@ class AuthController extends Controller
                 'email' => $request->email,
             ]);
 
-            // Executar Use Case
-            $this->solicitarResetSenhaUseCase->executar($request->email);
+            // Executar Use Case (agora retorna array com success e message)
+            $result = $this->solicitarResetSenhaUseCase->executar($request->email);
 
-            // Sempre retornar sucesso para prevenir enumeração de emails
-            // (não revelar se o email existe ou não)
             return response()->json([
-                'message' => 'Se o e-mail informado estiver cadastrado, você receberá um link para redefinir sua senha.',
-                'success' => true,
+                'message' => $result['message'],
+                'success' => $result['success'],
             ]);
 
         } catch (ValidationException $e) {
@@ -327,17 +325,31 @@ class AuthController extends Controller
                 'errors' => $e->errors(),
                 'success' => false,
             ], 422);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            // Exceção de domínio (email não encontrado ou erro no envio)
+            $statusCode = $e->getCode() ?: 400;
+            
+            Log::warning('AuthController::forgotPassword - Erro de domínio', [
+                'email' => $request->email,
+                'message' => $e->getMessage(),
+                'code' => $statusCode,
+            ]);
+            
+            return response()->json([
+                'message' => $e->getMessage(),
+                'success' => false,
+            ], $statusCode);
         } catch (\Exception $e) {
             Log::error('Erro ao solicitar redefinição de senha', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
+                'email' => $request->email ?? null,
             ]);
             
-            // Retornar sucesso mesmo em caso de erro (prevenir enumeração)
             return response()->json([
-                'message' => 'Se o e-mail informado estiver cadastrado, você receberá um link para redefinir sua senha.',
-                'success' => true,
-            ]);
+                'message' => 'Erro ao processar solicitação. Tente novamente mais tarde ou entre em contato com o suporte.',
+                'success' => false,
+            ], 500);
         }
     }
 
