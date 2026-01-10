@@ -1,5 +1,22 @@
 <?php
 
+// 🔥 PRODUÇÃO: Validar e corrigir configurações SMTP
+// Prevenir uso de mailpit/localhost em produção
+$mailHost = env('MAIL_HOST', 'smtp.hostinger.com');
+$mailPort = (int) env('MAIL_PORT', 465);
+
+$invalidHosts = ['mailpit', 'localhost', '127.0.0.1'];
+if (in_array(strtolower($mailHost), array_map('strtolower', $invalidHosts)) || $mailPort === 1025) {
+    \Log::warning('Config/Mail: Configuração de desenvolvimento detectada, usando SMTP de produção', [
+        'host_original' => $mailHost,
+        'porta_original' => $mailPort,
+        'fallback_host' => 'smtp.hostinger.com',
+        'fallback_port' => 465,
+    ]);
+    $mailHost = 'smtp.hostinger.com';
+    $mailPort = 465;
+}
+
 return [
 
     /*
