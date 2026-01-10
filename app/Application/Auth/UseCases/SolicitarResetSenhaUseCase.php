@@ -74,7 +74,7 @@ class SolicitarResetSenhaUseCase
                     Mail::raw(
                         "Você solicitou uma redefinição de senha.\n\n" .
                         "Clique no link abaixo para redefinir sua senha:\n" .
-                        config('app.frontend_url', env('FRONTEND_URL', 'https://gestor.addsimp.com')) . 
+                        (config('app.frontend_url') ?? env('FRONTEND_URL') ?? 'https://gestor.addsimp.com') . 
                         "/resetar-senha?token={$token}&email=" . urlencode($email) . "\n\n" .
                         "Este link expira em 60 minutos.\n\n" .
                         "Se você não solicitou esta redefinição, ignore este e-mail.",

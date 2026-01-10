@@ -64,7 +64,7 @@ return [
     |
     */
 
-    'frontend_url' => env('FRONTEND_URL', 'https://addsimp.com'),
+    'frontend_url' => env('FRONTEND_URL', 'https://gestor.addsimp.com'),
 
     /*
     |--------------------------------------------------------------------------
