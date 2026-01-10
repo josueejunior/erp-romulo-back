@@ -233,8 +233,13 @@ class UserReadRepository implements UserReadRepositoryInterface
 
         $perPage = $filtros['per_page'] ?? 15;
         
-        // Obter informações da conexão que o modelo está usando
-        $modelConnection = UserModel::getConnection();
+        // Obter informações da conexão que a query está usando
+        // Usar uma instância do modelo para obter a conexão (getConnection() não é estático)
+        $modelInstance = $useTenantConnection && $tenantConnection 
+            ? (new UserModel())->setConnection('tenant')
+            : new UserModel();
+        
+        $modelConnection = $modelInstance->getConnection();
         $currentDatabaseName = $modelConnection->getDatabaseName();
         $connectionName = $modelConnection->getName();
         $expectedDatabaseName = 'tenant_' . $tenantId;
@@ -246,6 +251,7 @@ class UserReadRepository implements UserReadRepositoryInterface
             'tenancy_initialized' => tenancy()->initialized,
             'database_connection' => $connectionName,
             'connection_used' => $connectionName === 'tenant' ? 'tenant (correto)' : 'padrão (' . $connectionName . ')',
+            'using_tenant_connection' => $useTenantConnection,
         ]);
         
         // 🔥 CRÍTICO: Verificar se o banco está correto (deve começar com 'tenant_')
@@ -257,6 +263,7 @@ class UserReadRepository implements UserReadRepositoryInterface
                 'tenant_id' => $tenantId,
                 'tenancy_initialized' => tenancy()->initialized,
                 'database_connection' => $connectionName,
+                'using_tenant_connection' => $useTenantConnection,
             ]);
             throw new \RuntimeException("Banco de dados incorreto. Tenancy está inicializado mas o modelo está usando banco central ({$currentDatabaseName}). Esperado banco do tenant ({$expectedDatabaseName}). Verifique se o DatabaseTenancyBootstrapper está funcionando corretamente.");
         }
