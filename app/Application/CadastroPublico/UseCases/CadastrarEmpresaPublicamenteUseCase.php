@@ -15,6 +15,7 @@ use App\Application\Afiliado\UseCases\ValidarCupomAfiliadoUseCase;
 use App\Application\Afiliado\UseCases\RastrearReferenciaAfiliadoUseCase;
 use App\Application\Afiliado\UseCases\CriarIndicacaoAfiliadoUseCase;
 use App\Application\Onboarding\UseCases\GerenciarOnboardingUseCase;
+use App\Application\Onboarding\DTOs\ConcluirOnboardingDTO;
 use App\Domain\Assinatura\Services\AssinaturaDomainService;
 use App\Domain\Auth\Repositories\UserRepositoryInterface;
 use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
@@ -210,8 +211,16 @@ final class CadastrarEmpresaPublicamenteUseCase
                 );
             }
 
-            // 7. Criar registro de onboarding (tutorial não concluído)
-            $this->criarOnboarding($tenantResult['tenant']->id, $tenantResult['admin_user']->id, $dto->adminEmail);
+            // 7. Criar registro de onboarding
+            // 🔥 IMPORTANTE: Se plano for PAGO, concluir onboarding automaticamente
+            // Planos gratuitos devem passar pelo tutorial
+            $isPlanoGratuito = !$plano->preco_mensal || $plano->preco_mensal == 0;
+            $this->criarOnboarding(
+                $tenantResult['tenant']->id, 
+                $tenantResult['admin_user']->id, 
+                $dto->adminEmail,
+                concluirAutomaticamente: !$isPlanoGratuito // Concluir automaticamente se plano pago
+            );
 
             $result = [
                 'tenant' => $tenantResult['tenant'],
@@ -629,22 +638,46 @@ final class CadastrarEmpresaPublicamenteUseCase
 
     /**
      * Cria registro de onboarding para o novo usuário
+     * 
+     * @param bool $concluirAutomaticamente Se true, conclui o onboarding automaticamente (para planos pagos)
      */
-    private function criarOnboarding(int $tenantId, int $userId, string $email): void
+    private function criarOnboarding(int $tenantId, int $userId, string $email, bool $concluirAutomaticamente = false): void
     {
         try {
-            $this->gerenciarOnboardingUseCase->iniciar(
+            // Iniciar onboarding
+            $onboarding = $this->gerenciarOnboardingUseCase->iniciar(
                 tenantId: $tenantId,
                 userId: $userId,
                 sessionId: null,
                 email: $email,
             );
 
-            Log::info('CadastrarEmpresaPublicamenteUseCase - Onboarding criado', [
-                'tenant_id' => $tenantId,
-                'user_id' => $userId,
-                'email' => $email,
-            ]);
+            // Se plano for pago, concluir onboarding automaticamente
+            if ($concluirAutomaticamente) {
+                $dtoConcluir = new ConcluirOnboardingDTO(
+                    onboardingId: $onboarding->id,
+                    tenantId: $tenantId,
+                    userId: $userId,
+                    sessionId: null,
+                    email: $email,
+                );
+                
+                $this->gerenciarOnboardingUseCase->concluir($dtoConcluir);
+                
+                Log::info('CadastrarEmpresaPublicamenteUseCase - Onboarding concluído automaticamente (plano pago)', [
+                    'tenant_id' => $tenantId,
+                    'user_id' => $userId,
+                    'email' => $email,
+                    'onboarding_id' => $onboarding->id,
+                ]);
+            } else {
+                Log::info('CadastrarEmpresaPublicamenteUseCase - Onboarding criado (plano gratuito - tutorial será mostrado)', [
+                    'tenant_id' => $tenantId,
+                    'user_id' => $userId,
+                    'email' => $email,
+                    'onboarding_id' => $onboarding->id,
+                ]);
+            }
         } catch (\Exception $e) {
             Log::error('Erro ao criar onboarding durante cadastro público', [
                 'error' => $e->getMessage(),
