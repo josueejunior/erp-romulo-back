@@ -5,6 +5,7 @@ namespace App\Infrastructure\Persistence\Eloquent;
 use App\Domain\Auth\Entities\User;
 use App\Domain\Auth\Repositories\UserRepositoryInterface;
 use App\Domain\Empresa\Repositories\EmpresaRepositoryInterface;
+use App\Domain\Exceptions\DomainException;
 use App\Modules\Auth\Models\User as UserModel;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -50,15 +51,61 @@ class UserRepository implements UserRepositoryInterface
         string $email,
         string $senha
     ): User {
-        $model = UserModel::create([
-            'name' => $nome,
-            'email' => $email,
-            'password' => Hash::make($senha),
-            'empresa_ativa_id' => $empresaId,
-        ]);
+        // 🔥 SEGURANÇA: Verificar se já existe usuário com esse email no tenant
+        // Pode acontecer de uma tentativa anterior ter criado o tenant e empresa mas falhado ao criar usuário
+        // ou ter criado parcialmente um usuário que precisa ser atualizado
+        $existingUser = UserModel::withTrashed()
+            ->where('email', $email)
+            ->first();
+        
+        if ($existingUser) {
+            if ($existingUser->trashed()) {
+                // Usuário existe mas está deletado (soft delete) - restaurar e atualizar
+                \Log::info('UserRepository::criarAdministrador - Usuário existente encontrado (deletado), restaurando e atualizando', [
+                    'user_id' => $existingUser->id,
+                    'email' => $email,
+                    'tenant_id' => $tenantId,
+                ]);
+                
+                $existingUser->restore();
+                $existingUser->update([
+                    'name' => $nome,
+                    'password' => Hash::make($senha),
+                    'empresa_ativa_id' => $empresaId,
+                    // excluido_em será limpo automaticamente pelo restore()
+                ]);
+                
+                // Remover roles antigas e adicionar Administrador
+                $existingUser->roles()->detach();
+                $existingUser->assignRole('Administrador');
+                
+                // Atualizar relação com empresa
+                $existingUser->empresas()->sync([$empresaId => ['perfil' => 'administrador']]);
+                
+                $model = $existingUser->fresh();
+            } else {
+                // Usuário existe e está ativo - isso não deveria acontecer se a validação funcionou
+                // Mas pode acontecer em casos de race condition ou tentativas anteriores
+                \Log::warning('UserRepository::criarAdministrador - Usuário já existe e está ativo', [
+                    'user_id' => $existingUser->id,
+                    'email' => $email,
+                    'tenant_id' => $tenantId,
+                ]);
+                
+                throw new DomainException("Um usuário com o email {$email} já existe neste tenant.");
+            }
+        } else {
+            // Criar novo usuário normalmente
+            $model = UserModel::create([
+                'name' => $nome,
+                'email' => $email,
+                'password' => Hash::make($senha),
+                'empresa_ativa_id' => $empresaId,
+            ]);
 
-        $model->assignRole('Administrador');
-        $model->empresas()->attach($empresaId, ['perfil' => 'administrador']);
+            $model->assignRole('Administrador');
+            $model->empresas()->attach($empresaId, ['perfil' => 'administrador']);
+        }
 
         return $this->toDomain($model->fresh(), $tenantId);
     }
