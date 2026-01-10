@@ -3,114 +3,122 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Modules\Auth\Models\AdminUser;
+use App\Http\Responses\ApiResponse;
+use App\Application\Auth\UseCases\LoginAdminUseCase;
+use App\Application\Auth\UseCases\LogoutAdminUseCase;
+use App\Application\Auth\UseCases\ObterDadosAdminUseCase;
+use App\Application\Auth\DTOs\LoginAdminDTO;
+use App\Http\Requests\Admin\LoginAdminRequest;
+use App\Domain\Exceptions\DomainException;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Controller Admin para autenticação
- * Usa DDD - apenas recebe request e devolve response
+ * 🔥 DDD: Controller Admin para autenticação
+ * 
+ * Controller FINO - apenas recebe request e devolve response
+ * Toda lógica está nos UseCases, Domain Services e FormRequests
+ * 
+ * Responsabilidades:
+ * - Receber request HTTP
+ * - Validar entrada (via FormRequest)
+ * - Chamar UseCase apropriado
+ * - Retornar response padronizado (ApiResponse)
  */
 class AdminAuthController extends Controller
 {
+    public function __construct(
+        private readonly LoginAdminUseCase $loginAdminUseCase,
+        private readonly LogoutAdminUseCase $logoutAdminUseCase,
+        private readonly ObterDadosAdminUseCase $obterDadosAdminUseCase,
+    ) {}
+
     /**
      * Login do administrador
+     * 🔥 DDD: Controller fino - validação via FormRequest, delega para UseCase
      */
-    public function login(Request $request)
+    public function login(LoginAdminRequest $request): JsonResponse
     {
         try {
-            $validated = $request->validate([
-                'email' => 'required|email',
-                'password' => 'required|string',
-            ], [
-                'email.required' => 'O e-mail é obrigatório.',
-                'password.required' => 'A senha é obrigatória.',
-            ]);
+            // Request já está validado via Form Request
+            $validated = $request->validated();
 
-            $admin = AdminUser::where('email', $validated['email'])->first();
+            // Criar DTO
+            $dto = LoginAdminDTO::fromRequest($validated);
 
-            if (!$admin || !Hash::check($validated['password'], $admin->password)) {
-                return response()->json([
-                    'message' => 'Credenciais inválidas.',
-                    'errors' => ['email' => ['Credenciais inválidas.']],
-                ], 401);
-            }
+            // Executar Use Case
+            $data = $this->loginAdminUseCase->executar($dto);
 
-            // 🔥 JWT STATELESS: Gerar token JWT para admin
-            $jwtService = app(\App\Services\JWTService::class);
-            $token = $jwtService->generateToken([
-                'user_id' => $admin->id,
-                'is_admin' => true,
-                'role' => 'admin',
-            ]);
-
-            return response()->json([
-                'message' => 'Login realizado com sucesso!',
-                'success' => true,
-                'data' => [
-                    'user' => [
-                        'id' => $admin->id,
-                        'name' => $admin->name,
-                        'email' => $admin->email,
-                    ],
-                    'token' => $token,
-                ],
-            ]);
+            return ApiResponse::success(
+                'Login realizado com sucesso!',
+                $data
+            );
+        } catch (DomainException $e) {
+            return ApiResponse::error(
+                $e->getMessage(),
+                $e->getCode() ?: 401,
+                null,
+                ['email' => [$e->getMessage()]]
+            );
         } catch (ValidationException $e) {
-            return response()->json([
-                'message' => 'Dados inválidos.',
-                'errors' => $e->errors(),
-                'success' => false,
-            ], 422);
+            return ApiResponse::error(
+                'Dados inválidos.',
+                422,
+                null,
+                $e->errors()
+            );
         } catch (\Exception $e) {
-            Log::error('Erro ao fazer login admin', ['error' => $e->getMessage()]);
-            return response()->json(['message' => 'Erro ao fazer login.'], 500);
+            Log::error('AdminAuthController::login - Erro inesperado', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return ApiResponse::error('Erro ao fazer login.', 500);
         }
     }
 
     /**
      * Logout do administrador
+     * 🔥 DDD: Controller fino - delega para UseCase
      */
-    public function logout(Request $request)
+    public function logout(Request $request): JsonResponse
     {
         try {
-            // 🔥 JWT STATELESS: JWT não precisa ser deletado (stateless)
-            // O frontend apenas remove o token do storage local.
-            \Log::info('AdminAuthController::logout - Logout realizado', [
-                'user_id' => $request->user()->id,
-                'note' => 'JWT stateless - token removido apenas no frontend',
-            ]);
+            $admin = $request->user();
 
-            return response()->json([
-                'message' => 'Logout realizado com sucesso!',
-                'success' => true,
-            ]);
+            // Executar Use Case
+            $this->logoutAdminUseCase->executar($admin);
+
+            return ApiResponse::success('Logout realizado com sucesso!');
         } catch (\Exception $e) {
-            Log::error('Erro ao fazer logout admin', ['error' => $e->getMessage()]);
-            return response()->json(['message' => 'Erro ao fazer logout.'], 500);
+            Log::error('AdminAuthController::logout - Erro', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return ApiResponse::error('Erro ao fazer logout.', 500);
         }
     }
 
     /**
      * Obter dados do administrador autenticado
+     * 🔥 DDD: Controller fino - delega para UseCase
      */
-    public function me(Request $request)
+    public function me(Request $request): JsonResponse
     {
         try {
             $admin = $request->user();
 
-            return response()->json([
-                'data' => [
-                    'id' => $admin->id,
-                    'name' => $admin->name,
-                    'email' => $admin->email,
-                ],
-            ]);
+            // Executar Use Case
+            $data = $this->obterDadosAdminUseCase->executar($admin);
+
+            return ApiResponse::item($data);
         } catch (\Exception $e) {
-            Log::error('Erro ao obter dados do admin', ['error' => $e->getMessage()]);
-            return response()->json(['message' => 'Erro ao obter dados.'], 500);
+            Log::error('AdminAuthController::me - Erro', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return ApiResponse::error('Erro ao obter dados.', 500);
         }
     }
 }

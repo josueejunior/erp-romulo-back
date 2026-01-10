@@ -126,7 +126,7 @@ class AdminComissoesController extends Controller
                     'file_size' => $arquivo->getSize(),
                     'mime_type' => $arquivo->getMimeType(),
                     'path' => $path,
-                    'url' => $comprovantePath,
+                    'url' => $fullUrl,
                 ]);
             }
             

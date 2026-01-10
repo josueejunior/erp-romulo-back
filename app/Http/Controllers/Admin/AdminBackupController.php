@@ -2,18 +2,28 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Http\Controllers\Api\BaseApiController;
+use App\Http\Controllers\Controller;
+use App\Http\Responses\ApiResponse;
 use App\Application\Backup\UseCases\FazerBackupTenantUseCase;
 use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
 use App\Domain\Exceptions\DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
-class AdminBackupController extends BaseApiController
+/**
+ * 🔥 DDD: Controller Admin para gerenciar backups de tenants
+ * 
+ * Controller FINO - apenas recebe request e devolve response
+ * Toda lógica está nos UseCases
+ * 
+ * Responsabilidades:
+ * - Receber request HTTP
+ * - Chamar UseCase apropriado
+ * - Retornar response padronizado (ApiResponse)
+ */
+class AdminBackupController extends Controller
 {
     public function __construct(
         private readonly FazerBackupTenantUseCase $fazerBackupTenantUseCase,
@@ -60,13 +70,19 @@ class AdminBackupController extends BaseApiController
                 })
                 ->values(); // Reindexar array
 
-            return response()->json([
-                'data' => $tenants,
-                'current_page' => $tenantsPaginator->currentPage(),
-                'per_page' => $tenantsPaginator->perPage(),
-                'total' => $tenantsPaginator->total(),
-                'last_page' => $tenantsPaginator->lastPage(),
-            ]);
+            // Criar paginator manual para resposta padronizada
+            $paginator = new \Illuminate\Pagination\LengthAwarePaginator(
+                $tenants,
+                $tenantsPaginator->total(),
+                $tenantsPaginator->perPage(),
+                $tenantsPaginator->currentPage(),
+                [
+                    'path' => $request->url(),
+                    'pageName' => 'page',
+                ]
+            );
+
+            return ApiResponse::paginated($paginator);
 
         } catch (\Exception $e) {
             Log::error('AdminBackupController::listarTenants - Erro', [
@@ -74,10 +90,7 @@ class AdminBackupController extends BaseApiController
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            return response()->json([
-                'message' => 'Erro ao listar tenants.',
-                'error' => $e->getMessage(),
-            ], 500);
+            return ApiResponse::error('Erro ao listar tenants.', 500);
         }
     }
 
@@ -89,16 +102,17 @@ class AdminBackupController extends BaseApiController
         try {
             $result = $this->fazerBackupTenantUseCase->executar($tenantId);
 
-            return response()->json([
-                'message' => 'Backup criado com sucesso!',
-                'data' => $result,
-            ], 201);
+            return ApiResponse::success(
+                'Backup criado com sucesso!',
+                $result,
+                201
+            );
 
         } catch (DomainException $e) {
-            return response()->json([
-                'message' => $e->getMessage(),
-                'code' => $e->getCode(),
-            ], $e->getCode() ?: 400);
+            return ApiResponse::error(
+                $e->getMessage(),
+                $e->getCode() ?: 400
+            );
 
         } catch (\Exception $e) {
             Log::error('AdminBackupController::fazerBackup - Erro', [
@@ -107,10 +121,7 @@ class AdminBackupController extends BaseApiController
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            return response()->json([
-                'message' => 'Erro ao criar backup.',
-                'error' => $e->getMessage(),
-            ], 500);
+            return ApiResponse::error('Erro ao criar backup.', 500);
         }
     }
 
@@ -122,10 +133,7 @@ class AdminBackupController extends BaseApiController
         try {
             $backups = $this->fazerBackupTenantUseCase->listarBackups();
 
-            return response()->json([
-                'data' => $backups,
-                'total' => count($backups),
-            ]);
+            return ApiResponse::collection($backups);
 
         } catch (\Exception $e) {
             Log::error('AdminBackupController::listarBackups - Erro', [
@@ -133,10 +141,7 @@ class AdminBackupController extends BaseApiController
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            return response()->json([
-                'message' => 'Erro ao listar backups.',
-                'error' => $e->getMessage(),
-            ], 500);
+            return ApiResponse::error('Erro ao listar backups.', 500);
         }
     }
 
@@ -151,17 +156,14 @@ class AdminBackupController extends BaseApiController
 
             // Validar nome do arquivo (prevenir path traversal)
             if (!preg_match('/^backup_tenant_\d+_[a-zA-Z0-9_]+_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.sql$/', $filename)) {
-                return response()->json([
-                    'message' => 'Nome de arquivo inválido.',
-                ], 400);
+                return ApiResponse::error('Nome de arquivo inválido.', 400);
             }
 
             if (!file_exists($fullPath)) {
-                return response()->json([
-                    'message' => 'Arquivo de backup não encontrado.',
-                ], 404);
+                return ApiResponse::error('Arquivo de backup não encontrado.', 404);
             }
 
+            // Retornar download diretamente (ApiResponse não suporta download, usar response()->download())
             return response()->download($fullPath, $filename, [
                 'Content-Type' => 'application/sql',
                 'Content-Disposition' => "attachment; filename=\"{$filename}\"",
@@ -174,10 +176,7 @@ class AdminBackupController extends BaseApiController
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            return response()->json([
-                'message' => 'Erro ao baixar backup.',
-                'error' => $e->getMessage(),
-            ], 500);
+            return ApiResponse::error('Erro ao baixar backup.', 500);
         }
     }
 
@@ -192,15 +191,11 @@ class AdminBackupController extends BaseApiController
 
             // Validar nome do arquivo (prevenir path traversal)
             if (!preg_match('/^backup_tenant_\d+_[a-zA-Z0-9_]+_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.sql$/', $filename)) {
-                return response()->json([
-                    'message' => 'Nome de arquivo inválido.',
-                ], 400);
+                return ApiResponse::error('Nome de arquivo inválido.', 400);
             }
 
             if (!file_exists($fullPath)) {
-                return response()->json([
-                    'message' => 'Arquivo de backup não encontrado.',
-                ], 404);
+                return ApiResponse::error('Arquivo de backup não encontrado.', 404);
             }
 
             unlink($fullPath);
@@ -209,9 +204,7 @@ class AdminBackupController extends BaseApiController
                 'filename' => $filename,
             ]);
 
-            return response()->json([
-                'message' => 'Backup deletado com sucesso!',
-            ]);
+            return ApiResponse::success('Backup deletado com sucesso!');
 
         } catch (\Exception $e) {
             Log::error('AdminBackupController::deletarBackup - Erro', [
@@ -220,10 +213,7 @@ class AdminBackupController extends BaseApiController
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            return response()->json([
-                'message' => 'Erro ao deletar backup.',
-                'error' => $e->getMessage(),
-            ], 500);
+            return ApiResponse::error('Erro ao deletar backup.', 500);
         }
     }
 }
