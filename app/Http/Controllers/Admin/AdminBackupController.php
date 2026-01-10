@@ -34,13 +34,19 @@ class AdminBackupController extends BaseApiController
             $tenants = $tenantsPaginator->getCollection()->map(function ($tenantDomain) {
                 $tenant = $this->tenantRepository->buscarModeloPorId($tenantDomain->id);
                 
+                // Obter nome do banco de dados usando o padrão do stancl/tenancy
+                // Padrão: prefix + tenant_id + suffix (configurado em config/tenancy.php)
+                $prefix = config('tenancy.database.prefix', 'tenant_');
+                $suffix = config('tenancy.database.suffix', '');
+                $databaseName = $prefix . $tenantDomain->id . $suffix;
+                
                 return [
                     'id' => $tenantDomain->id,
                     'razao_social' => $tenantDomain->razaoSocial,
                     'cnpj' => $tenantDomain->cnpj,
-                    'database' => $tenant->database ?? null,
+                    'database' => $databaseName,
                     'status' => $tenantDomain->status ?? 'ativa',
-                    'created_at' => $tenant->created_at ?? null,
+                    'created_at' => $tenant ? $tenant->created_at : null,
                 ];
             });
 
