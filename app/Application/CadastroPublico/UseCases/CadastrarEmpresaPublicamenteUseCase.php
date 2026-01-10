@@ -19,6 +19,7 @@ use App\Application\Onboarding\DTOs\ConcluirOnboardingDTO;
 use App\Domain\Assinatura\Services\AssinaturaDomainService;
 use App\Domain\Auth\Repositories\UserRepositoryInterface;
 use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
+use App\Domain\Empresa\Repositories\EmpresaRepositoryInterface;
 use App\Domain\Plano\Repositories\PlanoRepositoryInterface;
 use App\Domain\Exceptions\EmailJaCadastradoException;
 use App\Domain\Exceptions\CnpjJaCadastradoException;
@@ -57,6 +58,7 @@ final class CadastrarEmpresaPublicamenteUseCase
         private readonly AssinaturaDomainService $assinaturaDomainService,
         private readonly UserRepositoryInterface $userRepository,
         private readonly TenantRepositoryInterface $tenantRepository,
+        private readonly EmpresaRepositoryInterface $empresaRepository,
         private readonly PlanoRepositoryInterface $planoRepository,
     ) {}
 
@@ -314,14 +316,30 @@ final class CadastrarEmpresaPublicamenteUseCase
                     $userDomain = $this->userRepository->buscarPorEmail($dto->adminEmail);
                     
                     if ($userDomain) {
-                        $emailEncontrado = true;
-                        Log::warning('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email já cadastrado em tenant', [
-                            'email' => $dto->adminEmail,
-                            'tenant_id' => $tenant->id,
-                            'tenant_razao_social' => $tenantDomain->razaoSocial,
-                        ]);
-                        tenancy()->end();
-                        break;
+                        // 🔥 IMPORTANTE: Verificar se o tenant tem empresa válida
+                        // Se não tiver, considerar como cadastro incompleto e não bloquear
+                        $tenantTemEmpresaValida = $this->verificarSeTenantTemEmpresaValida($tenant->id);
+                        
+                        if ($tenantTemEmpresaValida) {
+                            // Tenant completo: email realmente está cadastrado
+                            $emailEncontrado = true;
+                            Log::warning('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email já cadastrado em tenant completo', [
+                                'email' => $dto->adminEmail,
+                                'tenant_id' => $tenant->id,
+                                'tenant_razao_social' => $tenantDomain->razaoSocial,
+                            ]);
+                            tenancy()->end();
+                            break;
+                        } else {
+                            // Tenant incompleto ou sem empresa ATIVA: ignorar e continuar
+                            // Isso permite que cadastros incompletos ou empresas inativas sejam sobrescritos
+                            Log::info('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email encontrado em tenant sem empresa válida e ATIVA, ignorando para permitir novo cadastro', [
+                                'email' => $dto->adminEmail,
+                                'tenant_id' => $tenant->id,
+                                'tenant_razao_social' => $tenantDomain->razaoSocial,
+                                'motivo' => 'tenant_sem_empresa_ativa_ou_incompleto',
+                            ]);
+                        }
                     }
                     
                     tenancy()->end();
@@ -778,6 +796,70 @@ final class CadastrarEmpresaPublicamenteUseCase
                 'email' => $email,
             ]);
             // Não lança exceção - apenas loga para não bloquear o cadastro
+        }
+    }
+
+    /**
+     * Verifica se um tenant tem pelo menos uma empresa válida (completa)
+     * 
+     * Um tenant é considerado incompleto se não tiver nenhuma empresa com razao_social preenchida.
+     * Isso permite que cadastros incompletos sejam sobrescritos por novos cadastros.
+     * 
+     * @param int $tenantId
+     * @return bool
+     */
+    private function verificarSeTenantTemEmpresaValida(int $tenantId): bool
+    {
+        try {
+            // Verificar se o tenancy já está inicializado para este tenant
+            // Este método é chamado APÓS tenancy()->initialize($tenant), então deve estar inicializado
+            if (!tenancy()->initialized || tenancy()->tenant?->id !== $tenantId) {
+                Log::warning('CadastrarEmpresaPublicamenteUseCase::verificarSeTenantTemEmpresaValida - Tenancy não inicializado para este tenant', [
+                    'tenant_id' => $tenantId,
+                    'tenancy_initialized' => tenancy()->initialized ?? false,
+                    'current_tenant_id' => tenancy()->tenant?->id ?? null,
+                ]);
+                // Se não estiver inicializado, não podemos verificar - assumir que não tem empresa válida
+                return false;
+            }
+            
+            // Listar empresas do tenant atual (tenancy já está inicializado)
+            $empresas = $this->empresaRepository->listar();
+            
+            // Verificar se existe pelo menos uma empresa válida e ATIVA
+            // Empresa válida = tem razao_social preenchida E status = 'ativa'
+            foreach ($empresas as $empresa) {
+                if ($empresa 
+                    && !empty($empresa->razaoSocial) 
+                    && trim($empresa->razaoSocial) !== ''
+                    && $empresa->estaAtiva() // 🔥 IMPORTANTE: Apenas empresas ATIVAS bloqueiam o cadastro
+                ) {
+                    Log::debug('CadastrarEmpresaPublicamenteUseCase::verificarSeTenantTemEmpresaValida - Empresa válida e ATIVA encontrada', [
+                        'tenant_id' => $tenantId,
+                        'empresa_id' => $empresa->id,
+                        'razao_social' => $empresa->razaoSocial,
+                        'status' => $empresa->status,
+                    ]);
+                    return true;
+                }
+            }
+            
+            Log::debug('CadastrarEmpresaPublicamenteUseCase::verificarSeTenantTemEmpresaValida - Nenhuma empresa válida e ATIVA encontrada', [
+                'tenant_id' => $tenantId,
+                'total_empresas' => count($empresas),
+                'empresas_status' => array_map(fn($e) => ['id' => $e->id, 'status' => $e->status ?? 'N/A', 'razao_social' => $e->razaoSocial ?? 'N/A'], $empresas),
+            ]);
+            
+            return false;
+            
+        } catch (\Exception $e) {
+            Log::warning('CadastrarEmpresaPublicamenteUseCase::verificarSeTenantTemEmpresaValida - Erro ao verificar empresas', [
+                'tenant_id' => $tenantId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            // Em caso de erro, assumir que não tem empresa válida (mais seguro para permitir novo cadastro)
+            return false;
         }
     }
 }
