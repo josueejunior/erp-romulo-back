@@ -4,7 +4,6 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
-use Stancl\Tenancy\Facades\Tenancy;
 
 class CleanupTempTables extends Command
 {
@@ -25,7 +24,7 @@ class CleanupTempTables extends Command
             $this->info("Processando tenant: {$tenant->id}");
             
             try {
-                Tenancy::initialize($tenant);
+                tenancy()->initialize($tenant);
                 
                 // Limpar tabelas temporárias
                 DB::statement('PRAGMA foreign_keys=OFF;');
@@ -37,7 +36,9 @@ class CleanupTempTables extends Command
             } catch (\Exception $e) {
                 $this->error("  ✗ Erro: " . $e->getMessage());
             } finally {
-                Tenancy::end();
+                if (tenancy()->initialized) {
+                    tenancy()->end();
+                }
             }
         }
     }

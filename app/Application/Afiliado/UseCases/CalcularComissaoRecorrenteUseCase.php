@@ -13,7 +13,6 @@ use App\Domain\Shared\Events\EventDispatcherInterface;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
-use Stancl\Tenancy\Facades\Tenancy;
 
 /**
  * Use Case: Calcular Comissão Recorrente
@@ -53,7 +52,7 @@ final class CalcularComissaoRecorrenteUseCase
             }
 
             // Inicializar contexto do tenant
-            Tenancy::initialize($tenant);
+            tenancy()->initialize($tenant);
 
             try {
                 // Buscar assinatura
@@ -151,8 +150,8 @@ final class CalcularComissaoRecorrenteUseCase
                 return $comissao;
 
             } finally {
-                if (Tenancy::initialized()) {
-                    Tenancy::end();
+                if (tenancy()->initialized) {
+                    tenancy()->end();
                 }
             }
         });

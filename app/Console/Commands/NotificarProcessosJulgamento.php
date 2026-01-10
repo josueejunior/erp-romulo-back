@@ -75,7 +75,7 @@ class NotificarProcessosJulgamento extends Command
                         'trace' => $e->getTraceAsString(),
                     ]);
                     $this->error("  Erro ao processar tenant {$tenant->id}: {$e->getMessage()}");
-                    if (tenancy()->initialized()) {
+                    if (tenancy()->initialized) {
                         tenancy()->end();
                     }
                 }
