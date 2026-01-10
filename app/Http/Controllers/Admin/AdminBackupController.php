@@ -31,24 +31,34 @@ class AdminBackupController extends BaseApiController
                 'page' => $request->get('page', 1),
             ]);
 
-            $tenants = $tenantsPaginator->getCollection()->map(function ($tenantDomain) {
-                $tenant = $this->tenantRepository->buscarModeloPorId($tenantDomain->id);
-                
-                // Obter nome do banco de dados usando o padrão do stancl/tenancy
-                // Padrão: prefix + tenant_id + suffix (configurado em config/tenancy.php)
-                $prefix = config('tenancy.database.prefix', 'tenant_');
-                $suffix = config('tenancy.database.suffix', '');
-                $databaseName = $prefix . $tenantDomain->id . $suffix;
-                
-                return [
-                    'id' => $tenantDomain->id,
-                    'razao_social' => $tenantDomain->razaoSocial,
-                    'cnpj' => $tenantDomain->cnpj,
-                    'database' => $databaseName,
-                    'status' => $tenantDomain->status ?? 'ativa',
-                    'created_at' => $tenant ? $tenant->created_at : null,
-                ];
-            });
+            $tenants = $tenantsPaginator->getCollection()
+                ->filter(function ($tenantDomain) {
+                    // Filtrar apenas tenants válidos com ID
+                    return $tenantDomain && $tenantDomain->id !== null;
+                })
+                ->map(function ($tenantDomain) {
+                    $tenant = $this->tenantRepository->buscarModeloPorId($tenantDomain->id);
+                    
+                    // Obter nome do banco de dados usando o padrão do stancl/tenancy
+                    // Padrão: prefix + tenant_id + suffix (configurado em config/tenancy.php)
+                    $prefix = config('tenancy.database.prefix', 'tenant_');
+                    $suffix = config('tenancy.database.suffix', '');
+                    $databaseName = $prefix . $tenantDomain->id . $suffix;
+                    
+                    return [
+                        'id' => $tenantDomain->id,
+                        'razao_social' => $tenantDomain->razaoSocial ?? 'N/A',
+                        'cnpj' => $tenantDomain->cnpj ?? null,
+                        'database' => $databaseName,
+                        'status' => $tenantDomain->status ?? 'ativa',
+                        'created_at' => $tenant ? ($tenant->created_at ? $tenant->created_at->toIso8601String() : null) : null,
+                    ];
+                })
+                ->filter(function ($tenant) {
+                    // Filtrar qualquer resultado inválido que possa ter sido criado
+                    return $tenant && isset($tenant['id']) && $tenant['id'] !== null;
+                })
+                ->values(); // Reindexar array
 
             return response()->json([
                 'data' => $tenants,
