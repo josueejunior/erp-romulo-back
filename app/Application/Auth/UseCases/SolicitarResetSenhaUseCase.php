@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
+use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 use App\Notifications\ResetPasswordNotification;
 
 /**
@@ -194,6 +195,17 @@ class SolicitarResetSenhaUseCase
                 tenancy()->initialize($tenantFound);
             }
             
+            // Log da configuração SMTP antes de enviar (sem expor senha)
+            Log::info('SolicitarResetSenhaUseCase - Tentando enviar email via SMTP', [
+                'email' => $email,
+                'tenant_id' => $tenantFound?->id,
+                'smtp_host' => config('mail.mailers.smtp.host'),
+                'smtp_port' => config('mail.mailers.smtp.port'),
+                'smtp_username' => config('mail.mailers.smtp.username'),
+                'smtp_encryption' => config('mail.mailers.smtp.encryption'),
+                'has_password' => !empty(config('mail.mailers.smtp.password')),
+            ]);
+            
             // Enviar notificação via SMTP usando Laravel Notifications
             // Isso garante que o email será enviado usando a configuração SMTP
             $userModel->notify(new ResetPasswordNotification($token));
@@ -208,19 +220,48 @@ class SolicitarResetSenhaUseCase
                 tenancy()->end();
             }
             
+        } catch (\Symfony\Component\Mailer\Exception\TransportExceptionInterface $e) {
+            // Garantir que tenancy seja finalizado em caso de erro
+            if (tenancy()->initialized) {
+                tenancy()->end();
+            }
+            
+            Log::error('SolicitarResetSenhaUseCase - Erro de transporte SMTP ao enviar email', [
+                'email' => $email,
+                'error' => $e->getMessage(),
+                'error_code' => $e->getCode(),
+                'smtp_host' => config('mail.mailers.smtp.host'),
+                'smtp_port' => config('mail.mailers.smtp.port'),
+                'smtp_username' => config('mail.mailers.smtp.username'),
+                'smtp_encryption' => config('mail.mailers.smtp.encryption'),
+                'error_class' => get_class($e),
+            ]);
+            
+            // Mensagem mais específica baseada no tipo de erro
+            $errorMessage = 'Erro ao enviar email de redefinição de senha. ';
+            if (str_contains($e->getMessage(), 'Client host rejected') || str_contains($e->getMessage(), 'Access denied')) {
+                $errorMessage .= 'O servidor SMTP está rejeitando a conexão. Verifique se o IP do servidor está autorizado e se as credenciais SMTP estão corretas.';
+            } elseif (str_contains($e->getMessage(), 'authentication') || str_contains($e->getMessage(), 'login')) {
+                $errorMessage .= 'Erro de autenticação SMTP. Verifique as credenciais (usuário e senha) no arquivo .env.';
+            } else {
+                $errorMessage .= 'Verifique as configurações de SMTP no servidor ou entre em contato com o suporte.';
+            }
+            
+            throw new DomainException($errorMessage, 500);
         } catch (\Exception $e) {
             // Garantir que tenancy seja finalizado em caso de erro
             if (tenancy()->initialized) {
                 tenancy()->end();
             }
             
-            Log::error('SolicitarResetSenhaUseCase - Erro ao gerar token ou enviar email', [
+            Log::error('SolicitarResetSenhaUseCase - Erro genérico ao gerar token ou enviar email', [
                 'email' => $email,
                 'error' => $e->getMessage(),
+                'error_class' => get_class($e),
                 'trace' => $e->getTraceAsString(),
             ]);
             
-            throw new DomainException('Erro ao enviar email de redefinição de senha. Verifique as configurações de SMTP ou tente novamente mais tarde.', 500);
+            throw new DomainException('Erro ao enviar email de redefinição de senha. Tente novamente mais tarde ou entre em contato com o suporte.', 500);
         }
 
         return [

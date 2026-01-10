@@ -59,10 +59,11 @@ return [
             // 🔥 PRODUÇÃO: Valores validados para garantir SMTP de produção
             'host' => $mailHost,
             'port' => $mailPort,
-            'encryption' => env('MAIL_ENCRYPTION', 'ssl'),
+            // Tentar TLS primeiro (porta 587), se não funcionar usar SSL (porta 465)
+            'encryption' => env('MAIL_ENCRYPTION', $mailPort === 587 ? 'tls' : 'ssl'),
             'username' => env('MAIL_USERNAME', 'naoresponda@addsimp.com'),
             'password' => env('MAIL_PASSWORD' , 'C/k6@!S0'),
-            'timeout' => null,
+            'timeout' => 30,
             'local_domain' => env('MAIL_EHLO_DOMAIN', parse_url((string) env('APP_URL', 'http://localhost'), PHP_URL_HOST)),
         ],
 
