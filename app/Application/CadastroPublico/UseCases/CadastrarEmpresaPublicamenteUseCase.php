@@ -15,6 +15,7 @@ use App\Application\Afiliado\UseCases\ValidarCupomAfiliadoUseCase;
 use App\Application\Afiliado\UseCases\RastrearReferenciaAfiliadoUseCase;
 use App\Application\Afiliado\UseCases\CriarIndicacaoAfiliadoUseCase;
 use App\Application\Onboarding\UseCases\GerenciarOnboardingUseCase;
+use App\Application\Onboarding\DTOs\IniciarOnboardingDTO;
 use App\Application\Onboarding\DTOs\ConcluirOnboardingDTO;
 use App\Domain\Assinatura\Services\AssinaturaDomainService;
 use App\Domain\Auth\Repositories\UserRepositoryInterface;
@@ -754,13 +755,16 @@ final class CadastrarEmpresaPublicamenteUseCase
     private function criarOnboarding(int $tenantId, int $userId, string $email, bool $concluirAutomaticamente = false): void
     {
         try {
-            // Iniciar onboarding
-            $onboarding = $this->gerenciarOnboardingUseCase->iniciar(
+            // Criar DTO para iniciar onboarding
+            $dtoIniciar = new IniciarOnboardingDTO(
                 tenantId: $tenantId,
                 userId: $userId,
                 sessionId: null,
                 email: $email,
             );
+            
+            // Iniciar onboarding
+            $onboarding = $this->gerenciarOnboardingUseCase->iniciar($dtoIniciar);
 
             // Se plano for pago, concluir onboarding automaticamente
             if ($concluirAutomaticamente) {
