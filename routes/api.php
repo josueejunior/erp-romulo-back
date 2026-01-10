@@ -158,6 +158,13 @@ Route::prefix('v1')->group(function () {
             Route::post('/concluir', [\App\Modules\Onboarding\Controllers\OnboardingController::class, 'concluir']);
         });
         
+        // Configurações (usuários autenticados - não precisa de assinatura ativa)
+        Route::prefix('configuracoes')->group(function () {
+            Route::get('/tenant', [\App\Http\Controllers\Public\ConfiguracoesController::class, 'getTenant']); // GET para obter dados (se necessário)
+            Route::put('/tenant', [\App\Http\Controllers\Public\ConfiguracoesController::class, 'atualizarTenant']);
+            Route::put('/notificacoes', [\App\Http\Controllers\Public\ConfiguracoesController::class, 'atualizarNotificacoes']); // Placeholder para futuras implementações
+        });
+        
         // Buscar cupom automático de afiliado (protegido por onboarding - só após tutorial concluído)
         Route::get('/planos/cupom-automatico', [\App\Http\Controllers\Public\AfiliadoReferenciaController::class, 'buscarCupomAutomatico'])
             ->middleware(['onboarding.completo']);
