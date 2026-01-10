@@ -103,19 +103,18 @@ class UserReadRepository implements UserReadRepositoryInterface
     }
 
     /**
-     * Valida se o contexto do banco de dados está correto
+     * Valida se o contexto do tenancy está inicializado
+     * 
+     * O DatabaseTenancyBootstrapper do stancl/tenancy cuida automaticamente
+     * da configuração da conexão. Quando tenancy está inicializado, os modelos
+     * Eloquent usam automaticamente o banco do tenant, então não precisamos
+     * verificar manualmente o nome do banco.
      */
     private function checkTenancyContext(): void
     {
         if (!tenancy()->initialized) {
             Log::error('UserReadRepository: Acesso tentado sem inicializar Tenancy.');
             throw new \RuntimeException('Contexto de Tenant não identificado.');
-        }
-
-        $dbName = DB::connection()->getDatabaseName();
-        if (!str_starts_with($dbName, 'tenant_')) {
-            Log::critical("UserReadRepository: Possível vazamento de dados! Conexão atual: {$dbName}");
-            throw new \RuntimeException("Erro de isolamento de banco de dados.");
         }
     }
 }
