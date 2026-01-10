@@ -153,6 +153,31 @@ class UserReadRepository implements UserReadRepositoryInterface
         // IMPORTANTE: Usar JOIN direto para garantir que apenas usuários com empresas válidas sejam retornados.
         // O JOIN é mais explícito e eficiente do que whereHas para este caso.
         
+        // 🔥 CRÍTICO: Forçar o modelo a usar a conexão 'tenant' quando tenancy estiver inicializado
+        // O stancl/tenancy cria uma conexão dinâmica chamada 'tenant' quando initialize() é chamado
+        // Mas os modelos Eloquent ainda usam a conexão padrão, então precisamos forçar explicitamente
+        if (tenancy()->initialized) {
+            try {
+                // Verificar se a conexão 'tenant' existe (criada pelo DatabaseTenancyBootstrapper)
+                $tenantConnection = \DB::connection('tenant');
+                $tenantDbName = $tenantConnection->getDatabaseName();
+                
+                \Log::debug('UserReadRepository: Usando conexão tenant', [
+                    'tenant_db_name' => $tenantDbName,
+                    'tenant_id' => $tenantId,
+                ]);
+                
+                // Forçar o modelo a usar a conexão tenant
+                UserModel::setConnection('tenant');
+            } catch (\Exception $e) {
+                \Log::warning('UserReadRepository: Conexão "tenant" não encontrada, usando conexão padrão do modelo', [
+                    'error' => $e->getMessage(),
+                    'tenant_id' => $tenantId,
+                ]);
+                // Se a conexão tenant não existir, deixar o modelo usar sua conexão padrão
+            }
+        }
+        
         // Carregar todos os relacionamentos necessários
         // IMPORTANTE: Incluir usuários deletados (soft deletes) para mostrar na listagem admin
         // 🔥 CRÍTICO: Usar JOIN direto para garantir que apenas usuários com empresas sejam retornados
@@ -196,8 +221,10 @@ class UserReadRepository implements UserReadRepositoryInterface
 
         $perPage = $filtros['per_page'] ?? 15;
         
-        // 🔥 CRÍTICO: Verificar se estamos usando o banco correto antes de executar a query
-        $currentDatabaseName = \DB::connection()->getDatabaseName();
+        // Obter informações da conexão que o modelo está usando
+        $modelConnection = UserModel::getConnection();
+        $currentDatabaseName = $modelConnection->getDatabaseName();
+        $connectionName = $modelConnection->getName();
         $expectedDatabaseName = 'tenant_' . $tenantId;
         
         \Log::info('UserReadRepository: Verificando banco de dados antes da query', [
@@ -205,17 +232,21 @@ class UserReadRepository implements UserReadRepositoryInterface
             'expected_database_name' => $expectedDatabaseName,
             'tenant_id' => $tenantId,
             'tenancy_initialized' => tenancy()->initialized,
-            'database_connection' => \DB::connection()->getName(),
+            'database_connection' => $connectionName,
+            'connection_used' => $connectionName === 'tenant' ? 'tenant (correto)' : 'padrão (' . $connectionName . ')',
         ]);
         
-        // Verificar se o banco está correto (deve começar com 'tenant_')
-        if (!str_starts_with($currentDatabaseName, 'tenant_')) {
-            \Log::error('UserReadRepository: Banco de dados incorreto! Esperado banco de tenant, mas está usando banco central', [
+        // 🔥 CRÍTICO: Verificar se o banco está correto (deve começar com 'tenant_')
+        // Se tenancy está inicializado mas estamos usando banco central, há um problema de configuração
+        if (tenancy()->initialized && !str_starts_with($currentDatabaseName, 'tenant_')) {
+            \Log::error('UserReadRepository: Banco de dados incorreto! Tenancy inicializado mas usando banco central', [
                 'current_database_name' => $currentDatabaseName,
                 'expected_database_name' => $expectedDatabaseName,
                 'tenant_id' => $tenantId,
+                'tenancy_initialized' => tenancy()->initialized,
+                'database_connection' => $connectionName,
             ]);
-            throw new \RuntimeException("Banco de dados incorreto. Esperado banco do tenant ({$expectedDatabaseName}), mas está usando banco: {$currentDatabaseName}");
+            throw new \RuntimeException("Banco de dados incorreto. Tenancy está inicializado mas o modelo está usando banco central ({$currentDatabaseName}). Esperado banco do tenant ({$expectedDatabaseName}). Verifique se o DatabaseTenancyBootstrapper está funcionando corretamente.");
         }
         
         // Log antes da query - verificar SQL completo com subqueries
