@@ -322,25 +322,28 @@ final class CadastrarEmpresaPublicamenteUseCase
                     if ($userModel) {
                         // 🔥 VALIDAÇÃO INTELIGENTE:
                         // 1. Se usuário está soft deleted (inativo) → permitir novo cadastro
-                        // 2. Se usuário está ativo MAS empresa está inativa → permitir novo cadastro
-                        // 3. Se usuário está ativo E empresa está ativa → bloquear
+                        // 2. Se usuário está ativo MAS NÃO está vinculado a empresa ativa → permitir novo cadastro
+                        // 3. Se usuário está ativo E está vinculado a empresa ativa → bloquear
                         
                         $usuarioAtivo = $userModel->deleted_at === null;
-                        $tenantTemEmpresaValida = $this->verificarSeTenantTemEmpresaValida($tenant->id);
+                        
+                        // 🔥 CORREÇÃO: Verificar se o USUÁRIO está vinculado a empresa ativa
+                        // Não verificar apenas se o tenant tem empresa ativa (pode ter empresa de teste)
+                        $usuarioTemEmpresaAtiva = $this->verificarSeUsuarioTemEmpresaAtiva($userModel);
                         
                         Log::debug('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email encontrado, analisando condições', [
                             'email' => $dto->adminEmail,
                             'tenant_id' => $tenant->id,
                             'usuario_id' => $userModel->id,
                             'usuario_ativo' => $usuarioAtivo,
-                            'tenant_tem_empresa_valida' => $tenantTemEmpresaValida,
+                            'usuario_tem_empresa_ativa' => $usuarioTemEmpresaAtiva,
                             'deleted_at' => $userModel->deleted_at,
                         ]);
                         
-                        if ($usuarioAtivo && $tenantTemEmpresaValida) {
-                            // Usuário ativo + Empresa ativa = bloquear cadastro
+                        if ($usuarioAtivo && $usuarioTemEmpresaAtiva) {
+                            // Usuário ativo + vinculado a empresa ativa = bloquear cadastro
                             $emailEncontrado = true;
-                            Log::warning('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email já cadastrado (usuário ativo + empresa ativa)', [
+                            Log::warning('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email já cadastrado (usuário ativo + vinculado a empresa ativa)', [
                                 'email' => $dto->adminEmail,
                                 'tenant_id' => $tenant->id,
                                 'tenant_razao_social' => $tenantDomain->razaoSocial,
@@ -349,10 +352,10 @@ final class CadastrarEmpresaPublicamenteUseCase
                             tenancy()->end();
                             break;
                         } else {
-                            // Usuário inativo OU empresa inativa/incompleta = permitir novo cadastro
+                            // Usuário inativo OU não vinculado a empresa ativa = permitir novo cadastro
                             $motivo = !$usuarioAtivo 
                                 ? 'usuario_inativo' 
-                                : 'empresa_inativa_ou_incompleta';
+                                : 'usuario_sem_empresa_ativa';
                             
                             Log::info('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email encontrado mas permitindo novo cadastro', [
                                 'email' => $dto->adminEmail,
@@ -360,7 +363,7 @@ final class CadastrarEmpresaPublicamenteUseCase
                                 'tenant_razao_social' => $tenantDomain->razaoSocial,
                                 'motivo' => $motivo,
                                 'usuario_ativo' => $usuarioAtivo,
-                                'tenant_tem_empresa_valida' => $tenantTemEmpresaValida,
+                                'usuario_tem_empresa_ativa' => $usuarioTemEmpresaAtiva,
                             ]);
                         }
                     }
@@ -930,6 +933,105 @@ final class CadastrarEmpresaPublicamenteUseCase
     }
 
     /**
+     * Verifica se um usuário está vinculado a pelo menos uma empresa ATIVA
+     * 
+     * Esta verificação é mais precisa que verificar se o tenant tem empresa ativa,
+     * pois considera apenas as empresas às quais o usuário está efetivamente vinculado.
+     * 
+     * @param \App\Modules\Auth\Models\User $userModel
+     * @return bool
+     */
+    private function verificarSeUsuarioTemEmpresaAtiva($userModel): bool
+    {
+        try {
+            // Carregar empresas do usuário
+            $empresas = $userModel->empresas()->get();
+            
+            if ($empresas->isEmpty()) {
+                Log::debug('CadastrarEmpresaPublicamenteUseCase::verificarSeUsuarioTemEmpresaAtiva - Usuário sem empresas', [
+                    'usuario_id' => $userModel->id,
+                ]);
+                return false;
+            }
+            
+            // Verificar se alguma empresa está ativa E tem razão social preenchida (não é empresa de teste)
+            foreach ($empresas as $empresa) {
+                $razaoSocial = $empresa->razao_social ?? '';
+                $status = $empresa->status ?? 'inativa';
+                $cnpj = $empresa->cnpj ?? '';
+                
+                // Empresa válida = ativa + tem razão social + tem CNPJ (não é empresa de teste)
+                // OU ativa + razão social não é genérica
+                $empresaAtiva = $status === 'ativa';
+                $temRazaoSocial = !empty(trim($razaoSocial));
+                $temCnpj = !empty(trim($cnpj));
+                $naoEhEmpresaTeste = !$this->ehEmpresaDeTeste($razaoSocial);
+                
+                if ($empresaAtiva && $temRazaoSocial && ($temCnpj || $naoEhEmpresaTeste)) {
+                    Log::debug('CadastrarEmpresaPublicamenteUseCase::verificarSeUsuarioTemEmpresaAtiva - Usuário vinculado a empresa ativa', [
+                        'usuario_id' => $userModel->id,
+                        'empresa_id' => $empresa->id,
+                        'razao_social' => $razaoSocial,
+                        'status' => $status,
+                        'cnpj' => $cnpj,
+                    ]);
+                    return true;
+                }
+            }
+            
+            Log::debug('CadastrarEmpresaPublicamenteUseCase::verificarSeUsuarioTemEmpresaAtiva - Usuário sem empresa ativa válida', [
+                'usuario_id' => $userModel->id,
+                'total_empresas' => $empresas->count(),
+                'empresas' => $empresas->map(fn($e) => [
+                    'id' => $e->id,
+                    'razao_social' => $e->razao_social,
+                    'status' => $e->status,
+                    'cnpj' => $e->cnpj ?? '',
+                ])->toArray(),
+            ]);
+            
+            return false;
+            
+        } catch (\Exception $e) {
+            Log::warning('CadastrarEmpresaPublicamenteUseCase::verificarSeUsuarioTemEmpresaAtiva - Erro', [
+                'usuario_id' => $userModel->id ?? null,
+                'error' => $e->getMessage(),
+            ]);
+            return false;
+        }
+    }
+    
+    /**
+     * Verifica se a razão social parece ser de uma empresa de teste/exemplo
+     */
+    private function ehEmpresaDeTeste(string $razaoSocial): bool
+    {
+        $razaoLower = strtolower(trim($razaoSocial));
+        
+        // Lista de padrões que indicam empresa de teste
+        $padroesTeste = [
+            'empresa exemplo',
+            'empresa teste',
+            'teste ltda',
+            'exemplo ltda',
+            'test company',
+            'empresa de teste',
+            'empresa de exemplo',
+            'sample company',
+            'demo company',
+            'empresa demo',
+        ];
+        
+        foreach ($padroesTeste as $padrao) {
+            if (str_contains($razaoLower, $padrao)) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
      * Verifica se um tenant tem pelo menos uma empresa válida (completa)
      * 
      * Um tenant é considerado incompleto se não tiver nenhuma empresa com razao_social preenchida.
@@ -956,19 +1058,24 @@ final class CadastrarEmpresaPublicamenteUseCase
             // Listar empresas do tenant atual (tenancy já está inicializado)
             $empresas = $this->empresaRepository->listar();
             
-            // Verificar se existe pelo menos uma empresa válida e ATIVA
-            // Empresa válida = tem razao_social preenchida E status = 'ativa'
+            // 🔥 VALIDAÇÃO INTELIGENTE: Verificar se existe pelo menos uma empresa válida e ATIVA
+            // Empresa válida = tem razao_social preenchida E status = 'ativa' E NÃO é empresa de teste E tem CNPJ
             foreach ($empresas as $empresa) {
-                if ($empresa 
-                    && !empty($empresa->razaoSocial) 
-                    && trim($empresa->razaoSocial) !== ''
-                    && $empresa->estaAtiva() // 🔥 IMPORTANTE: Apenas empresas ATIVAS bloqueiam o cadastro
-                ) {
+                $razaoSocial = $empresa->razaoSocial ?? '';
+                $cnpj = $empresa->cnpj ?? '';
+                $estaAtiva = $empresa->estaAtiva();
+                $temRazaoSocial = !empty(trim($razaoSocial));
+                $temCnpj = !empty(trim($cnpj));
+                $naoEhTeste = !$this->ehEmpresaDeTeste($razaoSocial);
+                
+                // Empresa válida = ativa + razão social + (CNPJ OU não é empresa de teste)
+                if ($estaAtiva && $temRazaoSocial && ($temCnpj || $naoEhTeste)) {
                     Log::debug('CadastrarEmpresaPublicamenteUseCase::verificarSeTenantTemEmpresaValida - Empresa válida e ATIVA encontrada', [
                         'tenant_id' => $tenantId,
                         'empresa_id' => $empresa->id,
-                        'razao_social' => $empresa->razaoSocial,
+                        'razao_social' => $razaoSocial,
                         'status' => $empresa->status,
+                        'cnpj' => $cnpj,
                     ]);
                     return true;
                 }
@@ -977,7 +1084,13 @@ final class CadastrarEmpresaPublicamenteUseCase
             Log::debug('CadastrarEmpresaPublicamenteUseCase::verificarSeTenantTemEmpresaValida - Nenhuma empresa válida e ATIVA encontrada', [
                 'tenant_id' => $tenantId,
                 'total_empresas' => count($empresas),
-                'empresas_status' => array_map(fn($e) => ['id' => $e->id, 'status' => $e->status ?? 'N/A', 'razao_social' => $e->razaoSocial ?? 'N/A'], $empresas),
+                'empresas_status' => array_map(fn($e) => [
+                    'id' => $e->id, 
+                    'status' => $e->status ?? 'N/A', 
+                    'razao_social' => $e->razaoSocial ?? 'N/A',
+                    'cnpj' => $e->cnpj ?? 'N/A',
+                    'eh_teste' => $this->ehEmpresaDeTeste($e->razaoSocial ?? ''),
+                ], $empresas),
             ]);
             
             return false;
