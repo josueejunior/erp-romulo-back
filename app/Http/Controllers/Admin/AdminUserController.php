@@ -122,6 +122,16 @@ class AdminUserController extends Controller
                                 'id' => $tenantDomain->id,
                                 'razao_social' => $tenantDomain->razaoSocial,
                             ];
+                            // IMPORTANTE: Se o usuário está deletado neste tenant, atualizar deleted_at
+                            // Usar o deleted_at mais recente (se houver múltiplos tenants com deleted_at)
+                            if ($user->trashed() && $user->excluido_em) {
+                                $currentDeletedAt = $allUsers[$existingIndex]['deleted_at'];
+                                $newDeletedAt = $user->excluido_em->toISOString() ?? $user->excluido_em->toDateTimeString();
+                                // Se não tinha deleted_at ou este é mais recente, atualizar
+                                if (!$currentDeletedAt || ($newDeletedAt && strtotime($newDeletedAt) > strtotime($currentDeletedAt ?? ''))) {
+                                    $allUsers[$existingIndex]['deleted_at'] = $newDeletedAt;
+                                }
+                            }
                         } else {
                             // Novo usuário
                             $allUsers[] = [
@@ -131,7 +141,7 @@ class AdminUserController extends Controller
                                 'roles_list' => $user->roles->pluck('name')->toArray(),
                                 'empresas' => $empresasComTenant,
                                 'empresa_ativa_id' => $user->empresa_ativa_id,
-                                'deleted_at' => $user->excluido_em,
+                                'deleted_at' => $user->trashed() ? ($user->excluido_em?->toISOString() ?? $user->excluido_em?->toDateTimeString() ?? now()->toDateTimeString()) : null,
                                 'tenants' => [[
                                     'id' => $tenantDomain->id,
                                     'razao_social' => $tenantDomain->razaoSocial,
@@ -286,7 +296,7 @@ class AdminUserController extends Controller
                                 'email' => $user->email,
                                 'roles_list' => $user->roles->pluck('name')->toArray(),
                                 'empresa_ativa_id' => $user->empresa_ativa_id,
-                                'deleted_at' => $user->excluido_em,
+                                'deleted_at' => $user->trashed() ? ($user->excluido_em?->toISOString() ?? $user->excluido_em?->toDateTimeString() ?? now()->toDateTimeString()) : null,
                             ];
                         }
                         
