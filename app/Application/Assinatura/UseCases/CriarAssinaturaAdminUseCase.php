@@ -59,7 +59,9 @@ class CriarAssinaturaAdminUseCase
         }
 
         // Validar que o plano existe
-        $planoDomain = $this->planoRepository->buscarPorId($dados['plano_id']);
+        // Converter para int para evitar TypeError (pode vir como string do request)
+        $planoId = is_int($dados['plano_id']) ? $dados['plano_id'] : (int) $dados['plano_id'];
+        $planoDomain = $this->planoRepository->buscarPorId($planoId);
         if (!$planoDomain) {
             throw new DomainException('Plano não encontrado.');
         }
@@ -126,7 +128,8 @@ class CriarAssinaturaAdminUseCase
             $dataFim = Carbon::parse($dados['data_fim']);
         } else {
             // Buscar modelo Plano para usar no Domain Service
-            $planoModel = PlanoModel::find($dados['plano_id']);
+            // Usar $planoId já convertido para int
+            $planoModel = PlanoModel::find($planoId);
             if (!$planoModel) {
                 throw new DomainException('Plano não encontrado.');
             }
@@ -154,7 +157,7 @@ class CriarAssinaturaAdminUseCase
         // Preparar DTO
         $dto = new CriarAssinaturaDTO(
             userId: $userId,
-            planoId: $dados['plano_id'],
+            planoId: $planoId,
             status: $dados['status'] ?? 'ativa',
             dataInicio: $dataInicio,
             dataFim: $dataFim,
@@ -177,7 +180,7 @@ class CriarAssinaturaAdminUseCase
             'tenant_id' => $tenantId,
             'empresa_id' => $empresaId,
             'user_id' => $userId,
-            'plano_id' => $dados['plano_id'],
+            'plano_id' => $planoId,
             'assinatura_id' => $assinatura->id,
         ]);
 

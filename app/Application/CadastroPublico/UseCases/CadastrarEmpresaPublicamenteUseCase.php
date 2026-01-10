@@ -278,12 +278,86 @@ final class CadastrarEmpresaPublicamenteUseCase
      */
     private function validarDuplicidades(CadastroPublicoDTO $dto): void
     {
-        // Validar email
-        if ($this->userRepository->emailExiste($dto->adminEmail)) {
-            Log::info('Tentativa de cadastro com email já existente', [
+        // 🔥 VALIDAÇÃO DE EMAIL: Verificar em TODOS os tenants (multi-tenancy)
+        // O email não pode estar cadastrado em nenhum tenant
+        $emailEncontrado = false;
+        
+        // 1. Verificar no banco central (admin users) se necessário
+        // Nota: Admin users geralmente têm um repositório separado, mas vamos verificar nos tenants primeiro
+        
+        // 2. Verificar em todos os tenants
+        try {
+            Log::info('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Verificando email em todos os tenants', [
                 'email' => $dto->adminEmail,
             ]);
             
+            // Buscar todos os tenants
+            $tenantsPaginator = $this->tenantRepository->buscarComFiltros(['per_page' => 10000]);
+            $tenants = $tenantsPaginator->getCollection();
+            
+            Log::debug('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Total de tenants para verificar', [
+                'total_tenants' => $tenants->count(),
+                'email' => $dto->adminEmail,
+            ]);
+            
+            foreach ($tenants as $tenantDomain) {
+                try {
+                    // Buscar modelo Eloquent para inicializar tenancy
+                    $tenant = $this->tenantRepository->buscarModeloPorId($tenantDomain->id);
+                    if (!$tenant) {
+                        continue;
+                    }
+                    
+                    tenancy()->initialize($tenant);
+                    
+                    // Verificar se o email existe neste tenant
+                    $userDomain = $this->userRepository->buscarPorEmail($dto->adminEmail);
+                    
+                    if ($userDomain) {
+                        $emailEncontrado = true;
+                        Log::warning('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email já cadastrado em tenant', [
+                            'email' => $dto->adminEmail,
+                            'tenant_id' => $tenant->id,
+                            'tenant_razao_social' => $tenantDomain->razaoSocial,
+                        ]);
+                        tenancy()->end();
+                        break;
+                    }
+                    
+                    tenancy()->end();
+                } catch (\Exception $e) {
+                    if (tenancy()->initialized) {
+                        tenancy()->end();
+                    }
+                    Log::warning('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Erro ao verificar email no tenant', [
+                        'tenant_id' => $tenantDomain->id,
+                        'email' => $dto->adminEmail,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+            
+            if ($emailEncontrado) {
+                Log::info('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email já existe, bloqueando cadastro', [
+                    'email' => $dto->adminEmail,
+                ]);
+                throw new EmailJaCadastradoException($dto->adminEmail);
+            }
+            
+            Log::info('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email não encontrado em nenhum tenant, permitindo cadastro', [
+                'email' => $dto->adminEmail,
+            ]);
+            
+        } catch (EmailJaCadastradoException $e) {
+            // Re-lançar a exceção se já foi lançada
+            throw $e;
+        } catch (\Exception $e) {
+            Log::error('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Erro ao validar email', [
+                'email' => $dto->adminEmail,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            // Em caso de erro na validação, bloquear o cadastro por segurança
             throw new EmailJaCadastradoException($dto->adminEmail);
         }
 

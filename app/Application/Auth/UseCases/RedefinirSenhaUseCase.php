@@ -87,10 +87,21 @@ class RedefinirSenhaUseCase
                     $userModel = \App\Modules\Auth\Models\User::where('email', $email)->first();
                     
                     if ($userModel) {
-                        // Atualizar senha usando hash do Value Object
-                        $userModel->password = $senha->hash;
-                        $userModel->save();
+                        // ⚠️ IMPORTANTE: O modelo User tem cast 'password' => 'hashed' (auto-hash)
+                        // Como $senha->hash já é um hash, precisamos evitar hash duplo
+                        // Solução: usar update direto no banco (sem cast) para salvar o hash já feito
+                        // O tenancy já está inicializado, então a conexão padrão já é do tenant
+                        DB::table('users')
+                            ->where('id', $userModel->id)
+                            ->update(['password' => $senha->hash]);
+                        
                         $userUpdated = true;
+                        
+                        Log::info('RedefinirSenhaUseCase - Senha atualizada com sucesso', [
+                            'user_id' => $userModel->id,
+                            'email' => $email,
+                            'tenant_id' => $tenantDomain->id,
+                        ]);
                     }
                 }
                 
