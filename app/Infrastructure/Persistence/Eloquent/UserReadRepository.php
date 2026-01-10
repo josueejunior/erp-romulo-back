@@ -27,7 +27,12 @@ class UserReadRepository implements UserReadRepositoryInterface
     {
         $this->checkTenancyContext();
 
-        $query = UserModel::withTrashed()
+        // 🔥 CRÍTICO: Garantir que o modelo use a conexão 'tenant' quando disponível
+        // O DatabaseTenancyBootstrapper deveria fazer isso automaticamente, mas se não estiver
+        // funcionando, precisamos forçar explicitamente para garantir isolamento de dados
+        $query = $this->getUserQuery();
+        
+        $query = $query
             ->with(['empresas', 'roles'])
             // Filtra para garantir que o usuário pertence a pelo menos uma empresa no tenant atual
             ->whereHas('empresas', function ($q) use ($filtros) {
@@ -103,12 +108,48 @@ class UserReadRepository implements UserReadRepositoryInterface
     }
 
     /**
+     * Obtém query builder do User usando a conexão correta
+     * Garante que a conexão 'tenant' seja usada quando disponível
+     */
+    private function getUserQuery()
+    {
+        if (tenancy()->initialized) {
+            try {
+                // Verificar se a conexão 'tenant' existe e está configurada
+                $tenantConnection = DB::connection('tenant');
+                $dbName = $tenantConnection->getDatabaseName();
+                
+                Log::info('UserReadRepository: Usando conexão tenant', [
+                    'connection' => 'tenant',
+                    'database_name' => $dbName,
+                    'tenant_id' => tenancy()->tenant?->id,
+                ]);
+                
+                // Se a conexão existe, criar instância do modelo com essa conexão
+                $userInstance = new UserModel();
+                $userInstance->setConnection('tenant');
+                return $userInstance->newQuery()->withTrashed();
+            } catch (\Exception $e) {
+                // Se não existir, usar conexão padrão (pode ser um problema de configuração)
+                Log::warning('UserReadRepository: Conexão tenant não disponível, usando padrão', [
+                    'error' => $e->getMessage(),
+                    'default_connection' => DB::connection()->getName(),
+                    'default_database' => DB::connection()->getDatabaseName(),
+                ]);
+            }
+        }
+        
+        // Fallback: usar conexão padrão do modelo
+        Log::info('UserReadRepository: Usando conexão padrão', [
+            'connection' => DB::connection()->getName(),
+            'database_name' => DB::connection()->getDatabaseName(),
+            'tenancy_initialized' => tenancy()->initialized,
+        ]);
+        return UserModel::withTrashed();
+    }
+
+    /**
      * Valida se o contexto do tenancy está inicializado
-     * 
-     * O DatabaseTenancyBootstrapper do stancl/tenancy cuida automaticamente
-     * da configuração da conexão. Quando tenancy está inicializado, os modelos
-     * Eloquent usam automaticamente o banco do tenant, então não precisamos
-     * verificar manualmente o nome do banco.
      */
     private function checkTenancyContext(): void
     {
