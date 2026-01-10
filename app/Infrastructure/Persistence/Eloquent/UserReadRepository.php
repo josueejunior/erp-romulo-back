@@ -82,6 +82,36 @@ class UserReadRepository implements UserReadRepositoryInterface
         }
     }
 
+    public function listarSemPaginacao(array $filtros = []): array
+    {
+        $this->checkTenancyContext();
+
+        try {
+            $query = $this->getIsolatedUserQuery()
+                ->with(['empresas', 'roles'])
+                ->when(!empty($filtros['search']), function ($q) use ($filtros) {
+                    $search = $filtros['search'];
+                    $q->where(fn($sub) => $sub->where('name', 'like', "%{$search}%")
+                                              ->orWhere('email', 'like', "%{$search}%"));
+                })
+                ->when(!empty($filtros['empresa_id']), function ($q) use ($filtros) {
+                    $q->whereHas('empresas', fn($e) => $e->where('empresas.id', $filtros['empresa_id']));
+                });
+
+            $users = $query->orderBy('name')->get();
+
+            // Transforma os itens usando o método map que já criamos
+            return $users->map(fn($user) => $this->mapUserToArray($user))->toArray();
+
+        } catch (\Exception $e) {
+            Log::error("Erro ao listar usuários sem paginação: " . $e->getMessage(), [
+                'tenant_id' => tenancy()->tenant?->id,
+                'filtros' => $filtros,
+            ]);
+            return [];
+        }
+    }
+
     /**
      * Centraliza a transformação do Model para o Array de saída (Frontend)
      */

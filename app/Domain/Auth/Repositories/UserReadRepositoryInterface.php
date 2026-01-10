@@ -26,5 +26,14 @@ interface UserReadRepositoryInterface
      * Usado para vincular usuário existente a uma nova empresa
      */
     public function buscarPorEmail(string $email): ?array;
+
+    /**
+     * Listar usuários sem paginação (para uso em listagens globais)
+     * Retorna array de arrays com todos os usuários que atendem aos filtros
+     * 
+     * @param array $filtros
+     * @return array Array de arrays representando usuários
+     */
+    public function listarSemPaginacao(array $filtros = []): array;
 }
 

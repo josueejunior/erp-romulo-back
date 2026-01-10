@@ -57,8 +57,9 @@ class AdminUserController extends Controller
     /**
      * Listar TODOS os usuários de TODOS os tenants (visão global)
      * 
-     * Esta rota permite ao admin ver todos os usuários do sistema
-     * sem precisar fazer múltiplas requisições por tenant.
+     * 🔥 REFATORADO: Agora usa UserReadRepository para garantir isolamento e formato consistente.
+     * Esta rota permite ao admin ver todos os usuários do sistema sem precisar fazer
+     * múltiplas requisições por tenant, mantendo a mesma estrutura de resposta do index().
      */
     public function indexGlobal(Request $request)
     {
@@ -71,16 +72,20 @@ class AdminUserController extends Controller
                 'per_page' => 1000, // Buscar todos para admin
             ]);
             
-            $allUsers = [];
+            $usuariosConsolidados = [];
             
             // 🔥 ARQUITETURA LIMPA: AdminTenancyRunner isola toda lógica de tenancy
             foreach ($tenantsPaginator->items() as $tenantDomain) {
                 try {
-                    $resultado = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($tenantDomain) {
-                        // Buscar usuários com suas empresas (dentro do contexto do tenant)
-                        $users = \App\Modules\Auth\Models\User::with(['empresas', 'roles'])
-                            ->withTrashed() // Incluir inativos
-                            ->get();
+                    $resultado = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($request, $tenantDomain) {
+                        // Usar o repositório para garantir isolamento e formato consistente
+                        // O filtro de busca é aplicado no repositório (mais eficiente que filtrar após consolidação)
+                        $filtros = [];
+                        if ($request->has('search') && $request->filled('search')) {
+                            $filtros['search'] = $request->input('search');
+                        }
+                        
+                        $users = $this->userReadRepository->listarSemPaginacao($filtros);
                         
                         return [
                             'users' => $users,
@@ -91,63 +96,59 @@ class AdminUserController extends Controller
                     $users = $resultado['users'];
                     $tenantDomain = $resultado['tenant'];
                     
-                    foreach ($users as $user) {
-                        // Verificar se usuário já existe na lista (por email)
-                        $existingIndex = null;
-                        foreach ($allUsers as $index => $existingUser) {
-                            if ($existingUser['email'] === $user->email) {
-                                $existingIndex = $index;
-                                break;
-                            }
-                        }
+                    // Enriquecer dados dos usuários com informações do tenant
+                    foreach ($users as $userData) {
+                        $email = $userData['email'];
                         
-                        // Preparar dados das empresas com tenant_id
-                        $empresasComTenant = $user->empresas->map(function ($empresa) use ($tenantDomain) {
-                            return [
-                                'id' => $empresa->id,
-                                'razao_social' => $empresa->razao_social,
-                                'cnpj' => $empresa->cnpj,
+                        // Enriquecer empresas com informações do tenant
+                        $empresasComTenant = array_map(function ($empresa) use ($tenantDomain) {
+                            return array_merge($empresa, [
                                 'tenant_id' => $tenantDomain->id,
                                 'tenant_razao_social' => $tenantDomain->razaoSocial,
-                            ];
-                        })->toArray();
+                            ]);
+                        }, $userData['empresas'] ?? []);
                         
-                        if ($existingIndex !== null) {
+                        // Preparar informações do tenant para o usuário
+                        $tenantInfo = [
+                            'id' => $tenantDomain->id,
+                            'razao_social' => $tenantDomain->razaoSocial,
+                        ];
+                        
+                        if (isset($usuariosConsolidados[$email])) {
                             // Usuário já existe - adicionar empresas deste tenant
-                            $allUsers[$existingIndex]['empresas'] = array_merge(
-                                $allUsers[$existingIndex]['empresas'],
+                            $usuariosConsolidados[$email]['empresas'] = array_merge(
+                                $usuariosConsolidados[$email]['empresas'] ?? [],
                                 $empresasComTenant
                             );
-                            $allUsers[$existingIndex]['tenants'][] = [
-                                'id' => $tenantDomain->id,
-                                'razao_social' => $tenantDomain->razaoSocial,
-                            ];
-                            // IMPORTANTE: Se o usuário está deletado neste tenant, atualizar deleted_at
-                            // Usar o deleted_at mais recente (se houver múltiplos tenants com deleted_at)
-                            if ($user->trashed() && $user->excluido_em) {
-                                $currentDeletedAt = $allUsers[$existingIndex]['deleted_at'];
-                                $newDeletedAt = $user->excluido_em->toISOString() ?? $user->excluido_em->toDateTimeString();
-                                // Se não tinha deleted_at ou este é mais recente, atualizar
-                                if (!$currentDeletedAt || ($newDeletedAt && strtotime($newDeletedAt) > strtotime($currentDeletedAt ?? ''))) {
-                                    $allUsers[$existingIndex]['deleted_at'] = $newDeletedAt;
+                            $usuariosConsolidados[$email]['tenants'][] = $tenantInfo;
+                            
+                            // Atualizar deleted_at se necessário (usar o mais recente)
+                            if (!empty($userData['deleted_at'])) {
+                                $currentDeletedAt = $usuariosConsolidados[$email]['deleted_at'] ?? null;
+                                $newDeletedAt = $userData['deleted_at'];
+                                
+                                if (!$currentDeletedAt || 
+                                    ($newDeletedAt && strtotime($newDeletedAt) > strtotime($currentDeletedAt ?? ''))) {
+                                    $usuariosConsolidados[$email]['deleted_at'] = $newDeletedAt;
                                 }
                             }
+                            
+                            // Atualizar total_empresas e is_multi_empresa
+                            $totalEmpresas = count($usuariosConsolidados[$email]['empresas']);
+                            $usuariosConsolidados[$email]['total_empresas'] = $totalEmpresas;
+                            $usuariosConsolidados[$email]['is_multi_empresa'] = $totalEmpresas > 1;
                         } else {
-                            // Novo usuário
-                            $allUsers[] = [
-                                'id' => $user->id,
-                                'name' => $user->name,
-                                'email' => $user->email,
-                                'roles_list' => $user->roles->pluck('name')->toArray(),
+                            // Novo usuário - usar dados do repositório e enriquecer com tenant info
+                            $usuariosConsolidados[$email] = array_merge($userData, [
                                 'empresas' => $empresasComTenant,
-                                'empresa_ativa_id' => $user->empresa_ativa_id,
-                                'deleted_at' => $user->trashed() ? ($user->excluido_em?->toISOString() ?? $user->excluido_em?->toDateTimeString() ?? now()->toDateTimeString()) : null,
-                                'tenants' => [[
-                                    'id' => $tenantDomain->id,
-                                    'razao_social' => $tenantDomain->razaoSocial,
-                                ]],
+                                'tenants' => [$tenantInfo],
                                 'primary_tenant_id' => $tenantDomain->id, // Primeiro tenant onde foi encontrado
-                            ];
+                            ]);
+                            
+                            // Garantir que roles_list existe (alguns campos podem vir como 'roles')
+                            if (!isset($usuariosConsolidados[$email]['roles_list']) && isset($usuariosConsolidados[$email]['roles'])) {
+                                $usuariosConsolidados[$email]['roles_list'] = $usuariosConsolidados[$email]['roles'];
+                            }
                         }
                     }
                 } catch (\Exception $e) {
@@ -159,19 +160,12 @@ class AdminUserController extends Controller
                 }
             }
             
-            // Aplicar filtros se necessário
-            $search = $request->input('search');
-            if ($search) {
-                $allUsers = array_filter($allUsers, function ($user) use ($search) {
-                    return stripos($user['name'], $search) !== false 
-                        || stripos($user['email'], $search) !== false;
-                });
-                $allUsers = array_values($allUsers); // Reindexar
-            }
+            // Converter para array indexado (remover chaves de email)
+            $allUsers = array_values($usuariosConsolidados);
             
-            // Ordenar por nome
+            // Ordenar por nome (já vem ordenado do repositório, mas garantimos após consolidação)
             usort($allUsers, function ($a, $b) {
-                return strcmp($a['name'], $b['name']);
+                return strcmp($a['name'] ?? '', $b['name'] ?? '');
             });
             
             \Log::info('AdminUserController::indexGlobal - Usuários consolidados', [
