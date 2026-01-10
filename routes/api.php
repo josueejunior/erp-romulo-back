@@ -398,6 +398,7 @@ Route::prefix('admin')->group(function () {
         Route::prefix('usuarios')->group(function () {
             Route::get('/', [AdminUserController::class, 'indexGlobal']);
             Route::get('/{userId}', [AdminUserController::class, 'showGlobal'])->where('userId', '[0-9]+');
+            Route::delete('/{userId}', [AdminUserController::class, 'destroyGlobal'])->where('userId', '[0-9]+');
         });
         
         // Gerenciamento de empresas (tenants)

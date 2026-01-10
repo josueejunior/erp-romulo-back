@@ -541,6 +541,98 @@ class AdminUserController extends Controller
     }
 
     /**
+     * Excluir usuário globalmente (soft delete em todos os tenants)
+     * 🔥 DDD: Busca usuário em todos os tenants e deleta em cada um
+     */
+    public function destroyGlobal(Request $request, int $userId)
+    {
+        try {
+            Log::info('AdminUserController::destroyGlobal - Iniciando exclusão global', ['userId' => $userId]);
+            
+            // Buscar todos os tenants onde o usuário existe
+            $tenants = $this->tenantRepository->listarTodos();
+            $tenantsComUsuario = [];
+            $tenantsDeletados = 0;
+            $tenantsComErro = 0;
+            
+            // Buscar usuário em cada tenant para identificar onde ele existe
+            foreach ($tenants as $tenantDomain) {
+                try {
+                    $resultado = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($userId) {
+                        return \App\Modules\Auth\Models\User::withTrashed()
+                            ->where('id', $userId)
+                            ->first();
+                    });
+                    
+                    if ($resultado) {
+                        $tenantsComUsuario[] = $tenantDomain;
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('AdminUserController::destroyGlobal - Erro ao buscar usuário no tenant', [
+                        'tenant_id' => $tenantDomain->id,
+                        'userId' => $userId,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+            
+            // Deletar usuário em cada tenant onde ele existe
+            foreach ($tenantsComUsuario as $tenantDomain) {
+                try {
+                    $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($userId) {
+                        $this->deletarUsuarioAdminUseCase->executar($userId);
+                    });
+                    
+                    $tenantsDeletados++;
+                    Log::info('AdminUserController::destroyGlobal - Usuário deletado no tenant', [
+                        'tenant_id' => $tenantDomain->id,
+                        'userId' => $userId,
+                    ]);
+                } catch (\Exception $e) {
+                    $tenantsComErro++;
+                    Log::error('AdminUserController::destroyGlobal - Erro ao deletar usuário no tenant', [
+                        'tenant_id' => $tenantDomain->id,
+                        'userId' => $userId,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+            
+            if ($tenantsDeletados === 0 && count($tenantsComUsuario) > 0) {
+                // Usuário existe mas houve erro em todos os tenants
+                return ApiResponse::error('Erro ao deletar usuário em todos os tenants.', 500);
+            }
+            
+            if (count($tenantsComUsuario) === 0) {
+                // Usuário não encontrado em nenhum tenant
+                return ApiResponse::error('Usuário não encontrado.', 404);
+            }
+            
+            Log::info('AdminUserController::destroyGlobal - Exclusão concluída', [
+                'userId' => $userId,
+                'tenants_deletados' => $tenantsDeletados,
+                'tenants_com_erro' => $tenantsComErro,
+                'total_tenants' => count($tenantsComUsuario),
+            ]);
+            
+            $mensagem = $tenantsComErro > 0
+                ? "Usuário deletado em {$tenantsDeletados} tenant(s), mas houve erro em {$tenantsComErro} tenant(s)."
+                : "Usuário deletado com sucesso em {$tenantsDeletados} tenant(s)!";
+            
+            return ApiResponse::success($mensagem);
+        } catch (DomainException $e) {
+            return ApiResponse::error($e->getMessage(), 404);
+        } catch (\Exception $e) {
+            Log::error('AdminUserController::destroyGlobal - Erro geral', [
+                'userId' => $userId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return ApiResponse::error('Erro ao deletar usuário globalmente.', 500);
+        }
+    }
+
+    /**
      * Excluir usuário (soft delete)
      * 🔥 DDD: Controller fino - delega para UseCase
      */
