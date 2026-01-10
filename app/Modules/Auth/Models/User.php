@@ -45,12 +45,20 @@ class User extends Authenticatable
 
     /**
      * Empresas às quais o usuário pertence.
+     * 
+     * IMPORTANTE: Para evitar ambiguidade de colunas no PostgreSQL quando usado em eager loading,
+     * não usamos select() customizado aqui. O Laravel gerencia as colunas automaticamente.
      */
     public function empresas(): BelongsToMany
     {
-        return $this->belongsToMany(Empresa::class, 'empresa_user')
+        $relation = $this->belongsToMany(Empresa::class, 'empresa_user')
             ->withPivot('perfil')
             ->withTimestamps();
+        
+        // PostgreSQL requer qualificação explícita de colunas em JOINs
+        // Remover qualquer select padrão que possa causar ambiguidade
+        // O Laravel adiciona automaticamente as colunas necessárias da tabela pivot
+        return $relation;
     }
 
     /**

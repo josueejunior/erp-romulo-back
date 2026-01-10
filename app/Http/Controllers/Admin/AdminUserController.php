@@ -24,6 +24,7 @@ use App\Http\Requests\Admin\BuscarPorEmailAdminRequest;
 use App\Models\Tenant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 use App\Domain\Exceptions\DomainException;
 
 /**
@@ -215,23 +216,63 @@ class AdminUserController extends Controller
                 
                 try {
                     $resultado = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($userId) {
-                        // 🔥 PERFORMANCE: Usar eager loading para evitar N+1 dentro do tenant
-                        // Já carrega empresas e roles em uma única query por tenant
-                        return \App\Modules\Auth\Models\User::with([
-                            'empresas' => function($query) {
-                                // Carregar apenas campos necessários
-                                // IMPORTANTE: Não usar select customizado aqui, pois causa ambiguidade no JOIN
-                                // O Laravel precisa das chaves estrangeiras da tabela pivot automaticamente
-                                // Deixar o Laravel fazer o select padrão e filtrar depois se necessário
-                            },
-                            'roles' => function($query) {
-                                // Carregar apenas nome das roles
-                                $query->select('id', 'name');
-                            }
-                        ])
+                        // 🔥 PERFORMANCE: Usar eager loading para roles apenas
+                        // Carregar empresas manualmente para evitar ambiguidade de colunas no PostgreSQL
+                        // O problema ocorre porque belongsToMany gera JOIN e PostgreSQL exige qualificação explícita
+                        $user = \App\Modules\Auth\Models\User::with(['roles' => function($query) {
+                            // Carregar apenas nome das roles
+                            $query->select('id', 'name');
+                        }])
                         ->withTrashed()
                         ->select('id', 'name', 'email', 'empresa_ativa_id', 'excluido_em')
                         ->find($userId);
+                        
+                        // Carregar empresas manualmente para evitar ambiguidade no JOIN
+                        if ($user) {
+                            // Buscar IDs das empresas primeiro
+                            $empresasIds = \DB::table('empresa_user')
+                                ->where('user_id', $userId)
+                                ->pluck('empresa_id')
+                                ->toArray();
+                            
+                            if (!empty($empresasIds)) {
+                                // Carregar empresas sem JOIN (evita ambiguidade)
+                                $empresas = \App\Models\Empresa::whereIn('id', $empresasIds)
+                                    ->whereNull('excluido_em')
+                                    ->get();
+                                
+                                // Para cada empresa, adicionar dados do pivot manualmente
+                                // Isso simula o comportamento do relacionamento belongsToMany
+                                $empresasComPivot = $empresas->map(function ($empresa) use ($userId) {
+                                    $pivotData = \DB::table('empresa_user')
+                                        ->where('user_id', $userId)
+                                        ->where('empresa_id', $empresa->id)
+                                        ->first();
+                                    
+                                    if ($pivotData) {
+                                        // Criar objeto pivot manualmente
+                                        $pivot = new \stdClass();
+                                        $pivot->user_id = $pivotData->user_id;
+                                        $pivot->empresa_id = $pivotData->empresa_id;
+                                        $pivot->perfil = $pivotData->perfil ?? 'consulta';
+                                        $pivot->criado_em = $pivotData->criado_em;
+                                        $pivot->atualizado_em = $pivotData->atualizado_em;
+                                        
+                                        $empresa->setAttribute('pivot', $pivot);
+                                    }
+                                    
+                                    return $empresa;
+                                });
+                                
+                                // Associar empresas ao usuário
+                                $user->setRelation('empresas', $empresasComPivot);
+                            } else {
+                                // Nenhuma empresa encontrada
+                                $user->setRelation('empresas', collect([]));
+                            }
+                        }
+                        
+                        return $user;
                     });
                     
                     if ($resultado) {
