@@ -355,10 +355,13 @@ class MercadoPagoGateway implements PaymentProviderInterface
                 try {
                     $payment = $this->paymentClient->get($externalId);
 
-                    if (!$payment || isset($payment['error'])) {
+                    // $payment é um objeto MercadoPago\Resources\Payment, não um array
+                    if (!$payment) {
                         throw new NotFoundException("Pagamento não encontrado: {$externalId}");
                     }
 
+                    // O mapPaymentToResult já trata a conversão de objeto para array
+                    // Não tentar acessar propriedades como array aqui
                     return $this->mapPaymentToResult($payment);
 
                 } catch (NotFoundException $e) {

@@ -365,9 +365,16 @@ class AuthController extends Controller
     {
         try {
             $request->validate([
-                'token' => 'required',
+                'token' => 'required|string',
                 'email' => 'required|email',
                 'password' => 'required|string|min:8|confirmed',
+            ]);
+
+            Log::info('AuthController::resetPassword - Iniciando', [
+                'email' => $request->email,
+                'has_token' => !empty($request->token),
+                'has_password' => !empty($request->password),
+                'has_password_confirmation' => !empty($request->password_confirmation),
             ]);
 
             // Executar Use Case
@@ -383,18 +390,39 @@ class AuthController extends Controller
             ]);
 
         } catch (ValidationException $e) {
+            Log::warning('AuthController::resetPassword - Erro de validação', [
+                'email' => $request->email,
+                'errors' => $e->errors(),
+            ]);
+            
             return response()->json([
                 'message' => 'Dados inválidos.',
                 'errors' => $e->errors(),
                 'success' => false,
             ], 422);
         } catch (\App\Domain\Exceptions\DomainException $e) {
+            Log::warning('AuthController::resetPassword - Erro de domínio', [
+                'email' => $request->email,
+                'message' => $e->getMessage(),
+                'code' => $e->getCode(),
+            ]);
+            
+            // Se o código for 422 (validação de senha), retornar como erro de validação
+            if ($e->getCode() === 422) {
+                return response()->json([
+                    'message' => $e->getMessage(),
+                    'errors' => ['password' => [$e->getMessage()]],
+                    'success' => false,
+                ], 422);
+            }
+            
             return response()->json([
                 'message' => $e->getMessage(),
                 'success' => false,
             ], $e->getCode() ?: 400);
         } catch (\Exception $e) {
             Log::error('Erro ao redefinir senha', [
+                'email' => $request->email,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
