@@ -153,28 +153,29 @@ class UserReadRepository implements UserReadRepositoryInterface
         // IMPORTANTE: Usar JOIN direto para garantir que apenas usuários com empresas válidas sejam retornados.
         // O JOIN é mais explícito e eficiente do que whereHas para este caso.
         
-        // 🔥 CRÍTICO: Forçar o modelo a usar a conexão 'tenant' quando tenancy estiver inicializado
+        // 🔥 CRÍTICO: Forçar a query a usar a conexão 'tenant' quando tenancy estiver inicializado
         // O stancl/tenancy cria uma conexão dinâmica chamada 'tenant' quando initialize() é chamado
         // Mas os modelos Eloquent ainda usam a conexão padrão, então precisamos forçar explicitamente
+        $useTenantConnection = false;
+        $tenantConnection = null;
         if (tenancy()->initialized) {
             try {
                 // Verificar se a conexão 'tenant' existe (criada pelo DatabaseTenancyBootstrapper)
                 $tenantConnection = \DB::connection('tenant');
                 $tenantDbName = $tenantConnection->getDatabaseName();
+                $useTenantConnection = true;
                 
                 \Log::debug('UserReadRepository: Usando conexão tenant', [
                     'tenant_db_name' => $tenantDbName,
                     'tenant_id' => $tenantId,
                 ]);
-                
-                // Forçar o modelo a usar a conexão tenant
-                UserModel::setConnection('tenant');
             } catch (\Exception $e) {
                 \Log::warning('UserReadRepository: Conexão "tenant" não encontrada, usando conexão padrão do modelo', [
                     'error' => $e->getMessage(),
                     'tenant_id' => $tenantId,
                 ]);
-                // Se a conexão tenant não existir, deixar o modelo usar sua conexão padrão
+                // Se a conexão tenant não existir, usar a conexão padrão do modelo
+                $useTenantConnection = false;
             }
         }
         
@@ -182,7 +183,18 @@ class UserReadRepository implements UserReadRepositoryInterface
         // IMPORTANTE: Incluir usuários deletados (soft deletes) para mostrar na listagem admin
         // 🔥 CRÍTICO: Usar JOIN direto para garantir que apenas usuários com empresas sejam retornados
         // Isso garante que estamos realmente no banco do tenant e apenas usuários válidos são retornados
-        $query = UserModel::withTrashed()
+        
+        // 🔥 CRÍTICO: Criar uma nova instância do modelo com a conexão tenant se necessário
+        if ($useTenantConnection && $tenantConnection) {
+            // Criar uma nova instância do modelo configurada com a conexão tenant
+            $userInstance = (new UserModel())->setConnection('tenant');
+            $query = $userInstance->newQuery()->withTrashed();
+        } else {
+            // Usar a conexão padrão do modelo
+            $query = UserModel::withTrashed();
+        }
+        
+        $query = $query
             ->join('empresa_user', 'users.id', '=', 'empresa_user.user_id')
             ->join('empresas', function($join) use ($filtros) {
                 $join->on('empresa_user.empresa_id', '=', 'empresas.id')
