@@ -15,7 +15,6 @@ use App\Modules\Assinatura\Models\Plano;
 use App\Modules\Auth\Models\User;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use Stancl\Tenancy\Facades\Tenancy;
 
 /**
  * Listener para eventos de Assinatura
@@ -62,7 +61,7 @@ class AssinaturaNotificacaoListener
             }
 
             // Inicializar contexto do tenant
-            Tenancy::initialize($tenant);
+            tenancy()->initialize($tenant);
 
             try {
                 // Buscar assinatura completa
@@ -161,8 +160,8 @@ class AssinaturaNotificacaoListener
                 ]);
 
             } finally {
-                if (Tenancy::initialized()) {
-                    Tenancy::end();
+                if (tenancy()->initialized) {
+                    tenancy()->end();
                 }
             }
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Auditoria\Entities;
 
+use App\Domain\Auditoria\Enums\AuditAction;
 use App\Domain\Exceptions\DomainException;
 use Carbon\Carbon;
 

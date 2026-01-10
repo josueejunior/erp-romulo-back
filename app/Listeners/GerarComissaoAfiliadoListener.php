@@ -13,7 +13,6 @@ use App\Modules\Assinatura\Models\Assinatura as AssinaturaModel;
 use App\Modules\Assinatura\Models\Plano;
 use App\Models\Empresa;
 use Illuminate\Support\Facades\Log;
-use Stancl\Tenancy\Facades\Tenancy;
 use Carbon\Carbon;
 
 /**
@@ -75,7 +74,7 @@ class GerarComissaoAfiliadoListener
                 return;
             }
 
-            Tenancy::initialize($tenant);
+            tenancy()->initialize($tenant);
 
             try {
                 // Buscar assinatura
@@ -116,8 +115,8 @@ class GerarComissaoAfiliadoListener
                 }
 
             } finally {
-                if (Tenancy::initialized()) {
-                    Tenancy::end();
+                if (tenancy()->initialized) {
+                    tenancy()->end();
                 }
             }
 
