@@ -3,7 +3,7 @@
 // 🔥 PRODUÇÃO: Validar e corrigir configurações SMTP
 // Prevenir uso de mailpit/localhost em produção
 $mailHost = env('MAIL_HOST', 'smtp.hostinger.com');
-$mailPort = (int) env('MAIL_PORT', 465);
+$mailPort = (int) env('MAIL_PORT', 587); // Hostinger geralmente usa 587 com TLS
 
 $invalidHosts = ['mailpit', 'localhost', '127.0.0.1'];
 if (in_array(strtolower($mailHost), array_map('strtolower', $invalidHosts)) || $mailPort === 1025) {
@@ -11,10 +11,17 @@ if (in_array(strtolower($mailHost), array_map('strtolower', $invalidHosts)) || $
         'host_original' => $mailHost,
         'porta_original' => $mailPort,
         'fallback_host' => 'smtp.hostinger.com',
-        'fallback_port' => 465,
+        'fallback_port' => 587,
     ]);
     $mailHost = 'smtp.hostinger.com';
-    $mailPort = 465;
+    $mailPort = 587;
+}
+
+// Determinar encryption baseado na porta
+// Hostinger: 587 = TLS, 465 = SSL
+$mailEncryption = env('MAIL_ENCRYPTION');
+if (!$mailEncryption) {
+    $mailEncryption = ($mailPort === 587) ? 'tls' : (($mailPort === 465) ? 'ssl' : 'tls');
 }
 
 return [
@@ -59,8 +66,8 @@ return [
             // 🔥 PRODUÇÃO: Valores validados para garantir SMTP de produção
             'host' => $mailHost,
             'port' => $mailPort,
-            // Tentar TLS primeiro (porta 587), se não funcionar usar SSL (porta 465)
-            'encryption' => env('MAIL_ENCRYPTION', $mailPort === 587 ? 'tls' : 'ssl'),
+            // Hostinger: porta 587 = TLS (recomendado), porta 465 = SSL
+            'encryption' => $mailEncryption,
             'username' => env('MAIL_USERNAME', 'naoresponda@addsimp.com'),
             'password' => env('MAIL_PASSWORD' , 'C/k6@!S0'),
             'timeout' => 30,
@@ -73,10 +80,6 @@ return [
 
         'postmark' => [
             'transport' => 'postmark',
-            // 'message_stream_id' => env('POSTMARK_MESSAGE_STREAM_ID'),
-            // 'client' => [
-            //     'timeout' => 5,
-            // ],
         ],
 
         'resend' => [
