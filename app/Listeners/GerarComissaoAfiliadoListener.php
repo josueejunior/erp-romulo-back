@@ -150,7 +150,8 @@ class GerarComissaoAfiliadoListener
                 descontoAplicado: $descontoAplicado,
                 planoId: $plano->id,
                 valorPlanoOriginal: $valorOriginal,
-                valorPlanoComDesconto: (float) $valorComDesconto
+                valorPlanoComDesconto: (float) $valorComDesconto,
+                empresaNome: $empresa->razao_social ?? null // 🔥 Passar nome da empresa para exibição na UI
             );
 
             Log::info('GerarComissaoAfiliadoListener - Indicação inicial criada', [

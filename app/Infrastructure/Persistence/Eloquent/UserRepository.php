@@ -93,7 +93,9 @@ class UserRepository implements UserRepositoryInterface
 
     public function buscarPorId(int $id): ?User
     {
-        $model = UserModel::find($id);
+        // 🔥 CORREÇÃO: Usar withTrashed para buscar também usuários inativos (soft deleted)
+        // Isso é necessário para operações de reativação e para evitar erros "Usuário não encontrado"
+        $model = UserModel::withTrashed()->find($id);
         if (!$model) {
             return null;
         }
@@ -217,7 +219,16 @@ class UserRepository implements UserRepositoryInterface
 
     public function deletar(int $id): void
     {
-        UserModel::findOrFail($id)->delete();
+        // 🔥 CORREÇÃO: Usar withTrashed para encontrar usuário mesmo se já estiver inativo
+        // Isso evita o erro "Usuário não encontrado" quando tenta inativar novamente
+        $user = UserModel::withTrashed()->findOrFail($id);
+        
+        // Se já está deletado (soft delete), não faz nada
+        if ($user->trashed()) {
+            return;
+        }
+        
+        $user->delete();
     }
 
     public function reativar(int $id): void

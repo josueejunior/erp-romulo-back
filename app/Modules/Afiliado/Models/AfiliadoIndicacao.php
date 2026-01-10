@@ -19,6 +19,7 @@ class AfiliadoIndicacao extends Model
         'afiliado_id',
         'tenant_id',
         'empresa_id',
+        'empresa_nome', // 🔥 Nome da empresa para exibição na UI
         'codigo_usado',
         'desconto_aplicado',
         'comissao_percentual',

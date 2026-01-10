@@ -34,6 +34,7 @@ final class CriarIndicacaoAfiliadoUseCase
      * @param int $planoId ID do plano contratado
      * @param float $valorPlanoOriginal Valor original do plano
      * @param float $valorPlanoComDesconto Valor após desconto
+     * @param string|null $empresaNome Nome da empresa (razão social) para exibição
      * @return AfiliadoIndicacao
      */
     public function executar(
@@ -44,7 +45,8 @@ final class CriarIndicacaoAfiliadoUseCase
         float $descontoAplicado,
         int $planoId,
         float $valorPlanoOriginal,
-        float $valorPlanoComDesconto
+        float $valorPlanoComDesconto,
+        ?string $empresaNome = null
     ): AfiliadoIndicacao {
         return DB::transaction(function () use (
             $afiliadoId,
@@ -54,7 +56,8 @@ final class CriarIndicacaoAfiliadoUseCase
             $descontoAplicado,
             $planoId,
             $valorPlanoOriginal,
-            $valorPlanoComDesconto
+            $valorPlanoComDesconto,
+            $empresaNome
         ) {
             // Buscar afiliado para obter percentual de comissão
             $afiliado = Afiliado::find($afiliadoId);
@@ -113,6 +116,7 @@ final class CriarIndicacaoAfiliadoUseCase
                 'afiliado_id' => $afiliadoId,
                 'tenant_id' => $tenantId,
                 'empresa_id' => $empresaId,
+                'empresa_nome' => $empresaNome, // 🔥 Salvar nome da empresa para exibição na UI
                 'codigo_usado' => strtoupper(trim($codigoUsado)),
                 'desconto_aplicado' => $descontoAplicado,
                 'comissao_percentual' => $comissaoPercentual,
