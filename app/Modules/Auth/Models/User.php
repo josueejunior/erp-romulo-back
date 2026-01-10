@@ -7,6 +7,8 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 use App\Models\Traits\HasTimestampsCustomizados;
@@ -41,6 +43,44 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ]);
+    }
+
+    /**
+     * Global Scope para garantir isolamento de tenant
+     * 
+     * 🔥 SEGURANÇA: Impede que queries de usuários sejam executadas sem filtro de tenant
+     * quando estiverem no banco central. Só é ativado se a conexão for a central e o
+     * tenancy estiver inicializado, forçando um filtro através das empresas do tenant.
+     */
+    protected static function booted()
+    {
+        static::addGlobalScope('tenant_filter', function (Builder $builder) {
+            if (tenancy()->initialized && tenancy()->tenant) {
+                $databaseName = DB::connection()->getDatabaseName();
+                
+                // Só aplicar o filtro se estivermos no banco central (fallback)
+                if (!str_starts_with($databaseName, 'tenant_')) {
+                    $tenantId = tenancy()->tenant->id;
+                    
+                    // Buscar empresa_ids do tenant através da tabela tenant_empresas (banco central)
+                    $empresaIds = \App\Models\TenantEmpresa::where('tenant_id', $tenantId)
+                        ->pluck('empresa_id')
+                        ->toArray();
+                    
+                    if (!empty($empresaIds)) {
+                        // Filtrar usuários que têm relacionamento com empresas do tenant
+                        $builder->whereHas('empresas', function ($q) use ($empresaIds) {
+                            $q->whereIn('empresas.id', $empresaIds);
+                        });
+                    } else {
+                        // Se não houver empresas mapeadas, não retornar nenhum usuário
+                        $builder->whereRaw('1 = 0');
+                    }
+                }
+                // Se estiver no banco tenant, não precisa de filtro adicional
+                // pois o isolamento já é feito pelo banco de dados
+            }
+        });
     }
 
     /**
