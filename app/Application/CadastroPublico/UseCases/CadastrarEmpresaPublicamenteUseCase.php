@@ -28,6 +28,7 @@ use App\Domain\Payment\ValueObjects\PaymentRequest;
 use App\Jobs\VerificarPagamentoPendenteJob;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
 
@@ -327,13 +328,29 @@ final class CadastrarEmpresaPublicamenteUseCase
                     
                     if ($userModel) {
                         // 🔥 VALIDAÇÃO INTELIGENTE:
-                        // 1. Se usuário está soft deleted (inativo) → permitir novo cadastro
+                        // 1. Se usuário está soft deleted (desativado) → permitir novo cadastro
                         // 2. Se usuário está ativo MAS NÃO está vinculado a empresa ativa → permitir novo cadastro
                         // 3. Se usuário está ativo E está vinculado a empresa ativa → bloquear
                         
                         // NOTA: Usar trashed() para verificar soft delete é mais seguro do que acessar a coluna diretamente
                         // pois o nome da coluna pode variar (deleted_at vs excluido_em)
-                        $usuarioAtivo = !$userModel->trashed();
+                        $usuarioEstaDesativado = $userModel->trashed();
+                        $usuarioAtivo = !$usuarioEstaDesativado;
+                        
+                        // 🔥 VALIDAÇÃO: Se usuário está desativado, já pode permitir novo cadastro
+                        // Não precisa verificar empresas se o usuário está desativado
+                        if ($usuarioEstaDesativado) {
+                            Log::info('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email encontrado mas usuário está desativado, permitindo novo cadastro', [
+                                'email' => $dto->adminEmail,
+                                'tenant_id' => $tenant->id,
+                                'tenant_razao_social' => $tenantDomain->razaoSocial ?? 'N/A',
+                                'usuario_id' => $userModel->id,
+                                'usuario_desativado' => true,
+                                'excluido_em' => $userModel->excluido_em?->toDateTimeString(),
+                            ]);
+                            // Continuar verificando outros tenants (não bloquear)
+                            continue;
+                        }
                         
                         // 🔥 CORREÇÃO: Verificar se o USUÁRIO está vinculado a empresa ativa
                         // Não verificar apenas se o tenant tem empresa ativa (pode ter empresa de teste)
@@ -345,6 +362,7 @@ final class CadastrarEmpresaPublicamenteUseCase
                             'tenant_razao_social' => $tenantDomain->razaoSocial ?? 'N/A',
                             'usuario_id' => $userModel->id,
                             'usuario_ativo' => $usuarioAtivo,
+                            'usuario_desativado' => $usuarioEstaDesativado,
                             'usuario_tem_empresa_ativa' => $usuarioTemEmpresaAtiva,
                             'is_trashed' => $userModel->trashed(),
                         ]);
@@ -360,16 +378,12 @@ final class CadastrarEmpresaPublicamenteUseCase
                             ]);
                             break; // Não precisa continuar verificando outros tenants
                         } else {
-                            // Usuário inativo OU não vinculado a empresa ativa = permitir novo cadastro
-                            $motivo = !$usuarioAtivo 
-                                ? 'usuario_inativo' 
-                                : 'usuario_sem_empresa_ativa';
-                            
-                            Log::info('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email encontrado mas permitindo novo cadastro', [
+                            // Usuário ativo mas não vinculado a empresa ativa = permitir novo cadastro
+                            Log::info('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email encontrado mas permitindo novo cadastro (usuário ativo mas sem empresa ativa)', [
                                 'email' => $dto->adminEmail,
                                 'tenant_id' => $tenant->id,
                                 'tenant_razao_social' => $tenantDomain->razaoSocial ?? 'N/A',
-                                'motivo' => $motivo,
+                                'motivo' => 'usuario_sem_empresa_ativa',
                                 'usuario_ativo' => $usuarioAtivo,
                                 'usuario_tem_empresa_ativa' => $usuarioTemEmpresaAtiva,
                             ]);
@@ -964,21 +978,69 @@ final class CadastrarEmpresaPublicamenteUseCase
      * @param \App\Modules\Auth\Models\User $userModel
      * @return bool
      */
+    /**
+     * Verifica se o usuário está vinculado a uma empresa ativa e válida
+     * 
+     * IMPORTANTE: Este método NÃO verifica se o usuário está desativado (soft deleted),
+     * pois essa verificação deve ser feita ANTES de chamar este método.
+     * 
+     * @param \App\Modules\Auth\Models\User $userModel
+     * @return bool True se o usuário está vinculado a pelo menos uma empresa ativa e válida
+     */
     private function verificarSeUsuarioTemEmpresaAtiva($userModel): bool
     {
         try {
-            // Carregar empresas do usuário
-            $empresas = $userModel->empresas()->get();
+            // 🔥 VALIDAÇÃO: Se o usuário está desativado (soft deleted), não tem empresa ativa
+            // Esta verificação é redundante se já foi verificada antes, mas serve como segurança
+            if ($userModel->trashed()) {
+                Log::debug('CadastrarEmpresaPublicamenteUseCase::verificarSeUsuarioTemEmpresaAtiva - Usuário está desativado, não tem empresa ativa', [
+                    'usuario_id' => $userModel->id,
+                    'excluido_em' => $userModel->excluido_em?->toDateTimeString(),
+                ]);
+                return false;
+            }
+            
+            // Carregar empresas do usuário (belongsToMany não suporta withTrashed() diretamente)
+            // IMPORTANTE: empresas() retorna apenas empresas ativas (não deletadas)
+            // Mas vamos verificar manualmente se há empresas deletadas na relação pivot
+            $empresasIds = DB::table('empresa_user')
+                ->where('user_id', $userModel->id)
+                ->pluck('empresa_id')
+                ->toArray();
+            
+            if (empty($empresasIds)) {
+                Log::debug('CadastrarEmpresaPublicamenteUseCase::verificarSeUsuarioTemEmpresaAtiva - Usuário sem empresas vinculadas', [
+                    'usuario_id' => $userModel->id,
+                ]);
+                return false;
+            }
+            
+            // Buscar empresas incluindo deletadas (soft delete)
+            // Usar modelo Eloquent diretamente para ter acesso a withTrashed()
+            $empresas = \App\Models\Empresa::withTrashed()
+                ->whereIn('id', $empresasIds)
+                ->get();
             
             if ($empresas->isEmpty()) {
-                Log::debug('CadastrarEmpresaPublicamenteUseCase::verificarSeUsuarioTemEmpresaAtiva - Usuário sem empresas', [
+                Log::debug('CadastrarEmpresaPublicamenteUseCase::verificarSeUsuarioTemEmpresaAtiva - Nenhuma empresa encontrada nos IDs', [
                     'usuario_id' => $userModel->id,
+                    'empresas_ids' => $empresasIds,
                 ]);
                 return false;
             }
             
             // Verificar se alguma empresa está ativa E tem razão social preenchida (não é empresa de teste)
             foreach ($empresas as $empresa) {
+                // Verificar se empresa não está deletada (soft delete)
+                if ($empresa->trashed()) {
+                    Log::debug('CadastrarEmpresaPublicamenteUseCase::verificarSeUsuarioTemEmpresaAtiva - Empresa deletada, ignorando', [
+                        'usuario_id' => $userModel->id,
+                        'empresa_id' => $empresa->id,
+                        'excluido_em' => $empresa->excluido_em?->toDateTimeString(),
+                    ]);
+                    continue;
+                }
+                
                 $razaoSocial = $empresa->razao_social ?? '';
                 $status = $empresa->status ?? 'inativa';
                 $cnpj = $empresa->cnpj ?? '';
@@ -1005,11 +1067,14 @@ final class CadastrarEmpresaPublicamenteUseCase
             Log::debug('CadastrarEmpresaPublicamenteUseCase::verificarSeUsuarioTemEmpresaAtiva - Usuário sem empresa ativa válida', [
                 'usuario_id' => $userModel->id,
                 'total_empresas' => $empresas->count(),
+                'usuario_desativado' => $userModel->trashed(),
                 'empresas' => $empresas->map(fn($e) => [
                     'id' => $e->id,
                     'razao_social' => $e->razao_social,
-                    'status' => $e->status,
+                    'status' => $e->status ?? 'inativa',
                     'cnpj' => $e->cnpj ?? '',
+                    'empresa_deletada' => $e->trashed(),
+                    'excluido_em' => $e->excluido_em?->toDateTimeString(),
                 ])->toArray(),
             ]);
             
@@ -1018,7 +1083,9 @@ final class CadastrarEmpresaPublicamenteUseCase
         } catch (\Exception $e) {
             Log::warning('CadastrarEmpresaPublicamenteUseCase::verificarSeUsuarioTemEmpresaAtiva - Erro', [
                 'usuario_id' => $userModel->id ?? null,
+                'usuario_desativado' => $userModel->trashed() ?? false,
                 'error' => $e->getMessage(),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null,
             ]);
             return false;
         }
