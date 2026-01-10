@@ -8,12 +8,8 @@ $mailPort = (int) (env('MAIL_PORT') ?? 587); // Hostinger geralmente usa 587 com
 
 $invalidHosts = ['mailpit', 'localhost', '127.0.0.1'];
 if (in_array(strtolower($mailHost), array_map('strtolower', $invalidHosts)) || $mailPort === 1025) {
-    \Log::warning('Config/Mail: Configuração de desenvolvimento detectada, usando SMTP de produção', [
-        'host_original' => $mailHost,
-        'porta_original' => $mailPort,
-        'fallback_host' => 'smtp.hostinger.com',
-        'fallback_port' => 587,
-    ]);
+    // Corrigir automaticamente para configurações de produção
+    // Nota: Não usar Log aqui - arquivos de config não suportam facades durante config:cache
     $mailHost = 'smtp.hostinger.com';
     $mailPort = 587;
 }
@@ -30,17 +26,11 @@ if (!$mailEncryption || $mailEncryption === 'null' || $mailEncryption === '') {
 $mailUsername = env('MAIL_USERNAME');
 if (empty($mailUsername) || $mailUsername === false || $mailUsername === null || $mailUsername === 'null') {
     $mailUsername = 'naoresponda@addsimp.com';
-    \Log::warning('Config/Mail: MAIL_USERNAME não encontrado no .env, usando valor padrão', [
-        'valor_usado' => $mailUsername,
-    ]);
 }
 
 $mailPassword = env('MAIL_PASSWORD');
 if (empty($mailPassword) || $mailPassword === false || $mailPassword === null || $mailPassword === 'null') {
     $mailPassword = 'C/k6@!S0';
-    \Log::warning('Config/Mail: MAIL_PASSWORD não encontrado no .env, usando valor padrão', [
-        'tem_senha' => !empty($mailPassword),
-    ]);
 }
 
 $mailFromAddress = env('MAIL_FROM_ADDRESS');
