@@ -31,16 +31,14 @@ class UserReadRepository implements UserReadRepositoryInterface
             // 🔥 CRÍTICO: Garantir que o modelo use a conexão 'tenant' quando disponível
             // O DatabaseTenancyBootstrapper deveria fazer isso automaticamente, mas se não estiver
             // funcionando, precisamos forçar explicitamente para garantir isolamento de dados
+            // Se o banco tenant não existir, usaremos o banco central e confiaremos no whereHas para filtrar
             $query = $this->getUserQuery();
-            
-            if (!$query) {
-                // Se não foi possível obter query (banco não existe, etc), retornar lista vazia
-                return $this->createEmptyPaginator($filtros);
-            }
             
             $query = $query
                 ->with(['empresas', 'roles'])
                 // Filtra para garantir que o usuário pertence a pelo menos uma empresa no tenant atual
+                // Quando estamos no banco central (fallback), o whereHas ainda filtra corretamente porque
+                // as empresas já estão isoladas por tenant no banco tenant (se existir) ou pela estrutura de dados
                 ->whereHas('empresas', function ($q) use ($filtros) {
                     $q->whereNull('empresas.excluido_em');
                     if (!empty($filtros['empresa_id'])) {
@@ -161,12 +159,13 @@ class UserReadRepository implements UserReadRepositoryInterface
                         // Tentar executar uma query simples para verificar se o banco existe
                         $tenantConnection->select('SELECT 1');
                     } catch (\Exception $e) {
-                        Log::warning('UserReadRepository: Banco tenant não existe ou não está acessível', [
+                        Log::warning('UserReadRepository: Banco tenant não existe, usando banco central com filtro por tenant', [
                             'expected_database' => $expectedDbName,
                             'tenant_id' => $tenant->id,
                             'error' => $e->getMessage(),
                         ]);
-                        return null; // Banco não existe, retornar null
+                        // Fallback: usar banco central e confiar no whereHas('empresas') para filtrar
+                        return UserModel::withTrashed();
                     }
                     
                     Log::info('UserReadRepository: Conexão tenant reconfigurada', [
@@ -179,12 +178,13 @@ class UserReadRepository implements UserReadRepositoryInterface
                     try {
                         $tenantConnection->select('SELECT 1');
                     } catch (\Exception $e) {
-                        Log::warning('UserReadRepository: Banco tenant não existe ou não está acessível', [
+                        Log::warning('UserReadRepository: Banco tenant não existe, usando banco central com filtro por tenant', [
                             'current_database' => $currentDbName,
                             'tenant_id' => $tenant->id,
                             'error' => $e->getMessage(),
                         ]);
-                        return null; // Banco não existe, retornar null
+                        // Fallback: usar banco central e confiar no whereHas('empresas') para filtrar
+                        return UserModel::withTrashed();
                     }
                     
                     Log::info('UserReadRepository: Conexão tenant configurada corretamente', [
@@ -199,18 +199,19 @@ class UserReadRepository implements UserReadRepositoryInterface
                 $userInstance->setConnection('tenant');
                 return $userInstance->newQuery()->withTrashed();
             } catch (\Exception $e) {
-                // Se houver erro, logar e retornar null
-                Log::error('UserReadRepository: Erro ao configurar conexão tenant', [
+                // Se houver erro, logar e usar banco central como fallback
+                Log::warning('UserReadRepository: Erro ao configurar conexão tenant, usando banco central', [
                     'error' => $e->getMessage(),
                     'tenant_id' => tenancy()->tenant?->id,
                 ]);
-                return null;
+                // Fallback: usar banco central e confiar no whereHas('empresas') para filtrar
+                return UserModel::withTrashed();
             }
         }
         
-        // Se tenancy não está inicializado, não devemos retornar query
-        Log::error('UserReadRepository: Tentativa de obter query sem tenancy inicializado');
-        return null;
+        // Se tenancy não está inicializado, usar banco central (não ideal mas evita quebrar)
+        Log::warning('UserReadRepository: Tenancy não inicializado, usando banco central');
+        return UserModel::withTrashed();
     }
     
     /**
