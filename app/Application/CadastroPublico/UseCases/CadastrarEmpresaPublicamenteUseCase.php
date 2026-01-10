@@ -25,6 +25,8 @@ use App\Domain\Plano\Repositories\PlanoRepositoryInterface;
 use App\Domain\Exceptions\EmailJaCadastradoException;
 use App\Domain\Exceptions\CnpjJaCadastradoException;
 use App\Domain\Payment\ValueObjects\PaymentRequest;
+use App\Domain\Shared\Events\EventDispatcherInterface;
+use App\Domain\Tenant\Events\EmpresaCriada;
 use App\Jobs\VerificarPagamentoPendenteJob;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
@@ -62,6 +64,7 @@ final class CadastrarEmpresaPublicamenteUseCase
         private readonly TenantRepositoryInterface $tenantRepository,
         private readonly EmpresaRepositoryInterface $empresaRepository,
         private readonly PlanoRepositoryInterface $planoRepository,
+        private readonly EventDispatcherInterface $eventDispatcher,
     ) {}
 
     /**
@@ -225,6 +228,32 @@ final class CadastrarEmpresaPublicamenteUseCase
                 $dto->adminEmail,
                 concluirAutomaticamente: !$isPlanoGratuito // Concluir automaticamente se plano pago
             );
+
+            // 8. Disparar evento de empresa criada para enviar email de boas-vindas
+            // 🔥 DDD: Evento de domínio disparado após criação bem-sucedida
+            try {
+                $this->eventDispatcher->dispatch(
+                    new EmpresaCriada(
+                        tenantId: $tenantResult['tenant']->id,
+                        razaoSocial: $tenantResult['tenant']->razaoSocial,
+                        cnpj: $tenantResult['tenant']->cnpj,
+                        email: $dto->adminEmail, // Usar email do admin cadastrado
+                        empresaId: $tenantResult['empresa']->id,
+                    )
+                );
+                
+                Log::info('CadastrarEmpresaPublicamenteUseCase - Evento EmpresaCriada disparado', [
+                    'tenant_id' => $tenantResult['tenant']->id,
+                    'empresa_id' => $tenantResult['empresa']->id,
+                    'email' => $dto->adminEmail,
+                ]);
+            } catch (\Exception $eventException) {
+                // Não quebrar o fluxo se houver erro ao disparar evento
+                Log::warning('CadastrarEmpresaPublicamenteUseCase - Erro ao disparar evento EmpresaCriada', [
+                    'tenant_id' => $tenantResult['tenant']->id,
+                    'error' => $eventException->getMessage(),
+                ]);
+            }
 
             $result = [
                 'tenant' => $tenantResult['tenant'],

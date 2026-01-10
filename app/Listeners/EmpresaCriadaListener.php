@@ -92,45 +92,66 @@ class EmpresaCriadaListener
                 'config_cached' => app()->configurationIsCached(),
             ]);
 
-            // Validar configuração SMTP
+            // Validar configuração SMTP (mas não bloquear se for configuração de desenvolvimento)
             if ($mailDriver === 'smtp') {
                 // Verificar se host é válido (não vazio, não mailpit, não localhost)
                 if (empty($mailHost) || 
                     strtolower($mailHost) === 'mailpit' || 
                     strtolower($mailHost) === 'localhost' ||
                     str_contains(strtolower($mailHost), '127.0.0.1')) {
-                    Log::error('EmpresaCriadaListener - Configuração SMTP inválida ou de desenvolvimento', [
+                    Log::warning('EmpresaCriadaListener - Configuração SMTP de desenvolvimento detectada', [
                         'mail_host' => $mailHost,
                         'mail_driver' => $mailDriver,
+                        'tenant_id' => $event->tenantId,
+                        'email_destino' => $emailDestino,
                         'sugestao' => 'Execute: php artisan config:clear && verifique MAIL_HOST no .env',
+                        'acao' => 'Tentando enviar mesmo assim - erro pode ocorrer',
                     ]);
-                    throw new \RuntimeException(
-                        'Configuração de email inválida. Host atual: ' . ($mailHost ?: 'não definido') . 
-                        '. Execute: php artisan config:clear e verifique MAIL_HOST no .env'
-                    );
+                    // Não lançar exceção - tentar enviar mesmo assim e capturar erro depois
                 }
                 
-                // Verificar se credenciais estão definidas
+                // Verificar se credenciais estão definidas (mas não bloquear se não estiverem)
                 if (empty($mailUsername) || empty($mailPassword)) {
-                    Log::error('EmpresaCriadaListener - Credenciais SMTP não definidas', [
+                    Log::warning('EmpresaCriadaListener - Credenciais SMTP parcialmente não definidas', [
                         'mail_host' => $mailHost,
                         'username_set' => !empty($mailUsername),
                         'password_set' => !empty($mailPassword),
+                        'tenant_id' => $event->tenantId,
+                        'email_destino' => $emailDestino,
                         'sugestao' => 'Verifique MAIL_USERNAME e MAIL_PASSWORD no .env',
+                        'acao' => 'Tentando enviar mesmo assim - erro pode ocorrer',
                     ]);
-                    throw new \RuntimeException(
-                        'Credenciais SMTP não definidas. Verifique MAIL_USERNAME e MAIL_PASSWORD no .env'
-                    );
+                    // Não lançar exceção - tentar enviar mesmo assim e capturar erro depois
                 }
             }
 
-            // Enviar email
-            Mail::to($emailDestino)->send(new EmpresaCriadaEmail($tenantData, $empresaData));
-            
-            Log::info('EmpresaCriadaListener - Email enviado com sucesso', [
-                'tenant_id' => $event->tenantId,
-                'email_destino' => $emailDestino,
-            ]);
+            // 🔥 TENTAR ENVIAR EMAIL: Mesmo com validações de aviso, tentar enviar
+            // Se houver erro de configuração, será capturado no catch e logado
+            try {
+                Log::info('EmpresaCriadaListener - Tentando enviar email', [
+                    'tenant_id' => $event->tenantId,
+                    'email_destino' => $emailDestino,
+                    'mail_driver' => $mailDriver,
+                    'mail_host' => $mailHost,
+                ]);
+
+                Mail::to($emailDestino)->send(new EmpresaCriadaEmail($tenantData, $empresaData));
+                
+                Log::info('EmpresaCriadaListener - Email enviado com sucesso', [
+                    'tenant_id' => $event->tenantId,
+                    'email_destino' => $emailDestino,
+                ]);
+            } catch (\Exception $mailException) {
+                Log::error('EmpresaCriadaListener - Erro ao enviar email (capturado)', [
+                    'tenant_id' => $event->tenantId,
+                    'email_destino' => $emailDestino,
+                    'error' => $mailException->getMessage(),
+                    'error_class' => get_class($mailException),
+                    'trace' => $mailException->getTraceAsString(),
+                ]);
+                // Re-lançar exceção para ser capturada no catch externo
+                throw $mailException;
+            }
 
         } catch (\Exception $e) {
             // Não quebrar o fluxo de criação se houver erro no email
