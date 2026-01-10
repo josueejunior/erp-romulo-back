@@ -92,12 +92,19 @@ class FornecedorRepository implements FornecedorRepositoryInterface
             $query->where('is_transportadora', true);
         }
 
+        // Filtro por estado (UF)
+        if (isset($filtros['estado']) && !empty($filtros['estado'])) {
+            $query->where('estado', $filtros['estado']);
+        }
+
+        // Busca livre
         if (isset($filtros['search']) && !empty($filtros['search'])) {
             $search = $filtros['search'];
             $query->where(function($q) use ($search) {
                 $q->where('razao_social', 'ilike', "%{$search}%")
                   ->orWhere('cnpj', 'ilike', "%{$search}%")
-                  ->orWhere('nome_fantasia', 'ilike', "%{$search}%");
+                  ->orWhere('nome_fantasia', 'ilike', "%{$search}%")
+                  ->orWhere('cidade', 'ilike', "%{$search}%");
             });
         }
 
