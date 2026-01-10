@@ -19,7 +19,9 @@ class DocumentoHabilitacaoService extends BaseService
     {
         return [
             'search' => $values['search'] ?? null,
-            'vencendo' => $values['vencendo'] ?? false,
+            'vencendo' => isset($values['vencendo']) ? (bool) $values['vencendo'] : false,
+            'vencidos' => isset($values['vencidos']) ? (bool) $values['vencidos'] : false,
+            'ativo' => isset($values['ativo']) ? (bool) $values['ativo'] : null,
             'todos' => $values['todos'] ?? false,
             'page' => $values['page'] ?? 1,
             'per_page' => $values['per_page'] ?? 15,
@@ -41,16 +43,19 @@ class DocumentoHabilitacaoService extends BaseService
 
         // Filtro por documentos vencendo
         if (isset($params['vencendo']) && $params['vencendo']) {
+            $hoje = \Carbon\Carbon::now()->startOfDay();
+            $em30Dias = \Carbon\Carbon::now()->addDays(30)->endOfDay();
             $builder->whereNotNull('data_validade')
-                  ->where('data_validade', '>=', now())
-                  ->where('data_validade', '<=', now()->addDays(30))
+                  ->where('data_validade', '>=', $hoje)
+                  ->where('data_validade', '<=', $em30Dias)
                   ->where('ativo', true);
         }
 
         // Filtro por documentos vencidos
         if (isset($params['vencidos']) && $params['vencidos']) {
+            $hoje = \Carbon\Carbon::now()->startOfDay();
             $builder->whereNotNull('data_validade')
-                  ->where('data_validade', '<', now())
+                  ->where('data_validade', '<', $hoje)
                   ->where('ativo', true);
         }
 
@@ -60,7 +65,16 @@ class DocumentoHabilitacaoService extends BaseService
         }
 
         // Ordenação
-        $builder->orderBy('data_validade', 'asc');
+        if (isset($params['vencidos']) && $params['vencidos']) {
+            // Documentos vencidos: ordenar por data de validade (mais recente primeiro)
+            $builder->orderBy('data_validade', 'desc');
+        } elseif (isset($params['vencendo']) && $params['vencendo']) {
+            // Documentos vencendo: ordenar por data de validade (mais próximo primeiro)
+            $builder->orderBy('data_validade', 'asc');
+        } else {
+            // Ordenação padrão por data de validade
+            $builder->orderBy('data_validade', 'asc');
+        }
 
         // Se não for paginação, retornar todos em um paginator
         if (isset($params['todos']) && $params['todos']) {
