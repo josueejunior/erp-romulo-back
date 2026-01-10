@@ -118,70 +118,72 @@ class UserReadRepository implements UserReadRepositoryInterface
             throw new \RuntimeException('Tenancy não inicializado. Não é possível listar usuários sem contexto de tenant.');
         }
 
-        // 🔥 CRÍTICO: Verificar se estamos usando o banco de dados correto
-        // O banco deve começar com 'tenant_' quando tenancy está inicializado
-        $databaseName = \DB::connection()->getDatabaseName();
+        // Obter informações do tenant e banco de dados
         $tenantId = tenancy()->tenant?->id;
-        $expectedDatabaseName = 'tenant_' . $tenantId;
-        
-        if ($databaseName !== $expectedDatabaseName && !str_starts_with($databaseName, 'tenant_')) {
-            \Log::error('UserReadRepository: Banco de dados incorreto!', [
-                'database_name_atual' => $databaseName,
-                'database_name_esperado' => $expectedDatabaseName,
-                'tenant_id' => $tenantId,
-                'tenancy_initialized' => tenancy()->initialized,
-            ]);
-            throw new \RuntimeException("Banco de dados incorreto. Esperado: {$expectedDatabaseName}, Atual: {$databaseName}");
-        }
-
-        // Carregar todos os relacionamentos necessários
-        // IMPORTANTE: Incluir usuários deletados (soft deletes) para mostrar na listagem admin
-        $query = UserModel::withTrashed()->with(['empresas', 'roles']);
+        $databaseName = \DB::connection()->getDatabaseName();
+        $connectionName = \DB::connection()->getName();
         
         \Log::info('UserReadRepository: Listando usuários', [
             'filtros' => $filtros,
             'tenant_id' => $tenantId,
             'tenant_razao_social' => tenancy()->tenant?->razao_social ?? 'N/A',
             'tenancy_initialized' => tenancy()->initialized,
-            'database_connection' => \DB::connection()->getName(),
+            'database_connection' => $connectionName,
             'database_name' => $databaseName,
-            'database_name_esperado' => $expectedDatabaseName,
         ]);
 
-        // 🔥 SEGURANÇA: Garantir que apenas usuários do tenant atual sejam listados
-        // Como User não tem tenant_id direto, filtramos via relacionamento com Empresa
-        // IMPORTANTE: Quando tenancy está inicializado, já estamos no banco do tenant (tenant_XX),
-        // então todas as empresas já estão automaticamente filtradas pelo tenant.
-        // O `whereHas('empresas')` garante que apenas usuários que têm pelo menos uma empresa sejam retornados,
-        // e como estamos no banco do tenant, essas empresas são do tenant correto.
+        // 🔥 CRÍTICO: Quando tenancy está inicializado, o Laravel muda automaticamente a conexão do banco
+        // para o banco do tenant (ex: tenant_2). Isso significa que:
+        // - A tabela `users` já está no banco do tenant
+        // - A tabela `empresas` já está no banco do tenant  
+        // - A tabela `empresa_user` (pivot) já está no banco do tenant
+        // Então, todas as queries já estão automaticamente no contexto correto.
+        //
+        // IMPORTANTE: Usar whereHas ao invés de JOIN direto, pois o JOIN pode causar problemas
+        // com eager loading. O whereHas gera uma subquery EXISTS que é mais segura.
         
-        // 🔥 UX: Filtrar por empresa específica quando solicitado
-        // Comportamento:
-        // - Se empresa_id for fornecido: mostrar APENAS usuários vinculados àquela empresa específica
-        // - Se não for fornecido: mostrar TODOS os usuários do tenant (todas as empresas do tenant)
+        // 🔥 CRÍTICO: Garantir que apenas usuários do tenant atual sejam listados
+        // IMPORTANTE: Quando tenancy está inicializado, o Laravel muda automaticamente a conexão do banco
+        // para o banco do tenant (ex: tenant_2). Isso significa que:
+        // - A tabela `users` já está no banco do tenant (tenant_2)
+        // - A tabela `empresas` já está no banco do tenant (tenant_2)
+        // - A tabela `empresa_user` (pivot) já está no banco do tenant (tenant_2)
+        // Então, TODAS as queries já estão automaticamente no contexto correto do tenant.
+        //
+        // IMPORTANTE: Usar JOIN direto para garantir que apenas usuários com empresas válidas sejam retornados.
+        // O JOIN é mais explícito e eficiente do que whereHas para este caso.
+        
+        // Carregar todos os relacionamentos necessários
+        // IMPORTANTE: Incluir usuários deletados (soft deletes) para mostrar na listagem admin
+        // 🔥 CRÍTICO: Usar JOIN direto para garantir que apenas usuários com empresas sejam retornados
+        // Isso garante que estamos realmente no banco do tenant e apenas usuários válidos são retornados
+        $query = UserModel::withTrashed()
+            ->join('empresa_user', 'users.id', '=', 'empresa_user.user_id')
+            ->join('empresas', function($join) use ($filtros) {
+                $join->on('empresa_user.empresa_id', '=', 'empresas.id')
+                     ->whereNull('empresas.excluido_em');
+                // Se empresa_id for especificado, adicionar filtro aqui
+                if (isset($filtros['empresa_id']) && $filtros['empresa_id'] > 0) {
+                    $join->where('empresas.id', $filtros['empresa_id']);
+                }
+            })
+            ->select('users.*') // Selecionar apenas colunas da tabela users para evitar ambiguidade
+            ->distinct() // Garantir que não há duplicatas devido ao JOIN múltiplo
+            ->with(['empresas', 'roles']); // Eager loading dos relacionamentos (após JOIN)
+        
+        // 🔥 UX: Log do comportamento
         if (isset($filtros['empresa_id']) && $filtros['empresa_id'] > 0) {
             \Log::info('UserReadRepository: Filtrando por empresa_id específico', [
                 'empresa_id' => $filtros['empresa_id'],
                 'tenant_id' => $tenantId,
                 'database_name' => $databaseName,
             ]);
-            // Filtrar apenas usuários que têm vínculo com a empresa específica
-            $query->whereHas('empresas', function($q) use ($filtros) {
-                $q->where('empresas.id', $filtros['empresa_id'])
-                  ->whereNull('empresas.excluido_em');
-            });
         } else {
             \Log::info('UserReadRepository: Mostrando TODOS os usuários do tenant (sem filtro de empresa)', [
                 'tenant_id' => $tenantId,
                 'tenancy_initialized' => tenancy()->initialized,
                 'database_name' => $databaseName,
             ]);
-            // Sem filtro de empresa_id, mostra todos os usuários que têm pelo menos uma empresa não deletada no tenant atual
-            // Como estamos no banco do tenant (tenant_XX), todas as empresas aqui são do tenant correto
-            // IMPORTANTE: O whereHas garante que apenas usuários com empresas sejam retornados
-            $query->whereHas('empresas', function($q) {
-                $q->whereNull('empresas.excluido_em');
-            });
         }
 
         if (isset($filtros['search']) && !empty($filtros['search'])) {
@@ -194,26 +196,81 @@ class UserReadRepository implements UserReadRepositoryInterface
 
         $perPage = $filtros['per_page'] ?? 15;
         
-        // Log antes da query
+        // 🔥 CRÍTICO: Verificar se estamos usando o banco correto antes de executar a query
+        $currentDatabaseName = \DB::connection()->getDatabaseName();
+        $expectedDatabaseName = 'tenant_' . $tenantId;
+        
+        \Log::info('UserReadRepository: Verificando banco de dados antes da query', [
+            'current_database_name' => $currentDatabaseName,
+            'expected_database_name' => $expectedDatabaseName,
+            'tenant_id' => $tenantId,
+            'tenancy_initialized' => tenancy()->initialized,
+            'database_connection' => \DB::connection()->getName(),
+        ]);
+        
+        // Verificar se o banco está correto (deve começar com 'tenant_')
+        if (!str_starts_with($currentDatabaseName, 'tenant_')) {
+            \Log::error('UserReadRepository: Banco de dados incorreto! Esperado banco de tenant, mas está usando banco central', [
+                'current_database_name' => $currentDatabaseName,
+                'expected_database_name' => $expectedDatabaseName,
+                'tenant_id' => $tenantId,
+            ]);
+            throw new \RuntimeException("Banco de dados incorreto. Esperado banco do tenant ({$expectedDatabaseName}), mas está usando banco: {$currentDatabaseName}");
+        }
+        
+        // Log antes da query - verificar SQL completo com subqueries
         \Log::info('UserReadRepository: Executando query', [
             'sql' => $query->toSql(),
             'bindings' => $query->getBindings(),
+            'database_name' => $currentDatabaseName,
+            'database_connection' => \DB::connection()->getName(),
+            'tenant_id' => $tenantId,
+            'tenant_razao_social' => tenancy()->tenant?->razao_social ?? 'N/A',
         ]);
         
+        // Executar query e obter resultados
         $paginator = $query->orderBy('name')->paginate($perPage);
+        
+        // 🔥 CRÍTICO: Verificar se os usuários retornados realmente pertencem ao tenant correto
+        // Filtrar no PHP para garantir que apenas usuários com empresas do tenant atual sejam retornados
+        $items = $paginator->getCollection()->filter(function ($user) use ($tenantId) {
+            // Verificar se o usuário tem pelo menos uma empresa não deletada
+            $hasValidEmpresa = $user->empresas->whereNull('excluido_em')->count() > 0;
+            
+            if (!$hasValidEmpresa) {
+                \Log::warning('UserReadRepository: Usuário sem empresa válida filtrado', [
+                    'user_id' => $user->id,
+                    'user_email' => $user->email,
+                    'tenant_id' => $tenantId,
+                ]);
+                return false;
+            }
+            
+            return true;
+        });
+        
+        // Atualizar total após filtro
+        $totalFiltered = $items->count();
+        
+        \Log::info('UserReadRepository: Filtro aplicado', [
+            'total_antes_filtro' => $paginator->count(),
+            'total_apos_filtro' => $totalFiltered,
+            'tenant_id' => $tenantId,
+        ]);
         
         // Log após query
         \Log::info('UserReadRepository: Query executada', [
             'total' => $paginator->total(),
             'count' => $paginator->count(),
             'items_count' => $paginator->getCollection()->count(),
+            'database_name' => \DB::connection()->getDatabaseName(),
         ]);
 
-        // Transformar Collection para array
+        // Transformar Collection filtrada para array
         // IMPORTANTE: Incluir todos os campos que o frontend espera
         // 🔥 PERFORMANCE: Relacionamentos já estão carregados via with(['empresas', 'roles'])
         // Não precisa verificar ou carregar novamente
-        $items = $paginator->getCollection()->map(function ($user) {
+        $items = $items->map(function ($user) {
             // Relacionamentos já estão carregados via eager loading (with())
             // Não precisa verificar relationLoaded nem fazer load() adicional
             
@@ -238,10 +295,11 @@ class UserReadRepository implements UserReadRepositoryInterface
             ];
         })->values()->toArray();
 
-        // Criar novo paginator com array (não Collection)
+        // Criar novo paginator com array filtrado (não Collection)
+        // NOTA: $items já é um array após o map()->values()->toArray()
         return new \Illuminate\Pagination\LengthAwarePaginator(
-            $items,
-            $paginator->total(),
+            $items, // Já é um array
+            $totalFiltered, // Usar total filtrado ao invés do total original
             $paginator->perPage(),
             $paginator->currentPage(),
             [
