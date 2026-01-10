@@ -169,3 +169,4 @@
 
 3. **Saldos**: Os Observers já atualizam saldos quando há mudanças. O comando de recalcular é apenas um fallback para garantir consistência.
 
+

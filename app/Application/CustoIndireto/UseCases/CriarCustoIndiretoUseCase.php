@@ -36,3 +36,4 @@ class CriarCustoIndiretoUseCase
         return $this->custoIndiretoRepository->criar($custoIndireto);
     }
 }
+

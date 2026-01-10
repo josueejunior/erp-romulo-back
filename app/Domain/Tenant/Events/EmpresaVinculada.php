@@ -32,3 +32,4 @@ readonly class EmpresaVinculada implements DomainEvent
 
 
 
+

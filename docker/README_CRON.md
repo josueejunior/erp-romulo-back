@@ -64,3 +64,4 @@ docker exec erp-licitacoes-app /usr/local/bin/laravel-cron.sh pagamentos:verific
 - Os logs são salvos em `/var/log/cron.log`
 - O cron roda em background enquanto o container está ativo
 
+
