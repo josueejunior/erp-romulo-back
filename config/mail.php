@@ -2,8 +2,9 @@
 
 // 🔥 PRODUÇÃO: Validar e corrigir configurações SMTP
 // Prevenir uso de mailpit/localhost em produção
-$mailHost = env('MAIL_HOST', 'smtp.hostinger.com');
-$mailPort = (int) env('MAIL_PORT', 587); // Hostinger geralmente usa 587 com TLS
+// IMPORTANTE: Usar operador ?? para garantir valores padrão mesmo com config cache
+$mailHost = env('MAIL_HOST') ?? 'smtp.hostinger.com';
+$mailPort = (int) (env('MAIL_PORT') ?? 587); // Hostinger geralmente usa 587 com TLS
 
 $invalidHosts = ['mailpit', 'localhost', '127.0.0.1'];
 if (in_array(strtolower($mailHost), array_map('strtolower', $invalidHosts)) || $mailPort === 1025) {
@@ -20,8 +21,31 @@ if (in_array(strtolower($mailHost), array_map('strtolower', $invalidHosts)) || $
 // Determinar encryption baseado na porta
 // Hostinger: 587 = TLS, 465 = SSL
 $mailEncryption = env('MAIL_ENCRYPTION');
-if (!$mailEncryption) {
+if (!$mailEncryption || $mailEncryption === 'null' || $mailEncryption === '') {
     $mailEncryption = ($mailPort === 587) ? 'tls' : (($mailPort === 465) ? 'ssl' : 'tls');
+}
+
+// 🔥 CREDENCIAIS: Garantir valores padrão mesmo se env() retornar null/false/empty (com config cache)
+// Quando há config cache ativo, env() pode retornar null mesmo que exista no .env
+$mailUsername = env('MAIL_USERNAME');
+if (empty($mailUsername) || $mailUsername === false || $mailUsername === null || $mailUsername === 'null') {
+    $mailUsername = 'naoresponda@addsimp.com';
+    \Log::warning('Config/Mail: MAIL_USERNAME não encontrado no .env, usando valor padrão', [
+        'valor_usado' => $mailUsername,
+    ]);
+}
+
+$mailPassword = env('MAIL_PASSWORD');
+if (empty($mailPassword) || $mailPassword === false || $mailPassword === null || $mailPassword === 'null') {
+    $mailPassword = 'C/k6@!S0';
+    \Log::warning('Config/Mail: MAIL_PASSWORD não encontrado no .env, usando valor padrão', [
+        'tem_senha' => !empty($mailPassword),
+    ]);
+}
+
+$mailFromAddress = env('MAIL_FROM_ADDRESS');
+if (!$mailFromAddress || $mailFromAddress === 'null' || $mailFromAddress === '') {
+    $mailFromAddress = 'naoresponda@addsimp.com';
 }
 
 return [
@@ -64,14 +88,15 @@ return [
         'smtp' => [
             'transport' => 'smtp',
             // 🔥 PRODUÇÃO: Valores validados para garantir SMTP de produção
+            // Usar variáveis já validadas para garantir credenciais mesmo com config cache
             'host' => $mailHost,
             'port' => $mailPort,
             // Hostinger: porta 587 = TLS (recomendado), porta 465 = SSL
             'encryption' => $mailEncryption,
-            'username' => env('MAIL_USERNAME', 'naoresponda@addsimp.com'),
-            'password' => env('MAIL_PASSWORD' , 'C/k6@!S0'),
+            'username' => $mailUsername,
+            'password' => $mailPassword,
             'timeout' => 30,
-            'local_domain' => env('MAIL_EHLO_DOMAIN', parse_url((string) env('APP_URL', 'http://localhost'), PHP_URL_HOST)),
+            'local_domain' => env('MAIL_EHLO_DOMAIN') ?? parse_url((string) (env('APP_URL') ?? 'http://localhost'), PHP_URL_HOST),
         ],
 
         'ses' => [
@@ -132,8 +157,8 @@ return [
     */
 
     'from' => [
-        'address' => env('MAIL_FROM_ADDRESS', 'naoresponda@addsimp.com'),
-        'name' => env('MAIL_FROM_NAME', 'Sistema ERP - Gestão de Licitações'),
+        'address' => $mailFromAddress,
+        'name' => env('MAIL_FROM_NAME') ?? 'Sistema ERP - Gestão de Licitações',
     ],
 
 ];
