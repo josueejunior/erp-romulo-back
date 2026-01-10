@@ -109,35 +109,79 @@ class UserReadRepository implements UserReadRepositoryInterface
 
     public function listarComRelacionamentos(array $filtros = []): LengthAwarePaginator
     {
+        // 🔥 CRÍTICO: Verificar se tenancy está inicializado
+        // Se não estiver, não devemos fazer queries pois não sabemos qual tenant usar
+        if (!tenancy()->initialized) {
+            \Log::error('UserReadRepository: Tenancy não inicializado!', [
+                'filtros' => $filtros,
+            ]);
+            throw new \RuntimeException('Tenancy não inicializado. Não é possível listar usuários sem contexto de tenant.');
+        }
+
+        // 🔥 CRÍTICO: Verificar se estamos usando o banco de dados correto
+        // O banco deve começar com 'tenant_' quando tenancy está inicializado
+        $databaseName = \DB::connection()->getDatabaseName();
+        $tenantId = tenancy()->tenant?->id;
+        $expectedDatabaseName = 'tenant_' . $tenantId;
+        
+        if ($databaseName !== $expectedDatabaseName && !str_starts_with($databaseName, 'tenant_')) {
+            \Log::error('UserReadRepository: Banco de dados incorreto!', [
+                'database_name_atual' => $databaseName,
+                'database_name_esperado' => $expectedDatabaseName,
+                'tenant_id' => $tenantId,
+                'tenancy_initialized' => tenancy()->initialized,
+            ]);
+            throw new \RuntimeException("Banco de dados incorreto. Esperado: {$expectedDatabaseName}, Atual: {$databaseName}");
+        }
+
         // Carregar todos os relacionamentos necessários
         // IMPORTANTE: Incluir usuários deletados (soft deletes) para mostrar na listagem admin
         $query = UserModel::withTrashed()->with(['empresas', 'roles']);
-
+        
         \Log::info('UserReadRepository: Listando usuários', [
             'filtros' => $filtros,
-            'tenant_id' => tenancy()->tenant?->id,
+            'tenant_id' => $tenantId,
             'tenant_razao_social' => tenancy()->tenant?->razao_social ?? 'N/A',
             'tenancy_initialized' => tenancy()->initialized,
+            'database_connection' => \DB::connection()->getName(),
+            'database_name' => $databaseName,
+            'database_name_esperado' => $expectedDatabaseName,
         ]);
 
+        // 🔥 SEGURANÇA: Garantir que apenas usuários do tenant atual sejam listados
+        // Como User não tem tenant_id direto, filtramos via relacionamento com Empresa
+        // IMPORTANTE: Quando tenancy está inicializado, já estamos no banco do tenant (tenant_XX),
+        // então todas as empresas já estão automaticamente filtradas pelo tenant.
+        // O `whereHas('empresas')` garante que apenas usuários que têm pelo menos uma empresa sejam retornados,
+        // e como estamos no banco do tenant, essas empresas são do tenant correto.
+        
         // 🔥 UX: Filtrar por empresa específica quando solicitado
         // Comportamento:
         // - Se empresa_id for fornecido: mostrar APENAS usuários vinculados àquela empresa específica
         // - Se não for fornecido: mostrar TODOS os usuários do tenant (todas as empresas do tenant)
-        // Normalmente é 1 tenant = 1 empresa, então sem filtro mostra todos os usuários do tenant
         if (isset($filtros['empresa_id']) && $filtros['empresa_id'] > 0) {
             \Log::info('UserReadRepository: Filtrando por empresa_id específico', [
                 'empresa_id' => $filtros['empresa_id'],
+                'tenant_id' => $tenantId,
+                'database_name' => $databaseName,
             ]);
+            // Filtrar apenas usuários que têm vínculo com a empresa específica
             $query->whereHas('empresas', function($q) use ($filtros) {
-                $q->where('empresas.id', $filtros['empresa_id']);
+                $q->where('empresas.id', $filtros['empresa_id'])
+                  ->whereNull('empresas.excluido_em');
             });
         } else {
             \Log::info('UserReadRepository: Mostrando TODOS os usuários do tenant (sem filtro de empresa)', [
-                'tenant_id' => tenancy()->tenant?->id,
+                'tenant_id' => $tenantId,
+                'tenancy_initialized' => tenancy()->initialized,
+                'database_name' => $databaseName,
             ]);
-            // Sem filtro de empresa_id, mostra todos os usuários do tenant
-            // Como normalmente é 1 tenant = 1 empresa, isso mostra todos os usuários
+            // Sem filtro de empresa_id, mostra todos os usuários que têm pelo menos uma empresa não deletada no tenant atual
+            // Como estamos no banco do tenant (tenant_XX), todas as empresas aqui são do tenant correto
+            // IMPORTANTE: O whereHas garante que apenas usuários com empresas sejam retornados
+            $query->whereHas('empresas', function($q) {
+                $q->whereNull('empresas.excluido_em');
+            });
         }
 
         if (isset($filtros['search']) && !empty($filtros['search'])) {

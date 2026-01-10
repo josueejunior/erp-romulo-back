@@ -364,12 +364,38 @@ class AdminUserController extends Controller
     public function index(Request $request, Tenant $tenant)
     {
         try {
+            // 🔥 CRÍTICO: Garantir que o tenant está inicializado antes de fazer qualquer query
+            // Se não estiver inicializado, inicializar agora (pode acontecer se o model binding executar antes do middleware)
+            if (!tenancy()->initialized || tenancy()->tenant?->id !== $tenant->id) {
+                \Log::warning('AdminUserController::index - Tenancy não inicializado ou tenant incorreto, inicializando', [
+                    'tenant_id_param' => $tenant->id,
+                    'tenancy_initialized' => tenancy()->initialized,
+                    'current_tenant_id' => tenancy()->tenant?->id,
+                ]);
+                
+                // Finalizar tenancy atual se existir
+                if (tenancy()->initialized) {
+                    tenancy()->end();
+                }
+                
+                // Inicializar tenant correto
+                tenancy()->initialize($tenant);
+                
+                \Log::info('AdminUserController::index - Tenant inicializado pelo controller', [
+                    'tenant_id' => $tenant->id,
+                    'database_connection' => \DB::connection()->getName(),
+                    'database_name' => \DB::connection()->getDatabaseName(),
+                ]);
+            }
+
             \Log::info('AdminUserController::index - Iniciando', [
                 'tenant_id' => $tenant->id,
                 'tenant_razao_social' => $tenant->razao_social,
                 'request_params' => $request->all(),
                 'tenancy_initialized' => tenancy()->initialized,
                 'current_tenant_id' => tenancy()->tenant?->id,
+                'database_connection' => \DB::connection()->getName(),
+                'database_name' => \DB::connection()->getDatabaseName(),
             ]);
 
             // 🔥 UX: Filtrar por empresa específica quando solicitado
@@ -396,7 +422,9 @@ class AdminUserController extends Controller
                 'count' => $users->count(),
                 'current_page' => $users->currentPage(),
                 'per_page' => $users->perPage(),
-                'items' => $users->items(),
+                'tenant_id_esperado' => $tenant->id,
+                'tenancy_initialized' => tenancy()->initialized,
+                'database_name' => \DB::connection()->getDatabaseName(),
             ]);
 
             // Usar ResponseBuilder padronizado
@@ -412,6 +440,8 @@ class AdminUserController extends Controller
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
                 'tenant_id' => $tenant->id ?? null,
+                'tenancy_initialized' => tenancy()->initialized,
+                'database_name' => \DB::connection()->getDatabaseName(),
             ]);
             return ApiResponse::error('Erro ao listar usuários.', 500);
         }
