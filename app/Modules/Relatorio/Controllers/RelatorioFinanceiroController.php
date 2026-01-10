@@ -8,6 +8,7 @@ use App\Application\Relatorio\UseCases\GerarRelatorioFinanceiroUseCase;
 use App\Modules\Relatorio\Services\FinanceiroService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use App\Helpers\PermissionHelper;
 use Carbon\Carbon;
 
@@ -191,7 +192,7 @@ class RelatorioFinanceiroController extends BaseApiController
     /**
      * Exporta relatório mensal em CSV
      */
-    protected function exportarCSVMensal($data, Carbon $mes): \Illuminate\Http\Response
+    protected function exportarCSVMensal($data, Carbon $mes): StreamedResponse
     {
         $resumo = $data['resumo'] ?? [];
         $processos = $data['processos'] ?? [];
@@ -253,7 +254,7 @@ class RelatorioFinanceiroController extends BaseApiController
     /**
      * Exporta relatório de execução em CSV
      */
-    protected function exportarCSVExecucao($data, array $filters): \Illuminate\Http\Response
+    protected function exportarCSVExecucao($data, array $filters): StreamedResponse
     {
         $resumo = $data['resumo'] ?? [];
         $processos = $data['processos'] ?? [];
@@ -317,18 +318,18 @@ class RelatorioFinanceiroController extends BaseApiController
     }
 
     /**
-     * Exporta relatório mensal em PDF (simplificado - retorna HTML por enquanto)
+     * Exporta relatório mensal em PDF (simplificado - retorna CSV por enquanto)
      */
-    protected function exportarPDFMensal($data, Carbon $mes): \Illuminate\Http\Response
+    protected function exportarPDFMensal($data, Carbon $mes): StreamedResponse
     {
         // Por enquanto, retornar CSV já que PDF requer biblioteca externa
         return $this->exportarCSVMensal($data, $mes);
     }
 
     /**
-     * Exporta relatório de execução em PDF (simplificado - retorna HTML por enquanto)
+     * Exporta relatório de execução em PDF (simplificado - retorna CSV por enquanto)
      */
-    protected function exportarPDFExecucao($data, array $filters): \Illuminate\Http\Response
+    protected function exportarPDFExecucao($data, array $filters): StreamedResponse
     {
         // Por enquanto, retornar CSV já que PDF requer biblioteca externa
         return $this->exportarCSVExecucao($data, $filters);
