@@ -220,7 +220,9 @@ class AdminUserController extends Controller
                         return \App\Modules\Auth\Models\User::with([
                             'empresas' => function($query) {
                                 // Carregar apenas campos necessários
-                                $query->select('id', 'razao_social', 'cnpj');
+                                // IMPORTANTE: Não usar select customizado aqui, pois causa ambiguidade no JOIN
+                                // O Laravel precisa das chaves estrangeiras da tabela pivot automaticamente
+                                // Deixar o Laravel fazer o select padrão e filtrar depois se necessário
                             },
                             'roles' => function($query) {
                                 // Carregar apenas nome das roles
