@@ -135,9 +135,12 @@ class GerarComissaoAfiliadoListener
     private function criarIndicacaoInicial($event, $empresa, $plano, $assinatura): void
     {
         try {
-            $valorOriginal = $plano->preco_mensal ?? 0;
-            $valorComDesconto = $assinatura->valor_pago ?? $valorOriginal;
-            $descontoAplicado = $empresa->afiliado_desconto_aplicado ?? 0;
+            $valorOriginal = (float) ($plano->preco_mensal ?? 0);
+            $valorComDesconto = (float) ($assinatura->valor_pago ?? $valorOriginal);
+            // Converter desconto para float (pode vir como string do banco)
+            $descontoAplicado = is_numeric($empresa->afiliado_desconto_aplicado ?? 0) 
+                ? (float) $empresa->afiliado_desconto_aplicado 
+                : 0.0;
 
             $this->criarIndicacaoAfiliadoUseCase->executar(
                 afiliadoId: $empresa->afiliado_id,
@@ -147,7 +150,7 @@ class GerarComissaoAfiliadoListener
                 descontoAplicado: $descontoAplicado,
                 planoId: $plano->id,
                 valorPlanoOriginal: $valorOriginal,
-                valorPlanoComDesconto: $valorComDesconto
+                valorPlanoComDesconto: (float) $valorComDesconto
             );
 
             Log::info('GerarComissaoAfiliadoListener - Indicação inicial criada', [

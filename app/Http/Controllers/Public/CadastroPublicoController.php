@@ -148,7 +148,7 @@ class CadastroPublicoController extends Controller
             
             // Dados da empresa (tenant)
             'razao_social' => 'required|string|max:255',
-            'cnpj' => 'nullable|string|max:18',
+            'cnpj' => ['required', 'string', 'max:18', new \App\Rules\CnpjValido()],
             'email' => 'nullable|email|max:255',
             'endereco' => 'nullable|string|max:255',
             'cidade' => 'nullable|string|max:255',

@@ -33,6 +33,7 @@ use App\Modules\Payment\Controllers\WebhookController as ApiWebhookController;
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Admin\AdminTenantController;
 use App\Http\Controllers\Admin\AdminUserController;
+use App\Http\Controllers\Admin\AdminBackupController;
 use App\Http\Controllers\Admin\AdminComissoesController;
 
 /*
@@ -479,6 +480,15 @@ Route::prefix('admin')->group(function () {
         Route::prefix('upload')->group(function () {
             Route::post('/image', [\App\Http\Controllers\UploadController::class, 'uploadImage']);
             Route::delete('/image', [\App\Http\Controllers\UploadController::class, 'deleteImage']);
+        });
+
+        // Backups de Tenants
+        Route::prefix('backups')->group(function () {
+            Route::get('/tenants', [AdminBackupController::class, 'listarTenants']);
+            Route::get('/listar', [AdminBackupController::class, 'listarBackups']);
+            Route::post('/tenant/{tenantId}', [AdminBackupController::class, 'fazerBackup'])->where('tenantId', '[0-9]+');
+            Route::get('/download/{filename}', [AdminBackupController::class, 'baixarBackup'])->where('filename', '[a-zA-Z0-9_.-]+');
+            Route::delete('/{filename}', [AdminBackupController::class, 'deletarBackup'])->where('filename', '[a-zA-Z0-9_.-]+');
         });
     });
 });

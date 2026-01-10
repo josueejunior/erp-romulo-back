@@ -361,22 +361,33 @@ final class CadastrarEmpresaPublicamenteUseCase
             throw new EmailJaCadastradoException($dto->adminEmail);
         }
 
-        // Validar CNPJ (se informado)
-        if ($dto->cnpj) {
-            $cnpjLimpo = preg_replace('/\D/', '', $dto->cnpj);
-            $tenantExistente = $this->tenantRepository->buscarPorCnpj($dto->cnpj);
+        // Validar CNPJ (obrigatório agora)
+        if (empty($dto->cnpj)) {
+            throw new DomainException('CNPJ é obrigatório para cadastro de empresa.');
+        }
+
+        // Normalizar CNPJ (remover formatação para busca e comparação)
+        $cnpjLimpo = preg_replace('/\D/', '', $dto->cnpj);
+        
+        // Validar formato básico
+        if (strlen($cnpjLimpo) !== 14) {
+            throw new DomainException('CNPJ deve ter 14 dígitos.');
+        }
+
+        // Verificar se CNPJ já existe (buscar tanto formatado quanto limpo)
+        $tenantExistente = $this->tenantRepository->buscarPorCnpj($dto->cnpj);
+        
+        if (!$tenantExistente) {
+            $tenantExistente = $this->tenantRepository->buscarPorCnpj($cnpjLimpo);
+        }
+        
+        if ($tenantExistente) {
+            Log::info('Tentativa de cadastro com CNPJ já existente', [
+                'cnpj' => $dto->cnpj,
+                'tenant_id_existente' => $tenantExistente->id,
+            ]);
             
-            if (!$tenantExistente) {
-                $tenantExistente = $this->tenantRepository->buscarPorCnpj($cnpjLimpo);
-            }
-            
-            if ($tenantExistente) {
-                Log::info('Tentativa de cadastro com CNPJ já existente', [
-                    'cnpj' => $dto->cnpj,
-                ]);
-                
-                throw new CnpjJaCadastradoException($dto->cnpj);
-            }
+            throw new CnpjJaCadastradoException($dto->cnpj);
         }
     }
 
@@ -385,10 +396,17 @@ final class CadastrarEmpresaPublicamenteUseCase
      */
     private function criarTenantEUsuario(CadastroPublicoDTO $dto): array
     {
-        // Converter DTO para CriarTenantDTO
+        // Normalizar CNPJ (remover formatação para garantir consistência)
+        $cnpjNormalizado = $dto->cnpj ? preg_replace('/\D/', '', $dto->cnpj) : null;
+        
+        if (empty($cnpjNormalizado)) {
+            throw new DomainException('CNPJ é obrigatório para cadastro de empresa.');
+        }
+
+        // Converter DTO para CriarTenantDTO (usar CNPJ normalizado)
         $tenantDTO = CriarTenantDTO::fromArray([
             'razao_social' => $dto->razaoSocial,
-            'cnpj' => $dto->cnpj,
+            'cnpj' => $cnpjNormalizado, // Salvar CNPJ sem formatação
             'email' => $dto->email,
             'endereco' => $dto->endereco,
             'cidade' => $dto->cidade,

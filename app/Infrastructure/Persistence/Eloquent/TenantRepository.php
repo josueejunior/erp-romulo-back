@@ -179,12 +179,28 @@ class TenantRepository implements TenantRepositoryInterface
                 ]);
                 
                 // Tentar buscar pelo CNPJ primeiro (mais único)
+                // Buscar tanto CNPJ formatado quanto limpo (sem formatação)
                 if (!empty($data['cnpj'])) {
+                    $cnpjLimpo = preg_replace('/\D/', '', $data['cnpj']);
+                    
+                    // Tentar buscar com CNPJ formatado (se veio formatado)
                     $foundModel = TenantModel::where('cnpj', $data['cnpj'])->first();
+                    
+                    // Se não encontrou, tentar com CNPJ limpo (sem formatação)
+                    if (!$foundModel && $cnpjLimpo !== $data['cnpj']) {
+                        $foundModel = TenantModel::where('cnpj', $cnpjLimpo)->first();
+                    }
+                    
+                    // Se ainda não encontrou, buscar por LIKE (caso tenha algum caractere extra)
+                    if (!$foundModel) {
+                        $foundModel = TenantModel::whereRaw('REPLACE(REPLACE(REPLACE(REPLACE(cnpj, ".", ""), "/", ""), "-", ""), " ", "") = ?', [$cnpjLimpo])->first();
+                    }
+                    
                     if ($foundModel && $foundModel->id) {
                         \Log::debug('Tenant encontrado pelo CNPJ após criação', [
                             'tenant_id' => $foundModel->id,
                             'razao_social' => $foundModel->razao_social,
+                            'cnpj_buscado' => $data['cnpj'],
                         ]);
                         return $this->toDomain($foundModel);
                     }
@@ -202,11 +218,17 @@ class TenantRepository implements TenantRepositoryInterface
                     }
                 }
                 
-                // Se não encontrou nem pelo CNPJ nem pelo email, pode ser que o modelo
-                // foi criado mas ainda não está visível (problema de transação ou cache)
-                // Tentar buscar pelo último registro criado com os mesmos dados
+                // Se não encontrou nem pelo CNPJ nem pelo email, tentar buscar pelo último registro criado
+                // com razão social e CNPJ (para lidar com problemas de transação/cache)
+                $cnpjParaBusca = !empty($data['cnpj']) ? preg_replace('/\D/', '', $data['cnpj']) : null;
                 $foundModel = TenantModel::where('razao_social', $data['razao_social'])
-                    ->where('cnpj', $data['cnpj'] ?? '')
+                    ->when($cnpjParaBusca, function ($query) use ($cnpjParaBusca) {
+                        // Buscar CNPJ normalizado (sem formatação) ou formatado
+                        $query->where(function ($q) use ($cnpjParaBusca) {
+                            $q->where('cnpj', $cnpjParaBusca)
+                              ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(cnpj, ".", ""), "/", ""), "-", ""), " ", "") = ?', [$cnpjParaBusca]);
+                        });
+                    })
                     ->orderBy('id', 'desc')
                     ->first();
                 

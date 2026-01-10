@@ -6,6 +6,7 @@ namespace App\Application\CadastroPublico\DTOs;
 
 use App\Application\CadastroPublico\DTOs\PagamentoDTO;
 use App\Application\CadastroPublico\DTOs\AfiliacaoDTO;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * DTO para cadastro público completo
@@ -26,7 +27,7 @@ final class CadastroPublicoDTO
         
         // Dados da Empresa (Tenant)
         public readonly string $razaoSocial,
-        public readonly ?string $cnpj = null,
+        public readonly string $cnpj, // Obrigatório agora
         public readonly ?string $email = null,
         public readonly ?string $endereco = null,
         public readonly ?string $cidade = null,
@@ -56,11 +57,16 @@ final class CadastroPublicoDTO
 
     public static function fromArray(array $data): self
     {
+        // Validar que CNPJ está presente (obrigatório)
+        if (empty($data['cnpj'])) {
+            throw new DomainException('CNPJ é obrigatório para cadastro de empresa.');
+        }
+
         return new self(
             planoId: (int) $data['plano_id'],
             periodo: $data['periodo'] ?? 'mensal',
             razaoSocial: $data['razao_social'],
-            cnpj: $data['cnpj'] ?? null,
+            cnpj: $data['cnpj'], // Já validado acima
             email: $data['email'] ?? null,
             endereco: $data['endereco'] ?? null,
             cidade: $data['cidade'] ?? null,
