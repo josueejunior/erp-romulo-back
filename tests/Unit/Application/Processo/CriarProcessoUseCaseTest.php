@@ -8,9 +8,13 @@ use App\Application\Processo\DTOs\CriarProcessoDTO;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\Processo\Entities\Processo;
 use App\Domain\Factories\ProcessoFactory;
+use App\Models\Tenant;
+use App\Models\Plano;
 use Carbon\Carbon;
 use Mockery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Stancl\Tenancy\Facades\Tenancy;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Testes unitários para CriarProcessoUseCase
@@ -39,12 +43,82 @@ class CriarProcessoUseCaseTest extends TestCase
         $this->processoRepositoryMock = Mockery::mock(ProcessoRepositoryInterface::class);
         $this->app->instance(ProcessoRepositoryInterface::class, $this->processoRepositoryMock);
         
-        // Nota: Para testes unitários focados apenas na criação de processos
-        // com diferentes status/modalidades, não precisamos mockar tenancy.
-        // Os testes que dependem de validação de tenant devem ser feitos como
-        // testes Feature com tenancy real inicializado.
+        // Mock do tenant e plano para validações de assinatura
+        $this->setupTenancyMocks();
         
         $this->useCase = new CriarProcessoUseCase($this->processoRepositoryMock);
+    }
+
+    /**
+     * Configura mocks para tenancy (tenant e plano)
+     * 
+     * Cria tenant e plano reais no banco e inicializa o tenancy
+     */
+    private function setupTenancyMocks(): void
+    {
+        // Criar tenant e plano reais no banco de dados
+        $tenant = Tenant::firstOrCreate(
+            ['id' => 1],
+            [
+                'razao_social' => 'Tenant de Teste',
+                'cnpj' => '12345678000199',
+                'status' => 'ativa',
+            ]
+        );
+
+        // Criar plano real
+        $plano = Plano::firstOrCreate(
+            ['id' => 1],
+            [
+                'nome' => 'Plano de Teste',
+                'limite_processos' => null, // Sem limite
+                'limite_processos_mensal' => null,
+                'limite_processos_diario' => null,
+                'ativo' => true,
+            ]
+        );
+
+        // Associar plano ao tenant
+        $tenant->plano_atual_id = $plano->id;
+        $tenant->assinatura_atual_id = 1; // Fake assinatura para passar na validação
+        $tenant->save();
+        $tenant->refresh();
+        $tenant->load('planoAtual');
+
+        // Inicializar tenancy com o tenant real
+        // O helper tenancy() retorna o tenant inicializado
+        try {
+            Tenancy::initialize($tenant);
+        } catch (\Exception $e) {
+            // Se não conseguir inicializar, criar um mock alternativo
+            // Por enquanto, vamos ignorar o erro e usar o tenant diretamente
+        }
+
+        // Mockar métodos do tenant que dependem de autenticação
+        // Usando swap no container para substituir o tenant
+        // O método temAssinaturaAtiva() precisa de usuário autenticado
+        $tenantMock = Mockery::mock($tenant)->makePartial();
+        $tenantMock->shouldReceive('temAssinaturaAtiva')->andReturn(true);
+        $tenantMock->shouldReceive('podeCriarProcesso')->andReturn(true);
+        $tenantMock->planoAtual = $plano;
+        $tenantMock->id = $tenant->id;
+        
+        // Garantir que planoAtual é acessível
+        $tenantMock->shouldReceive('getAttribute')
+            ->with('planoAtual')
+            ->andReturn($plano);
+        $tenantMock->shouldReceive('getAttribute')
+            ->with('id')
+            ->andReturn($tenant->id);
+
+        // Sobrescrever o tenant no container do tenancy
+        // O helper tenancy() busca do container
+        $this->app->singleton('tenancy.tenant', function () use ($tenantMock) {
+            return $tenantMock;
+        });
+        
+        // Mockar o facade Tenancy para garantir que retorna nosso tenant mockado
+        Tenancy::shouldReceive('tenant')->andReturn($tenantMock);
     }
 
     /**
