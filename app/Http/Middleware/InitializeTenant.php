@@ -50,9 +50,20 @@ class InitializeTenant
                     abort(404, 'Tenant não encontrado');
                 }
                 
+                $databaseName = 'N/A';
+                try {
+                    $databaseName = $tenantModel->database()->getName();
+                } catch (\Exception $e) {
+                    // Se falhar ao obter nome do banco, usar 'N/A'
+                    Log::warning('InitializeTenant: Não foi possível obter nome do banco de dados', [
+                        'tenant_id' => $tenantModel->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+                
                 Log::info('InitializeTenant: Tenant encontrado', [
                     'tenant_id' => $tenantModel->id,
-                    'tenant_database' => $tenantModel->database ?? 'N/A',
+                    'tenant_database' => $databaseName,
                     'tenant_razao_social' => $tenantModel->razao_social ?? 'N/A',
                 ]);
             }
@@ -77,9 +88,17 @@ class InitializeTenant
             if ($tenantModel) {
                 try {
                     tenancy()->initialize($tenantModel);
+                    $databaseName = null;
+                    try {
+                        $databaseName = tenancy()->tenant?->database()->getName();
+                    } catch (\Exception $e) {
+                        // Se falhar, tentar obter do DB connection
+                        $databaseName = \DB::connection()->getDatabaseName();
+                    }
+                    
                     Log::info('InitializeTenant: Tenant inicializado com sucesso', [
                         'tenant_id' => $tenantModel->id,
-                        'tenant_database' => tenancy()->tenant?->database ?? 'N/A',
+                        'tenant_database' => $databaseName ?? 'N/A',
                         'tenancy_initialized' => tenancy()->initialized,
                         'database_connection' => \DB::connection()->getName(),
                         'database_name' => \DB::connection()->getDatabaseName(),
