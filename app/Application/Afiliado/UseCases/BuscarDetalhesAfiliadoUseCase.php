@@ -85,13 +85,14 @@ final class BuscarDetalhesAfiliadoUseCase
             ->toArray();
 
         // Valores de comissão
-        $totalComissoes = AfiliadoIndicacao::where('afiliado_id', $afiliadoId)
+        // 🔥 CORREÇÃO: Converter para float pois sum() pode retornar string no PostgreSQL
+        $totalComissoes = (float) (AfiliadoIndicacao::where('afiliado_id', $afiliadoId)
             ->whereNotNull('primeira_assinatura_em')
-            ->sum('valor_comissao');
+            ->sum('valor_comissao') ?? 0);
 
-        $comissoesPagas = AfiliadoIndicacao::where('afiliado_id', $afiliadoId)
+        $comissoesPagas = (float) (AfiliadoIndicacao::where('afiliado_id', $afiliadoId)
             ->where('comissao_paga', true)
-            ->sum('valor_comissao');
+            ->sum('valor_comissao') ?? 0);
 
         $comissoesPendentes = $totalComissoes - $comissoesPagas;
 
@@ -131,17 +132,17 @@ final class BuscarDetalhesAfiliadoUseCase
                 'trial' => $porStatus['trial'] ?? 0,
             ],
             'comissoes' => [
-                'total' => round($totalComissoes, 2),
-                'pagas' => round($comissoesPagas, 2),
-                'pendentes' => round($comissoesPendentes, 2),
+                'total' => round((float) $totalComissoes, 2),
+                'pagas' => round((float) $comissoesPagas, 2),
+                'pendentes' => round((float) $comissoesPendentes, 2),
             ],
             'retencao' => [
-                'tempo_medio_dias' => round($tempoMedioRetencao ?? 0),
+                'tempo_medio_dias' => round((float) ($tempoMedioRetencao ?? 0)),
             ],
             'conversao' => [
                 'total_trials' => $totalTrials,
                 'convertidos' => $convertidos,
-                'taxa_percentual' => round($taxaConversao, 1),
+                'taxa_percentual' => round((float) $taxaConversao, 1),
             ],
             'evolucao_mensal' => $evolucaoMensal,
         ];

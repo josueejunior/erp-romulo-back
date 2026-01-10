@@ -45,11 +45,11 @@ final class FazerBackupTenantUseCase
             throw new DomainException('Tenant não encontrado.', 404);
         }
 
-        // Obter configuração do banco de dados do tenant
-        $databaseName = $tenant->database ?? null;
-        if (!$databaseName) {
-            throw new DomainException('Tenant não possui banco de dados configurado.', 400);
-        }
+        // Obter nome do banco de dados usando o padrão do stancl/tenancy
+        // Padrão: prefix + tenant_id + suffix (configurado em config/tenancy.php)
+        $prefix = config('tenancy.database.prefix', 'tenant_');
+        $suffix = config('tenancy.database.suffix', '');
+        $databaseName = $prefix . $tenantId . $suffix;
 
         // Configurações do banco central (para mysqldump)
         $dbHost = config('database.connections.mysql.host', 'localhost');
