@@ -313,32 +313,54 @@ final class CadastrarEmpresaPublicamenteUseCase
                     
                     tenancy()->initialize($tenant);
                     
-                    // Verificar se o email existe neste tenant
-                    $userDomain = $this->userRepository->buscarPorEmail($dto->adminEmail);
+                    // 🔥 VALIDAÇÃO ROBUSTA: Verificar email incluindo usuários inativos (soft deleted)
+                    // Usar query direta para ter controle total
+                    $userModel = \App\Modules\Auth\Models\User::withTrashed()
+                        ->where('email', $dto->adminEmail)
+                        ->first();
                     
-                    if ($userDomain) {
-                        // 🔥 IMPORTANTE: Verificar se o tenant tem empresa válida
-                        // Se não tiver, considerar como cadastro incompleto e não bloquear
+                    if ($userModel) {
+                        // 🔥 VALIDAÇÃO INTELIGENTE:
+                        // 1. Se usuário está soft deleted (inativo) → permitir novo cadastro
+                        // 2. Se usuário está ativo MAS empresa está inativa → permitir novo cadastro
+                        // 3. Se usuário está ativo E empresa está ativa → bloquear
+                        
+                        $usuarioAtivo = $userModel->deleted_at === null;
                         $tenantTemEmpresaValida = $this->verificarSeTenantTemEmpresaValida($tenant->id);
                         
-                        if ($tenantTemEmpresaValida) {
-                            // Tenant completo: email realmente está cadastrado
+                        Log::debug('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email encontrado, analisando condições', [
+                            'email' => $dto->adminEmail,
+                            'tenant_id' => $tenant->id,
+                            'usuario_id' => $userModel->id,
+                            'usuario_ativo' => $usuarioAtivo,
+                            'tenant_tem_empresa_valida' => $tenantTemEmpresaValida,
+                            'deleted_at' => $userModel->deleted_at,
+                        ]);
+                        
+                        if ($usuarioAtivo && $tenantTemEmpresaValida) {
+                            // Usuário ativo + Empresa ativa = bloquear cadastro
                             $emailEncontrado = true;
-                            Log::warning('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email já cadastrado em tenant completo', [
+                            Log::warning('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email já cadastrado (usuário ativo + empresa ativa)', [
                                 'email' => $dto->adminEmail,
                                 'tenant_id' => $tenant->id,
                                 'tenant_razao_social' => $tenantDomain->razaoSocial,
+                                'usuario_id' => $userModel->id,
                             ]);
                             tenancy()->end();
                             break;
                         } else {
-                            // Tenant incompleto ou sem empresa ATIVA: ignorar e continuar
-                            // Isso permite que cadastros incompletos ou empresas inativas sejam sobrescritos
-                            Log::info('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email encontrado em tenant sem empresa válida e ATIVA, ignorando para permitir novo cadastro', [
+                            // Usuário inativo OU empresa inativa/incompleta = permitir novo cadastro
+                            $motivo = !$usuarioAtivo 
+                                ? 'usuario_inativo' 
+                                : 'empresa_inativa_ou_incompleta';
+                            
+                            Log::info('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - Email encontrado mas permitindo novo cadastro', [
                                 'email' => $dto->adminEmail,
                                 'tenant_id' => $tenant->id,
                                 'tenant_razao_social' => $tenantDomain->razaoSocial,
-                                'motivo' => 'tenant_sem_empresa_ativa_ou_incompleto',
+                                'motivo' => $motivo,
+                                'usuario_ativo' => $usuarioAtivo,
+                                'tenant_tem_empresa_valida' => $tenantTemEmpresaValida,
                             ]);
                         }
                     }
@@ -393,6 +415,7 @@ final class CadastrarEmpresaPublicamenteUseCase
             throw new DomainException('CNPJ deve ter 14 dígitos.');
         }
 
+        // 🔥 VALIDAÇÃO INTELIGENTE DE CNPJ
         // Verificar se CNPJ já existe (buscar tanto formatado quanto limpo)
         $tenantExistente = $this->tenantRepository->buscarPorCnpj($dto->cnpj);
         
@@ -401,12 +424,115 @@ final class CadastrarEmpresaPublicamenteUseCase
         }
         
         if ($tenantExistente) {
-            Log::info('Tentativa de cadastro com CNPJ já existente', [
+            Log::info('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - CNPJ encontrado, verificando se tenant tem empresa válida', [
                 'cnpj' => $dto->cnpj,
                 'tenant_id_existente' => $tenantExistente->id,
             ]);
             
-            throw new CnpjJaCadastradoException($dto->cnpj);
+            // 🔥 VALIDAÇÃO INTELIGENTE: Verificar se o tenant tem empresa válida e ATIVA
+            // Se não tiver, considerar como tenant "abandonado" e permitir novo cadastro
+            $tenantTemEmpresaValida = $this->verificarSeTenantPorIdTemEmpresaValida($tenantExistente->id);
+            
+            if ($tenantTemEmpresaValida) {
+                // Tenant completo com empresa ativa: CNPJ realmente está em uso
+                Log::warning('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - CNPJ em uso por tenant com empresa ativa', [
+                    'cnpj' => $dto->cnpj,
+                    'tenant_id' => $tenantExistente->id,
+                    'tenant_razao_social' => $tenantExistente->razaoSocial,
+                ]);
+                throw new CnpjJaCadastradoException($dto->cnpj);
+            } else {
+                // Tenant incompleto ou sem empresa ativa: permitir novo cadastro
+                // 🔥 IMPORTANTE: Marcar tenant antigo como abandonado para limpeza futura
+                Log::info('CadastrarEmpresaPublicamenteUseCase::validarDuplicidades - CNPJ em tenant sem empresa válida/ativa, permitindo novo cadastro', [
+                    'cnpj' => $dto->cnpj,
+                    'tenant_id_abandonado' => $tenantExistente->id,
+                    'tenant_razao_social' => $tenantExistente->razaoSocial,
+                    'motivo' => 'tenant_incompleto_ou_empresas_inativas',
+                ]);
+                
+                // Tentar inativar o tenant antigo para evitar conflitos
+                $this->inativarTenantAbandonado($tenantExistente->id, $dto->cnpj);
+            }
+        }
+    }
+    
+    /**
+     * Verifica se um tenant tem empresa válida e ativa (versão que inicializa tenancy)
+     * 
+     * Diferente de verificarSeTenantTemEmpresaValida(), este método inicializa o tenancy
+     * se necessário, usado para validação de CNPJ antes do cadastro.
+     */
+    private function verificarSeTenantPorIdTemEmpresaValida(int $tenantId): bool
+    {
+        try {
+            // Buscar modelo Eloquent para inicializar tenancy
+            $tenant = $this->tenantRepository->buscarModeloPorId($tenantId);
+            if (!$tenant) {
+                Log::warning('CadastrarEmpresaPublicamenteUseCase::verificarSeTenantPorIdTemEmpresaValida - Tenant não encontrado', [
+                    'tenant_id' => $tenantId,
+                ]);
+                return false;
+            }
+            
+            // Inicializar tenancy
+            tenancy()->initialize($tenant);
+            
+            // Usar método existente para verificar
+            $temEmpresaValida = $this->verificarSeTenantTemEmpresaValida($tenantId);
+            
+            // Finalizar tenancy
+            tenancy()->end();
+            
+            return $temEmpresaValida;
+            
+        } catch (\Exception $e) {
+            if (tenancy()->initialized) {
+                tenancy()->end();
+            }
+            Log::warning('CadastrarEmpresaPublicamenteUseCase::verificarSeTenantPorIdTemEmpresaValida - Erro ao verificar', [
+                'tenant_id' => $tenantId,
+                'error' => $e->getMessage(),
+            ]);
+            return false;
+        }
+    }
+    
+    /**
+     * Inativa um tenant abandonado (sem empresa válida) para permitir novo cadastro com mesmo CNPJ
+     * 
+     * Marca o tenant como inativo e atualiza o CNPJ para evitar conflitos futuros.
+     */
+    private function inativarTenantAbandonado(int $tenantId, string $cnpjOriginal): void
+    {
+        try {
+            $tenant = $this->tenantRepository->buscarModeloPorId($tenantId);
+            if (!$tenant) {
+                return;
+            }
+            
+            // Atualizar CNPJ para valor único (adicionar sufixo com timestamp)
+            // Isso permite que o novo cadastro use o CNPJ original
+            $cnpjLimpo = preg_replace('/\D/', '', $cnpjOriginal);
+            $cnpjArquivado = $cnpjLimpo . '_ABANDONADO_' . time();
+            
+            $tenant->update([
+                'cnpj' => $cnpjArquivado,
+                'status' => 'inativa',
+            ]);
+            
+            Log::info('CadastrarEmpresaPublicamenteUseCase::inativarTenantAbandonado - Tenant marcado como abandonado', [
+                'tenant_id' => $tenantId,
+                'cnpj_original' => $cnpjOriginal,
+                'cnpj_arquivado' => $cnpjArquivado,
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::warning('CadastrarEmpresaPublicamenteUseCase::inativarTenantAbandonado - Erro ao inativar tenant', [
+                'tenant_id' => $tenantId,
+                'error' => $e->getMessage(),
+            ]);
+            // Não lança exceção - apenas loga para não bloquear o cadastro
         }
     }
 

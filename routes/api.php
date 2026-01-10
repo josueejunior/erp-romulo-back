@@ -35,6 +35,7 @@ use App\Http\Controllers\Admin\AdminTenantController;
 use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\Admin\AdminBackupController;
 use App\Http\Controllers\Admin\AdminComissoesController;
+use App\Http\Controllers\Admin\AdminTenantsIncompletosController;
 
 /*
 |--------------------------------------------------------------------------
@@ -489,6 +490,13 @@ Route::prefix('admin')->group(function () {
             Route::post('/tenant/{tenantId}', [AdminBackupController::class, 'fazerBackup'])->where('tenantId', '[0-9]+');
             Route::get('/download/{filename}', [AdminBackupController::class, 'baixarBackup'])->where('filename', '[a-zA-Z0-9_.-]+');
             Route::delete('/{filename}', [AdminBackupController::class, 'deletarBackup'])->where('filename', '[a-zA-Z0-9_.-]+');
+        });
+        
+        // 🔥 NOVO: Gestão de tenants incompletos/abandonados
+        Route::prefix('tenants-incompletos')->group(function () {
+            Route::get('/', [AdminTenantsIncompletosController::class, 'index']);
+            Route::delete('/{tenantId}', [AdminTenantsIncompletosController::class, 'destroy'])->where('tenantId', '[0-9]+');
+            Route::post('/deletar-lote', [AdminTenantsIncompletosController::class, 'deletarLote']);
         });
     });
 });
