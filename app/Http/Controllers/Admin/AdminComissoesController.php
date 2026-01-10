@@ -16,6 +16,7 @@ use App\Http\Responses\ApiResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Controller Admin para gerenciar comissões de afiliados
@@ -99,7 +100,41 @@ class AdminComissoesController extends Controller
     public function criarPagamento(CriarPagamentoComissaoAdminRequest $request): JsonResponse
     {
         try {
-            $dto = CriarPagamentoComissaoDTO::fromArray($request->validated());
+            $validated = $request->validated();
+            
+            // Processar upload de arquivo se fornecido
+            if ($request->hasFile('comprovante_arquivo')) {
+                $arquivo = $request->file('comprovante_arquivo');
+                
+                // Validar tamanho (já validado no FormRequest, mas garantir)
+                if ($arquivo->getSize() > 10 * 1024 * 1024) {
+                    return ApiResponse::error('Arquivo muito grande. Tamanho máximo: 10MB', 400);
+                }
+                
+                $fileName = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $arquivo->getClientOriginalName());
+                $path = $arquivo->storeAs('comissoes/comprovantes', $fileName, 'public');
+                
+                // Obter URL pública do arquivo (mesmo padrão usado no UploadController)
+                $url = Storage::disk('public')->url($path);
+                $fullUrl = url($url); // Adicionar domínio completo
+                
+                // Substituir comprovante (URL) pelo caminho do arquivo
+                $validated['comprovante'] = $fullUrl;
+                
+                Log::info('AdminComissoesController::criarPagamento - Arquivo de comprovante anexado', [
+                    'file_name' => $fileName,
+                    'file_size' => $arquivo->getSize(),
+                    'mime_type' => $arquivo->getMimeType(),
+                    'path' => $path,
+                    'url' => $comprovantePath,
+                ]);
+            }
+            
+            // Remover comprovante_arquivo do array validated (não vai para o DTO)
+            // O DTO já trata comissao_ids como array (aceita string JSON e converte)
+            unset($validated['comprovante_arquivo']);
+            
+            $dto = CriarPagamentoComissaoDTO::fromArray($validated);
             $pagoPor = auth('admin')->id();
 
             $pagamento = $this->criarPagamentoComissaoUseCase->executar($dto, $pagoPor);

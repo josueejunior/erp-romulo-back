@@ -21,10 +21,19 @@ final class CriarPagamentoComissaoDTO
 
     public static function fromArray(array $data): self
     {
+        // Garantir que comissao_ids seja sempre um array
+        $comissaoIds = $data['comissao_ids'] ?? [];
+        if (is_string($comissaoIds)) {
+            $comissaoIds = json_decode($comissaoIds, true) ?? [];
+        }
+        if (!is_array($comissaoIds)) {
+            $comissaoIds = [];
+        }
+        
         return new self(
             afiliadoId: (int) $data['afiliado_id'],
             periodoCompetencia: $data['periodo_competencia'],
-            comissaoIds: $data['comissao_ids'],
+            comissaoIds: $comissaoIds,
             metodoPagamento: $data['metodo_pagamento'] ?? null,
             comprovante: $data['comprovante'] ?? null,
             observacoes: $data['observacoes'] ?? null,
