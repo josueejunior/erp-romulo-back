@@ -27,44 +27,61 @@ class UserReadRepository implements UserReadRepositoryInterface
     {
         $this->checkTenancyContext();
 
-        // 🔥 CRÍTICO: Garantir que o modelo use a conexão 'tenant' quando disponível
-        // O DatabaseTenancyBootstrapper deveria fazer isso automaticamente, mas se não estiver
-        // funcionando, precisamos forçar explicitamente para garantir isolamento de dados
-        $query = $this->getUserQuery();
-        
-        $query = $query
-            ->with(['empresas', 'roles'])
-            // Filtra para garantir que o usuário pertence a pelo menos uma empresa no tenant atual
-            ->whereHas('empresas', function ($q) use ($filtros) {
-                $q->whereNull('empresas.excluido_em');
-                if (!empty($filtros['empresa_id'])) {
-                    $q->where('empresas.id', $filtros['empresa_id']);
-                }
-            });
+        try {
+            // 🔥 CRÍTICO: Garantir que o modelo use a conexão 'tenant' quando disponível
+            // O DatabaseTenancyBootstrapper deveria fazer isso automaticamente, mas se não estiver
+            // funcionando, precisamos forçar explicitamente para garantir isolamento de dados
+            $query = $this->getUserQuery();
+            
+            if (!$query) {
+                // Se não foi possível obter query (banco não existe, etc), retornar lista vazia
+                return $this->createEmptyPaginator($filtros);
+            }
+            
+            $query = $query
+                ->with(['empresas', 'roles'])
+                // Filtra para garantir que o usuário pertence a pelo menos uma empresa no tenant atual
+                ->whereHas('empresas', function ($q) use ($filtros) {
+                    $q->whereNull('empresas.excluido_em');
+                    if (!empty($filtros['empresa_id'])) {
+                        $q->where('empresas.id', $filtros['empresa_id']);
+                    }
+                });
 
-        if (!empty($filtros['search'])) {
-            $search = $filtros['search'];
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%");
-            });
+            if (!empty($filtros['search'])) {
+                $search = $filtros['search'];
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                      ->orWhere('email', 'like', "%{$search}%");
+                });
+            }
+
+            $paginator = $query->orderBy('name')->paginate($filtros['per_page'] ?? 15);
+
+            // Transforma os itens mantendo a estrutura do paginador
+            $items = collect($paginator->items())->map(fn($user) => $this->mapUserToArray($user));
+
+            return new Paginator(
+                $items,
+                $paginator->total(),
+                $paginator->perPage(),
+                $paginator->currentPage(),
+                [
+                    'path' => $paginator->path(),
+                    'pageName' => $paginator->getPageName(),
+                ]
+            );
+        } catch (\Illuminate\Database\QueryException $e) {
+            // Erro de banco de dados (banco não existe, tabela não existe, etc)
+            Log::warning('UserReadRepository: Erro ao listar usuários - banco ou tabela não existe', [
+                'error' => $e->getMessage(),
+                'tenant_id' => tenancy()->tenant?->id,
+                'database' => tenancy()->tenant?->database()->getName() ?? 'N/A',
+            ]);
+            
+            // Retornar lista vazia ao invés de quebrar
+            return $this->createEmptyPaginator($filtros);
         }
-
-        $paginator = $query->orderBy('name')->paginate($filtros['per_page'] ?? 15);
-
-        // Transforma os itens mantendo a estrutura do paginador
-        $items = collect($paginator->items())->map(fn($user) => $this->mapUserToArray($user));
-
-        return new Paginator(
-            $items,
-            $paginator->total(),
-            $paginator->perPage(),
-            $paginator->currentPage(),
-            [
-                'path' => $paginator->path(),
-                'pageName' => $paginator->getPageName(),
-            ]
-        );
     }
 
     /**
@@ -112,6 +129,8 @@ class UserReadRepository implements UserReadRepositoryInterface
      * 🔥 CRÍTICO: Configura manualmente a conexão 'tenant' para usar o banco correto
      * O DatabaseTenancyBootstrapper deveria fazer isso, mas se não estiver funcionando,
      * configuramos manualmente para garantir isolamento de dados
+     * 
+     * @return \Illuminate\Database\Eloquent\Builder|null Retorna null se não for possível configurar a conexão
      */
     private function getUserQuery()
     {
@@ -135,7 +154,20 @@ class UserReadRepository implements UserReadRepositoryInterface
                     // Reconfigurar a conexão tenant para usar o banco correto
                     config(["database.connections.tenant.database" => $expectedDbName]);
                     DB::purge('tenant'); // Limpar cache da conexão
-                    $tenantConnection = DB::connection('tenant'); // Reconectar
+                    
+                    // Tentar reconectar e verificar se o banco existe
+                    try {
+                        $tenantConnection = DB::connection('tenant');
+                        // Tentar executar uma query simples para verificar se o banco existe
+                        $tenantConnection->select('SELECT 1');
+                    } catch (\Exception $e) {
+                        Log::warning('UserReadRepository: Banco tenant não existe ou não está acessível', [
+                            'expected_database' => $expectedDbName,
+                            'tenant_id' => $tenant->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                        return null; // Banco não existe, retornar null
+                    }
                     
                     Log::info('UserReadRepository: Conexão tenant reconfigurada', [
                         'connection' => 'tenant',
@@ -143,6 +175,18 @@ class UserReadRepository implements UserReadRepositoryInterface
                         'tenant_id' => $tenant->id,
                     ]);
                 } else {
+                    // Verificar se o banco existe fazendo uma query simples
+                    try {
+                        $tenantConnection->select('SELECT 1');
+                    } catch (\Exception $e) {
+                        Log::warning('UserReadRepository: Banco tenant não existe ou não está acessível', [
+                            'current_database' => $currentDbName,
+                            'tenant_id' => $tenant->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                        return null; // Banco não existe, retornar null
+                    }
+                    
                     Log::info('UserReadRepository: Conexão tenant configurada corretamente', [
                         'connection' => 'tenant',
                         'database_name' => $currentDbName,
@@ -155,23 +199,38 @@ class UserReadRepository implements UserReadRepositoryInterface
                 $userInstance->setConnection('tenant');
                 return $userInstance->newQuery()->withTrashed();
             } catch (\Exception $e) {
-                // Se houver erro, logar e usar fallback
+                // Se houver erro, logar e retornar null
                 Log::error('UserReadRepository: Erro ao configurar conexão tenant', [
                     'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString(),
                     'tenant_id' => tenancy()->tenant?->id,
                 ]);
+                return null;
             }
         }
         
-        // Fallback: usar conexão padrão (NÃO IDEAL - pode causar vazamento de dados)
-        Log::warning('UserReadRepository: Usando conexão padrão (FALLBACK)', [
-            'connection' => DB::connection()->getName(),
-            'database_name' => DB::connection()->getDatabaseName(),
-            'tenancy_initialized' => tenancy()->initialized,
-            'tenant_id' => tenancy()->tenant?->id,
-        ]);
-        return UserModel::withTrashed();
+        // Se tenancy não está inicializado, não devemos retornar query
+        Log::error('UserReadRepository: Tentativa de obter query sem tenancy inicializado');
+        return null;
+    }
+    
+    /**
+     * Cria um paginador vazio quando não há dados disponíveis
+     */
+    private function createEmptyPaginator(array $filtros): LengthAwarePaginator
+    {
+        $perPage = $filtros['per_page'] ?? 15;
+        $currentPage = request()->get('page', 1);
+        
+        return new Paginator(
+            [],
+            0,
+            $perPage,
+            $currentPage,
+            [
+                'path' => request()->url(),
+                'pageName' => 'page',
+            ]
+        );
     }
 
     /**
@@ -185,3 +244,4 @@ class UserReadRepository implements UserReadRepositoryInterface
         }
     }
 }
+
