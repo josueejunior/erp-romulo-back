@@ -166,10 +166,10 @@ class ObterDadosDashboardUseCase
             ];
         })->toArray();
 
-        // Documentos vencidos
+        // Documentos vencidos (vencidos antes de hoje)
         $documentosVencidosPaginator = $this->documentoRepository->buscarComFiltros([
             'empresa_id' => $empresaId,
-            'data_validade_fim' => now(),
+            'vencidos' => true,
             'per_page' => 5,
         ]);
 
