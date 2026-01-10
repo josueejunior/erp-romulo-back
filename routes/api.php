@@ -60,8 +60,9 @@ Route::prefix('v1')->group(function () {
         ->middleware(['throttle:10,1', 'throttle:20,60']);
 
     // Rotas públicas - Planos (podem ser visualizados sem autenticação)
-    Route::module('planos', ApiPlanoController::class, 'plano')
-        ->only(['list', 'get']);
+    // IMPORTANTE: Estas rotas devem ser públicas para a tela de cadastro funcionar
+    Route::get('/planos', [ApiPlanoController::class, 'list']);
+    Route::get('/planos/{id}', [ApiPlanoController::class, 'get'])->where('id', '[0-9]+');
 
     // Rotas públicas (autenticação)
     // Rate limiting: aumentado para desenvolvimento/testes
@@ -149,13 +150,9 @@ Route::prefix('v1')->group(function () {
             Route::post('/concluir', [\App\Modules\Onboarding\Controllers\OnboardingController::class, 'concluir']);
         });
         
-        // Planos (protegido por onboarding - só após tutorial concluído)
-        Route::prefix('planos')->middleware(['onboarding.completo'])->group(function () {
-            Route::get('/', [ApiPlanoController::class, 'list']);
-            Route::get('/{id}', [ApiPlanoController::class, 'get'])->where('id', '[0-9]+');
-            // Buscar cupom automático de afiliado
-            Route::get('/cupom-automatico', [\App\Http\Controllers\Public\AfiliadoReferenciaController::class, 'buscarCupomAutomatico']);
-        });
+        // Buscar cupom automático de afiliado (protegido por onboarding - só após tutorial concluído)
+        Route::get('/planos/cupom-automatico', [\App\Http\Controllers\Public\AfiliadoReferenciaController::class, 'buscarCupomAutomatico'])
+            ->middleware(['onboarding.completo']);
         
         // Rotas de comissões para afiliados (autenticadas)
         Route::prefix('afiliado')->middleware(['auth:api'])->group(function () {
