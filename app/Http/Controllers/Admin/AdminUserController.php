@@ -549,14 +549,18 @@ class AdminUserController extends Controller
         try {
             Log::info('AdminUserController::destroyGlobal - Iniciando exclusão global', ['userId' => $userId]);
             
-            // Buscar todos os tenants onde o usuário existe
-            $tenants = $this->tenantRepository->listarTodos();
+            // Buscar todos os tenants ativos (similar ao indexGlobal)
+            $tenantsPaginator = $this->tenantRepository->buscarComFiltros([
+                'status' => 'ativa',
+                'per_page' => 1000, // Buscar todos para admin
+            ]);
+            
             $tenantsComUsuario = [];
             $tenantsDeletados = 0;
             $tenantsComErro = 0;
             
             // Buscar usuário em cada tenant para identificar onde ele existe
-            foreach ($tenants as $tenantDomain) {
+            foreach ($tenantsPaginator->items() as $tenantDomain) {
                 try {
                     $resultado = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($userId) {
                         return \App\Modules\Auth\Models\User::withTrashed()
