@@ -4,6 +4,7 @@ namespace App\Application\Assinatura\UseCases;
 
 use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
 use App\Domain\Exceptions\NotFoundException;
+use Carbon\Carbon;
 
 /**
  * Use Case: Obter Status da Assinatura com Limites Utilizados
@@ -50,6 +51,27 @@ class ObterStatusAssinaturaUseCase
             $query->where('empresas.id', $empresaIdParaContagem);
         })->count();
 
+        // ✅ NOVO: Calcular informações de grace period
+        // Usar mesmo cálculo do VerificarAssinaturaAtivaPorEmpresaUseCase
+        $hoje = Carbon::now()->startOfDay();
+        $dataFim = $assinatura->dataFim?->copy()->startOfDay();
+        
+        if ($dataFim) {
+            $diasRestantes = (int) $hoje->diffInDays($dataFim, false); // Pode ser negativo
+            $diasExpirado = $diasRestantes < 0 ? abs($diasRestantes) : 0;
+            $diasGracePeriod = $assinatura->diasGracePeriod ?? 7;
+            $estaNoGracePeriod = $diasRestantes < 0 && abs($diasRestantes) <= $diasGracePeriod;
+            
+            $warning = $estaNoGracePeriod ? [
+                'warning' => true,
+                'dias_expirado' => $diasExpirado,
+            ] : null;
+        } else {
+            $diasRestantes = 0;
+            $diasExpirado = 0;
+            $warning = null;
+        }
+
         return [
             'status' => $assinatura->status,
             'limite_processos' => $assinaturaModel->plano->limite_processos,
@@ -60,6 +82,10 @@ class ObterStatusAssinaturaUseCase
             'restricao_diaria' => $assinaturaModel->plano->restricao_diaria ?? true,
             'recursos_disponiveis' => $assinaturaModel->plano->recursos_disponiveis ?? [],
             'mensagem' => $assinatura->isAtiva() ? 'Assinatura ativa' : 'Assinatura inativa',
+            // ✅ NOVO: Informações de grace period
+            'dias_restantes' => $diasRestantes,
+            'dias_expirado' => $diasExpirado,
+            'warning' => $warning,
         ];
     }
 }
