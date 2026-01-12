@@ -51,3 +51,4 @@ interface AuditLogRepositoryInterface
     public function buscarOperacoesCriticas(?int $limit = null): array;
 }
 
+

@@ -66,3 +66,4 @@ interface OnboardingProgressRepositoryInterface
     public function buscarModeloPorId(int $id): ?\App\Models\OnboardingProgress;
 }
 
+

@@ -32,3 +32,4 @@ class UserLookup extends Model
     }
 }
 
+

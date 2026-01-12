@@ -204,3 +204,4 @@ CREATE TABLE afiliado_comissoes_pagamentos (
 - Usar Jobs para processar comissões em background (evitar timeout)
 
 
+

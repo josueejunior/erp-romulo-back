@@ -128,3 +128,4 @@
 - ⚠️ Sanitização aplicada em 100% das rotas públicas
 - ⏳ Audit log cobrindo 100% das operações críticas
 
+

@@ -34,3 +34,4 @@ class StoreAssinaturaAdminRequest extends FormRequest
     }
 }
 
+

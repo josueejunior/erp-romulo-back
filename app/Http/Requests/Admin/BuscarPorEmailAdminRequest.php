@@ -22,3 +22,4 @@ class BuscarPorEmailAdminRequest extends FormRequest
     }
 }
 
+

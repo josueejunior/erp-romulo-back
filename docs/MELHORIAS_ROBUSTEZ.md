@@ -145,3 +145,4 @@ Este documento lista as melhorias necessárias para tornar o sistema mais robust
 8. Monitoring e alertas
 9. Documentação da API
 
+

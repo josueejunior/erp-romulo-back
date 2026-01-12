@@ -25,13 +25,17 @@ class EnsureTenantHasActiveSubscription
         
         if (!$tenant || !$tenant->temAssinaturaAtiva()) {
             return response()->json([
-                'message' => 'Você precisa ter uma assinatura ativa para acessar este recurso.',
+                'success' => false,
+                'code' => 'NO_SUBSCRIPTION',
+                'message' => 'Para acessar este recurso, é necessário contratar um dos nossos planos. Consulte nossos planos e preços para continuar.',
+                'action' => 'subscribe',
             ], 403);
         }
 
         return $next($request);
     }
 }
+
 
 
 

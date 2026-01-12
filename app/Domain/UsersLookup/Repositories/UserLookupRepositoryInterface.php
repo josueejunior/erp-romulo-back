@@ -55,3 +55,4 @@ interface UserLookupRepositoryInterface
     public function marcarComoAtivo(int $id): void;
 }
 
+
