@@ -1,0 +1,95 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Domain\Assinatura\Services;
+
+use App\Domain\Assinatura\Entities\Assinatura;
+use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
+use App\Domain\Plano\Repositories\PlanoRepositoryInterface;
+use App\Domain\Plano\Entities\Plano as PlanoEntity;
+
+/**
+ * Domain Service para validação de acesso a recursos baseado em assinatura
+ * 
+ * ✅ DDD: Centraliza regras de negócio sobre acesso a recursos/rotas
+ * 
+ * Responsabilidades:
+ * - Verificar se uma rota/recurso pode ser acessada baseado na assinatura
+ * - Aplicar exceções especiais (ex: dashboard para onboarding)
+ * - Validar acesso baseado no plano e assinatura
+ */
+final class SubscriptionAccessService
+{
+    public function __construct(
+        private readonly AssinaturaRepositoryInterface $assinaturaRepository,
+        private readonly PlanoRepositoryInterface $planoRepository,
+        private readonly AssinaturaDomainService $assinaturaDomainService,
+    ) {}
+
+    /**
+     * Verifica se uma rota pode ser acessada sem validação de assinatura
+     * 
+     * ✅ DDD: Regra de negócio isolada
+     * 
+     * @param string $routeName Nome da rota
+     * @param string $path Path da requisição
+     * @return bool
+     */
+    public function isRouteExemptFromSubscriptionCheck(string $routeName, string $path): bool
+    {
+        // Dashboard é acessível para onboarding mesmo sem assinatura ativa
+        $isDashboardRoute = $routeName === 'dashboard' 
+            || $path === 'api/v1/dashboard' 
+            || str_ends_with($path, '/dashboard');
+        
+        return $isDashboardRoute;
+    }
+
+    /**
+     * Verifica se o dashboard pode ser acessado (incluindo exceção para onboarding)
+     * 
+     * ✅ DDD: Regra de negócio sobre acesso ao dashboard
+     * 
+     * @param int|null $empresaId ID da empresa
+     * @param Assinatura|null $assinatura Assinatura atual (opcional, para evitar busca extra)
+     * @return bool
+     */
+    public function podeAcessarDashboard(?int $empresaId, ?Assinatura $assinatura = null): bool
+    {
+        // Se não tem empresa, não pode acessar
+        if (!$empresaId) {
+            return false;
+        }
+
+        // Buscar assinatura se não foi fornecida
+        if (!$assinatura) {
+            $assinatura = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($empresaId);
+        }
+
+        // Se não tem assinatura, permitir acesso (para onboarding)
+        if (!$assinatura) {
+            return true;
+        }
+
+        // Buscar plano (entidade)
+        $planoEntity = $this->planoRepository->buscarPorId($assinatura->planoId);
+        if (!$planoEntity) {
+            return false;
+        }
+
+        // 🔥 REGRA DE NEGÓCIO: Dashboard é acessível para planos gratuitos (onboarding)
+        // Verificar se é plano gratuito (verificação direta na entidade)
+        $isPlanoGratuito = !$planoEntity->precoMensal || $planoEntity->precoMensal == 0;
+        if ($isPlanoGratuito) {
+            return true;
+        }
+
+        // Para planos pagos, verificar recursos do plano
+        // Dashboard está disponível para planos com 'relatorios' ou 'dashboard_analytics'
+        $recursos = $planoEntity->recursosDisponiveis ?? [];
+        return in_array('relatorios', $recursos) || in_array('dashboard_analytics', $recursos);
+    }
+
+}
+

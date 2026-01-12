@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 use App\Contracts\ApplicationContextContract;
+use App\Domain\Assinatura\Services\SubscriptionAccessService;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -34,6 +35,7 @@ class CheckSubscription
 {
     public function __construct(
         private ApplicationContextContract $context,
+        private SubscriptionAccessService $subscriptionAccessService,
     ) {}
 
     /**
@@ -41,6 +43,8 @@ class CheckSubscription
      * 
      * 🔥 THIN MIDDLEWARE: Apenas chama o ApplicationContext
      * Toda a lógica está centralizada no ApplicationContext.
+     * 
+     * 🔥 EXCEÇÃO: Dashboard deve estar acessível para planos gratuitos (onboarding)
      *
      * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
      */
@@ -49,6 +53,19 @@ class CheckSubscription
         // Garantir que o contexto foi inicializado
         if (!$this->context->isInitialized()) {
             $this->context->bootstrap($request);
+        }
+        
+        // ✅ DDD: Usar Domain Service para verificar se rota está isenta de validação
+        $routeName = $request->route()?->getName() ?? '';
+        $path = $request->path();
+        
+        if ($this->subscriptionAccessService->isRouteExemptFromSubscriptionCheck($routeName, $path)) {
+            Log::debug('CheckSubscription - Rota isenta de validação de assinatura (ex: dashboard para onboarding)', [
+                'user_id' => $this->context->getUser()?->id,
+                'route' => $routeName,
+                'path' => $path,
+            ]);
+            return $next($request);
         }
         
         // Verificar assinatura

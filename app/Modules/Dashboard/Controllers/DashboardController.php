@@ -5,6 +5,7 @@ namespace App\Modules\Dashboard\Controllers;
 use App\Http\Controllers\Api\BaseApiController;
 use App\Http\Controllers\Traits\HasAuthContext;
 use App\Application\Dashboard\UseCases\ObterDadosDashboardUseCase;
+use App\Domain\Assinatura\Services\SubscriptionAccessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -23,6 +24,7 @@ class DashboardController extends BaseApiController
 
     public function __construct(
         private ObterDadosDashboardUseCase $obterDadosDashboardUseCase,
+        private SubscriptionAccessService $subscriptionAccessService,
     ) {}
 
     /**
@@ -42,17 +44,16 @@ class DashboardController extends BaseApiController
     public function index(Request $request): JsonResponse
     {
         try {
-            // Validar acesso ao dashboard (baseado no plano do tenant)
-            $tenant = $this->getTenant();
-            if (!$tenant || !$tenant->temAcessoDashboard()) {
+            // Obter empresa e tenant do contexto (middleware já inicializou)
+            $empresa = $this->getEmpresaAtivaOrFail();
+            $tenantId = $this->getTenantId();
+            
+            // ✅ DDD: Usar Domain Service para validar acesso ao dashboard
+            if (!$this->subscriptionAccessService->podeAcessarDashboard($empresa->id)) {
                 return response()->json([
                     'message' => 'O dashboard não está disponível no seu plano. Faça upgrade para o plano Profissional ou superior.',
                 ], 403);
             }
-
-            // Obter empresa e tenant do contexto (middleware já inicializou)
-            $empresa = $this->getEmpresaAtivaOrFail();
-            $tenantId = $this->getTenantId();
             
             // Executar Use Case (gerencia cache internamente)
             $data = $this->obterDadosDashboardUseCase->executar($empresa->id, $tenantId);
