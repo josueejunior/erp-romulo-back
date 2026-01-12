@@ -204,6 +204,12 @@ class AppServiceProvider extends ServiceProvider
             \App\Infrastructure\Persistence\Eloquent\AuditLogRepository::class
         );
 
+        // UsersLookup Repository (tabela global de lookup)
+        $this->app->bind(
+            \App\Domain\UsersLookup\Repositories\UserLookupRepositoryInterface::class,
+            \App\Infrastructure\Persistence\Eloquent\UserLookupRepository::class
+        );
+
         // Domain Services
         $this->app->bind(
             \App\Domain\Auth\Services\UserRoleServiceInterface::class,

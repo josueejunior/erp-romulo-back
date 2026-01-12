@@ -60,6 +60,7 @@ final class CadastrarEmpresaPublicamenteUseCase
         private readonly CriarIndicacaoAfiliadoUseCase $criarIndicacaoAfiliadoUseCase,
         private readonly GerenciarOnboardingUseCase $gerenciarOnboardingUseCase,
         private readonly AssinaturaDomainService $assinaturaDomainService,
+        private readonly ValidarDuplicidadesService $validarDuplicidadesService,
         private readonly UserRepositoryInterface $userRepository,
         private readonly TenantRepositoryInterface $tenantRepository,
         private readonly EmpresaRepositoryInterface $empresaRepository,
@@ -170,7 +171,9 @@ final class CadastrarEmpresaPublicamenteUseCase
             }
 
             // 1. Validar duplicidades (regra de negócio)
-            $this->validarDuplicidades($dto);
+            // ⚡ REFATORADO: Agora usa ValidarDuplicidadesService com tabela global (O(1))
+            $this->validarDuplicidadesService->validarEmail($dto->adminEmail);
+            $this->validarDuplicidadesService->validarCnpj($dto->cnpj);
 
             // 2. Buscar plano (via repository - não Eloquent direto)
             $plano = $this->planoRepository->buscarModeloPorId($dto->planoId);
@@ -803,13 +806,11 @@ final class CadastrarEmpresaPublicamenteUseCase
             }
         }
 
-        // 🔥 CORREÇÃO: Status 'pendente' não é válido no banco de dados.
-        // Os status válidos são: 'ativa', 'suspensa', 'expirada', 'cancelada'.
-        // Para cadastro público sem pagamento (plano gratuito), usar 'ativa'.
-        // Este método só é chamado quando não há pagamento, mas no cadastro público
-        // sempre criamos planos gratuitos, então usar 'ativa'.
-        $status = 'ativa';
-        $metodoPagamento = 'gratuito';
+        // 🔥 CORREÇÃO: Status correto para planos pagos sem pagamento processado
+        // Se é plano pago mas não há dados de pagamento, usar 'aguardando_pagamento'
+        // Se for plano gratuito, usar 'ativa' (já validado em processarPagamentoECriarAssinatura)
+        $status = 'aguardando_pagamento';
+        $metodoPagamento = null;  // Ainda não foi pago
         
         $assinaturaDTO = new CriarAssinaturaDTO(
             userId: $adminUser->id,
