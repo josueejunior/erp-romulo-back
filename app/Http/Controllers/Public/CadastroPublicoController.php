@@ -18,7 +18,7 @@ use OpenApi\Annotations as OA;
 /**
  * Controller para cadastro público (sem autenticação)
  * 
- * Permite criar tenant, assinatura e usuário em uma única operação.
+ * Permite criar tenant e usuário. Assinatura só será criada quando usuário escolher um plano internamente.
  * Segue padrão DDD com Use Cases e DTOs.
  * 
  * @OA\Tag(
@@ -39,14 +39,14 @@ class CadastroPublicoController extends Controller
      * @OA\Post(
      *     path="/cadastro-publico",
      *     summary="Cadastro público de nova empresa",
-     *     description="Cria tenant, empresa, usuário admin e assinatura em uma única operação",
+     *     description="Cria tenant, empresa e usuário admin. Assinatura só será criada quando usuário escolher um plano internamente.",
      *     operationId="cadastroPublico",
      *     tags={"Cadastro Público"},
      *     @OA\RequestBody(
      *         required=true,
      *         @OA\JsonContent(
-     *             required={"plano_id", "razao_social", "admin_name", "admin_email", "admin_password"},
-     *             @OA\Property(property="plano_id", type="integer", example=1),
+     *             required={"razao_social", "admin_name", "admin_email", "admin_password"},
+     *             @OA\Property(property="plano_id", type="integer", example=1, description="Opcional - assinatura só será criada quando usuário escolher internamente"),
      *             @OA\Property(property="periodo", type="string", enum={"mensal", "anual"}, example="mensal"),
      *             @OA\Property(property="razao_social", type="string", example="Empresa LTDA"),
      *             @OA\Property(property="cnpj", type="string", example="12.345.678/0001-90"),
@@ -142,8 +142,8 @@ class CadastroPublicoController extends Controller
     private function validateRequest(Request $request): array
     {
         return $request->validate([
-            // Dados do plano
-            'plano_id' => 'required|exists:planos,id',
+            // Dados do plano (opcional - assinatura só será criada quando usuário escolher internamente)
+            'plano_id' => 'nullable|integer|exists:planos,id',
             'periodo' => 'nullable|string|in:mensal,anual',
             
             // Dados da empresa (tenant)
@@ -217,16 +217,20 @@ class CadastroPublicoController extends Controller
                     'name' => $adminUser->nome ?? $adminUser->name,
                     'email' => $adminUser->email,
                 ],
-                'assinatura' => [
-                    'id' => $assinatura->id,
-                    'plano' => [
-                        'id' => $plano->id,
-                        'nome' => $plano->nome,
-                    ],
-                    'data_fim' => $dataFim->format('Y-m-d'),
-                ],
             ],
         ];
+
+        // 🔥 CORREÇÃO: Incluir assinatura apenas se existir (não é mais criada automaticamente)
+        if ($assinatura && $plano && $dataFim) {
+            $response['data']['assinatura'] = [
+                'id' => $assinatura->id,
+                'plano' => [
+                    'id' => $plano->id,
+                    'nome' => $plano->nome,
+                ],
+                'data_fim' => $dataFim->format('Y-m-d'),
+            ];
+        }
 
         // Incluir dados de pagamento se houver (ex: PIX QR Code)
         if (isset($result['payment_result'])) {
