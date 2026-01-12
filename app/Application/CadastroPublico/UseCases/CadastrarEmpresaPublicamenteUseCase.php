@@ -176,16 +176,10 @@ final class CadastrarEmpresaPublicamenteUseCase
             $this->validarDuplicidadesService->validarEmail($dto->adminEmail);
             $this->validarDuplicidadesService->validarCnpj($dto->cnpj);
 
-            // 2. Buscar plano (via repository - não Eloquent direto)
-            $plano = $this->planoRepository->buscarModeloPorId($dto->planoId);
-            if (!$plano) {
-                throw new \DomainException('Plano não encontrado.');
-            }
-
-            // 3. Criar tenant com empresa e usuário admin
+            // 2. Criar tenant com empresa e usuário admin
             $tenantResult = $this->criarTenantEUsuario($dto);
 
-            // 4. Marcar referência como concluída (se houver)
+            // 3. Marcar referência como concluída (se houver)
             if ($referenciaAfiliado) {
                 $this->rastrearReferenciaAfiliadoUseCase->marcarComoConcluida(
                     referenciaId: $referenciaAfiliado->id,
@@ -194,7 +188,7 @@ final class CadastrarEmpresaPublicamenteUseCase
                 );
             }
 
-            // 5. Registrar afiliado na empresa (se aplicável)
+            // 4. Registrar afiliado na empresa (se aplicável)
             if ($dto->afiliacao) {
                 $this->registrarAfiliado($tenantResult['empresa'], $dto->afiliacao);
                 
@@ -204,33 +198,16 @@ final class CadastrarEmpresaPublicamenteUseCase
                 }
             }
 
-            // 6. Processar pagamento e criar assinatura
-            $assinaturaResult = $this->processarPagamentoECriarAssinatura(
-                $tenantResult,
-                $plano,
-                $dto
-            );
+            // 🔥 CORREÇÃO: Assinatura NÃO é criada automaticamente no cadastro
+            // A assinatura só será criada quando o usuário escolher um plano internamente
+            // através do fluxo de assinatura/pagamento
 
-            // 6.1. Criar indicação de afiliado (se aplicável e pagamento confirmado)
-            if ($dto->afiliacao && $assinaturaResult['assinatura']->status === 'ativa') {
-                $this->criarIndicacaoAfiliado(
-                    $dto->afiliacao,
-                    $tenantResult['tenant']->id,
-                    $tenantResult['empresa']->id,
-                    $plano,
-                    $assinaturaResult
-                );
-            }
-
-            // 7. Criar registro de onboarding
-            // 🔥 IMPORTANTE: Se plano for PAGO, concluir onboarding automaticamente
-            // Planos gratuitos devem passar pelo tutorial
-            $isPlanoGratuito = !$plano->preco_mensal || $plano->preco_mensal == 0;
+            // 5. Criar registro de onboarding (sempre com tutorial - sem assinatura inicial)
             $this->criarOnboarding(
                 $tenantResult['tenant']->id, 
                 $tenantResult['admin_user']->id, 
                 $dto->adminEmail,
-                concluirAutomaticamente: !$isPlanoGratuito // Concluir automaticamente se plano pago
+                concluirAutomaticamente: false // Sempre mostrar tutorial, sem assinatura
             );
 
             // 8. Disparar evento de empresa criada para enviar email de boas-vindas
@@ -264,10 +241,10 @@ final class CadastrarEmpresaPublicamenteUseCase
                 'tenant' => $tenantResult['tenant'],
                 'empresa' => $tenantResult['empresa'],
                 'admin_user' => $tenantResult['admin_user'],
-                'assinatura' => $assinaturaResult['assinatura'],
-                'plano' => $assinaturaResult['plano'],
-                'data_fim' => $assinaturaResult['data_fim'],
-                'payment_result' => $assinaturaResult['payment_result'] ?? null,
+                'assinatura' => null, // 🔥 CORREÇÃO: Não criar assinatura automaticamente
+                'plano' => null,
+                'data_fim' => null,
+                'payment_result' => null,
             ];
 
             // Salvar resultado no cache para idempotência (1 hora)
@@ -285,7 +262,7 @@ final class CadastrarEmpresaPublicamenteUseCase
                 'correlation_id' => $correlationId,
                 'duration_ms' => round($duration, 2),
                 'tenant_id' => $result['tenant']->id ?? null,
-                'assinatura_id' => $result['assinatura']->id ?? null,
+                'assinatura_id' => null, // 🔥 CORREÇÃO: Não criar assinatura no cadastro
                 'success' => true,
             ]);
 

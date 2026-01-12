@@ -21,8 +21,8 @@ use App\Domain\Exceptions\DomainException;
 final class CadastroPublicoDTO
 {
     public function __construct(
-        // Dados do Plano
-        public readonly int $planoId,
+        // Dados do Plano (opcional - assinatura só será criada quando usuário escolher internamente)
+        public readonly ?int $planoId = null,
         public readonly string $periodo = 'mensal', // 'mensal' ou 'anual'
         
         // Dados da Empresa (Tenant)
@@ -63,7 +63,7 @@ final class CadastroPublicoDTO
         }
 
         return new self(
-            planoId: (int) $data['plano_id'],
+            planoId: isset($data['plano_id']) ? (int) $data['plano_id'] : null,
             periodo: $data['periodo'] ?? 'mensal',
             razaoSocial: $data['razao_social'],
             cnpj: $data['cnpj'], // Já validado acima
