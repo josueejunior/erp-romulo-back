@@ -152,7 +152,8 @@ Route::prefix('v1')->group(function () {
         Route::post('/notifications/read-all', [\App\Modules\Notification\Controllers\NotificationController::class, 'markAllAsRead']);
         
         // Onboarding (usuários autenticados)
-        Route::prefix('onboarding')->group(function () {
+        // 🔥 Rate limiting removido para permitir que usuários passem rápido pelo tutorial
+        Route::prefix('onboarding')->withoutMiddleware(['throttle'])->group(function () {
             Route::get('/status', [\App\Modules\Onboarding\Controllers\OnboardingController::class, 'status']);
             Route::post('/marcar-etapa', [\App\Modules\Onboarding\Controllers\OnboardingController::class, 'marcarEtapa']);
             Route::post('/concluir', [\App\Modules\Onboarding\Controllers\OnboardingController::class, 'concluir']);
@@ -532,7 +533,8 @@ Route::prefix('v1')->group(function () {
     
     // Onboarding (rotas públicas - suportam autenticação opcional)
     // Se houver token, autentica o usuário. Caso contrário, funciona sem autenticação (usa user_id/session_id/email)
-    Route::prefix('onboarding')->middleware(['auth.optional', 'throttle:60,1'])->group(function () {
+    // 🔥 Rate limiting removido para permitir que usuários passem rápido pelo tutorial
+    Route::prefix('onboarding')->middleware(['auth.optional'])->withoutMiddleware(['throttle'])->group(function () {
         Route::post('/iniciar', [\App\Http\Controllers\Public\OnboardingController::class, 'iniciar']);
         Route::post('/marcar-etapa', [\App\Http\Controllers\Public\OnboardingController::class, 'marcarEtapa']);
         Route::post('/marcar-checklist', [\App\Http\Controllers\Public\OnboardingController::class, 'marcarChecklistItem']);
