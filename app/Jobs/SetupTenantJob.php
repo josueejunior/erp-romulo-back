@@ -11,6 +11,8 @@ use App\Domain\Tenant\Services\TenantRolesServiceInterface;
 use App\Domain\Empresa\Repositories\EmpresaRepositoryInterface;
 use App\Domain\Auth\Repositories\UserRepositoryInterface;
 use App\Application\Tenant\DTOs\CriarTenantDTO;
+use App\Domain\Tenant\Events\EmpresaCriada;
+use App\Domain\Shared\Events\EventDispatcherInterface;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -63,6 +65,7 @@ class SetupTenantJob implements ShouldQueue
         TenantRolesServiceInterface $rolesService,
         EmpresaRepositoryInterface $empresaRepository,
         UserRepositoryInterface $userRepository,
+        EventDispatcherInterface $eventDispatcher,
     ): void {
         Log::info('SetupTenantJob iniciado', [
             'tenant_id' => $this->tenantId,
@@ -138,13 +141,14 @@ class SetupTenantJob implements ShouldQueue
                 $empresa = $empresaRepository->criarNoTenant($this->tenantId, $dto);
 
                 // 10. Criar usuário administrador (se fornecido)
+                $adminUser = null;
                 if ($dto->temDadosAdmin()) {
                     Log::info('SetupTenantJob - Criando usuário administrador', [
                         'tenant_id' => $this->tenantId,
                         'admin_email' => $dto->adminEmail,
                     ]);
                     
-                    $userRepository->criarAdministrador(
+                    $adminUser = $userRepository->criarAdministrador(
                         tenantId: $this->tenantId,
                         empresaId: $empresa->id,
                         nome: $dto->adminName,
@@ -159,6 +163,31 @@ class SetupTenantJob implements ShouldQueue
                 // 12. Atualizar status para 'ativa'
                 $tenantDomain = $tenantDomain->withUpdates(['status' => 'ativa']);
                 $tenantRepository->atualizar($tenantDomain);
+
+                // 13. Disparar evento EmpresaCriada para enviar email de boas-vindas
+                try {
+                    $eventDispatcher->dispatch(
+                        new EmpresaCriada(
+                            tenantId: $this->tenantId,
+                            razaoSocial: $tenantDomain->razaoSocial,
+                            cnpj: $tenantDomain->cnpj,
+                            email: $dto->email ?? $dto->adminEmail,
+                            empresaId: $empresa->id,
+                            userId: $adminUser?->id ?? null,
+                        )
+                    );
+                    
+                    Log::info('SetupTenantJob - Evento EmpresaCriada disparado', [
+                        'tenant_id' => $this->tenantId,
+                        'empresa_id' => $empresa->id,
+                    ]);
+                } catch (\Exception $eventException) {
+                    // Não quebrar o fluxo se houver erro ao disparar evento
+                    Log::warning('SetupTenantJob - Erro ao disparar evento EmpresaCriada', [
+                        'tenant_id' => $this->tenantId,
+                        'error' => $eventException->getMessage(),
+                    ]);
+                }
 
                 Log::info('SetupTenantJob - Concluído com sucesso', [
                     'tenant_id' => $this->tenantId,
