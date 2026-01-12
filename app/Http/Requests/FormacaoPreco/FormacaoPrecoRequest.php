@@ -54,3 +54,4 @@ class FormacaoPrecoRequest extends FormRequest
 
 
 
+

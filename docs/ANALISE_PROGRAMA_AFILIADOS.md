@@ -206,3 +206,4 @@ CREATE TABLE afiliado_comissoes_pagamentos (
 
 
 
+
