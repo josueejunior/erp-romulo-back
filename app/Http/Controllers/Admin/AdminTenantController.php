@@ -100,32 +100,23 @@ class AdminTenantController extends Controller
     public function store(StoreTenantAdminRequest $request)
     {
         try {
-            // Criar DTO - REMOVER dados de admin para não criar usuário automaticamente
+            // Criar DTO (pode incluir dados de admin se fornecidos)
             $validated = $request->validated();
-            unset($validated['admin_name'], $validated['admin_email'], $validated['admin_password']);
             $dto = CriarTenantDTO::fromArray($validated);
 
-            // Executar Use Case - cria tenant, banco de dados separado e empresa (SEM criar usuário)
+            // Executar Use Case - cria tenant com status 'pending' e dispara Job
             $result = $this->criarTenantUseCase->executar($dto, requireAdmin: false);
 
-            // Disparar evento de empresa criada para enviar email
-            $this->eventDispatcher->dispatch(
-                new EmpresaCriada(
-                    tenantId: $result['tenant']->id,
-                    razaoSocial: $result['tenant']->razaoSocial,
-                    cnpj: $result['tenant']->cnpj,
-                    email: $result['tenant']->email,
-                    empresaId: $result['empresa']->id,
-                )
-            );
+            // ⚠️ NÃO disparar evento de EmpresaCriada aqui - empresa será criada pelo Job
+            // O evento será disparado no Job após a criação completa
 
-            Log::info('AdminTenantController::store - Empresa criada', [
+            Log::info('AdminTenantController::store - Tenant criado, processamento iniciado em background', [
                 'tenant_id' => $result['tenant']->id,
-                'empresa_id' => $result['empresa']->id,
+                'status' => $result['status'],
             ]);
 
             return ApiResponse::success(
-                'Empresa criada com sucesso! Banco de dados separado criado. Agora você pode criar usuários para esta empresa.',
+                'Empresa criada. Processamento em andamento...',
                 [
                     'tenant' => [
                         'id' => $result['tenant']->id,
@@ -134,12 +125,9 @@ class AdminTenantController extends Controller
                         'email' => $result['tenant']->email,
                         'status' => $result['tenant']->status,
                     ],
-                    'empresa' => [
-                        'id' => $result['empresa']->id,
-                        'razao_social' => $result['empresa']->razaoSocial,
-                    ],
+                    'message' => $result['message'],
                 ],
-                201
+                202 // 202 Accepted - indica que a requisição foi aceita mas processamento está em andamento
             );
 
         } catch (DomainException $e) {

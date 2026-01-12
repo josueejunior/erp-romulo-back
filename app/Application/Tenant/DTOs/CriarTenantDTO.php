@@ -74,6 +74,37 @@ class CriarTenantDTO
             && !empty($this->adminEmail) 
             && !empty($this->adminPassword);
     }
+
+    /**
+     * Converter DTO para array (para serialização em Jobs)
+     */
+    public function toArray(): array
+    {
+        return [
+            'razao_social' => $this->razaoSocial,
+            'cnpj' => $this->cnpj,
+            'email' => $this->email,
+            'status' => $this->status,
+            'endereco' => $this->endereco,
+            'cidade' => $this->cidade,
+            'estado' => $this->estado,
+            'cep' => $this->cep,
+            'telefones' => $this->telefones,
+            'emails_adicionais' => $this->emailsAdicionais,
+            'banco' => $this->banco,
+            'agencia' => $this->agencia,
+            'conta' => $this->conta,
+            'tipo_conta' => $this->tipoConta,
+            'pix' => $this->pix,
+            'representante_legal_nome' => $this->representanteLegalNome,
+            'representante_legal_cpf' => $this->representanteLegalCpf,
+            'representante_legal_cargo' => $this->representanteLegalCargo,
+            'logo' => $this->logo,
+            'admin_name' => $this->adminName,
+            'admin_email' => $this->adminEmail,
+            'admin_password' => $this->adminPassword,
+        ];
+    }
 }
 
 

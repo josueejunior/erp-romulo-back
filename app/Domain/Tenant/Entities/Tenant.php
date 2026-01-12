@@ -56,8 +56,8 @@ class Tenant
             throw new DomainException('O e-mail fornecido é inválido.');
         }
 
-        if (!in_array($this->status, ['ativa', 'inativa'])) {
-            throw new DomainException('O status deve ser "ativa" ou "inativa".');
+        if (!in_array($this->status, ['pending', 'processing', 'ativa', 'inativa', 'failed'])) {
+            throw new DomainException('O status deve ser "pending", "processing", "ativa", "inativa" ou "failed".');
         }
 
         if ($this->estado !== null && strlen($this->estado) !== 2) {
