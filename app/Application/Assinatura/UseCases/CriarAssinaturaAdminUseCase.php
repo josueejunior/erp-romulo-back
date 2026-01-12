@@ -20,6 +20,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\Assinatura\Models\Plano as PlanoModel;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Use Case: Criar Assinatura no Painel Admin
@@ -186,6 +187,9 @@ class CriarAssinaturaAdminUseCase
 
         // Nota: O evento AssinaturaCriada já é disparado pelo CriarAssinaturaUseCase
         // Não é necessário disparar novamente aqui para evitar duplicação
+
+        // 🔥 PERFORMANCE: Invalidar cache de listagem de assinaturas
+        \App\Application\Assinatura\UseCases\ListarAssinaturasAdminUseCase::invalidarCache();
 
         return $assinatura;
     }

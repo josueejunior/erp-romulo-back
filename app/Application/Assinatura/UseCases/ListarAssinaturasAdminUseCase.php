@@ -8,6 +8,7 @@ use App\Domain\Plano\Repositories\PlanoRepositoryInterface;
 use App\Services\AdminTenancyRunner;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Use Case: Listar Assinaturas para Admin
@@ -37,6 +38,24 @@ class ListarAssinaturasAdminUseCase
      */
     public function executar(array $filtros = []): Collection
     {
+        // 🔥 PERFORMANCE: Cache de 2 minutos para reduzir carga no banco
+        $cacheKey = 'admin:assinaturas:' . md5(json_encode($filtros));
+        
+        return Cache::remember($cacheKey, 120, function () use ($filtros) {
+            return $this->buscarAssinaturas($filtros);
+        });
+    }
+
+    /**
+     * Busca assinaturas (sem cache)
+     * 
+     * @param array $filtros Filtros: tenant_id, status, search
+     * @return Collection Collection de arrays com dados das assinaturas
+     */
+    private function buscarAssinaturas(array $filtros = []): Collection
+    {
+        Log::debug('ListarAssinaturasAdminUseCase - Buscando assinaturas (cache miss)', ['filtros' => $filtros]);
+        
         // Buscar todos os tenants ativos
         $tenantsPaginator = $this->tenantRepository->buscarComFiltros([
             'status' => 'ativa',
@@ -137,6 +156,23 @@ class ListarAssinaturasAdminUseCase
         }
 
         return $todasAssinaturas;
+    }
+
+    /**
+     * Invalida o cache de assinaturas
+     * Método público para uso em outros use cases (criar/atualizar assinatura)
+     */
+    public static function invalidarCache(): void
+    {
+        // Invalidar todos os caches de assinaturas (prefixo admin:assinaturas:)
+        // Como não temos tags no Laravel Cache padrão, precisamos invalidar manualmente
+        // Alternativa: usar cache tags se Redis estiver configurado
+        Cache::flush(); // ⚠️ Limpa TODOS os caches (não ideal, mas funcional)
+        
+        // Se usar Redis com tags, usar:
+        // Cache::tags(['admin:assinaturas'])->flush();
+        
+        Log::debug('ListarAssinaturasAdminUseCase - Cache invalidado');
     }
 }
 
