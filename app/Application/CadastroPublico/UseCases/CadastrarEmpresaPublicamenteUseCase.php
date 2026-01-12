@@ -803,14 +803,22 @@ final class CadastrarEmpresaPublicamenteUseCase
             }
         }
 
+        // 🔥 CORREÇÃO: Status 'pendente' não é válido no banco de dados.
+        // Os status válidos são: 'ativa', 'suspensa', 'expirada', 'cancelada'.
+        // Para cadastro público sem pagamento (plano gratuito), usar 'ativa'.
+        // Este método só é chamado quando não há pagamento, mas no cadastro público
+        // sempre criamos planos gratuitos, então usar 'ativa'.
+        $status = 'ativa';
+        $metodoPagamento = 'gratuito';
+        
         $assinaturaDTO = new CriarAssinaturaDTO(
             userId: $adminUser->id,
             planoId: $plano->id,
-            status: 'pendente',
+            status: $status,
             dataInicio: $dataInicio,
             dataFim: $dataFim,
             valorPago: $valorPago,
-            metodoPagamento: 'pendente',
+            metodoPagamento: $metodoPagamento,
             transacaoId: null,
             diasGracePeriod: $diasGracePeriod,
             observacoes: $observacoes,
