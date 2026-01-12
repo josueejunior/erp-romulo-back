@@ -443,6 +443,58 @@ class OrcamentoController extends BaseApiController
             return $this->handleException($e, 'Erro ao atualizar item do orçamento');
         }
     }
+
+    /**
+     * Lista todos os orçamentos da empresa (não apenas de um processo)
+     * 
+     * ✅ DDD: Controller apenas orquestra, usa Service para buscar dados
+     * 
+     * O middleware já inicializou o tenant correto baseado no X-Tenant-ID do header.
+     * A empresa é obtida automaticamente via getEmpresaAtivaOrFail() que prioriza header X-Empresa-ID.
+     */
+    public function listAll(Request $request): JsonResponse
+    {
+        try {
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // Usar repositório para buscar orçamentos com paginação
+            $filtros = [
+                'empresa_id' => $empresa->id,
+                'per_page' => $request->input('per_page', 15),
+            ];
+
+            // Adicionar filtro de processo se fornecido
+            if ($request->filled('processo_id')) {
+                $filtros['processo_id'] = (int) $request->input('processo_id');
+            }
+
+            // Buscar orçamentos usando repositório
+            $paginator = $this->orcamentoRepository->buscarComFiltros($filtros);
+            
+            // Converter entidades de domínio para modelos Eloquent para o Resource
+            // Buscar modelos com relacionamentos carregados
+            $orcamentos = collect($paginator->items())->map(function ($orcamentoDomain) {
+                return $this->orcamentoRepository->buscarModeloPorId(
+                    $orcamentoDomain->id,
+                    ['fornecedor', 'transportadora', 'itens.processoItem', 'itens.formacaoPreco', 'processo']
+                );
+            })->filter();
+
+            return response()->json([
+                'data' => OrcamentoResource::collection($orcamentos),
+                'meta' => [
+                    'current_page' => $paginator->currentPage(),
+                    'last_page' => $paginator->lastPage(),
+                    'per_page' => $paginator->perPage(),
+                    'total' => $paginator->total(),
+                ],
+            ]);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao listar orçamentos');
+        }
+    }
 }
 
 

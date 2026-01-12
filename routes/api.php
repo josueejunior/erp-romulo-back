@@ -186,6 +186,9 @@ Route::prefix('v1')->group(function () {
             // Notas Fiscais (listar todas - sem precisar de processo específico)
             Route::get('/notas-fiscais', [ApiNotaFiscalController::class, 'listAll']);
             
+            // Orçamentos (listar todos - sem precisar de processo específico)
+            Route::get('/orcamentos', [ApiOrcamentoController::class, 'listAll']);
+            
             // Recursos estáticos (enums, listas)
             Route::get('/unidades-medida', [ApiProcessoItemController::class, 'unidadesMedida']);
             
