@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Application\CadastroPublico\UseCases;
 
 use App\Application\CadastroPublico\DTOs\CadastroPublicoDTO;
+use App\Application\CadastroPublico\Services\ValidarDuplicidadesService;
 use App\Application\Tenant\UseCases\CriarTenantUseCase;
 use App\Application\Tenant\DTOs\CriarTenantDTO;
 use App\Application\Assinatura\UseCases\CriarAssinaturaUseCase;
