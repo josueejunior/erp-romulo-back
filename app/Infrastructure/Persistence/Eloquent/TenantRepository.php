@@ -116,6 +116,15 @@ class TenantRepository implements TenantRepositoryInterface
             $data['criado_em'] = now();
             $data['atualizado_em'] = now();
             
+            // 🔥 CORREÇÃO: Converter arrays para JSON antes de usar DB::table()->insert()
+            // Os casts do Eloquent só funcionam com create()/save(), não com insert() direto
+            if (isset($data['telefones']) && is_array($data['telefones'])) {
+                $data['telefones'] = json_encode($data['telefones']);
+            }
+            if (isset($data['emails_adicionais']) && is_array($data['emails_adicionais'])) {
+                $data['emails_adicionais'] = json_encode($data['emails_adicionais']);
+            }
+            
             // Usar insert() para forçar o ID
             \Illuminate\Support\Facades\DB::table('tenants')->insert($data);
             
