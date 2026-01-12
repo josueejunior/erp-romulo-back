@@ -5,6 +5,7 @@ namespace App\Application\Tenant\UseCases;
 use App\Application\Tenant\DTOs\CriarTenantDTO;
 use App\Domain\Tenant\Entities\Tenant;
 use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
+use App\Domain\Tenant\Services\TenantDatabaseServiceInterface;
 use App\Jobs\SetupTenantJob;
 use Illuminate\Support\Facades\Log;
 use DomainException;
@@ -19,6 +20,7 @@ class CriarTenantUseCase
 {
     public function __construct(
         private TenantRepositoryInterface $tenantRepository,
+        private TenantDatabaseServiceInterface $databaseService,
     ) {}
 
     /**
@@ -66,8 +68,16 @@ class CriarTenantUseCase
             }
         }
 
-        // Persistir tenant (infraestrutura) - apenas o registro inicial
-        $tenant = $this->tenantRepository->criar($tenant);
+        // 🔥 CORREÇÃO: Encontrar próximo ID disponível antes de criar
+        // Isso evita conflitos com bancos de dados já existentes
+        $proximoIdDisponivel = $this->databaseService->encontrarProximoNumeroDisponivel();
+        
+        Log::info('CriarTenantUseCase - Próximo ID disponível encontrado', [
+            'proximo_id' => $proximoIdDisponivel,
+        ]);
+
+        // Persistir tenant (infraestrutura) com ID específico para evitar conflitos
+        $tenant = $this->tenantRepository->criarComId($tenant, $proximoIdDisponivel);
 
         Log::info('CriarTenantUseCase - Tenant criado, disparando Job assíncrono', [
             'tenant_id' => $tenant->id,
