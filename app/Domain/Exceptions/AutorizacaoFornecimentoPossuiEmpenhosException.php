@@ -22,3 +22,4 @@ class AutorizacaoFornecimentoPossuiEmpenhosException extends BusinessRuleExcepti
 
 
 
+

@@ -42,3 +42,4 @@ readonly class ComissaoGerada implements DomainEvent
 }
 
 
+
