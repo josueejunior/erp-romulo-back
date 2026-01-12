@@ -21,10 +21,13 @@ use App\Application\Onboarding\DTOs\ConcluirOnboardingDTO;
 use App\Domain\Assinatura\Services\AssinaturaDomainService;
 use App\Domain\Auth\Repositories\UserRepositoryInterface;
 use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
+use App\Domain\Tenant\Services\TenantDatabaseServiceInterface;
+use App\Domain\Tenant\Services\TenantRolesServiceInterface;
 use App\Domain\Empresa\Repositories\EmpresaRepositoryInterface;
 use App\Domain\Plano\Repositories\PlanoRepositoryInterface;
 use App\Domain\Exceptions\EmailJaCadastradoException;
 use App\Domain\Exceptions\CnpjJaCadastradoException;
+use App\Domain\Exceptions\DomainException;
 use App\Domain\Payment\ValueObjects\PaymentRequest;
 use App\Domain\Shared\Events\EventDispatcherInterface;
 use App\Domain\Tenant\Events\EmpresaCriada;
@@ -64,6 +67,8 @@ final class CadastrarEmpresaPublicamenteUseCase
         private readonly ValidarDuplicidadesService $validarDuplicidadesService,
         private readonly UserRepositoryInterface $userRepository,
         private readonly TenantRepositoryInterface $tenantRepository,
+        private readonly TenantDatabaseServiceInterface $databaseService,
+        private readonly TenantRolesServiceInterface $rolesService,
         private readonly EmpresaRepositoryInterface $empresaRepository,
         private readonly PlanoRepositoryInterface $planoRepository,
         private readonly EventDispatcherInterface $eventDispatcher,
@@ -286,7 +291,11 @@ final class CadastrarEmpresaPublicamenteUseCase
     }
 
     /**
-     * Cria tenant com empresa e usuário admin
+     * Cria tenant com empresa e usuário admin (processamento SÍNCRONO para cadastro público)
+     * 
+     * 🔥 IMPORTANTE: Para o cadastro público, o processo DEVE ser síncrono porque
+     * o usuário precisa ter a resposta imediata. Este método executa o mesmo processo
+     * do SetupTenantJob, mas de forma síncrona.
      */
     private function criarTenantEUsuario(CadastroPublicoDTO $dto): array
     {
@@ -300,7 +309,7 @@ final class CadastrarEmpresaPublicamenteUseCase
         // Converter DTO para CriarTenantDTO (usar CNPJ normalizado)
         $tenantDTO = CriarTenantDTO::fromArray([
             'razao_social' => $dto->razaoSocial,
-            'cnpj' => $cnpjNormalizado, // Salvar CNPJ sem formatação
+            'cnpj' => $cnpjNormalizado,
             'email' => $dto->email,
             'endereco' => $dto->endereco,
             'cidade' => $dto->cidade,
@@ -314,7 +323,103 @@ final class CadastrarEmpresaPublicamenteUseCase
             'admin_password' => $dto->adminPassword,
         ]);
 
-        return $this->criarTenantUseCase->executar($tenantDTO, requireAdmin: true);
+        // 🔥 PROCESSAMENTO SÍNCRONO: Criar tenant, banco, migrations, empresa e usuário
+        // 1. Criar entidade Tenant
+        $tenant = new \App\Domain\Tenant\Entities\Tenant(
+            id: null,
+            razaoSocial: $tenantDTO->razaoSocial,
+            cnpj: $tenantDTO->cnpj,
+            email: $tenantDTO->email,
+            status: 'processing', // Status inicial
+            endereco: $tenantDTO->endereco,
+            cidade: $tenantDTO->cidade,
+            estado: $tenantDTO->estado,
+            cep: $tenantDTO->cep,
+            telefones: $tenantDTO->telefones,
+            emailsAdicionais: $tenantDTO->emailsAdicionais,
+            banco: $tenantDTO->banco,
+            agencia: $tenantDTO->agencia,
+            conta: $tenantDTO->conta,
+            tipoConta: $tenantDTO->tipoConta,
+            pix: $tenantDTO->pix,
+            representanteLegalNome: $tenantDTO->representanteLegalNome,
+            representanteLegalCpf: $tenantDTO->representanteLegalCpf,
+            representanteLegalCargo: $tenantDTO->representanteLegalCargo,
+            logo: $tenantDTO->logo,
+        );
+
+        // 2. Encontrar próximo ID disponível
+        $proximoIdDisponivel = $this->databaseService->encontrarProximoNumeroDisponivel();
+        
+        // 3. Criar tenant no banco
+        $tenant = $this->tenantRepository->criarComId($tenant, $proximoIdDisponivel);
+
+        try {
+            // 4. Criar banco de dados
+            $this->databaseService->criarBancoDados($tenant);
+            
+            // 5. Executar migrations
+            $this->databaseService->executarMigrations($tenant);
+            
+            // 6. Buscar tenant model
+            $tenantModel = $this->tenantRepository->buscarModeloPorId($tenant->id);
+            if (!$tenantModel) {
+                throw new \RuntimeException("Tenant model {$tenant->id} não encontrado após criar banco.");
+            }
+
+            // 7. Inicializar contexto do tenant
+            tenancy()->initialize($tenantModel);
+
+            try {
+                // 8. Inicializar roles
+                $this->rolesService->inicializarRoles($tenant);
+
+                // 9. Criar empresa
+                $empresa = $this->empresaRepository->criarNoTenant($tenant->id, $tenantDTO);
+
+                // 10. Criar usuário administrador
+                $adminUser = null;
+                if ($tenantDTO->temDadosAdmin()) {
+                    $adminUser = $this->userRepository->criarAdministrador(
+                        tenantId: $tenant->id,
+                        empresaId: $empresa->id,
+                        nome: $tenantDTO->adminName,
+                        email: $tenantDTO->adminEmail,
+                        senha: $tenantDTO->adminPassword,
+                    );
+                }
+
+                // 11. Finalizar contexto do tenant
+                tenancy()->end();
+
+                // 12. Atualizar status para 'ativa'
+                $tenant = $tenant->withUpdates(['status' => 'ativa']);
+                $this->tenantRepository->atualizar($tenant);
+
+                return [
+                    'tenant' => $tenantModel,
+                    'empresa' => $empresa,
+                    'admin_user' => $adminUser,
+                ];
+
+            } catch (\Exception $e) {
+                tenancy()->end();
+                throw $e;
+            }
+
+        } catch (\Exception $e) {
+            // Se falhar, tentar atualizar status para 'failed'
+            try {
+                $tenant = $tenant->withUpdates(['status' => 'failed']);
+                $this->tenantRepository->atualizar($tenant);
+            } catch (\Exception $updateException) {
+                Log::error('Erro ao atualizar status do tenant para failed', [
+                    'tenant_id' => $tenant->id,
+                    'error' => $updateException->getMessage(),
+                ]);
+            }
+            throw $e;
+        }
     }
 
     /**

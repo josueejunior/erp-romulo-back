@@ -192,11 +192,11 @@ class CadastroPublicoController extends Controller
     private function successResponse(array $result): JsonResponse
     {
         $tenant = $result['tenant'];
-        $empresa = $result['empresa'];
-        $adminUser = $result['admin_user'];
-        $assinatura = $result['assinatura'];
-        $plano = $result['plano'];
-        $dataFim = $result['data_fim'];
+        $empresa = $result['empresa'] ?? null;
+        $adminUser = $result['admin_user'] ?? null;
+        $assinatura = $result['assinatura'] ?? null;
+        $plano = $result['plano'] ?? null;
+        $dataFim = $result['data_fim'] ?? null;
 
         $response = [
             'message' => 'Cadastro realizado com sucesso!',
@@ -208,17 +208,25 @@ class CadastroPublicoController extends Controller
                     'cnpj' => $tenant->cnpj,
                     'email' => $tenant->email,
                 ],
-                'empresa' => [
-                    'id' => $empresa->id,
-                    'razao_social' => $empresa->razaoSocial ?? $empresa->razao_social,
-                ],
-                'usuario' => [
-                    'id' => $adminUser->id,
-                    'name' => $adminUser->nome ?? $adminUser->name,
-                    'email' => $adminUser->email,
-                ],
             ],
         ];
+
+        // Incluir empresa se disponível
+        if ($empresa) {
+            $response['data']['empresa'] = [
+                'id' => $empresa->id,
+                'razao_social' => $empresa->razaoSocial ?? $empresa->razao_social,
+            ];
+        }
+
+        // Incluir usuário se disponível
+        if ($adminUser) {
+            $response['data']['usuario'] = [
+                'id' => $adminUser->id,
+                'name' => $adminUser->nome ?? $adminUser->name,
+                'email' => $adminUser->email,
+            ];
+        }
 
         // 🔥 CORREÇÃO: Incluir assinatura apenas se existir (não é mais criada automaticamente)
         if ($assinatura && $plano && $dataFim) {
