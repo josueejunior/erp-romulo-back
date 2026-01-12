@@ -43,9 +43,9 @@ class TenantController extends Controller
             // Executar Use Case (aqui está a lógica)
             $result = $this->criarTenantUseCase->executar($dto, requireAdmin: true);
 
-            $message = $result['admin_user'] 
-                ? 'Empresa e usuário administrador criados com sucesso!'
-                : 'Empresa criada com sucesso!';
+            // 🔥 CORREÇÃO: Processo agora é assíncrono - admin_user é criado no Job
+            // O resultado já contém a mensagem apropriada
+            $message = $result['message'] ?? 'Empresa criada. Processamento em andamento...';
 
             return response()->json([
                 'message' => $message,
@@ -58,6 +58,7 @@ class TenantController extends Controller
                         'email' => $result['tenant']->email,
                         'status' => $result['tenant']->status,
                     ],
+                    'status' => $result['status'] ?? 'pending',
                 ],
             ], 201);
 
