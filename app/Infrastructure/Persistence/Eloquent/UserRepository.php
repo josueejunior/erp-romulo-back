@@ -178,35 +178,37 @@ class UserRepository implements UserRepositoryInterface
             'current_database' => $currentDatabase,
         ]);
 
-        // 🔥 CORREÇÃO: Eloquent com SoftDeletes já exclui automaticamente registros deletados
-        // Mas vamos garantir explicitamente que não estamos incluindo deletados
-        // UserModel usa SoftDeletes, então where() já exclui automaticamente deletados
-        $query = UserModel::where('email', $email);
+        // 🔥 CORREÇÃO CRÍTICA: A constraint unique do PostgreSQL NÃO respeita soft deletes
+        // Se existe um usuário deletado com esse email, a constraint bloqueia a inserção
+        // Precisamos verificar INCLUINDO usuários deletados para detectar esse caso
+        $query = UserModel::withTrashed()->where('email', $email);
         
         if ($excluirUserId) {
             $query->where('id', '!=', $excluirUserId);
         }
 
-        // Verificar se existe usuário ativo (não deletado)
-        // exists() já exclui soft deletes automaticamente
-        $exists = $query->exists();
+        // Verificar se existe algum usuário (ativo ou deletado)
+        $userFound = $query->first();
         
-        // Se encontrou, buscar detalhes para log e validação
-        if ($exists) {
-            $userFound = $query->first();
-            
-            // Verificar explicitamente se está deletado (por segurança)
-            // Usar trashed() é mais seguro pois funciona independente do nome da coluna (deleted_at vs excluido_em)
-            if ($userFound && $userFound->trashed()) {
-                \Log::warning('UserRepository::emailExiste - Email encontrado mas usuário está deletado (soft delete), ignorando', [
+        if ($userFound) {
+            // Se o usuário está deletado (soft delete), permitir criação (email disponível)
+            if ($userFound->trashed()) {
+                \Log::warning('UserRepository::emailExiste - Email encontrado mas usuário está deletado (soft delete). Constraint unique do PostgreSQL ainda bloqueia criação!', [
                     'email' => $email,
                     'user_id' => $userFound->id,
                     'is_trashed' => true,
                     'tenant_id' => $tenantId,
+                    'deleted_at' => $userFound->getAttribute($userFound->getDeletedAtColumn()),
                 ]);
-                return false; // Usuário deletado não conta como existente
+                // ⚠️ PROBLEMA: Retornar false aqui permite que o UseCase tente criar,
+                // mas a constraint unique do banco vai bloquear
+                // SOLUÇÃO IDEAL: Usar unique index parcial (WHERE deleted_at IS NULL) no banco
+                // SOLUÇÃO TEMPORÁRIA: Retornar true para evitar erro de constraint
+                // Mas isso impede criar usuário com email de usuário deletado
+                return true; // ⚠️ Impede criação se houver usuário deletado
             }
             
+            // Usuário ativo encontrado
             \Log::warning('UserRepository::emailExiste - Email encontrado (usuário ativo)', [
                 'email' => $email,
                 'user_id' => $userFound->id ?? null,
@@ -215,15 +217,15 @@ class UserRepository implements UserRepositoryInterface
                 'excluir_user_id' => $excluirUserId,
                 'current_database' => $currentDatabase,
             ]);
+            return true;
         } else {
             \Log::debug('UserRepository::emailExiste - Email não encontrado', [
                 'email' => $email,
                 'tenant_id' => $tenantId,
                 'current_database' => $currentDatabase,
             ]);
+            return false;
         }
-
-        return $exists;
     }
 
     public function buscarComFiltros(array $filtros = []): LengthAwarePaginator
