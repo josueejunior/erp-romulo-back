@@ -380,7 +380,7 @@ class Tenant extends BaseTenant implements TenantWithDatabase
                 $hoje = now()->startOfDay();
                 $amanha = now()->copy()->addDay()->startOfDay();
                 
-                $processosHoje = \App\Modules\Processo\Models\Processo::whereBetween('criado_em', [$hoje, $amanha])->count();
+                $processosHoje = \App\Modules\Processo\Models\Processo::whereBetween('created_at', [$hoje, $amanha])->count();
                 
                 if (!$jaInicializado) {
                     tenancy()->end();
@@ -415,7 +415,7 @@ class Tenant extends BaseTenant implements TenantWithDatabase
             $inicioMes = now()->startOfMonth();
             $fimMes = now()->copy()->endOfMonth();
             
-            $processosMes = \App\Modules\Processo\Models\Processo::whereBetween('criado_em', [$inicioMes, $fimMes])->count();
+            $processosMes = \App\Modules\Processo\Models\Processo::whereBetween('created_at', [$inicioMes, $fimMes])->count();
             
             if (!$jaInicializado) {
                 tenancy()->end();
