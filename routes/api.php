@@ -113,7 +113,7 @@ Route::prefix('v1')->group(function () {
         'auth.context',                // CAMADA 4: Identidade
         \App\Http\Middleware\ResolveTenantContext::class,  // CAMADA 5: Tenancy (usando classe completa para debug)
         \App\Http\Middleware\BootstrapApplicationContext::class,  // CAMADA 6: Bootstrap empresa (usando classe completa para debug)
-        'throttle:200,1'               // Rate limiting
+        // 🔥 Rate limiting removido para desenvolvimento (causava muitos erros 429)
     ])->group(function () {
         // Rotas que NÃO precisam de assinatura (exceções)
         Route::post('/auth/logout', [AuthController::class, 'logout']);
