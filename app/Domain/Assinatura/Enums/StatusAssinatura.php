@@ -16,6 +16,7 @@ enum StatusAssinatura: string
     case PENDENTE = 'pendente';
     case SUSPENSA = 'suspensa';
     case TRIAL = 'trial';
+    case AGUARDANDO_PAGAMENTO = 'aguardando_pagamento';
 
     /**
      * Verifica se o status representa uma assinatura válida/utilizável
@@ -63,6 +64,7 @@ enum StatusAssinatura: string
             self::PENDENTE => 'Pendente',
             self::SUSPENSA => 'Suspensa',
             self::TRIAL => 'Período de Teste',
+            self::AGUARDANDO_PAGAMENTO => 'Aguardando Pagamento',
         };
     }
 
@@ -78,6 +80,7 @@ enum StatusAssinatura: string
             self::PENDENTE => 'yellow',
             self::SUSPENSA => 'orange',
             self::TRIAL => 'blue',
+            self::AGUARDANDO_PAGAMENTO => 'yellow',
         };
     }
 
