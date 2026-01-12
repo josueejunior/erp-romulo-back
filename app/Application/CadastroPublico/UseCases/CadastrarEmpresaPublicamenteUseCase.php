@@ -243,6 +243,7 @@ final class CadastrarEmpresaPublicamenteUseCase
                         cnpj: $tenantResult['tenant']->cnpj,
                         email: $dto->adminEmail, // Usar email do admin cadastrado
                         empresaId: $tenantResult['empresa']->id,
+                        userId: $tenantResult['admin_user']->id ?? null, // Passar userId para evitar query extra no listener
                     )
                 );
                 

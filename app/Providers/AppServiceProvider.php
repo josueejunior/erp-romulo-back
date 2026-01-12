@@ -287,6 +287,12 @@ class AppServiceProvider extends ServiceProvider
             \App\Listeners\EmpresaCriadaListener::class
         );
 
+        // Listener para atualizar users_lookup quando empresa é criada
+        \Illuminate\Support\Facades\Event::listen(
+            \App\Domain\Tenant\Events\EmpresaCriada::class,
+            \App\Listeners\AtualizarUsersLookupListener::class
+        );
+
         \Illuminate\Support\Facades\Event::listen(
             \App\Domain\Auth\Events\SenhaAlterada::class,
             \App\Listeners\SenhaAlteradaListener::class

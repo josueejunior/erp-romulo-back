@@ -3,6 +3,7 @@
 namespace App\Application\Auth\UseCases;
 
 use App\Application\Auth\DTOs\LoginDTO;
+use App\Application\CadastroPublico\Services\UsersLookupService;
 use App\Domain\Auth\Repositories\UserRepositoryInterface;
 use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
 use App\Domain\Shared\ValueObjects\Email;
@@ -24,6 +25,7 @@ class LoginUseCase
         private UserRepositoryInterface $userRepository,
         private TenantRepositoryInterface $tenantRepository,
         private AdminTenancyRunner $adminTenancyRunner,
+        private UsersLookupService $usersLookupService,
     ) {}
 
     /**
@@ -59,10 +61,46 @@ class LoginUseCase
                 }
             } else {
                 \Log::debug('LoginUseCase::executar - Buscando tenant automaticamente por email');
-                // Buscar tenant automaticamente pelo email
-                $tenant = $this->buscarTenantPorEmail($email->value);
-                if (!$tenant) {
-                    throw new DomainException('Usuário não encontrado em nenhum tenant. Verifique suas credenciais.');
+                // ⚡ REFATORADO: Usar users_lookup para busca O(1) ao invés de O(n)
+                $lookups = $this->usersLookupService->encontrarPorEmail($email->value);
+                
+                if (empty($lookups)) {
+                    // Fallback: Se não encontrar em users_lookup, usar busca antiga (para dados antigos)
+                    \Log::warning('LoginUseCase::executar - Usuário não encontrado em users_lookup, usando busca antiga', [
+                        'email' => $email->value,
+                    ]);
+                    $tenant = $this->buscarTenantPorEmail($email->value);
+                    if (!$tenant) {
+                        throw new DomainException('Usuário não encontrado em nenhum tenant. Verifique suas credenciais.');
+                    }
+                } else {
+                    // Se encontrar múltiplos tenants, usar o primeiro (futuro: perguntar ao usuário)
+                    if (count($lookups) > 1) {
+                        \Log::info('LoginUseCase::executar - Múltiplos tenants encontrados para este email', [
+                            'email' => $email->value,
+                            'count' => count($lookups),
+                            'tenant_ids' => array_map(fn($l) => $l->tenantId, $lookups),
+                        ]);
+                        // TODO: Futuro - Perguntar ao usuário qual tenant usar
+                    }
+                    
+                    $lookup = $lookups[0];
+                    $tenantDomain = $this->tenantRepository->buscarPorId($lookup->tenantId);
+                    
+                    if (!$tenantDomain) {
+                        throw new DomainException('Tenant não encontrado.');
+                    }
+                    
+                    $tenant = $this->tenantRepository->buscarModeloPorId($lookup->tenantId);
+                    if (!$tenant) {
+                        throw new DomainException('Tenant não encontrado.');
+                    }
+                    
+                    \Log::info('LoginUseCase::executar - Tenant encontrado via users_lookup', [
+                        'tenant_id' => $lookup->tenantId,
+                        'user_id' => $lookup->userId,
+                        'email' => $email->value,
+                    ]);
                 }
             }
 
@@ -140,13 +178,16 @@ class LoginUseCase
                 'tenant_id' => $tenantCorreto->id,
             ]);
 
+            // Buscar modelo completo do usuário para foto_perfil (se necessário)
+            $userModel = $this->userRepository->buscarModeloPorId($user->id);
+            
             return [
                 'user' => [
                     'id' => $user->id,
                     'name' => $user->nome,
                     'email' => $user->email,
                     'empresa_ativa_id' => $user->empresaAtivaId,
-                    'foto_perfil' => $userModel->foto_perfil ?? null,
+                    'foto_perfil' => $userModel?->foto_perfil ?? null,
                 ],
                 'tenant' => [
                     'id' => $tenantCorreto->id,

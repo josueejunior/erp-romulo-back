@@ -20,6 +20,7 @@ readonly class EmpresaCriada implements DomainEvent
         public ?string $cnpj,
         public ?string $email,
         public int $empresaId,
+        public ?int $userId = null, // ID do usuário admin (opcional para retrocompatibilidade)
         public DateTimeImmutable $ocorreuEm = new DateTimeImmutable()
     ) {}
 
