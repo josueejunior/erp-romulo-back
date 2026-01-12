@@ -25,6 +25,7 @@ use App\Models\Tenant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use App\Domain\Exceptions\DomainException;
 
 /**
@@ -64,18 +65,37 @@ class AdminUserController extends Controller
     public function indexGlobal(Request $request)
     {
         try {
-            \Log::info('AdminUserController::indexGlobal - Listando usuários de todos os tenants');
+            // 🔥 PERFORMANCE: Cache de 2 minutos para reduzir carga
+            $cacheKey = 'admin_usuarios_global_' . md5(json_encode($request->only(['search'])));
             
-            // Buscar todos os tenants ativos usando repository (Domain, não Eloquent)
-            $tenantsPaginator = $this->tenantRepository->buscarComFiltros([
-                'status' => 'ativa',
-                'per_page' => 1000, // Buscar todos para admin
-            ]);
-            
-            $usuariosConsolidados = [];
-            
-            // 🔥 ARQUITETURA LIMPA: AdminTenancyRunner isola toda lógica de tenancy
-            foreach ($tenantsPaginator->items() as $tenantDomain) {
+            // Cachear apenas os dados (array), não a JsonResponse
+            $allUsers = Cache::remember($cacheKey, 120, function () use ($request) {
+                \Log::info('AdminUserController::indexGlobal - Listando usuários de todos os tenants (cache miss)');
+                
+                // Buscar tenants ativos usando repository (Domain, não Eloquent)
+                // ⚠️ LIMITE: Processar máximo 100 tenants por vez para evitar timeouts
+                $tenantsPaginator = $this->tenantRepository->buscarComFiltros([
+                    'status' => 'ativa',
+                    'per_page' => 100, // Limitado para evitar timeout
+                ]);
+                
+                $tenantsItems = $tenantsPaginator->items();
+                $totalTenants = $tenantsPaginator->total();
+                
+                if ($totalTenants > 100) {
+                    \Log::warning('AdminUserController::indexGlobal - Limite de tenants atingido', [
+                        'total_tenants' => $totalTenants,
+                        'processando' => count($tenantsItems),
+                    ]);
+                }
+                
+                $usuariosConsolidados = [];
+                $tenantsProcessados = 0;
+                $tenantsComErro = 0;
+                
+                // 🔥 ARQUITETURA LIMPA: AdminTenancyRunner isola toda lógica de tenancy
+                foreach ($tenantsItems as $tenantDomain) {
+                    $tenantsProcessados++;
                 try {
                     $resultado = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($request, $tenantDomain) {
                         // Usar o repositório para garantir isolamento e formato consistente
@@ -151,27 +171,36 @@ class AdminUserController extends Controller
                             }
                         }
                     }
-                } catch (\Exception $e) {
-                    Log::warning('Erro ao buscar usuários do tenant', [
-                        'tenant_id' => $tenantDomain->id,
-                        'error' => $e->getMessage(),
-                    ]);
-                    // AdminTenancyRunner já garantiu finalização do tenancy no finally
+                    } catch (\Exception $e) {
+                        $tenantsComErro++;
+                        Log::warning('Erro ao buscar usuários do tenant', [
+                            'tenant_id' => $tenantDomain->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                        // AdminTenancyRunner já garantiu finalização do tenancy no finally
+                        // Continuar processando outros tenants mesmo em caso de erro
+                    }
                 }
-            }
-            
-            // Converter para array indexado (remover chaves de email)
-            $allUsers = array_values($usuariosConsolidados);
-            
-            // Ordenar por nome (já vem ordenado do repositório, mas garantimos após consolidação)
-            usort($allUsers, function ($a, $b) {
-                return strcmp($a['name'] ?? '', $b['name'] ?? '');
+                
+                // Converter para array indexado (remover chaves de email)
+                $allUsers = array_values($usuariosConsolidados);
+                
+                // Ordenar por nome (já vem ordenado do repositório, mas garantimos após consolidação)
+                usort($allUsers, function ($a, $b) {
+                    return strcmp($a['name'] ?? '', $b['name'] ?? '');
+                });
+                
+                \Log::info('AdminUserController::indexGlobal - Usuários consolidados', [
+                    'total_users' => count($allUsers),
+                    'tenants_processados' => $tenantsProcessados,
+                    'tenants_com_erro' => $tenantsComErro,
+                    'total_tenants_disponiveis' => $totalTenants,
+                ]);
+                
+                return $allUsers; // Retornar array, não JsonResponse
             });
             
-            \Log::info('AdminUserController::indexGlobal - Usuários consolidados', [
-                'total_users' => count($allUsers),
-            ]);
-            
+            // Criar JsonResponse após obter dados do cache
             return ApiResponse::collection($allUsers);
         } catch (\Exception $e) {
             Log::error('Erro ao listar usuários globalmente', [
