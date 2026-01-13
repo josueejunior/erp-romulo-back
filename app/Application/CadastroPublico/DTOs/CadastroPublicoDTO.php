@@ -53,6 +53,14 @@ final class CadastroPublicoDTO
         // Referência de Afiliado (opcional - para rastreamento automático)
         public readonly ?string $referenciaAfiliado = null, // Código do afiliado (?ref=code)
         public readonly ?string $sessionId = null, // ID da sessão do navegador
+        
+        // 🔥 MELHORIA: UTM Tracking (contexto de marketing)
+        public readonly ?string $utmSource = null,
+        public readonly ?string $utmMedium = null,
+        public readonly ?string $utmCampaign = null,
+        public readonly ?string $utmTerm = null,
+        public readonly ?string $utmContent = null,
+        public readonly ?string $fingerprint = null, // Browser fingerprint
     ) {}
 
     public static function fromArray(array $data): self
