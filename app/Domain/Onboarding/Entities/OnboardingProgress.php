@@ -199,7 +199,9 @@ class OnboardingProgress
         }
 
         // Retornar a última etapa do array (assumindo ordem cronológica)
-        return end($this->etapasConcluidas) ?: null;
+        // 🔥 CORREÇÃO: Não usar end() em propriedade readonly, usar array_slice
+        $etapas = $this->etapasConcluidas;
+        return $etapas[count($etapas) - 1] ?? null;
     }
 
     /**
