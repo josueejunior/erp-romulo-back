@@ -11,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
  * 🔥 DDD: Controller Admin para gerenciar backups de tenants
@@ -148,14 +149,15 @@ class AdminBackupController extends Controller
     /**
      * Baixa um arquivo de backup
      */
-    public function baixarBackup(string $filename): StreamedResponse|JsonResponse
+    public function baixarBackup(string $filename): BinaryFileResponse|JsonResponse
     {
         try {
             $backupPath = storage_path('app/backups');
             $fullPath = "{$backupPath}/{$filename}";
 
             // Validar nome do arquivo (prevenir path traversal)
-            if (!preg_match('/^backup_tenant_\d+_[a-zA-Z0-9_]+_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.sql$/', $filename)) {
+            // Aceita nomes de banco com underscores (ex: tenant_2)
+            if (!preg_match('/^backup_tenant_\d+_.+_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.sql$/', $filename)) {
                 return ApiResponse::error('Nome de arquivo inválido.', 400);
             }
 
@@ -190,7 +192,8 @@ class AdminBackupController extends Controller
             $fullPath = "{$backupPath}/{$filename}";
 
             // Validar nome do arquivo (prevenir path traversal)
-            if (!preg_match('/^backup_tenant_\d+_[a-zA-Z0-9_]+_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.sql$/', $filename)) {
+            // Aceita nomes de banco com underscores (ex: tenant_2)
+            if (!preg_match('/^backup_tenant_\d+_.+_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.sql$/', $filename)) {
                 return ApiResponse::error('Nome de arquivo inválido.', 400);
             }
 
