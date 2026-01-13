@@ -75,8 +75,13 @@ class TenantRepository implements TenantRepositoryInterface
     /**
      * Criar tenant com ID específico
      * Usado quando precisamos garantir que o ID não conflite com bancos existentes
+     * 
+     * @param Tenant $tenant Entidade do domínio
+     * @param int $id ID específico para o tenant
+     * @param array $dadosExtras Dados extras que não estão na entidade (ex: UTM tracking)
+     * @return Tenant Entidade criada
      */
-    public function criarComId(Tenant $tenant, int $id): Tenant
+    public function criarComId(Tenant $tenant, int $id, array $dadosExtras = []): Tenant
     {
         try {
             $data = $this->toArray($tenant);
