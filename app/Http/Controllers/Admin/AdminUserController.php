@@ -718,6 +718,102 @@ class AdminUserController extends Controller
     }
 
     /**
+     * Reativar usuário globalmente (em todos os tenants onde ele existe)
+     * 🔥 DDD: Busca usuário em todos os tenants e reativa em cada um
+     */
+    public function reactivateGlobal(Request $request, int $userId)
+    {
+        try {
+            Log::info('AdminUserController::reactivateGlobal - Iniciando reativação global', ['userId' => $userId]);
+            
+            // Buscar todos os tenants ativos (similar ao destroyGlobal)
+            $tenantsPaginator = $this->tenantRepository->buscarComFiltros([
+                'status' => 'ativa',
+                'per_page' => 1000, // Buscar todos para admin
+            ]);
+            
+            $tenantsComUsuario = [];
+            $tenantsReativados = 0;
+            $tenantsComErro = 0;
+            
+            // Buscar usuário em cada tenant para identificar onde ele existe (incluindo deletados)
+            foreach ($tenantsPaginator->items() as $tenantDomain) {
+                try {
+                    $resultado = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($userId) {
+                        return \App\Modules\Auth\Models\User::withTrashed()
+                            ->where('id', $userId)
+                            ->first();
+                    });
+                    
+                    if ($resultado) {
+                        $tenantsComUsuario[] = $tenantDomain;
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('AdminUserController::reactivateGlobal - Erro ao buscar usuário no tenant', [
+                        'tenant_id' => $tenantDomain->id,
+                        'userId' => $userId,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+            
+            // Reativar usuário em cada tenant onde ele existe
+            foreach ($tenantsComUsuario as $tenantDomain) {
+                try {
+                    $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($userId) {
+                        $this->reativarUsuarioAdminUseCase->executar($userId);
+                    });
+                    
+                    $tenantsReativados++;
+                    Log::info('AdminUserController::reactivateGlobal - Usuário reativado no tenant', [
+                        'tenant_id' => $tenantDomain->id,
+                        'userId' => $userId,
+                    ]);
+                } catch (\Exception $e) {
+                    $tenantsComErro++;
+                    Log::error('AdminUserController::reactivateGlobal - Erro ao reativar usuário no tenant', [
+                        'tenant_id' => $tenantDomain->id,
+                        'userId' => $userId,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+            
+            if ($tenantsReativados === 0 && count($tenantsComUsuario) > 0) {
+                // Usuário existe mas houve erro em todos os tenants
+                return ApiResponse::error('Erro ao reativar usuário em todos os tenants.', 500);
+            }
+            
+            if (count($tenantsComUsuario) === 0) {
+                // Usuário não encontrado em nenhum tenant
+                return ApiResponse::error('Usuário não encontrado.', 404);
+            }
+            
+            Log::info('AdminUserController::reactivateGlobal - Reativação concluída', [
+                'userId' => $userId,
+                'tenants_reativados' => $tenantsReativados,
+                'tenants_com_erro' => $tenantsComErro,
+                'total_tenants' => count($tenantsComUsuario),
+            ]);
+            
+            $mensagem = $tenantsComErro > 0
+                ? "Usuário reativado em {$tenantsReativados} tenant(s), mas houve erro em {$tenantsComErro} tenant(s)."
+                : "Usuário reativado com sucesso em {$tenantsReativados} tenant(s)!";
+            
+            return ApiResponse::success($mensagem);
+        } catch (DomainException $e) {
+            return ApiResponse::error($e->getMessage(), 404);
+        } catch (\Exception $e) {
+            Log::error('AdminUserController::reactivateGlobal - Erro geral', [
+                'userId' => $userId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return ApiResponse::error('Erro ao reativar usuário globalmente.', 500);
+        }
+    }
+
+    /**
      * Reativar usuário
      * 🔥 DDD: Controller fino - delega para UseCase
      */

@@ -136,6 +136,12 @@ class EmpresasClientesSeeder extends Seeder
                 'bairro' => 'Perequê Mirim',
                 'complemento' => null,
             ]);
+            
+            // Nota: Inscrição Estadual (IE): 254.407.129.110
+            // Nota: Inscrição Municipal (IM): 000034747
+            // Esses campos não existem no modelo Empresa atual
+            // Se necessário, adicionar campos 'inscricao_estadual' e 'inscricao_municipal' ao modelo
+            
             tenancy()->end();
 
             $this->command->info("✅ Empresa criada com sucesso!");
@@ -257,8 +263,6 @@ class EmpresasClientesSeeder extends Seeder
             app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
             // Atualizar empresa com dados adicionais
-            // Nota: Inscrição Estadual (800/4892572) deve ser adicionada manualmente 
-            // se o campo existir no sistema
             $empresa->update([
                 'nome_fantasia' => 'Rosa Vendas Públicas',
                 'logradouro' => 'R RUDI SCHALY',
@@ -266,6 +270,10 @@ class EmpresasClientesSeeder extends Seeder
                 'bairro' => 'PARQUE SANTA FÉ',
                 'complemento' => null,
             ]);
+            
+            // Nota: Inscrição Estadual (IE): 800/4892572
+            // Este campo não existe no modelo Empresa atual
+            // Se necessário, adicionar campo 'inscricao_estadual' ao modelo
 
             // Atribuir role de Administrador ao usuário (se ainda não tiver)
             if ($adminUser && !$adminUser->hasRole('Administrador')) {

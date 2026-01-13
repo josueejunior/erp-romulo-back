@@ -24,3 +24,4 @@ class ProcessoNaoEmExecucaoException extends BusinessRuleException
 
 
 
+

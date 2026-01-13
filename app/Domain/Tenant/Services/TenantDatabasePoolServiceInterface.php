@@ -50,3 +50,4 @@ interface TenantDatabasePoolServiceInterface
     public function provisionarBancos(int $quantidade): int;
 }
 
+

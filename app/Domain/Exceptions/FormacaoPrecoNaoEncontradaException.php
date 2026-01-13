@@ -19,3 +19,4 @@ class FormacaoPrecoNaoEncontradaException extends NotFoundException
 
 
 
+
