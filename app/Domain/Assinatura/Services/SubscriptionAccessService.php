@@ -8,6 +8,7 @@ use App\Domain\Assinatura\Entities\Assinatura;
 use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
 use App\Domain\Plano\Repositories\PlanoRepositoryInterface;
 use App\Domain\Plano\Entities\Plano as PlanoEntity;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Domain Service para validação de acesso a recursos baseado em assinatura
@@ -43,7 +44,25 @@ final class SubscriptionAccessService
             || $path === 'api/v1/dashboard' 
             || str_ends_with($path, '/dashboard');
         
-        return $isDashboardRoute;
+        // 🔥 Planos são públicos - podem ser visualizados sem assinatura
+        // Importante para a tela de cadastro e escolha de planos funcionar
+        $isPlanosRoute = $routeName === 'planos' 
+            || $routeName === 'planos.list' 
+            || $routeName === 'planos.get'
+            || $path === 'api/v1/planos' 
+            || preg_match('#^api/v1/planos(/\d+)?$#', $path);
+        
+        $isExempt = $isDashboardRoute || $isPlanosRoute;
+        
+        Log::info('🔍 SubscriptionAccessService::isRouteExemptFromSubscriptionCheck', [
+            'route_name' => $routeName,
+            'path' => $path,
+            'is_dashboard_route' => $isDashboardRoute,
+            'is_planos_route' => $isPlanosRoute,
+            'is_exempt' => $isExempt,
+        ]);
+        
+        return $isExempt;
     }
 
     /**

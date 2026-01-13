@@ -182,7 +182,34 @@ final class CadastrarEmpresaPublicamenteUseCase
             $this->validarDuplicidadesService->validarCnpj($dto->cnpj);
 
             // 2. Criar tenant com empresa e usuário admin
+            Log::info('CadastrarEmpresaPublicamenteUseCase - Criando tenant e usuário', [
+                'correlation_id' => $correlationId,
+                'admin_name' => $dto->adminName,
+                'admin_email' => $dto->adminEmail,
+                'has_admin_password' => !empty($dto->adminPassword),
+            ]);
+            
             $tenantResult = $this->criarTenantEUsuario($dto);
+            
+            // 🔥 VALIDAÇÃO: Verificar se admin_user foi criado
+            if (!isset($tenantResult['admin_user']) || $tenantResult['admin_user'] === null) {
+                Log::error('CadastrarEmpresaPublicamenteUseCase - admin_user não foi criado!', [
+                    'correlation_id' => $correlationId,
+                    'tenant_result_keys' => array_keys($tenantResult),
+                    'admin_name' => $dto->adminName,
+                    'admin_email' => $dto->adminEmail,
+                    'has_password' => !empty($dto->adminPassword),
+                ]);
+                
+                throw new DomainException('Erro ao criar usuário administrador. Verifique os dados informados.');
+            }
+            
+            Log::info('CadastrarEmpresaPublicamenteUseCase - Tenant e usuário criados com sucesso', [
+                'correlation_id' => $correlationId,
+                'tenant_id' => $tenantResult['tenant']->id ?? null,
+                'empresa_id' => $tenantResult['empresa']->id ?? null,
+                'admin_user_id' => $tenantResult['admin_user']->id ?? null,
+            ]);
 
             // 3. Marcar referência como concluída (se houver)
             if ($referenciaAfiliado) {
@@ -218,11 +245,34 @@ final class CadastrarEmpresaPublicamenteUseCase
             // 8. Disparar evento de empresa criada para enviar email de boas-vindas
             // 🔥 DDD: Evento de domínio disparado após criação bem-sucedida
             try {
+                // 🔥 CORREÇÃO: Usar razao_social do modelo Eloquent (snake_case) ou fallback para DTO
+                $tenantModel = $tenantResult['tenant'];
+                $razaoSocial = $tenantModel->razao_social ?? $tenantModel->razaoSocial ?? $dto->razaoSocial;
+                $cnpj = $tenantModel->cnpj ?? $dto->cnpj;
+                
+                // Validar que razaoSocial não é nulo antes de disparar evento
+                if (empty($razaoSocial)) {
+                    Log::warning('CadastrarEmpresaPublicamenteUseCase - razaoSocial está vazio, usando DTO', [
+                        'tenant_id' => $tenantModel->id ?? null,
+                        'tenant_model_attributes' => $tenantModel->getAttributes() ?? [],
+                        'dto_razao_social' => $dto->razaoSocial,
+                    ]);
+                    $razaoSocial = $dto->razaoSocial;
+                }
+                
+                Log::info('CadastrarEmpresaPublicamenteUseCase - Disparando evento EmpresaCriada', [
+                    'tenant_id' => $tenantModel->id ?? null,
+                    'razao_social' => $razaoSocial,
+                    'cnpj' => $cnpj,
+                    'empresa_id' => $tenantResult['empresa']->id ?? null,
+                    'user_id' => $tenantResult['admin_user']->id ?? null,
+                ]);
+                
                 $this->eventDispatcher->dispatch(
                     new EmpresaCriada(
-                        tenantId: $tenantResult['tenant']->id,
-                        razaoSocial: $tenantResult['tenant']->razaoSocial,
-                        cnpj: $tenantResult['tenant']->cnpj,
+                        tenantId: $tenantModel->id,
+                        razaoSocial: $razaoSocial,
+                        cnpj: $cnpj,
                         email: $dto->adminEmail, // Usar email do admin cadastrado
                         empresaId: $tenantResult['empresa']->id,
                         userId: $tenantResult['admin_user']->id ?? null, // Passar userId para evitar query extra no listener
@@ -352,7 +402,67 @@ final class CadastrarEmpresaPublicamenteUseCase
         $proximoIdDisponivel = $this->databaseService->encontrarProximoNumeroDisponivel();
         
         // 3. Criar tenant no banco
-        $tenant = $this->tenantRepository->criarComId($tenant, $proximoIdDisponivel);
+        // 🔥 CORREÇÃO: Capturar erro de violação de constraint única (CNPJ duplicado)
+        // O repositório pode lançar QueryException, PDOException ou RuntimeException
+        try {
+            $tenant = $this->tenantRepository->criarComId($tenant, $proximoIdDisponivel);
+        } catch (\Illuminate\Database\QueryException $e) {
+            // Verificar se é erro de violação de constraint única de CNPJ
+            if ($e->getCode() === '23505' || str_contains($e->getMessage(), 'tenants_cnpj_unique') || str_contains($e->getMessage(), 'duplicate key')) {
+                Log::warning('CadastrarEmpresaPublicamenteUseCase::criarTenantEUsuario - CNPJ já existe no banco (QueryException)', [
+                    'cnpj' => $cnpjNormalizado,
+                    'error' => $e->getMessage(),
+                ]);
+                
+                throw new CnpjJaCadastradoException($cnpjNormalizado);
+            }
+            
+            throw $e;
+        } catch (\PDOException $e) {
+            // PostgreSQL retorna PDOException para constraint violations
+            if ($e->getCode() === '23505' || str_contains($e->getMessage(), 'tenants_cnpj_unique') || str_contains($e->getMessage(), 'duplicate key')) {
+                Log::warning('CadastrarEmpresaPublicamenteUseCase::criarTenantEUsuario - CNPJ já existe no banco (PDOException)', [
+                    'cnpj' => $cnpjNormalizado,
+                    'error' => $e->getMessage(),
+                ]);
+                
+                throw new CnpjJaCadastradoException($cnpjNormalizado);
+            }
+            
+            throw $e;
+        } catch (\RuntimeException $e) {
+            // 🔥 CORREÇÃO: O repositório pode converter o erro em RuntimeException
+            // Verificar se a mensagem contém informações sobre CNPJ duplicado
+            $message = $e->getMessage();
+            $previous = $e->getPrevious();
+            
+            // Verificar na mensagem do RuntimeException
+            $isCnpjDuplicate = str_contains($message, 'tenants_cnpj_unique') ||
+                              str_contains($message, 'duplicate key') ||
+                              str_contains($message, 'CNPJ') && str_contains($message, 'already exists') ||
+                              str_contains($message, 'CNPJ') && str_contains($message, 'já existe');
+            
+            // Verificar na exceção anterior (QueryException ou PDOException)
+            if (!$isCnpjDuplicate && $previous) {
+                $previousMessage = $previous->getMessage();
+                $isCnpjDuplicate = str_contains($previousMessage, 'tenants_cnpj_unique') ||
+                                  str_contains($previousMessage, 'duplicate key') ||
+                                  ($previous->getCode() === '23505');
+            }
+            
+            if ($isCnpjDuplicate) {
+                Log::warning('CadastrarEmpresaPublicamenteUseCase::criarTenantEUsuario - CNPJ já existe no banco (RuntimeException)', [
+                    'cnpj' => $cnpjNormalizado,
+                    'error' => $message,
+                    'previous_error' => $previous ? $previous->getMessage() : null,
+                ]);
+                
+                throw new CnpjJaCadastradoException($cnpjNormalizado);
+            }
+            
+            // Se não for erro de CNPJ duplicado, relançar a exceção
+            throw $e;
+        }
 
         try {
             // 4. Criar banco de dados
@@ -379,7 +489,19 @@ final class CadastrarEmpresaPublicamenteUseCase
 
                 // 10. Criar usuário administrador
                 $adminUser = null;
+                
+                Log::info('CadastrarEmpresaPublicamenteUseCase::criarTenantEUsuario - Verificando dados admin', [
+                    'tenant_id' => $tenant->id,
+                    'empresa_id' => $empresa->id,
+                    'tem_dados_admin' => $tenantDTO->temDadosAdmin(),
+                    'admin_name' => $tenantDTO->adminName,
+                    'admin_email' => $tenantDTO->adminEmail,
+                    'has_admin_password' => !empty($tenantDTO->adminPassword),
+                ]);
+                
                 if ($tenantDTO->temDadosAdmin()) {
+                    Log::info('CadastrarEmpresaPublicamenteUseCase::criarTenantEUsuario - Criando admin user');
+                    
                     $adminUser = $this->userRepository->criarAdministrador(
                         tenantId: $tenant->id,
                         empresaId: $empresa->id,
@@ -387,6 +509,16 @@ final class CadastrarEmpresaPublicamenteUseCase
                         email: $tenantDTO->adminEmail,
                         senha: $tenantDTO->adminPassword,
                     );
+                    
+                    Log::info('CadastrarEmpresaPublicamenteUseCase::criarTenantEUsuario - Admin user criado', [
+                        'admin_user_id' => $adminUser->id ?? null,
+                    ]);
+                } else {
+                    Log::warning('CadastrarEmpresaPublicamenteUseCase::criarTenantEUsuario - Dados admin incompletos, não criando usuário', [
+                        'admin_name' => $tenantDTO->adminName,
+                        'admin_email' => $tenantDTO->adminEmail,
+                        'has_password' => !empty($tenantDTO->adminPassword),
+                    ]);
                 }
 
                 // 11. Finalizar contexto do tenant

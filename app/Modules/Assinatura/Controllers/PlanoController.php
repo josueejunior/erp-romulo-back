@@ -8,6 +8,7 @@ use App\Application\Plano\UseCases\BuscarPlanoUseCase;
 use App\Domain\Plano\Repositories\PlanoRepositoryInterface;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Controller para gerenciamento de Planos
@@ -52,6 +53,13 @@ class PlanoController extends BaseApiController
      */
     public function list(Request $request): JsonResponse
     {
+        Log::info('🔍 PlanoController::list - Iniciando listagem de planos', [
+            'path' => $request->path(),
+            'method' => $request->method(),
+            'query_params' => $request->query(),
+            'headers' => $request->headers->all(),
+        ]);
+
         try {
             // Preparar filtros
             $filtros = [];
@@ -61,21 +69,55 @@ class PlanoController extends BaseApiController
                 $filtros['ativo'] = $request->boolean('ativo');
             }
 
+            Log::info('🔍 PlanoController::list - Filtros preparados', [
+                'filtros' => $filtros,
+            ]);
+
             // Executar Use Case (retorna entidades de domínio)
+            Log::info('🔍 PlanoController::list - Chamando ListarPlanosUseCase::executar');
             $planosDomain = $this->listarPlanosUseCase->executar($filtros);
 
+            Log::info('🔍 PlanoController::list - UseCase retornou planos domain', [
+                'count' => $planosDomain->count(),
+                'ids' => $planosDomain->pluck('id')->toArray(),
+            ]);
+
             // Converter entidades de domínio para modelos Eloquent para manter compatibilidade com frontend
+            Log::info('🔍 PlanoController::list - Convertendo entidades para modelos Eloquent');
             $planos = $planosDomain->map(function ($planoDomain) {
-                return $this->planoRepository->buscarModeloPorId($planoDomain->id);
+                $modelo = $this->planoRepository->buscarModeloPorId($planoDomain->id);
+                Log::debug('🔍 PlanoController::list - Convertendo plano', [
+                    'domain_id' => $planoDomain->id,
+                    'modelo_encontrado' => $modelo !== null,
+                ]);
+                return $modelo;
             })->filter(); // Remove nulls
 
-            return response()->json([
+            Log::info('🔍 PlanoController::list - Conversão concluída', [
+                'planos_count' => $planos->count(),
+                'planos_ids' => $planos->pluck('id')->toArray(),
+            ]);
+
+            $response = [
                 'data' => $planos->values()->all(),
                 'meta' => [
                     'total' => $planos->count(),
                 ],
+            ];
+
+            Log::info('✅ PlanoController::list - Retornando resposta', [
+                'total' => $planos->count(),
+                'response_keys' => array_keys($response),
             ]);
+
+            return response()->json($response);
         } catch (\Exception $e) {
+            Log::error('❌ PlanoController::list - Erro ao listar planos', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
             return $this->handleException($e, 'Erro ao listar planos');
         }
     }

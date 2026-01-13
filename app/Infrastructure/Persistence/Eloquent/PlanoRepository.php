@@ -6,6 +6,7 @@ use App\Domain\Plano\Entities\Plano;
 use App\Domain\Plano\Repositories\PlanoRepositoryInterface;
 use App\Modules\Assinatura\Models\Plano as PlanoModel;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Implementação do Repository de Plano usando Eloquent
@@ -50,11 +51,20 @@ class PlanoRepository implements PlanoRepositoryInterface
      */
     public function listar(array $filtros = []): Collection
     {
+        Log::info('🔍 PlanoRepository::listar - Iniciando', [
+            'filtros' => $filtros,
+            'database' => config('database.default'),
+            'connection' => config('database.connections.' . config('database.default') . '.database'),
+        ]);
+
         $query = PlanoModel::query();
 
         // Filtrar por ativo (padrão: apenas ativos)
         $ativo = $filtros['ativo'] ?? true;
         if ($ativo !== null) {
+            Log::info('🔍 PlanoRepository::listar - Aplicando filtro ativo', [
+                'ativo' => $ativo,
+            ]);
             $query->where('ativo', $ativo);
         }
 
@@ -62,9 +72,32 @@ class PlanoRepository implements PlanoRepositoryInterface
         $query->orderBy('ordem', 'asc')
               ->orderBy('preco_mensal', 'asc');
 
+        Log::info('🔍 PlanoRepository::listar - Executando query', [
+            'sql' => $query->toSql(),
+            'bindings' => $query->getBindings(),
+        ]);
+
         $models = $query->get();
 
-        return $models->map(fn($model) => $this->toDomain($model));
+        Log::info('🔍 PlanoRepository::listar - Query executada', [
+            'models_count' => $models->count(),
+            'models_ids' => $models->pluck('id')->toArray(),
+            'models_data' => $models->map(fn($m) => [
+                'id' => $m->id,
+                'nome' => $m->nome,
+                'ativo' => $m->ativo,
+                'preco_mensal' => $m->preco_mensal,
+            ])->toArray(),
+        ]);
+
+        $planosDomain = $models->map(fn($model) => $this->toDomain($model));
+
+        Log::info('✅ PlanoRepository::listar - Retornando planos domain', [
+            'count' => $planosDomain->count(),
+            'ids' => $planosDomain->pluck('id')->toArray(),
+        ]);
+
+        return $planosDomain;
     }
 
     /**
@@ -72,7 +105,19 @@ class PlanoRepository implements PlanoRepositoryInterface
      */
     public function buscarModeloPorId(int $id): ?PlanoModel
     {
-        return PlanoModel::find($id);
+        Log::debug('🔍 PlanoRepository::buscarModeloPorId', [
+            'id' => $id,
+        ]);
+
+        $modelo = PlanoModel::find($id);
+
+        Log::debug('🔍 PlanoRepository::buscarModeloPorId - Resultado', [
+            'id' => $id,
+            'encontrado' => $modelo !== null,
+            'nome' => $modelo?->nome,
+        ]);
+
+        return $modelo;
     }
 
     /**
