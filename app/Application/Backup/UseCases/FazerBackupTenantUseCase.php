@@ -195,10 +195,20 @@ final class FazerBackupTenantUseCase
         $backupPath = storage_path('app/backups');
         
         if (!is_dir($backupPath)) {
+            Log::warning('FazerBackupTenantUseCase::listarBackups - Diretório de backups não existe', [
+                'path' => $backupPath,
+            ]);
             return [];
         }
 
         $files = glob("{$backupPath}/backup_tenant_*.sql");
+        
+        Log::info('FazerBackupTenantUseCase::listarBackups - Arquivos encontrados', [
+            'path' => $backupPath,
+            'count' => count($files),
+            'files' => $files,
+        ]);
+        
         $backups = [];
 
         foreach ($files as $file) {
@@ -207,7 +217,11 @@ final class FazerBackupTenantUseCase
             $createdAt = filemtime($file);
 
             // Extrair informações do nome do arquivo: backup_tenant_{id}_{database}_{timestamp}.sql
-            if (preg_match('/backup_tenant_(\d+)_([^_]+)_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})\.sql/', $filename, $matches)) {
+            // O nome do banco pode conter underscores (ex: tenant_2), então precisamos capturar tudo até o timestamp
+            // Padrão: backup_tenant_{id}_{database}_{timestamp}.sql
+            // Exemplo: backup_tenant_2_tenant_2_2026-01-13_11-15-13.sql
+            // Usar padrão que captura tudo entre tenant_id e timestamp (que sempre começa com YYYY-MM-DD)
+            if (preg_match('/^backup_tenant_(\d+)_(.+)_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})\.sql$/', $filename, $matches)) {
                 $backups[] = [
                     'filename' => $filename,
                     'path' => $file,
@@ -217,6 +231,11 @@ final class FazerBackupTenantUseCase
                     'tenant_id' => (int) $matches[1],
                     'database' => $matches[2],
                 ];
+            } else {
+                // Log para debug se o padrão não corresponder
+                Log::warning('FazerBackupTenantUseCase::listarBackups - Arquivo não corresponde ao padrão esperado', [
+                    'filename' => $filename,
+                ]);
             }
         }
 
