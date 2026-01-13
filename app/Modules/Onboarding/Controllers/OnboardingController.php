@@ -14,6 +14,7 @@ use App\Application\Onboarding\DTOs\BuscarProgressoDTO;
 use App\Application\Onboarding\Presenters\OnboardingApiPresenter;
 use App\Domain\Onboarding\Repositories\OnboardingProgressRepositoryInterface;
 use App\Http\Requests\Onboarding\MarcarEtapaRequest;
+use App\Http\Requests\Onboarding\ConcluirOnboardingRequest;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
@@ -116,13 +117,41 @@ class OnboardingController extends BaseApiController
             ], 401);
         }
 
+        // 🔥 CORREÇÃO: Inicializar variáveis antes do try para uso no catch
+        $tenantId = null;
+        $userId = null;
+        $email = null;
+
         try {
+            // 🔥 CORREÇÃO: Garantir que temos dados de identificação
+            $tenantId = tenancy()->tenant?->id;
+            $userId = $user->id;
+            $email = $user->email;
+            
+            Log::info('OnboardingController::marcarEtapa - Dados de identificação', [
+                'user_id' => $userId,
+                'tenant_id' => $tenantId,
+                'email' => $email,
+                'request_data' => $request->validated(),
+            ]);
+            
+            if (!$tenantId && !$userId && !$email) {
+                Log::error('OnboardingController::marcarEtapa - Dados de identificação ausentes', [
+                    'user' => $user,
+                    'tenancy_initialized' => tenancy()->initialized ?? false,
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Não foi possível identificar o contexto do usuário.',
+                ], 400);
+            }
+            
             // Criar DTO usando dados do usuário autenticado
             $dto = MarcarEtapaDTO::fromRequest(
                 requestData: $request->validated(),
-                tenantId: tenancy()->tenant?->id ?? null,
-                userId: $user->id,
-                email: $user->email,
+                tenantId: $tenantId,
+                userId: $userId,
+                email: $email,
             );
 
             // Executar Use Case
@@ -142,6 +171,17 @@ class OnboardingController extends BaseApiController
                 'success' => true,
                 'data' => $this->presenter->present($onboardingModel),
             ]);
+        } catch (\InvalidArgumentException $e) {
+            // Capturar erro de validação do DTO
+            Log::warning('OnboardingController::marcarEtapa - Dados de identificação inválidos', [
+                'error' => $e->getMessage(),
+                'user_id' => $user->id ?? null,
+                'tenant_id' => $tenantId ?? null,
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
         } catch (DomainException $e) {
             return response()->json([
                 'success' => false,
@@ -150,7 +190,8 @@ class OnboardingController extends BaseApiController
         } catch (\Exception $e) {
             Log::error('OnboardingController::marcarEtapa - Erro inesperado', [
                 'error' => $e->getMessage(),
-                'user_id' => $user->id,
+                'trace' => $e->getTraceAsString(),
+                'user_id' => $user->id ?? null,
             ]);
             return response()->json([
                 'success' => false,
@@ -162,7 +203,7 @@ class OnboardingController extends BaseApiController
     /**
      * Conclui o onboarding
      */
-    public function concluir(Request $request): JsonResponse
+    public function concluir(ConcluirOnboardingRequest $request): JsonResponse
     {
         $user = $request->user();
 
@@ -173,13 +214,41 @@ class OnboardingController extends BaseApiController
             ], 401);
         }
 
+        // 🔥 CORREÇÃO: Inicializar variáveis antes do try para uso no catch
+        $tenantId = null;
+        $userId = null;
+        $email = null;
+
         try {
+            // 🔥 CORREÇÃO: Garantir que temos dados de identificação
+            $tenantId = tenancy()->tenant?->id;
+            $userId = $user->id;
+            $email = $user->email;
+            
+            Log::info('OnboardingController::concluir - Dados de identificação', [
+                'user_id' => $userId,
+                'tenant_id' => $tenantId,
+                'email' => $email,
+                'request_data' => $request->all(),
+            ]);
+            
+            if (!$tenantId && !$userId && !$email) {
+                Log::error('OnboardingController::concluir - Dados de identificação ausentes', [
+                    'user' => $user,
+                    'tenancy_initialized' => tenancy()->initialized ?? false,
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Não foi possível identificar o contexto do usuário.',
+                ], 400);
+            }
+            
             // Criar DTO usando dados do usuário autenticado
             $dto = ConcluirOnboardingDTO::fromRequest(
-                requestData: $request->all(),
-                tenantId: tenancy()->tenant?->id ?? null,
-                userId: $user->id,
-                email: $user->email,
+                requestData: $request->validated(),
+                tenantId: $tenantId,
+                userId: $userId,
+                email: $email,
             );
 
             // Executar Use Case
@@ -206,6 +275,17 @@ class OnboardingController extends BaseApiController
                 'message' => 'Tutorial concluído com sucesso!',
                 'data' => $this->presenter->present($onboardingModel),
             ]);
+        } catch (\InvalidArgumentException $e) {
+            // Capturar erro de validação do DTO
+            Log::warning('OnboardingController::concluir - Dados de identificação inválidos', [
+                'error' => $e->getMessage(),
+                'user_id' => $user->id ?? null,
+                'tenant_id' => $tenantId ?? null,
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
         } catch (DomainException $e) {
             return response()->json([
                 'success' => false,
@@ -214,7 +294,8 @@ class OnboardingController extends BaseApiController
         } catch (\Exception $e) {
             Log::error('OnboardingController::concluir - Erro inesperado', [
                 'error' => $e->getMessage(),
-                'user_id' => $user->id,
+                'trace' => $e->getTraceAsString(),
+                'user_id' => $user->id ?? null,
             ]);
             return response()->json([
                 'success' => false,

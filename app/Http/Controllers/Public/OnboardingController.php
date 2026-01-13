@@ -99,12 +99,24 @@ class OnboardingController extends Controller
             // Tentar obter usuário autenticado (pode ser null)
             $user = $request->user() ?? auth('sanctum')->user();
 
+            // 🔥 CORREÇÃO: Garantir que temos dados de identificação
+            $tenantId = $user ? (tenancy()->tenant?->id ?? null) : null;
+            $userId = $user?->id;
+            $email = $user?->email;
+            
+            Log::info('OnboardingController::marcarEtapa (Public) - Dados de identificação', [
+                'user_id' => $userId,
+                'tenant_id' => $tenantId,
+                'email' => $email,
+                'request_data' => $request->validated(),
+            ]);
+            
             // Criar DTO com dados do request e usuário autenticado
             $dto = MarcarEtapaDTO::fromRequest(
                 requestData: $request->validated(),
-                tenantId: $user ? (tenancy()->tenant?->id ?? null) : null,
-                userId: $user?->id,
-                email: $user?->email,
+                tenantId: $tenantId,
+                userId: $userId,
+                email: $email,
             );
 
             // Executar Use Case (já calcula próxima etapa internamente)
@@ -129,13 +141,24 @@ class OnboardingController extends Controller
                 // 🔥 MELHORIA: Incluir próxima etapa recomendada explicitamente na resposta
                 'next_recommended_step' => $responseData['next_recommended_step'] ?? null,
             ]);
+        } catch (\InvalidArgumentException $e) {
+            // Capturar erro de validação do DTO
+            Log::warning('OnboardingController::marcarEtapa (Public) - Dados de identificação inválidos', [
+                'error' => $e->getMessage(),
+                'user_id' => $userId ?? null,
+                'tenant_id' => $tenantId ?? null,
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
         } catch (DomainException $e) {
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),
             ], 400);
         } catch (\Exception $e) {
-            Log::error('OnboardingController::marcarEtapa - Erro inesperado', [
+            Log::error('OnboardingController::marcarEtapa (Public) - Erro inesperado', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
@@ -202,16 +225,33 @@ class OnboardingController extends Controller
      */
     public function concluir(ConcluirOnboardingRequest $request): JsonResponse
     {
+        // 🔥 CORREÇÃO: Inicializar variáveis antes do try para uso no catch
+        $tenantId = null;
+        $userId = null;
+        $email = null;
+        
         try {
             // Tentar obter usuário autenticado (pode ser null)
             $user = $request->user() ?? auth('sanctum')->user();
 
+            // 🔥 CORREÇÃO: Garantir que temos dados de identificação
+            $tenantId = $user ? (tenancy()->tenant?->id ?? null) : null;
+            $userId = $user?->id;
+            $email = $user?->email;
+            
+            Log::info('OnboardingController::concluir (Public) - Dados de identificação', [
+                'user_id' => $userId,
+                'tenant_id' => $tenantId,
+                'email' => $email,
+                'request_data' => $request->validated(),
+            ]);
+            
             // Criar DTO com dados do request e usuário autenticado
             $dto = ConcluirOnboardingDTO::fromRequest(
                 requestData: $request->validated(),
-                tenantId: $user ? (tenancy()->tenant?->id ?? null) : null,
-                userId: $user?->id,
-                email: $user?->email,
+                tenantId: $tenantId,
+                userId: $userId,
+                email: $email,
             );
 
             // Executar Use Case
@@ -238,13 +278,24 @@ class OnboardingController extends Controller
                 'message' => 'Onboarding concluído com sucesso!',
                 'data' => $this->presenter->present($onboardingModel),
             ]);
+        } catch (\InvalidArgumentException $e) {
+            // Capturar erro de validação do DTO
+            Log::warning('OnboardingController::concluir (Public) - Dados de identificação inválidos', [
+                'error' => $e->getMessage(),
+                'user_id' => $userId ?? null,
+                'tenant_id' => $tenantId ?? null,
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
         } catch (DomainException $e) {
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),
             ], 400);
         } catch (\Exception $e) {
-            Log::error('OnboardingController::concluir - Erro inesperado', [
+            Log::error('OnboardingController::concluir (Public) - Erro inesperado', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
