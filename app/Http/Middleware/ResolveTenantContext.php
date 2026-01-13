@@ -128,6 +128,7 @@ class ResolveTenantContext
             'api/v1/auth/*',
             'api/auth/*',
             'auth/*',
+            'api/v1/onboarding/*',  // 🔥 Onboarding não precisa de validação rigorosa de tenant (pode ter múltiplos tenants)
         ];
 
         $path = $request->path();
