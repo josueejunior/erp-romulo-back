@@ -143,9 +143,21 @@ class AssinaturaNotificacaoListener
                     'preco_mensal' => $plano->preco_mensal,
                 ];
 
+                // 🔥 MELHORIA: Incluir informações completas da empresa
                 $empresaData = [
                     'id' => $empresa->id,
                     'razao_social' => $empresa->razao_social,
+                    'nome_fantasia' => $empresa->nome_fantasia,
+                    'cnpj' => $empresa->cnpj,
+                    'email' => $empresa->email,
+                    'telefone' => $empresa->telefone,
+                    'cep' => $empresa->cep,
+                    'logradouro' => $empresa->logradouro,
+                    'numero' => $empresa->numero,
+                    'bairro' => $empresa->bairro,
+                    'complemento' => $empresa->complemento,
+                    'cidade' => $empresa->cidade,
+                    'estado' => $empresa->estado,
                 ];
 
                 // Enviar email

@@ -68,6 +68,34 @@
         @endif
         
         <div class="details">
+            <h2>Dados da Empresa:</h2>
+            <ul>
+                <li><strong>Razão Social:</strong> {{ $empresa['razao_social'] ?? 'N/A' }}</li>
+                @if($empresa['nome_fantasia'] ?? null)
+                <li><strong>Nome Fantasia:</strong> {{ $empresa['nome_fantasia'] }}</li>
+                @endif
+                @if($empresa['cnpj'] ?? null)
+                <li><strong>CNPJ:</strong> {{ $empresa['cnpj'] }}</li>
+                @endif
+                @if($empresa['email'] ?? null)
+                <li><strong>E-mail:</strong> {{ $empresa['email'] }}</li>
+                @endif
+                @if($empresa['telefone'] ?? null)
+                <li><strong>Telefone:</strong> {{ $empresa['telefone'] }}</li>
+                @endif
+                @if(($empresa['logradouro'] ?? null) || ($empresa['cidade'] ?? null))
+                <li><strong>Endereço:</strong> 
+                    @if($empresa['logradouro'] ?? null){{ $empresa['logradouro'] }}@endif
+                    @if($empresa['numero'] ?? null), {{ $empresa['numero'] }}@endif
+                    @if($empresa['bairro'] ?? null) - {{ $empresa['bairro'] }}@endif
+                    @if($empresa['cidade'] ?? null), {{ $empresa['cidade'] }}/{{ $empresa['estado'] ?? '' }}@endif
+                    @if($empresa['cep'] ?? null) - CEP: {{ $empresa['cep'] }}@endif
+                </li>
+                @endif
+            </ul>
+        </div>
+        
+        <div class="details">
             <h2>Detalhes da Assinatura:</h2>
             <ul>
                 <li><strong>Plano:</strong> {{ $plano['nome'] ?? 'N/A' }}</li>
@@ -90,15 +118,13 @@
         <p>Sua assinatura está ativa e você já pode utilizar todos os recursos do plano contratado.</p>
         
         @if(($assinatura['status'] ?? 'ativa') === 'ativa')
-        <p>Aproveite ao máximo nossa plataforma!</p>
+        <p style="font-size: 16px; font-weight: bold; color: #059669; margin: 20px 0;">🎉 Aproveite o sistema!</p>
         @elseif(($assinatura['status'] ?? '') === 'pendente')
         <p>Aguardando confirmação do pagamento. Você receberá uma notificação quando for aprovado.</p>
         @endif
         @else
         <p>As alterações em sua assinatura já estão em vigor.</p>
         @endif
-        
-        <p>Se tiver alguma dúvida, entre em contato com o suporte.</p>
         
         <div class="footer">
             <p>Atenciosamente,<br>A equipe do Sistema ERP</p>
