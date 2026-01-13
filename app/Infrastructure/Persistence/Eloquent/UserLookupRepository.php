@@ -153,6 +153,45 @@ class UserLookupRepository implements UserLookupRepositoryInterface
             'id' => $id,
         ]);
     }
+    
+    public function buscarComFiltros(array $filtros = []): array
+    {
+        $query = UserLookupModel::query()
+            ->whereNull('deleted_at');
+        
+        // Filtro de busca (email ou CNPJ)
+        if (!empty($filtros['search'])) {
+            $search = $filtros['search'];
+            $query->where(function($q) use ($search) {
+                $q->where('email', 'ilike', "%{$search}%")
+                  ->orWhere('cnpj', 'like', "%{$search}%");
+            });
+        }
+        
+        // Filtro de status
+        if (!empty($filtros['status']) && $filtros['status'] !== 'all') {
+            $query->where('status', $filtros['status']);
+        }
+        
+        // Paginação
+        $perPage = $filtros['per_page'] ?? 15;
+        $page = $filtros['page'] ?? 1;
+        
+        $paginator = $query->orderBy('email')
+            ->orderBy('tenant_id')
+            ->paginate($perPage, ['*'], 'page', $page);
+        
+        $data = $paginator->items();
+        $lookups = array_map(fn($model) => $this->toDomain($model), $data);
+        
+        return [
+            'data' => $lookups,
+            'total' => $paginator->total(),
+            'per_page' => $paginator->perPage(),
+            'current_page' => $paginator->currentPage(),
+            'last_page' => $paginator->lastPage(),
+        ];
+    }
 }
 
 

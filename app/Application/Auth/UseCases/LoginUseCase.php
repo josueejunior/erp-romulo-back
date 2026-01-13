@@ -75,14 +75,34 @@ class LoginUseCase
                         throw new DomainException('Usuário não encontrado em nenhum tenant. Verifique suas credenciais.');
                     }
                 } else {
-                    // Se encontrar múltiplos tenants, usar o primeiro (futuro: perguntar ao usuário)
+                    // 🔥 SEGURANÇA/UX: Se encontrar múltiplos tenants, retornar lista para seleção
                     if (count($lookups) > 1) {
                         \Log::info('LoginUseCase::executar - Múltiplos tenants encontrados para este email', [
                             'email' => $email->value,
                             'count' => count($lookups),
                             'tenant_ids' => array_map(fn($l) => $l->tenantId, $lookups),
                         ]);
-                        // TODO: Futuro - Perguntar ao usuário qual tenant usar
+                        
+                        // Buscar informações dos tenants para exibir ao usuário
+                        $tenantsInfo = [];
+                        foreach ($lookups as $lookup) {
+                            $tenantDomain = $this->tenantRepository->buscarPorId($lookup->tenantId);
+                            if ($tenantDomain) {
+                                $tenantsInfo[] = [
+                                    'tenant_id' => $tenantDomain->id,
+                                    'razao_social' => $tenantDomain->razaoSocial,
+                                    'cnpj' => $tenantDomain->cnpj,
+                                    'user_id' => $lookup->userId,
+                                ];
+                            }
+                        }
+                        
+                        // Retornar resposta especial para múltiplos tenants
+                        // O frontend deve exibir tela de seleção
+                        throw new \App\Domain\Exceptions\MultiplosTenantsException(
+                            'Este email está associado a múltiplas empresas. Selecione qual deseja acessar.',
+                            $tenantsInfo
+                        );
                     }
                     
                     $lookup = $lookups[0];

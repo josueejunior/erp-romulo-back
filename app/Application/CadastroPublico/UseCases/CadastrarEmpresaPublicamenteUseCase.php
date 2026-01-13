@@ -211,6 +211,36 @@ final class CadastrarEmpresaPublicamenteUseCase
                 'admin_user_id' => $tenantResult['admin_user']->id ?? null,
             ]);
 
+            // 🔥 CONSISTÊNCIA: Registrar em users_lookup IMEDIATAMENTE (síncrono)
+            // Garante que o usuário pode logar logo após o cadastro
+            try {
+                $usersLookupService = app(\App\Application\CadastroPublico\Services\UsersLookupService::class);
+                $usersLookupService->registrar(
+                    tenantId: $tenantResult['tenant']->id,
+                    userId: $tenantResult['admin_user']->id,
+                    empresaId: $tenantResult['empresa']->id,
+                    email: $dto->adminEmail,
+                    cnpj: $dto->cnpj
+                );
+                
+                Log::info('CadastrarEmpresaPublicamenteUseCase - Registro em users_lookup criado (síncrono)', [
+                    'correlation_id' => $correlationId,
+                    'tenant_id' => $tenantResult['tenant']->id,
+                    'user_id' => $tenantResult['admin_user']->id,
+                ]);
+            } catch (\Exception $lookupException) {
+                // 🔥 CRÍTICO: Se falhar, não podemos continuar (usuário não conseguirá logar)
+                Log::error('CadastrarEmpresaPublicamenteUseCase - Erro CRÍTICO ao registrar em users_lookup', [
+                    'correlation_id' => $correlationId,
+                    'tenant_id' => $tenantResult['tenant']->id,
+                    'user_id' => $tenantResult['admin_user']->id,
+                    'error' => $lookupException->getMessage(),
+                ]);
+                
+                // Relançar exceção para que o controller possa tratar
+                throw new DomainException('Erro ao finalizar cadastro. Entre em contato com o suporte.');
+            }
+
             // 3. Marcar referência como concluída (se houver)
             if ($referenciaAfiliado) {
                 $this->rastrearReferenciaAfiliadoUseCase->marcarComoConcluida(

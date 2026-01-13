@@ -79,11 +79,26 @@ class CadastroPublicoController extends Controller
         } catch (ValidationException $e) {
             return $this->validationErrorResponse($e);
         } catch (EmailEmpresaDesativadaException $e) {
-            return $this->emailEmpresaDesativadaResponse($e);
+            // 🔥 SEGURANÇA: Retornar mensagem genérica para prevenir enumeração
+            Log::warning('CadastroPublicoController::store - Email com empresa desativada', [
+                'email' => $request->input('admin_email'),
+                'exception' => get_class($e),
+            ]);
+            return $this->genericErrorResponse('Não foi possível completar o cadastro. Verifique seus dados ou entre em contato com o suporte.');
         } catch (EmailJaCadastradoException $e) {
-            return $this->emailExistsResponse($e);
+            // 🔥 SEGURANÇA: Retornar mensagem genérica para prevenir enumeração
+            Log::warning('CadastroPublicoController::store - Email já cadastrado', [
+                'email' => $request->input('admin_email'),
+                'exception' => get_class($e),
+            ]);
+            return $this->genericErrorResponse('Não foi possível completar o cadastro. Verifique seus dados ou entre em contato com o suporte.');
         } catch (CnpjJaCadastradoException $e) {
-            return $this->cnpjExistsResponse($e);
+            // 🔥 SEGURANÇA: Retornar mensagem genérica para prevenir enumeração
+            Log::warning('CadastroPublicoController::store - CNPJ já cadastrado', [
+                'cnpj' => $request->input('cnpj'),
+                'exception' => get_class($e),
+            ]);
+            return $this->genericErrorResponse('Não foi possível completar o cadastro. Verifique seus dados ou entre em contato com o suporte.');
         } catch (DomainException $e) {
             return $this->domainErrorResponse($e);
         } catch (\Exception $e) {
@@ -395,6 +410,18 @@ class CadastroPublicoController extends Controller
             'code' => 'CNPJ_EXISTS',
             'redirect_to' => '/login',
         ], 409);
+    }
+    
+    /**
+     * 🔥 SEGURANÇA: Resposta genérica para prevenir enumeração de emails
+     */
+    private function genericErrorResponse(string $message = 'Não foi possível completar o cadastro. Verifique seus dados ou entre em contato com o suporte.'): JsonResponse
+    {
+        return response()->json([
+            'message' => $message,
+            'success' => false,
+            'code' => 'CADASTRO_INDISPONIVEL',
+        ], 400);
     }
 
     /**

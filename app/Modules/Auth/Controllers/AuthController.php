@@ -174,6 +174,19 @@ class AuthController extends Controller
                 'errors' => $e->errors(),
                 'success' => false,
             ], 422);
+        } catch (\App\Domain\Exceptions\MultiplosTenantsException $e) {
+            // 🔥 UX: Retornar lista de tenants para seleção
+            \Log::info('AuthController::login - Múltiplos tenants encontrados', [
+                'email' => $request->input('email'),
+                'tenants_count' => count($e->tenants),
+            ]);
+            
+            return response()->json([
+                'message' => $e->getMessage(),
+                'code' => 'MULTIPLE_TENANTS',
+                'tenants' => $e->tenants,
+                'success' => false,
+            ], 300); // HTTP 300 Multiple Choices
         } catch (DomainException $e) {
             // 🔥 MELHORIA: Prevenir enumeração e padronizar resposta de erro
             // Sempre retornar mensagem genérica para não revelar se o email existe

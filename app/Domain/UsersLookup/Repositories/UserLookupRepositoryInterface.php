@@ -59,6 +59,14 @@ interface UserLookupRepositoryInterface
      * Marca um registro como ativo
      */
     public function marcarComoAtivo(int $id): void;
+    
+    /**
+     * Busca registros com filtros e paginação (para admin)
+     * 
+     * @param array $filtros ['search' => string, 'status' => string, 'per_page' => int, 'page' => int]
+     * @return array ['data' => UserLookup[], 'total' => int, 'per_page' => int, 'current_page' => int]
+     */
+    public function buscarComFiltros(array $filtros = []): array;
 }
 
 

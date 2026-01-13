@@ -42,9 +42,15 @@ class AtualizarUsuarioUseCase
             throw new DomainException('Usuário não pertence ao tenant atual.');
         }
 
-        // Validar email se foi alterado (usando Value Object Email)
+        // 🔥 CONSISTÊNCIA: Validar email se foi alterado (operação de duas fases)
         $email = null;
+        $emailFoiAlterado = false;
+        $emailAntigo = $userExistente->email;
+        
         if ($dto->email && $dto->email !== $userExistente->email) {
+            $emailFoiAlterado = true;
+            
+            // Fase 1: Validar novo email
             // Value Object Email valida formato e normaliza automaticamente
             try {
                 $email = Email::criar($dto->email);
@@ -52,9 +58,19 @@ class AtualizarUsuarioUseCase
                 throw new DomainException('E-mail inválido: ' . $e->getMessage());
             }
             
-            // Regra de negócio: verificar se email já existe
+            // Regra de negócio: verificar se email já existe no tenant
             if ($this->userRepository->emailExiste($email->value, $dto->userId)) {
                 throw new DomainException('Este e-mail já está cadastrado.');
+            }
+            
+            // 🔥 CONSISTÊNCIA: Validar também na tabela users_lookup (global)
+            try {
+                $validarDuplicidadesService = app(\App\Application\CadastroPublico\Services\ValidarDuplicidadesService::class);
+                $validarDuplicidadesService->validarEmail($email->value);
+            } catch (\App\Domain\Exceptions\EmailJaCadastradoException $e) {
+                throw new DomainException('Este e-mail já está cadastrado em outra empresa.');
+            } catch (\App\Domain\Exceptions\EmailEmpresaDesativadaException $e) {
+                throw new DomainException('Este e-mail está associado a uma empresa desativada. Entre em contato com o suporte.');
             }
         }
 
@@ -173,6 +189,76 @@ class AtualizarUsuarioUseCase
                     );
                     $userAtualizado = $this->userRepository->atualizar($userAtualizado);
                 }
+            }
+        }
+
+        // 🔥 CONSISTÊNCIA: Atualizar users_lookup se email foi alterado (operação de duas fases)
+        if ($emailFoiAlterado && $email) {
+            try {
+                $usersLookupService = app(\App\Application\CadastroPublico\Services\UsersLookupService::class);
+                
+                // Buscar empresa ativa para obter CNPJ
+                $empresaAtiva = $this->userRepository->buscarEmpresaAtiva($userAtualizado->id);
+                $cnpj = null;
+                
+                if ($empresaAtiva) {
+                    // Buscar CNPJ da empresa
+                    $empresaModel = \App\Modules\Empresa\Models\Empresa::find($empresaAtiva->id);
+                    $cnpj = $empresaModel->cnpj ?? null;
+                }
+                
+                // Se não encontrou CNPJ da empresa, buscar do tenant
+                if (!$cnpj) {
+                    $tenantModel = \App\Models\Tenant::find($context->tenantId);
+                    $cnpj = $tenantModel->cnpj ?? null;
+                }
+                
+                if ($cnpj) {
+                    // Atualizar registro existente com novo email
+                    $lookupRepository = app(\App\Domain\UsersLookup\Repositories\UserLookupRepositoryInterface::class);
+                    $lookups = $lookupRepository->buscarAtivosPorEmail($emailAntigo);
+                    
+                    foreach ($lookups as $lookup) {
+                        if ($lookup->tenantId === $context->tenantId && $lookup->userId === $userAtualizado->id) {
+                            // Atualizar email no registro existente
+                            $lookupAtualizado = new \App\Domain\UsersLookup\Entities\UserLookup(
+                                id: $lookup->id,
+                                email: $email->value,
+                                cnpj: $lookup->cnpj,
+                                tenantId: $lookup->tenantId,
+                                userId: $lookup->userId,
+                                empresaId: $lookup->empresaId,
+                                status: $lookup->status,
+                            );
+                            
+                            $lookupRepository->atualizar($lookupAtualizado);
+                            
+                            \Log::info('AtualizarUsuarioUseCase - users_lookup atualizado com novo email', [
+                                'user_id' => $userAtualizado->id,
+                                'email_antigo' => $emailAntigo,
+                                'email_novo' => $email->value,
+                                'tenant_id' => $context->tenantId,
+                            ]);
+                            break;
+                        }
+                    }
+                } else {
+                    \Log::warning('AtualizarUsuarioUseCase - CNPJ não encontrado para atualizar users_lookup', [
+                        'user_id' => $userAtualizado->id,
+                        'tenant_id' => $context->tenantId,
+                    ]);
+                }
+            } catch (\Exception $lookupException) {
+                // 🔥 CRÍTICO: Se falhar, usuário não conseguirá logar com novo email
+                \Log::error('AtualizarUsuarioUseCase - Erro CRÍTICO ao atualizar users_lookup', [
+                    'user_id' => $userAtualizado->id,
+                    'email_antigo' => $emailAntigo,
+                    'email_novo' => $email->value,
+                    'error' => $lookupException->getMessage(),
+                ]);
+                
+                // Relançar exceção para que o controller possa tratar
+                throw new DomainException('Erro ao atualizar email. Entre em contato com o suporte.');
             }
         }
 

@@ -81,6 +81,18 @@ class ResolveTenantContext
             ], 404);
         }
 
+        // 🔥 SEGURANÇA: Validar que o usuário pertence ao tenant (prevenir Tenant Hopping)
+        if (!$this->validarRelacaoUsuarioTenant($user, $tenantId)) {
+            Log::warning('ResolveTenantContext: Tentativa de acesso a tenant não autorizado', [
+                'user_id' => $user->id,
+                'tenant_id' => $tenantId,
+                'user_email' => $user->email ?? 'N/A',
+            ]);
+            return response()->json([
+                'message' => 'Acesso não autorizado a este tenant.',
+            ], 403);
+        }
+
         tenancy()->initialize($tenant);
         
         Log::debug('⬅ ResolveTenantContext: tenancy inicializado', ['tenant_id' => $tenantId]);
@@ -158,5 +170,78 @@ class ResolveTenantContext
         }
 
         return null;
+    }
+
+    /**
+     * 🔥 SEGURANÇA: Validar que o usuário realmente pertence ao tenant
+     * 
+     * Previne Tenant Hopping: usuário mal-intencionado não pode manipular JWT
+     * para acessar dados de outros tenants.
+     * 
+     * @param \Illuminate\Contracts\Auth\Authenticatable $user
+     * @param int $tenantId
+     * @return bool
+     */
+    private function validarRelacaoUsuarioTenant($user, int $tenantId): bool
+    {
+        // Admin não precisa de validação (tem acesso a todos os tenants)
+        if ($user instanceof \App\Modules\Auth\Models\AdminUser) {
+            return true;
+        }
+
+        // Buscar na users_lookup para validar relação
+        try {
+            $lookupRepository = app(\App\Domain\UsersLookup\Repositories\UserLookupRepositoryInterface::class);
+            
+            // Buscar todos os registros do usuário por email
+            $email = $user->email;
+            $lookups = $lookupRepository->buscarAtivosPorEmail($email);
+            
+            // Verificar se há registro ativo para este tenant_id e user_id
+            foreach ($lookups as $lookup) {
+                if ($lookup->tenantId === $tenantId && $lookup->userId === $user->id) {
+                    // Relação válida encontrada
+                    Log::debug('ResolveTenantContext: Relação usuário-tenant validada', [
+                        'user_id' => $user->id,
+                        'tenant_id' => $tenantId,
+                    ]);
+                    return true;
+                }
+            }
+            
+            // Se não encontrou na lookup, validar diretamente no banco do tenant
+            // (pode ser caso de usuário criado antes da lookup ser populada)
+            $tenant = \App\Models\Tenant::find($tenantId);
+            if ($tenant) {
+                tenancy()->initialize($tenant);
+                try {
+                    $userNoTenant = \App\Modules\Auth\Models\User::find($user->id);
+                    $isValid = $userNoTenant !== null && !$userNoTenant->trashed();
+                    
+                    if ($isValid) {
+                        Log::debug('ResolveTenantContext: Relação validada diretamente no tenant', [
+                            'user_id' => $user->id,
+                            'tenant_id' => $tenantId,
+                        ]);
+                    }
+                    
+                    return $isValid;
+                } finally {
+                    tenancy()->end();
+                }
+            }
+            
+            return false;
+            
+        } catch (\Exception $e) {
+            Log::error('ResolveTenantContext: Erro ao validar relação usuário-tenant', [
+                'user_id' => $user->id,
+                'tenant_id' => $tenantId,
+                'error' => $e->getMessage(),
+            ]);
+            
+            // Em caso de erro, negar acesso por segurança
+            return false;
+        }
     }
 }
