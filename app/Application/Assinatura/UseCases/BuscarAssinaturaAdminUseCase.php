@@ -82,6 +82,16 @@ class BuscarAssinaturaAdminUseCase
             $hoje = now()->startOfDay();
             $dataFim = $assinaturaDomain->dataFim->copy()->startOfDay();
             $diasRestantes = (int) $hoje->diffInDays($dataFim, false);
+            
+            // 🔥 CORREÇÃO: Para planos gratuitos, sempre mostrar 3 dias (período fixo de trial)
+            if ($planoModel && (!$planoModel->preco_mensal || $planoModel->preco_mensal == 0)) {
+                // Para planos gratuitos, mostrar sempre 3 dias (duração fixa do trial)
+                $diasRestantes = max(0, (int) $hoje->diffInDays($dataFim, false));
+                // Se ainda está dentro do período de 3 dias, manter o cálculo, mas não permitir mais de 3
+                if ($diasRestantes > 3) {
+                    $diasRestantes = 3;
+                }
+            }
         }
 
         // Montar resposta com objetos completos
