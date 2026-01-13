@@ -245,11 +245,34 @@ final class CadastrarEmpresaPublicamenteUseCase
             // 8. Disparar evento de empresa criada para enviar email de boas-vindas
             // 🔥 DDD: Evento de domínio disparado após criação bem-sucedida
             try {
+                // 🔥 CORREÇÃO: Usar razao_social do modelo Eloquent (snake_case) ou fallback para DTO
+                $tenantModel = $tenantResult['tenant'];
+                $razaoSocial = $tenantModel->razao_social ?? $tenantModel->razaoSocial ?? $dto->razaoSocial;
+                $cnpj = $tenantModel->cnpj ?? $dto->cnpj;
+                
+                // Validar que razaoSocial não é nulo antes de disparar evento
+                if (empty($razaoSocial)) {
+                    Log::warning('CadastrarEmpresaPublicamenteUseCase - razaoSocial está vazio, usando DTO', [
+                        'tenant_id' => $tenantModel->id ?? null,
+                        'tenant_model_attributes' => $tenantModel->getAttributes() ?? [],
+                        'dto_razao_social' => $dto->razaoSocial,
+                    ]);
+                    $razaoSocial = $dto->razaoSocial;
+                }
+                
+                Log::info('CadastrarEmpresaPublicamenteUseCase - Disparando evento EmpresaCriada', [
+                    'tenant_id' => $tenantModel->id ?? null,
+                    'razao_social' => $razaoSocial,
+                    'cnpj' => $cnpj,
+                    'empresa_id' => $tenantResult['empresa']->id ?? null,
+                    'user_id' => $tenantResult['admin_user']->id ?? null,
+                ]);
+                
                 $this->eventDispatcher->dispatch(
                     new EmpresaCriada(
-                        tenantId: $tenantResult['tenant']->id,
-                        razaoSocial: $tenantResult['tenant']->razaoSocial,
-                        cnpj: $tenantResult['tenant']->cnpj,
+                        tenantId: $tenantModel->id,
+                        razaoSocial: $razaoSocial,
+                        cnpj: $cnpj,
                         email: $dto->adminEmail, // Usar email do admin cadastrado
                         empresaId: $tenantResult['empresa']->id,
                         userId: $tenantResult['admin_user']->id ?? null, // Passar userId para evitar query extra no listener
