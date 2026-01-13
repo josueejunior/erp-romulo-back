@@ -8,6 +8,7 @@ use App\Domain\Onboarding\Entities\OnboardingProgress;
 use App\Domain\Onboarding\Repositories\OnboardingProgressRepositoryInterface;
 use App\Models\OnboardingProgress as OnboardingProgressModel;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Implementação do Repository de OnboardingProgress usando Eloquent
@@ -114,7 +115,22 @@ class OnboardingProgressRepository implements OnboardingProgressRepositoryInterf
             return null;
         }
 
-        $model = $query->orderBy('created_at', 'desc')->first();
+        // 🔥 MELHORIA: Priorizar onboarding concluído (mais importante)
+        // Ordenar por: concluído primeiro, depois por data de criação (mais recente)
+        $model = $query->orderBy('onboarding_concluido', 'desc')
+                      ->orderBy('created_at', 'desc')
+                      ->first();
+        
+        Log::info('OnboardingProgressRepository::buscarPorCritérios - Busca realizada', [
+            'user_id' => $userId,
+            'tenant_id' => $tenantId,
+            'email' => $email,
+            'encontrado' => $model !== null,
+            'onboarding_id' => $model?->id,
+            'onboarding_concluido' => $model?->onboarding_concluido,
+            'tenant_id_encontrado' => $model?->tenant_id,
+        ]);
+        
         return $model ? $this->toDomain($model) : null;
     }
 

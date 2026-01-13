@@ -54,26 +54,70 @@ class OnboardingController extends BaseApiController
         }
 
         try {
+            $tenantId = tenancy()->tenant?->id ?? null;
+            
+            Log::info('OnboardingController::status - INÍCIO', [
+                'user_id' => $user->id,
+                'tenant_id' => $tenantId,
+                'email' => $user->email,
+            ]);
+
             // Criar DTO usando dados do usuário autenticado
             $dto = BuscarProgressoDTO::fromRequest(
                 requestData: [],
-                tenantId: tenancy()->tenant?->id ?? null,
+                tenantId: $tenantId,
                 userId: $user->id,
                 email: $user->email,
             );
+
+            Log::info('OnboardingController::status - Buscando progresso', [
+                'dto_tenantId' => $dto->tenantId,
+                'dto_userId' => $dto->userId,
+                'dto_email' => $dto->email,
+            ]);
 
             // Buscar progresso
             $onboardingDomain = $this->gerenciarOnboardingUseCase->buscarProgresso($dto);
 
             if (!$onboardingDomain) {
-                // Se não existe, criar um novo
+                // 🔥 CORREÇÃO: Verificar se já existe um onboarding concluído antes de criar novo
+                $jaConcluido = $this->gerenciarOnboardingUseCase->estaConcluido($dto);
+                
+                if ($jaConcluido) {
+                    Log::info('OnboardingController::status - Onboarding já foi concluído, mas não encontrado na busca. Isso pode indicar problema na busca.', [
+                        'user_id' => $user->id,
+                        'tenant_id' => $tenantId,
+                    ]);
+                    // Se já foi concluído, retornar um objeto indicando que está concluído
+                    // Mas isso não deveria acontecer - a busca deveria encontrar
+                    return response()->json([
+                        'success' => true,
+                        'data' => [
+                            'onboarding_concluido' => true,
+                            'message' => 'Onboarding já foi concluído',
+                        ],
+                    ]);
+                }
+                
+                Log::info('OnboardingController::status - Onboarding não encontrado e não concluído, criando novo', [
+                    'user_id' => $user->id,
+                    'tenant_id' => $tenantId,
+                ]);
+                // Se não existe e não foi concluído, criar um novo
                 $iniciarDto = IniciarOnboardingDTO::fromRequest(
                     requestData: [],
-                    tenantId: tenancy()->tenant?->id ?? null,
+                    tenantId: $tenantId,
                     userId: $user->id,
                     email: $user->email,
                 );
                 $onboardingDomain = $this->gerenciarOnboardingUseCase->iniciar($iniciarDto);
+            } else {
+                Log::info('OnboardingController::status - Onboarding encontrado', [
+                    'onboarding_id' => $onboardingDomain->id,
+                    'onboarding_concluido' => $onboardingDomain->onboardingConcluido,
+                    'tenant_id' => $onboardingDomain->tenantId,
+                    'user_id' => $onboardingDomain->userId,
+                ]);
             }
 
             // Buscar modelo para apresentação
