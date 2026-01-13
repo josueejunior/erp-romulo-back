@@ -92,9 +92,7 @@
         
         <p><strong>Próximos Passos:</strong></p>
         <ul>
-            <li>Um banco de dados separado foi criado para sua empresa</li>
             <li>Agora você pode criar usuários para acessar o sistema</li>
-            <li>Entre em contato com o suporte para configurar sua assinatura</li>
         </ul>
         
         <p>Se você tiver alguma dúvida, não hesite em entrar em contato conosco.</p>

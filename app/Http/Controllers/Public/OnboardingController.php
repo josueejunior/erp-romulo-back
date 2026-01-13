@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Public;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Traits\HasAuthContext;
 use App\Application\Onboarding\UseCases\GerenciarOnboardingUseCase;
 use App\Application\Onboarding\DTOs\IniciarOnboardingDTO;
 use App\Application\Onboarding\DTOs\MarcarEtapaDTO;
@@ -30,9 +31,14 @@ use App\Domain\Exceptions\DomainException;
  * ✅ DDD: Usa Use Cases para lógica de negócio
  * ✅ DDD: Usa Presenter para serialização
  * ✅ DDD: Não acessa Eloquent diretamente
+ * 
+ * ✅ Padrão: Usa trait HasAuthContext para obter contexto (como OrgaoController)
+ * O middleware já inicializou o contexto (ApplicationContext), então apenas usamos os métodos do trait
  */
 class OnboardingController extends Controller
 {
+    use HasAuthContext;
+
     public function __construct(
         private readonly GerenciarOnboardingUseCase $gerenciarOnboardingUseCase,
         private readonly OnboardingProgressRepositoryInterface $repository,
@@ -45,15 +51,21 @@ class OnboardingController extends Controller
     public function iniciar(IniciarOnboardingRequest $request): JsonResponse
     {
         try {
-            // Tentar obter usuário autenticado (pode ser null)
-            $user = $request->user() ?? auth('sanctum')->user();
+            // Obter contexto do trait (já inicializado pelo middleware)
+            $tenantId = $this->getTenantId();
+            $userId = $this->getUserId();
+            $user = $this->getUser();
+            $email = $user?->email;
             
-            // Criar DTO com dados do request e usuário autenticado
+            // Converter tenantId de string para int se necessário
+            $tenantIdInt = $tenantId ? (int) $tenantId : null;
+            
+            // Criar DTO com dados do request e contexto
             $dto = IniciarOnboardingDTO::fromRequest(
                 requestData: $request->validated(),
-                tenantId: $user ? (tenancy()->tenant?->id ?? null) : null,
-                userId: $user?->id,
-                email: $user?->email,
+                tenantId: $tenantIdInt,
+                userId: $userId,
+                email: $email,
             );
 
             // Executar Use Case
@@ -96,25 +108,19 @@ class OnboardingController extends Controller
     public function marcarEtapa(MarcarEtapaRequest $request): JsonResponse
     {
         try {
-            // Tentar obter usuário autenticado (pode ser null)
-            $user = $request->user() ?? auth('sanctum')->user();
-
-            // 🔥 CORREÇÃO: Garantir que temos dados de identificação
-            $tenantId = $user ? (tenancy()->tenant?->id ?? null) : null;
-            $userId = $user?->id;
+            // Obter contexto do trait (já inicializado pelo middleware)
+            $tenantId = $this->getTenantId();
+            $userId = $this->getUserId();
+            $user = $this->getUser();
             $email = $user?->email;
             
-            Log::info('OnboardingController::marcarEtapa (Public) - Dados de identificação', [
-                'user_id' => $userId,
-                'tenant_id' => $tenantId,
-                'email' => $email,
-                'request_data' => $request->validated(),
-            ]);
+            // Converter tenantId de string para int se necessário
+            $tenantIdInt = $tenantId ? (int) $tenantId : null;
             
-            // Criar DTO com dados do request e usuário autenticado
+            // Criar DTO com dados do request e contexto
             $dto = MarcarEtapaDTO::fromRequest(
                 requestData: $request->validated(),
-                tenantId: $tenantId,
+                tenantId: $tenantIdInt,
                 userId: $userId,
                 email: $email,
             );
@@ -145,8 +151,6 @@ class OnboardingController extends Controller
             // Capturar erro de validação do DTO
             Log::warning('OnboardingController::marcarEtapa (Public) - Dados de identificação inválidos', [
                 'error' => $e->getMessage(),
-                'user_id' => $userId ?? null,
-                'tenant_id' => $tenantId ?? null,
             ]);
             return response()->json([
                 'success' => false,
@@ -175,15 +179,21 @@ class OnboardingController extends Controller
     public function marcarChecklistItem(MarcarChecklistItemRequest $request): JsonResponse
     {
         try {
-            // Tentar obter usuário autenticado (pode ser null)
-            $user = $request->user() ?? auth('sanctum')->user();
-
-            // Criar DTO com dados do request e usuário autenticado
+            // Obter contexto do trait (já inicializado pelo middleware)
+            $tenantId = $this->getTenantId();
+            $userId = $this->getUserId();
+            $user = $this->getUser();
+            $email = $user?->email;
+            
+            // Converter tenantId de string para int se necessário
+            $tenantIdInt = $tenantId ? (int) $tenantId : null;
+            
+            // Criar DTO com dados do request e contexto
             $dto = MarcarChecklistItemDTO::fromRequest(
                 requestData: $request->validated(),
-                tenantId: $user ? (tenancy()->tenant?->id ?? null) : null,
-                userId: $user?->id,
-                email: $user?->email,
+                tenantId: $tenantIdInt,
+                userId: $userId,
+                email: $email,
             );
 
             // Executar Use Case
@@ -225,31 +235,20 @@ class OnboardingController extends Controller
      */
     public function concluir(ConcluirOnboardingRequest $request): JsonResponse
     {
-        // 🔥 CORREÇÃO: Inicializar variáveis antes do try para uso no catch
-        $tenantId = null;
-        $userId = null;
-        $email = null;
-        
         try {
-            // Tentar obter usuário autenticado (pode ser null)
-            $user = $request->user() ?? auth('sanctum')->user();
-
-            // 🔥 CORREÇÃO: Garantir que temos dados de identificação
-            $tenantId = $user ? (tenancy()->tenant?->id ?? null) : null;
-            $userId = $user?->id;
+            // Obter contexto do trait (já inicializado pelo middleware)
+            $tenantId = $this->getTenantId();
+            $userId = $this->getUserId();
+            $user = $this->getUser();
             $email = $user?->email;
             
-            Log::info('OnboardingController::concluir (Public) - Dados de identificação', [
-                'user_id' => $userId,
-                'tenant_id' => $tenantId,
-                'email' => $email,
-                'request_data' => $request->validated(),
-            ]);
+            // Converter tenantId de string para int se necessário
+            $tenantIdInt = $tenantId ? (int) $tenantId : null;
             
-            // Criar DTO com dados do request e usuário autenticado
+            // Criar DTO com dados do request e contexto
             $dto = ConcluirOnboardingDTO::fromRequest(
                 requestData: $request->validated(),
-                tenantId: $tenantId,
+                tenantId: $tenantIdInt,
                 userId: $userId,
                 email: $email,
             );
@@ -269,8 +268,8 @@ class OnboardingController extends Controller
 
             Log::info('OnboardingController::concluir - Onboarding concluído', [
                 'onboarding_id' => $onboardingDomain->id,
-                'user_id' => $user?->id,
-                'tenant_id' => tenancy()->tenant?->id,
+                'user_id' => $userId,
+                'tenant_id' => $tenantIdInt,
             ]);
 
             return response()->json([
@@ -282,8 +281,6 @@ class OnboardingController extends Controller
             // Capturar erro de validação do DTO
             Log::warning('OnboardingController::concluir (Public) - Dados de identificação inválidos', [
                 'error' => $e->getMessage(),
-                'user_id' => $userId ?? null,
-                'tenant_id' => $tenantId ?? null,
             ]);
             return response()->json([
                 'success' => false,
@@ -313,15 +310,21 @@ class OnboardingController extends Controller
     public function verificarStatus(Request $request): JsonResponse
     {
         try {
-            // Tentar obter usuário autenticado (pode ser null)
-            $user = $request->user() ?? auth('sanctum')->user();
-
+            // Obter contexto do trait (já inicializado pelo middleware)
+            $tenantId = $this->getTenantId();
+            $userId = $this->getUserId();
+            $user = $this->getUser();
+            $email = $user?->email;
+            
+            // Converter tenantId de string para int se necessário
+            $tenantIdInt = $tenantId ? (int) $tenantId : null;
+            
             // Criar DTO
             $dto = BuscarProgressoDTO::fromRequest(
                 requestData: $request->all(),
-                tenantId: $user ? (tenancy()->tenant?->id ?? null) : null,
-                userId: $user?->id,
-                email: $user?->email,
+                tenantId: $tenantIdInt,
+                userId: $userId,
+                email: $email,
             );
 
             // Buscar progresso
@@ -331,9 +334,9 @@ class OnboardingController extends Controller
                 // Se não existe, criar novo
                 $iniciarDto = IniciarOnboardingDTO::fromRequest(
                     requestData: $request->all(),
-                    tenantId: $user ? (tenancy()->tenant?->id ?? null) : null,
-                    userId: $user?->id,
-                    email: $user?->email,
+                    tenantId: $tenantIdInt,
+                    userId: $userId,
+                    email: $email,
                 );
                 $onboardingDomain = $this->gerenciarOnboardingUseCase->iniciar($iniciarDto);
             }
@@ -376,15 +379,21 @@ class OnboardingController extends Controller
     public function buscarProgresso(Request $request): JsonResponse
     {
         try {
-            // Tentar obter usuário autenticado (pode ser null)
-            $user = $request->user() ?? auth('sanctum')->user();
-
+            // Obter contexto do trait (já inicializado pelo middleware)
+            $tenantId = $this->getTenantId();
+            $userId = $this->getUserId();
+            $user = $this->getUser();
+            $email = $user?->email;
+            
+            // Converter tenantId de string para int se necessário
+            $tenantIdInt = $tenantId ? (int) $tenantId : null;
+            
             // Criar DTO
             $dto = BuscarProgressoDTO::fromRequest(
                 requestData: $request->all(),
-                tenantId: $user ? (tenancy()->tenant?->id ?? null) : null,
-                userId: $user?->id,
-                email: $user?->email,
+                tenantId: $tenantIdInt,
+                userId: $userId,
+                email: $email,
             );
 
             // Buscar progresso
