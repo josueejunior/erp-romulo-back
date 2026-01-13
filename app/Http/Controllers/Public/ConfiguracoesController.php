@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Public;
 
 use App\Http\Controllers\Controller;
 use App\Domain\Empresa\Repositories\EmpresaRepositoryInterface;
+use App\Modules\Auth\Models\UserNotificationPreferences;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
@@ -236,14 +237,100 @@ class ConfiguracoesController extends Controller
     }
 
     /**
-     * Atualiza configurações de notificações (placeholder para futuras implementações)
+     * Obtém configurações de notificações do usuário autenticado
+     */
+    public function getNotificacoes(Request $request): JsonResponse
+    {
+        try {
+            $user = $request->user();
+            
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuário não autenticado.',
+                ], 401);
+            }
+
+            $preferences = UserNotificationPreferences::buscarOuPadrao($user->id);
+
+            return response()->json([
+                'success' => true,
+                'data' => $preferences,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('ConfiguracoesController::getNotificacoes - Erro inesperado', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'user_id' => $request->user()?->id,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao obter configurações de notificações.',
+            ], 500);
+        }
+    }
+
+    /**
+     * Atualiza configurações de notificações do usuário autenticado
      */
     public function atualizarNotificacoes(Request $request): JsonResponse
     {
-        // TODO: Implementar quando necessário
-        return response()->json([
-            'success' => false,
-            'message' => 'Configurações de notificações serão implementadas em breve.',
-        ], 501); // 501 Not Implemented
+        try {
+            $user = $request->user();
+            
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuário não autenticado.',
+                ], 401);
+            }
+
+            // Validar dados
+            $validated = $request->validate([
+                'email_notificacoes' => 'nullable|boolean',
+                'push_notificacoes' => 'nullable|boolean',
+                'notificar_processos_novos' => 'nullable|boolean',
+                'notificar_documentos_vencendo' => 'nullable|boolean',
+                'notificar_prazos' => 'nullable|boolean',
+            ]);
+
+            // Criar ou atualizar preferências
+            $preferences = UserNotificationPreferences::criarOuAtualizar($user->id, $validated);
+
+            Log::info('ConfiguracoesController::atualizarNotificacoes - Preferências atualizadas com sucesso', [
+                'user_id' => $user->id,
+                'preferencias' => $validated,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Configurações de notificações salvas com sucesso!',
+                'data' => [
+                    'email_notificacoes' => $preferences->email_notificacoes,
+                    'push_notificacoes' => $preferences->push_notificacoes,
+                    'notificar_processos_novos' => $preferences->notificar_processos_novos,
+                    'notificar_documentos_vencendo' => $preferences->notificar_documentos_vencendo,
+                    'notificar_prazos' => $preferences->notificar_prazos,
+                ],
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Dados inválidos. Verifique os campos preenchidos.',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('ConfiguracoesController::atualizarNotificacoes - Erro inesperado', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'user_id' => $request->user()?->id,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao salvar configurações de notificações. Tente novamente.',
+            ], 500);
+        }
     }
 }

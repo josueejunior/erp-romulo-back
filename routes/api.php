@@ -167,7 +167,8 @@ Route::prefix('v1')->group(function () {
         Route::prefix('configuracoes')->group(function () {
             Route::get('/tenant', [\App\Http\Controllers\Public\ConfiguracoesController::class, 'getTenant']); // GET para obter dados (se necessário)
             Route::put('/tenant', [\App\Http\Controllers\Public\ConfiguracoesController::class, 'atualizarTenant']);
-            Route::put('/notificacoes', [\App\Http\Controllers\Public\ConfiguracoesController::class, 'atualizarNotificacoes']); // Placeholder para futuras implementações
+            Route::get('/notificacoes', [\App\Http\Controllers\Public\ConfiguracoesController::class, 'getNotificacoes']);
+            Route::put('/notificacoes', [\App\Http\Controllers\Public\ConfiguracoesController::class, 'atualizarNotificacoes']);
         });
         
         // Buscar cupom automático de afiliado (protegido por onboarding - só após tutorial concluído)
