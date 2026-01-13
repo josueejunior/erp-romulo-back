@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Public;
 
 use App\Http\Controllers\Controller;
 use App\Domain\Empresa\Repositories\EmpresaRepositoryInterface;
+use App\Http\Requests\Configuracoes\AtualizarNotificacoesRequest;
 use App\Modules\Auth\Models\UserNotificationPreferences;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -274,26 +275,13 @@ class ConfiguracoesController extends Controller
     /**
      * Atualiza configurações de notificações do usuário autenticado
      */
-    public function atualizarNotificacoes(Request $request): JsonResponse
+    public function atualizarNotificacoes(AtualizarNotificacoesRequest $request): JsonResponse
     {
         try {
             $user = $request->user();
             
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Usuário não autenticado.',
-                ], 401);
-            }
-
-            // Validar dados
-            $validated = $request->validate([
-                'email_notificacoes' => 'nullable|boolean',
-                'push_notificacoes' => 'nullable|boolean',
-                'notificar_processos_novos' => 'nullable|boolean',
-                'notificar_documentos_vencendo' => 'nullable|boolean',
-                'notificar_prazos' => 'nullable|boolean',
-            ]);
+            // Dados já validados pelo Form Request
+            $validated = $request->validated();
 
             // Criar ou atualizar preferências
             $preferences = UserNotificationPreferences::criarOuAtualizar($user->id, $validated);
@@ -314,12 +302,6 @@ class ConfiguracoesController extends Controller
                     'notificar_prazos' => $preferences->notificar_prazos,
                 ],
             ]);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Dados inválidos. Verifique os campos preenchidos.',
-                'errors' => $e->errors(),
-            ], 422);
         } catch (\Exception $e) {
             Log::error('ConfiguracoesController::atualizarNotificacoes - Erro inesperado', [
                 'error' => $e->getMessage(),
