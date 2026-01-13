@@ -185,6 +185,63 @@ class OnboardingProgress
         }
         return null;
     }
+
+    /**
+     * Regra de negócio: Obter última etapa registrada
+     * 
+     * Retorna a última etapa concluída do array etapasConcluidas,
+     * ou null se nenhuma etapa foi concluída.
+     */
+    public function getUltimaEtapaRegistrada(): ?string
+    {
+        if (empty($this->etapasConcluidas)) {
+            return null;
+        }
+
+        // Retornar a última etapa do array (assumindo ordem cronológica)
+        return end($this->etapasConcluidas) ?: null;
+    }
+
+    /**
+     * Regra de negócio: Obter próxima etapa recomendada
+     * 
+     * Calcula qual deve ser a próxima etapa baseado nas etapas já concluídas
+     * e na ordem definida de todas as etapas possíveis.
+     * 
+     * @param array<string> $todasEtapas Array com todas as etapas em ordem
+     * @return string|null A próxima etapa recomendada, ou null se todas foram concluídas
+     */
+    public function getProximaEtapaRecomendada(array $todasEtapas): ?string
+    {
+        // Se já está concluído, não há próxima etapa
+        if ($this->onboardingConcluido) {
+            return null;
+        }
+
+        // Se não há etapas concluídas, recomendar a primeira
+        if (empty($this->etapasConcluidas)) {
+            return $todasEtapas[0] ?? null;
+        }
+
+        // Encontrar a última etapa concluída na lista de todas as etapas
+        $ultimaEtapaConcluida = $this->getUltimaEtapaRegistrada();
+        $indiceUltimaEtapa = array_search($ultimaEtapaConcluida, $todasEtapas, true);
+
+        // Se não encontrou a última etapa na lista, recomendar a primeira
+        if ($indiceUltimaEtapa === false) {
+            return $todasEtapas[0] ?? null;
+        }
+
+        // Próxima etapa é a que vem depois da última concluída
+        $proximoIndice = $indiceUltimaEtapa + 1;
+
+        // Se já passou da última etapa, retornar null (deve concluir)
+        if ($proximoIndice >= count($todasEtapas)) {
+            return null;
+        }
+
+        return $todasEtapas[$proximoIndice];
+    }
 }
 
 
