@@ -127,72 +127,72 @@ class TenantDatabaseService implements TenantDatabaseServiceInterface
                 // Verificar se o banco de dados já existe usando conexão central (PostgreSQL)
                 try {
                     // Usar conexão padrão (pode ser 'pgsql' ou configurada no .env)
-                $centralConnection = \Illuminate\Support\Facades\DB::connection();
-                // PostgreSQL: verificar se o banco existe
-                $databases = $centralConnection->select(
-                    "SELECT datname FROM pg_database WHERE datname = ?",
-                    [$databaseName]
-                );
-                
-                if (!empty($databases)) {
-                    // Banco já existe - verificar se está vazio ou tem dados
-                    Log::warning('Banco de dados do tenant já existe', [
-                        'tenant_id' => $tenant->id,
-                        'database_name' => $databaseName,
-                    ]);
+                    $centralConnection = \Illuminate\Support\Facades\DB::connection();
+                    // PostgreSQL: verificar se o banco existe
+                    $databases = $centralConnection->select(
+                        "SELECT datname FROM pg_database WHERE datname = ?",
+                        [$databaseName]
+                    );
                     
-                    // Tentar conectar ao banco do tenant para verificar se está vazio
-                    try {
-                        // Inicializar tenancy temporariamente para verificar o banco
-                        tenancy()->initialize($tenantModel);
+                    if (!empty($databases)) {
+                        // Banco já existe - verificar se está vazio ou tem dados
+                        Log::warning('Banco de dados do tenant já existe', [
+                            'tenant_id' => $tenant->id,
+                            'database_name' => $databaseName,
+                        ]);
+                        
+                        // Tentar conectar ao banco do tenant para verificar se está vazio
                         try {
-                            // PostgreSQL: listar tabelas do schema public
-                            $tables = \Illuminate\Support\Facades\DB::select(
-                                "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
-                            );
-                            
-                            if (empty($tables)) {
-                                // Banco existe mas está vazio - podemos usar
-                                Log::info('Banco de dados existe mas está vazio, usando banco existente', [
-                                    'tenant_id' => $tenant->id,
-                                    'database_name' => $databaseName,
-                                ]);
-                                tenancy()->end();
-                                return; // Não precisa criar, já existe e está vazio
-                            } else {
-                                // Banco existe e tem tabelas
-                                Log::warning('Banco de dados existe e tem tabelas', [
-                                    'tenant_id' => $tenant->id,
-                                    'database_name' => $databaseName,
-                                    'tables_count' => count($tables),
-                                ]);
-                                tenancy()->end();
-                                throw new \Exception("Banco de dados '{$databaseName}' já existe e contém dados. Se você está tentando recriar a empresa, por favor, delete o banco de dados manualmente ou entre em contato com o suporte.");
+                            // Inicializar tenancy temporariamente para verificar o banco
+                            tenancy()->initialize($tenantModel);
+                            try {
+                                // PostgreSQL: listar tabelas do schema public
+                                $tables = \Illuminate\Support\Facades\DB::select(
+                                    "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
+                                );
+                                
+                                if (empty($tables)) {
+                                    // Banco existe mas está vazio - podemos usar
+                                    Log::info('Banco de dados existe mas está vazio, usando banco existente', [
+                                        'tenant_id' => $tenant->id,
+                                        'database_name' => $databaseName,
+                                    ]);
+                                    tenancy()->end();
+                                    return; // Não precisa criar, já existe e está vazio
+                                } else {
+                                    // Banco existe e tem tabelas
+                                    Log::warning('Banco de dados existe e tem tabelas', [
+                                        'tenant_id' => $tenant->id,
+                                        'database_name' => $databaseName,
+                                        'tables_count' => count($tables),
+                                    ]);
+                                    tenancy()->end();
+                                    throw new \Exception("Banco de dados '{$databaseName}' já existe e contém dados. Se você está tentando recriar a empresa, por favor, delete o banco de dados manualmente ou entre em contato com o suporte.");
+                                }
+                            } finally {
+                                if (tenancy()->initialized) {
+                                    tenancy()->end();
+                                }
                             }
-                        } finally {
+                        } catch (\Exception $e) {
+                            // Não conseguiu conectar - banco pode estar corrompido ou inacessível
                             if (tenancy()->initialized) {
                                 tenancy()->end();
                             }
+                            Log::error('Erro ao verificar banco existente do tenant', [
+                                'tenant_id' => $tenant->id,
+                                'database_name' => $databaseName,
+                                'error' => $e->getMessage(),
+                            ]);
+                            throw new \Exception("Banco de dados '{$databaseName}' já existe mas não está acessível. Por favor, verifique o banco de dados ou entre em contato com o suporte.");
                         }
-                    } catch (\Exception $e) {
-                        // Não conseguiu conectar - banco pode estar corrompido ou inacessível
-                        if (tenancy()->initialized) {
-                            tenancy()->end();
-                        }
-                        Log::error('Erro ao verificar banco existente do tenant', [
-                            'tenant_id' => $tenant->id,
-                            'database_name' => $databaseName,
-                            'error' => $e->getMessage(),
-                        ]);
-                        throw new \Exception("Banco de dados '{$databaseName}' já existe mas não está acessível. Por favor, verifique o banco de dados ou entre em contato com o suporte.");
                     }
-                }
-            } catch (\Exception $checkException) {
-                // Se não conseguir verificar, continuar tentando criar
-                Log::debug('Não foi possível verificar se banco existe, tentando criar', [
-                    'tenant_id' => $tenant->id,
-                    'error' => $checkException->getMessage(),
-                ]);
+                } catch (\Exception $checkException) {
+                    // Se não conseguir verificar, continuar tentando criar
+                    Log::debug('Não foi possível verificar se banco existe, tentando criar', [
+                        'tenant_id' => $tenant->id,
+                        'error' => $checkException->getMessage(),
+                    ]);
                 }
                 
                 // Criar banco de dados (apenas se não usou pool)

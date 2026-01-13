@@ -127,6 +127,19 @@ class TenantRepository implements TenantRepositoryInterface
                 $data['emails_adicionais'] = json_encode($data['emails_adicionais']);
             }
             
+            // 🔥 MELHORIA: Adicionar UTM tracking e outros dados extras
+            if (!empty($dadosExtras)) {
+                // Filtrar apenas campos que existem na tabela tenants
+                $camposPermitidos = [
+                    'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'fingerprint'
+                ];
+                foreach ($camposPermitidos as $campo) {
+                    if (isset($dadosExtras[$campo])) {
+                        $data[$campo] = $dadosExtras[$campo];
+                    }
+                }
+            }
+            
             // Usar insert() para forçar o ID
             \Illuminate\Support\Facades\DB::table('tenants')->insert($data);
             

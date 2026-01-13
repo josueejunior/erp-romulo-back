@@ -484,8 +484,18 @@ final class CadastrarEmpresaPublicamenteUseCase
         // 3. Criar tenant no banco
         // 🔥 CORREÇÃO: Capturar erro de violação de constraint única (CNPJ duplicado)
         // O repositório pode lançar QueryException, PDOException ou RuntimeException
+        
+        // 🔥 MELHORIA: Preparar dados extras (UTM tracking) para salvar no tenant
+        $dadosExtras = [];
+        if ($dto->utmSource) $dadosExtras['utm_source'] = $dto->utmSource;
+        if ($dto->utmMedium) $dadosExtras['utm_medium'] = $dto->utmMedium;
+        if ($dto->utmCampaign) $dadosExtras['utm_campaign'] = $dto->utmCampaign;
+        if ($dto->utmTerm) $dadosExtras['utm_term'] = $dto->utmTerm;
+        if ($dto->utmContent) $dadosExtras['utm_content'] = $dto->utmContent;
+        if ($dto->fingerprint) $dadosExtras['fingerprint'] = $dto->fingerprint;
+        
         try {
-            $tenant = $this->tenantRepository->criarComId($tenant, $proximoIdDisponivel);
+            $tenant = $this->tenantRepository->criarComId($tenant, $proximoIdDisponivel, $dadosExtras);
         } catch (\Illuminate\Database\QueryException $e) {
             // Verificar se é erro de violação de constraint única de CNPJ
             if ($e->getCode() === '23505' || str_contains($e->getMessage(), 'tenants_cnpj_unique') || str_contains($e->getMessage(), 'duplicate key')) {

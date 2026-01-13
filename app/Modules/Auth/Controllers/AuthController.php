@@ -175,27 +175,34 @@ class AuthController extends Controller
                 'success' => false,
             ], 422);
         } catch (DomainException $e) {
-            // Prevenir enumeração: sempre retornar mensagem genérica
-            // Não revelar se o email existe ou não
-            $message = $e->getMessage();
-            if (str_contains($message, 'Credenciais inválidas') || 
-                str_contains($message, 'não encontrado')) {
-                $message = 'Credenciais inválidas. Verifique seu e-mail e senha.';
+            // 🔥 MELHORIA: Prevenir enumeração e padronizar resposta de erro
+            // Sempre retornar mensagem genérica para não revelar se o email existe
+            $message = 'Credenciais inválidas. Verifique seu e-mail e senha.';
+            
+            // Log detalhado apenas em modo debug
+            if (config('app.debug')) {
+                \Log::warning('AuthController::login - Credenciais inválidas', [
+                    'original_message' => $e->getMessage(),
+                    'email' => $request->input('email'),
+                ]);
             }
             
             return response()->json([
                 'message' => $message,
-                'errors' => ['email' => [$message]],
                 'success' => false,
+                'error' => 'INVALID_CREDENTIALS',
             ], 401);
         } catch (\Exception $e) {
-            Log::error('Erro ao fazer login', [
+            \Log::error('AuthController::login - Erro inesperado', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null,
+                'email' => $request->input('email'),
             ]);
+            
             return response()->json([
-                'message' => 'Erro ao fazer login.',
+                'message' => 'Erro ao processar login. Tente novamente.',
                 'success' => false,
+                'error' => 'INTERNAL_ERROR',
             ], 500);
         }
     }

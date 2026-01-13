@@ -12,6 +12,7 @@ use App\Services\AdminTenancyRunner;
 use App\Models\Tenant;
 use App\Modules\Auth\Models\AdminUser;
 use DomainException;
+use Illuminate\Support\Facades\Hash;
 
 /**
  * Use Case: Login de Usuário
@@ -112,14 +113,22 @@ class LoginUseCase
             \Log::debug('LoginUseCase::executar - Buscando usuário por email');
             $user = $this->userRepository->buscarPorEmail($email->value);
 
-            if (!$user) {
-                throw new DomainException('Credenciais inválidas.');
+            // 🔥 MELHORIA: Prevenir timing attacks - sempre verificar senha mesmo se usuário não existir
+            $isValidPassword = false;
+            if ($user) {
+                // Validar senha usando Value Object
+                \Log::debug('LoginUseCase::executar - Validando senha');
+                $senha = new Senha($user->senhaHash);
+                $isValidPassword = $senha->verificar($dto->password);
+            } else {
+                // Se usuário não existe, ainda assim verificar senha com hash dummy para manter tempo constante
+                // Isso previne timing attacks que revelam se email existe
+                \Log::debug('LoginUseCase::executar - Usuário não encontrado, verificando senha dummy');
+                $dummyHash = '$2y$10$dummyhashforsecuritytimingattackprevention';
+                Hash::check($dto->password, $dummyHash);
             }
 
-            // Validar senha usando Value Object
-            \Log::debug('LoginUseCase::executar - Validando senha');
-            $senha = new Senha($user->senhaHash);
-            if (!$senha->verificar($dto->password)) {
+            if (!$user || !$isValidPassword) {
                 throw new DomainException('Credenciais inválidas.');
             }
 

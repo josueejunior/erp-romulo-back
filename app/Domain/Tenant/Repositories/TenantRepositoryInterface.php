@@ -21,9 +21,10 @@ interface TenantRepositoryInterface
      * 
      * @param Tenant $tenant Entidade do tenant
      * @param int $id ID específico para o tenant
+     * @param array $dadosExtras Dados extras que não estão na entidade (ex: UTM tracking)
      * @return Tenant Tenant criado
      */
-    public function criarComId(Tenant $tenant, int $id): Tenant;
+    public function criarComId(Tenant $tenant, int $id, array $dadosExtras = []): Tenant;
 
     /**
      * Buscar tenant por ID
