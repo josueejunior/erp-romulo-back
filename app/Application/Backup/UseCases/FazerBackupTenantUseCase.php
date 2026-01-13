@@ -51,11 +51,12 @@ final class FazerBackupTenantUseCase
         $suffix = config('tenancy.database.suffix', '');
         $databaseName = $prefix . $tenantId . $suffix;
 
-        // Configurações do banco central (para mysqldump)
-        $dbHost = config('database.connections.mysql.host', 'localhost');
-        $dbPort = config('database.connections.mysql.port', 3306);
-        $dbUser = config('database.connections.mysql.username');
-        $dbPassword = config('database.connections.mysql.password');
+        // Configurações do banco central (para pg_dump - PostgreSQL)
+        $dbConnection = config('database.default', 'pgsql');
+        $dbHost = config("database.connections.{$dbConnection}.host", 'localhost');
+        $dbPort = config("database.connections.{$dbConnection}.port", 5432);
+        $dbUser = config("database.connections.{$dbConnection}.username");
+        $dbPassword = config("database.connections.{$dbConnection}.password");
 
         if (!$dbUser || !$dbPassword) {
             throw new DomainException('Credenciais do banco de dados não configuradas.', 500);
@@ -73,35 +74,38 @@ final class FazerBackupTenantUseCase
 
         $fullPath = "{$backupPath}/{$filename}";
 
-        Log::info('FazerBackupTenantUseCase::executar - Executando mysqldump', [
+        // Verificar se pg_dump está disponível
+        $pgDumpCheck = new Process(['which', 'pg_dump']);
+        $pgDumpCheck->run();
+        if (!$pgDumpCheck->isSuccessful()) {
+            throw new DomainException('pg_dump não está instalado. Instale o postgresql-client.', 500);
+        }
+
+        Log::info('FazerBackupTenantUseCase::executar - Executando pg_dump', [
             'tenant_id' => $tenantId,
             'database' => $databaseName,
             'filename' => $filename,
+            'connection' => $dbConnection,
         ]);
 
         try {
-            // Executar mysqldump usando Process do Symfony
-            // Usar variável de ambiente MYSQL_PWD para senha (mais seguro que --password=)
-            // --single-transaction: garante consistência sem bloquear tabelas
-            // --quick: usa menos memória
-            // --lock-tables=false: não trava tabelas (já temos --single-transaction)
-            // --routines: inclui stored procedures e functions
-            // --triggers: inclui triggers
-            // --add-drop-table: adiciona DROP TABLE antes de CREATE TABLE
-            // --complete-insert: usa INSERT completos (mais seguro para restore)
+            // Executar pg_dump usando Process do Symfony
+            // Usar variável de ambiente PGPASSWORD para senha (mais seguro que passar na linha de comando)
+            // --no-owner: não incluir comandos de ownership (útil para restore em outros ambientes)
+            // --no-acl: não incluir comandos de ACL/permissões
+            // --clean: adiciona comandos DROP antes de CREATE
+            // --if-exists: usa IF EXISTS nos comandos DROP
+            // Formato padrão é plain text (SQL), não precisa especificar -F p
             $command = [
-                'mysqldump',
+                'pg_dump',
                 '-h', $dbHost,
-                '-P', (string) $dbPort,
-                '-u', $dbUser,
-                '--single-transaction',
-                '--quick',
-                '--lock-tables=false',
-                '--routines',
-                '--triggers',
-                '--add-drop-table',
-                '--complete-insert',
-                $databaseName,
+                '-p', (string) $dbPort,
+                '-U', $dbUser,
+                '-d', $databaseName,
+                '--no-owner',
+                '--no-acl',
+                '--clean',
+                '--if-exists',
             ];
 
             // Criar processo sem usar shell (mais seguro)
@@ -109,7 +113,7 @@ final class FazerBackupTenantUseCase
             
             // Definir variável de ambiente para senha (mais seguro que passar na linha de comando)
             $env = $_ENV;
-            $env['MYSQL_PWD'] = $dbPassword;
+            $env['PGPASSWORD'] = $dbPassword;
             $process->setEnv($env);
             
             $process->setTimeout(600); // 10 minutos (backups podem demorar)
@@ -131,7 +135,7 @@ final class FazerBackupTenantUseCase
 
             if (!$process->isSuccessful()) {
                 $error = $process->getErrorOutput() ?: $process->getOutput();
-                Log::error('FazerBackupTenantUseCase::executar - Erro ao executar mysqldump', [
+                Log::error('FazerBackupTenantUseCase::executar - Erro ao executar pg_dump', [
                     'tenant_id' => $tenantId,
                     'database' => $databaseName,
                     'error' => $error,

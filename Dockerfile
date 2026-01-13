@@ -25,6 +25,8 @@ RUN apt-get update && apt-get install -y \
        opcache \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# postgresql-client inclui pg_dump necessário para backups de banco de dados
+
 # ---------------------------------------------------------
 # Composer
 # ---------------------------------------------------------
