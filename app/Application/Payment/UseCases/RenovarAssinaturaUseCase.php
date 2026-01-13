@@ -54,6 +54,13 @@ class RenovarAssinaturaUseCase
             throw new BusinessRuleException('O plano da assinatura não está mais ativo.');
         }
 
+        // 🔥 BLOQUEAR RENOVAÇÃO DE PLANOS GRATUITOS
+        // Planos gratuitos têm duração limitada a 3 dias e não podem ser renovados
+        $isPlanoGratuito = !$plano->preco_mensal || $plano->preco_mensal == 0;
+        if ($isPlanoGratuito) {
+            throw new BusinessRuleException('Planos gratuitos têm duração limitada a 3 dias e não podem ser renovados. Escolha um plano pago para continuar usando o sistema.');
+        }
+
         // Calcular valor baseado no período
         $valor = $meses === 12 ? $plano->preco_anual : $plano->preco_mensal;
         
