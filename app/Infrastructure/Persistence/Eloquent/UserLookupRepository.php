@@ -87,6 +87,15 @@ class UserLookupRepository implements UserLookupRepositoryInterface
         return $models->map(fn($model) => $this->toDomain($model))->toArray();
     }
     
+    public function buscarTodosPorEmail(string $email): array
+    {
+        $models = UserLookupModel::where('email', $email)
+            ->whereNull('deleted_at')
+            ->get();
+            
+        return $models->map(fn($model) => $this->toDomain($model))->toArray();
+    }
+    
     public function criar(UserLookup $lookup): UserLookup
     {
         $data = $this->toArray($lookup);

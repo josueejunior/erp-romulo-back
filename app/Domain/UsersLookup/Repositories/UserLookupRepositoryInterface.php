@@ -25,6 +25,12 @@ interface UserLookupRepositoryInterface
     public function buscarAtivosPorEmail(string $email): array;
     
     /**
+     * Busca TODOS os registros por email (ativos e inativos)
+     * Retorna array porque pode haver múltiplos tenants com mesmo email
+     */
+    public function buscarTodosPorEmail(string $email): array;
+    
+    /**
      * Busca TODOS os registros ativos por CNPJ
      */
     public function buscarAtivosPorCnpj(string $cnpj): array;

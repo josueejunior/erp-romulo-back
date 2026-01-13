@@ -7,6 +7,7 @@ use App\Application\CadastroPublico\UseCases\CadastrarEmpresaPublicamenteUseCase
 use App\Application\CadastroPublico\DTOs\CadastroPublicoDTO;
 use App\Domain\Exceptions\DomainException;
 use App\Domain\Exceptions\EmailJaCadastradoException;
+use App\Domain\Exceptions\EmailEmpresaDesativadaException;
 use App\Domain\Exceptions\CnpjJaCadastradoException;
 use App\Services\CnpjConsultaService;
 use Illuminate\Http\Request;
@@ -76,6 +77,8 @@ class CadastroPublicoController extends Controller
 
         } catch (ValidationException $e) {
             return $this->validationErrorResponse($e);
+        } catch (EmailEmpresaDesativadaException $e) {
+            return $this->emailEmpresaDesativadaResponse($e);
         } catch (EmailJaCadastradoException $e) {
             return $this->emailExistsResponse($e);
         } catch (CnpjJaCadastradoException $e) {
@@ -258,6 +261,19 @@ class CadastroPublicoController extends Controller
             'errors' => $e->errors(),
             'success' => false,
         ], 422);
+    }
+
+    /**
+     * Resposta para email com empresa desativada
+     */
+    private function emailEmpresaDesativadaResponse(EmailEmpresaDesativadaException $e): JsonResponse
+    {
+        return response()->json([
+            'message' => $e->getMessage(),
+            'success' => false,
+            'code' => 'EMAIL_EMPRESA_DESATIVADA',
+            'email' => $e->getEmail(),
+        ], 409);
     }
 
     /**
