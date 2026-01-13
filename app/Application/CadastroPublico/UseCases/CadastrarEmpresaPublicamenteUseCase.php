@@ -403,24 +403,20 @@ final class CadastrarEmpresaPublicamenteUseCase
         
         // 3. Criar tenant no banco
         // 🔥 CORREÇÃO: Capturar erro de violação de constraint única (CNPJ duplicado)
+        // O repositório pode lançar QueryException, PDOException ou RuntimeException
         try {
             $tenant = $this->tenantRepository->criarComId($tenant, $proximoIdDisponivel);
         } catch (\Illuminate\Database\QueryException $e) {
             // Verificar se é erro de violação de constraint única de CNPJ
-            if ($e->getCode() === '23505' || str_contains($e->getMessage(), 'tenants_cnpj_unique')) {
-                Log::warning('CadastrarEmpresaPublicamenteUseCase::criarTenantEUsuario - CNPJ já existe no banco', [
+            if ($e->getCode() === '23505' || str_contains($e->getMessage(), 'tenants_cnpj_unique') || str_contains($e->getMessage(), 'duplicate key')) {
+                Log::warning('CadastrarEmpresaPublicamenteUseCase::criarTenantEUsuario - CNPJ já existe no banco (QueryException)', [
                     'cnpj' => $cnpjNormalizado,
                     'error' => $e->getMessage(),
                 ]);
                 
-                // Lançar exceção de domínio para ser capturada pelo controller
-                throw new CnpjJaCadastradoException(
-                    "Este CNPJ já está cadastrado no sistema. Se você é o responsável, faça login para acessar sua conta.",
-                    cnpj: $cnpjNormalizado
-                );
+                throw new CnpjJaCadastradoException($cnpjNormalizado);
             }
             
-            // Se não for erro de CNPJ duplicado, relançar a exceção
             throw $e;
         } catch (\PDOException $e) {
             // PostgreSQL retorna PDOException para constraint violations
@@ -430,12 +426,41 @@ final class CadastrarEmpresaPublicamenteUseCase
                     'error' => $e->getMessage(),
                 ]);
                 
-                throw new CnpjJaCadastradoException(
-                    "Este CNPJ já está cadastrado no sistema. Se você é o responsável, faça login para acessar sua conta.",
-                    cnpj: $cnpjNormalizado
-                );
+                throw new CnpjJaCadastradoException($cnpjNormalizado);
             }
             
+            throw $e;
+        } catch (\RuntimeException $e) {
+            // 🔥 CORREÇÃO: O repositório pode converter o erro em RuntimeException
+            // Verificar se a mensagem contém informações sobre CNPJ duplicado
+            $message = $e->getMessage();
+            $previous = $e->getPrevious();
+            
+            // Verificar na mensagem do RuntimeException
+            $isCnpjDuplicate = str_contains($message, 'tenants_cnpj_unique') ||
+                              str_contains($message, 'duplicate key') ||
+                              str_contains($message, 'CNPJ') && str_contains($message, 'already exists') ||
+                              str_contains($message, 'CNPJ') && str_contains($message, 'já existe');
+            
+            // Verificar na exceção anterior (QueryException ou PDOException)
+            if (!$isCnpjDuplicate && $previous) {
+                $previousMessage = $previous->getMessage();
+                $isCnpjDuplicate = str_contains($previousMessage, 'tenants_cnpj_unique') ||
+                                  str_contains($previousMessage, 'duplicate key') ||
+                                  ($previous->getCode() === '23505');
+            }
+            
+            if ($isCnpjDuplicate) {
+                Log::warning('CadastrarEmpresaPublicamenteUseCase::criarTenantEUsuario - CNPJ já existe no banco (RuntimeException)', [
+                    'cnpj' => $cnpjNormalizado,
+                    'error' => $message,
+                    'previous_error' => $previous ? $previous->getMessage() : null,
+                ]);
+                
+                throw new CnpjJaCadastradoException($cnpjNormalizado);
+            }
+            
+            // Se não for erro de CNPJ duplicado, relançar a exceção
             throw $e;
         }
 
