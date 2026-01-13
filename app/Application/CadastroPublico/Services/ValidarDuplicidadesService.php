@@ -26,6 +26,8 @@ final class ValidarDuplicidadesService
      * Valida email em uma ÚNICA query no banco central
      * 
      * ⚡ Performance: O(1) - Uma única query ao invés de N queries (onde N = número de tenants)
+     * 
+     * 🔥 CORREÇÃO: Verifica primeiro se empresas estão desativadas antes de lançar EmailJaCadastradoException
      */
     public function validarEmail(string $email): void
     {
@@ -33,42 +35,86 @@ final class ValidarDuplicidadesService
             'email' => $email,
         ]);
         
-        // Primeiro verificar se há registros ativos
-        $lookupsAtivos = $this->lookupRepository->buscarAtivosPorEmail($email);
+        // Buscar TODOS os registros (ativos e inativos) para verificar status das empresas
+        $lookupsTodos = $this->lookupRepository->buscarTodosPorEmail($email);
         
-        if (!empty($lookupsAtivos)) {
-            Log::warning('ValidarDuplicidadesService: Email já cadastrado', [
+        if (empty($lookupsTodos)) {
+            Log::debug('ValidarDuplicidadesService: Email validado com sucesso (não encontrado)', [
                 'email' => $email,
-                'registros_encontrados' => count($lookupsAtivos),
+            ]);
+            return; // Email não cadastrado, pode prosseguir
+        }
+        
+        Log::debug('ValidarDuplicidadesService: Registros encontrados para email', [
+            'email' => $email,
+            'total_registros' => count($lookupsTodos),
+        ]);
+        
+        // 🔥 CORREÇÃO: Verificar primeiro se há empresas desativadas
+        // Se TODAS as empresas estão desativadas, lançar EmailEmpresaDesativadaException
+        $temEmpresaAtiva = false;
+        $temEmpresaDesativada = false;
+        
+        foreach ($lookupsTodos as $lookup) {
+            if ($lookup->empresaId) {
+                // Verificar status da empresa no tenant
+                $empresaDesativada = $this->verificarEmpresaDesativada($lookup->tenantId, $lookup->empresaId);
+                
+                if ($empresaDesativada) {
+                    $temEmpresaDesativada = true;
+                    Log::debug('ValidarDuplicidadesService: Empresa desativada encontrada', [
+                        'email' => $email,
+                        'tenant_id' => $lookup->tenantId,
+                        'empresa_id' => $lookup->empresaId,
+                        'lookup_status' => $lookup->status,
+                    ]);
+                } else {
+                    // Empresa está ativa
+                    $temEmpresaAtiva = true;
+                    Log::debug('ValidarDuplicidadesService: Empresa ativa encontrada', [
+                        'email' => $email,
+                        'tenant_id' => $lookup->tenantId,
+                        'empresa_id' => $lookup->empresaId,
+                        'lookup_status' => $lookup->status,
+                    ]);
+                }
+            } else {
+                // Se não tem empresaId, considerar como ativo (lookup ativo sem empresa específica)
+                if ($lookup->status === 'ativo') {
+                    $temEmpresaAtiva = true;
+                    Log::debug('ValidarDuplicidadesService: Lookup ativo sem empresa específica', [
+                        'email' => $email,
+                        'tenant_id' => $lookup->tenantId,
+                        'user_id' => $lookup->userId,
+                    ]);
+                }
+            }
+        }
+        
+        // 🔥 LÓGICA CORRIGIDA: Priorizar verificação de empresa desativada
+        if ($temEmpresaDesativada && !$temEmpresaAtiva) {
+            // TODAS as empresas estão desativadas
+            Log::warning('ValidarDuplicidadesService: Email com empresa desativada (todas desativadas)', [
+                'email' => $email,
+                'total_registros' => count($lookupsTodos),
+            ]);
+            
+            throw new EmailEmpresaDesativadaException($email);
+        }
+        
+        if ($temEmpresaAtiva) {
+            // Há pelo menos uma empresa ATIVA
+            Log::warning('ValidarDuplicidadesService: Email já cadastrado (empresa ativa encontrada)', [
+                'email' => $email,
+                'registros_encontrados' => count($lookupsTodos),
             ]);
             
             throw new EmailJaCadastradoException($email);
         }
         
-        // Se não há registros ativos, verificar se há registros inativos (empresa desativada)
-        $lookupsTodos = $this->lookupRepository->buscarTodosPorEmail($email);
-        
-        if (!empty($lookupsTodos)) {
-            // Verificar se alguma empresa está desativada
-            foreach ($lookupsTodos as $lookup) {
-                if ($lookup->status === 'inativo' && $lookup->empresaId) {
-                    // Verificar status da empresa no tenant
-                    $empresaDesativada = $this->verificarEmpresaDesativada($lookup->tenantId, $lookup->empresaId);
-                    
-                    if ($empresaDesativada) {
-                        Log::warning('ValidarDuplicidadesService: Email com empresa desativada', [
-                            'email' => $email,
-                            'tenant_id' => $lookup->tenantId,
-                            'empresa_id' => $lookup->empresaId,
-                        ]);
-                        
-                        throw new EmailEmpresaDesativadaException($email);
-                    }
-                }
-            }
-        }
-        
-        Log::debug('ValidarDuplicidadesService: Email validado com sucesso', [
+        // Se chegou aqui, todos os registros são inativos mas não têm empresa ou empresa não está desativada
+        // Isso é um caso edge - permitir cadastro
+        Log::debug('ValidarDuplicidadesService: Email validado com sucesso (apenas registros inativos sem empresa desativada)', [
             'email' => $email,
         ]);
     }
