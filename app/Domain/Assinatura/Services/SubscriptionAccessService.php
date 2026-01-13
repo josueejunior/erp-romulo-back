@@ -104,10 +104,11 @@ final class SubscriptionAccessService
             return true;
         }
 
-        // Para planos pagos, verificar recursos do plano
-        // Dashboard está disponível para planos com 'relatorios' ou 'dashboard_analytics'
-        $recursos = $planoEntity->recursosDisponiveis ?? [];
-        return in_array('relatorios', $recursos) || in_array('dashboard_analytics', $recursos);
+        // 🔥 CORREÇÃO: Para planos PAGOS, o dashboard é sempre acessível
+        // O dashboard é uma funcionalidade básica disponível para todos os planos pagos
+        // A verificação de recursos específicos (relatorios, dashboard_analytics) foi removida
+        // porque o dashboard é uma funcionalidade core do sistema
+        return true;
     }
 
 }
