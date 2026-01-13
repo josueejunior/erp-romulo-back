@@ -231,11 +231,67 @@ final class CadastrarEmpresaPublicamenteUseCase
                 }
             }
 
-            // 🔥 CORREÇÃO: Assinatura NÃO é criada automaticamente no cadastro
-            // A assinatura só será criada quando o usuário escolher um plano internamente
-            // através do fluxo de assinatura/pagamento
+            // 🔥 MELHORIA: Criar trial automático de 3 dias (plano gratuito)
+            $assinaturaTrial = null;
+            $planoTrial = null;
+            $dataFimTrial = null;
+            
+            try {
+                // Buscar plano gratuito (preco_mensal = 0)
+                $planosAtivos = $this->planoRepository->listar(['ativo' => true]);
+                $planoGratuito = $planosAtivos->first(function ($plano) {
+                    $precoMensal = $plano->precoMensal ?? 0;
+                    return $precoMensal == 0 || $precoMensal === null;
+                });
+                
+                if ($planoGratuito) {
+                    Log::info('CadastrarEmpresaPublicamenteUseCase - Plano gratuito encontrado, criando trial automático', [
+                        'plano_id' => $planoGratuito->id,
+                        'plano_nome' => $planoGratuito->nome,
+                    ]);
+                    
+                    // Calcular data fim (3 dias a partir de agora)
+                    $dataInicio = Carbon::now();
+                    $dataFimTrial = $dataInicio->copy()->addDays(3);
+                    
+                    // Criar DTO de assinatura trial
+                    $assinaturaTrialDTO = CriarAssinaturaDTO::fromArray([
+                        'user_id' => $tenantResult['admin_user']->id,
+                        'plano_id' => $planoGratuito->id,
+                        'status' => 'trial', // Status trial
+                        'data_inicio' => $dataInicio->toDateString(),
+                        'data_fim' => $dataFimTrial->toDateString(),
+                        'valor_pago' => 0,
+                        'metodo_pagamento' => 'gratuito',
+                        'observacoes' => 'Trial automático de 3 dias - criado no cadastro público',
+                        'tenant_id' => $tenantResult['tenant']->id,
+                        'empresa_id' => $tenantResult['empresa']->id,
+                    ]);
+                    
+                    // Criar assinatura trial
+                    $assinaturaTrial = $this->criarAssinaturaUseCase->executar($assinaturaTrialDTO);
+                    $planoTrial = $planoGratuito;
+                    
+                    Log::info('CadastrarEmpresaPublicamenteUseCase - Trial automático criado com sucesso', [
+                        'tenant_id' => $tenantResult['tenant']->id,
+                        'assinatura_id' => $assinaturaTrial->id,
+                        'plano_id' => $planoGratuito->id,
+                        'data_fim' => $dataFimTrial->toDateString(),
+                    ]);
+                } else {
+                    Log::warning('CadastrarEmpresaPublicamenteUseCase - Plano gratuito não encontrado, trial não será criado', [
+                        'tenant_id' => $tenantResult['tenant']->id,
+                    ]);
+                }
+            } catch (\Exception $trialException) {
+                // Não quebrar o fluxo se houver erro ao criar trial
+                Log::warning('CadastrarEmpresaPublicamenteUseCase - Erro ao criar trial automático', [
+                    'tenant_id' => $tenantResult['tenant']->id,
+                    'error' => $trialException->getMessage(),
+                ]);
+            }
 
-            // 5. Criar registro de onboarding (sempre com tutorial - sem assinatura inicial)
+            // 5. Criar registro de onboarding (sempre com tutorial - com trial criado)
             $this->criarOnboarding(
                 $tenantResult['tenant']->id, 
                 $tenantResult['admin_user']->id, 
@@ -293,13 +349,36 @@ final class CadastrarEmpresaPublicamenteUseCase
                 ]);
             }
 
+            // 🔥 MELHORIA: Gerar token JWT para auto-login
+            $token = null;
+            try {
+                $jwtService = app(\App\Services\JWTService::class);
+                $token = $jwtService->generateToken([
+                    'user_id' => $tenantResult['admin_user']->id,
+                    'tenant_id' => $tenantResult['tenant']->id,
+                    'empresa_id' => $tenantResult['empresa']->id,
+                    'is_admin' => true,
+                ]);
+                
+                Log::info('CadastrarEmpresaPublicamenteUseCase - Token JWT gerado para auto-login', [
+                    'user_id' => $tenantResult['admin_user']->id,
+                    'tenant_id' => $tenantResult['tenant']->id,
+                ]);
+            } catch (\Exception $tokenException) {
+                // Não quebrar o fluxo se houver erro ao gerar token
+                Log::warning('CadastrarEmpresaPublicamenteUseCase - Erro ao gerar token JWT', [
+                    'error' => $tokenException->getMessage(),
+                ]);
+            }
+
             $result = [
                 'tenant' => $tenantResult['tenant'],
                 'empresa' => $tenantResult['empresa'],
                 'admin_user' => $tenantResult['admin_user'],
-                'assinatura' => null, // 🔥 CORREÇÃO: Não criar assinatura automaticamente
-                'plano' => null,
-                'data_fim' => null,
+                'token' => $token, // 🔥 NOVO: Token para auto-login
+                'assinatura' => $assinaturaTrial, // 🔥 MELHORIA: Trial automático criado
+                'plano' => $planoTrial, // Plano gratuito do trial
+                'data_fim' => $dataFimTrial, // Data fim do trial (3 dias)
                 'payment_result' => null,
             ];
 

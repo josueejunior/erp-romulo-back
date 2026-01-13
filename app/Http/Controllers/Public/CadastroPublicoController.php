@@ -32,6 +32,7 @@ class CadastroPublicoController extends Controller
     public function __construct(
         private readonly CadastrarEmpresaPublicamenteUseCase $cadastrarEmpresaPublicamenteUseCase,
         private readonly CnpjConsultaService $cnpjConsultaService,
+        private readonly \App\Application\CadastroPublico\Services\ValidarDuplicidadesService $validarDuplicidadesService,
     ) {}
 
     /**
@@ -87,6 +88,78 @@ class CadastroPublicoController extends Controller
             return $this->domainErrorResponse($e);
         } catch (\Exception $e) {
             return $this->serverErrorResponse($e);
+        }
+    }
+
+    /**
+     * Verificar disponibilidade de email (público)
+     * 
+     * @OA\Get(
+     *     path="/cadastro-publico/verificar-email/{email}",
+     *     summary="Verificar se email está disponível",
+     *     description="Valida se email já está cadastrado (para validação em tempo real no frontend)",
+     *     operationId="verificarEmailPublico",
+     *     tags={"Cadastro Público"},
+     *     @OA\Parameter(name="email", in="path", required=true, @OA\Schema(type="string", format="email")),
+     *     @OA\Response(response=200, description="Email disponível ou não"),
+     *     @OA\Response(response=422, description="Email inválido")
+     * )
+     */
+    public function verificarEmail(Request $request): JsonResponse
+    {
+        $email = $request->input('email') ?? $request->route('email');
+        
+        if (!$email) {
+            return response()->json([
+                'message' => 'Email é obrigatório',
+                'success' => false,
+            ], 400);
+        }
+        
+        // Validar formato de email
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return response()->json([
+                'available' => false,
+                'message' => 'Email inválido',
+                'success' => false,
+            ], 422);
+        }
+        
+        try {
+            // Usar o mesmo service de validação
+            $this->validarDuplicidadesService->validarEmail($email);
+            
+            return response()->json([
+                'available' => true,
+                'message' => 'Email disponível',
+                'success' => true,
+            ], 200);
+        } catch (EmailEmpresaDesativadaException $e) {
+            return response()->json([
+                'available' => false,
+                'message' => $e->getMessage(),
+                'code' => 'EMAIL_EMPRESA_DESATIVADA',
+                'success' => false,
+            ], 200); // HTTP 200 para não quebrar UX
+        } catch (EmailJaCadastradoException $e) {
+            return response()->json([
+                'available' => false,
+                'message' => $e->getMessage(),
+                'code' => 'EMAIL_EXISTS',
+                'redirect_to' => '/login',
+                'success' => false,
+            ], 200); // HTTP 200 para não quebrar UX
+        } catch (\Exception $e) {
+            Log::error('Erro ao verificar email', [
+                'email' => $email,
+                'error' => $e->getMessage(),
+            ]);
+            
+            return response()->json([
+                'available' => false,
+                'message' => 'Erro ao verificar email. Tente novamente.',
+                'success' => false,
+            ], 500);
         }
     }
 
@@ -184,6 +257,14 @@ class CadastroPublicoController extends Controller
             'ref' => 'nullable|string|max:50',
             'referencia_afiliado' => 'nullable|string|max:50',
             'session_id' => 'nullable|string|max:255',
+            
+            // 🔥 MELHORIA: UTM Tracking (contexto de marketing)
+            'utm_source' => 'nullable|string|max:100',
+            'utm_medium' => 'nullable|string|max:100',
+            'utm_campaign' => 'nullable|string|max:100',
+            'utm_term' => 'nullable|string|max:100',
+            'utm_content' => 'nullable|string|max:100',
+            'fingerprint' => 'nullable|string|max:255',
         ]);
     }
 
@@ -231,15 +312,23 @@ class CadastroPublicoController extends Controller
             ];
         }
 
-        // 🔥 CORREÇÃO: Incluir assinatura apenas se existir (não é mais criada automaticamente)
+        // 🔥 MELHORIA: Incluir token JWT para auto-login (se disponível)
+        if (isset($result['token']) && $result['token']) {
+            $response['data']['token'] = $result['token'];
+            $response['data']['token_type'] = 'Bearer';
+        }
+
+        // 🔥 MELHORIA: Incluir assinatura trial se foi criada automaticamente
         if ($assinatura && $plano && $dataFim) {
             $response['data']['assinatura'] = [
                 'id' => $assinatura->id,
+                'status' => $assinatura->status ?? 'trial',
                 'plano' => [
                     'id' => $plano->id,
-                    'nome' => $plano->nome,
+                    'nome' => $plano->nome ?? 'Gratuito',
                 ],
-                'data_fim' => $dataFim->format('Y-m-d'),
+                'data_fim' => $dataFim instanceof \Carbon\Carbon ? $dataFim->format('Y-m-d') : $dataFim,
+                'trial' => true, // Indica que é trial automático
             ];
         }
 

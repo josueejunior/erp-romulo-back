@@ -69,6 +69,11 @@ class AppServiceProvider extends ServiceProvider
         );
 
         $this->app->bind(
+            \App\Domain\Tenant\Services\TenantDatabasePoolServiceInterface::class,
+            \App\Infrastructure\Tenant\TenantDatabasePoolService::class
+        );
+
+        $this->app->bind(
             \App\Domain\Tenant\Services\TenantDatabaseServiceInterface::class,
             \App\Infrastructure\Tenant\TenantDatabaseService::class
         );

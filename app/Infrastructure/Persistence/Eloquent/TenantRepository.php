@@ -39,6 +39,7 @@ class TenantRepository implements TenantRepositoryInterface
             representanteLegalCpf: $model->representante_legal_cpf,
             representanteLegalCargo: $model->representante_legal_cargo,
             logo: $model->logo,
+            // UTM tracking não é parte da entidade Domain (é apenas tracking)
         );
     }
 
@@ -67,6 +68,7 @@ class TenantRepository implements TenantRepositoryInterface
             'representante_legal_cpf' => $tenant->representanteLegalCpf,
             'representante_legal_cargo' => $tenant->representanteLegalCargo,
             'logo' => $tenant->logo,
+            // UTM tracking será adicionado diretamente no array antes de salvar
         ];
     }
 

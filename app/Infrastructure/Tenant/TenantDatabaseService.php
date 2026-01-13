@@ -4,10 +4,12 @@ namespace App\Infrastructure\Tenant;
 
 use App\Domain\Tenant\Entities\Tenant;
 use App\Domain\Tenant\Services\TenantDatabaseServiceInterface;
+use App\Domain\Tenant\Services\TenantDatabasePoolServiceInterface;
 use App\Models\Tenant as TenantModel;
 use Stancl\Tenancy\Jobs\CreateDatabase;
 use Stancl\Tenancy\Jobs\MigrateDatabase;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Implementação do serviço de banco de dados do tenant
@@ -15,6 +17,9 @@ use Illuminate\Support\Facades\Log;
  */
 class TenantDatabaseService implements TenantDatabaseServiceInterface
 {
+    public function __construct(
+        private readonly ?TenantDatabasePoolServiceInterface $poolService = null,
+    ) {}
     /**
      * Encontrar o próximo número de tenant disponível
      * Verifica quais bancos já existem E quais tenants já existem na tabela
@@ -87,11 +92,41 @@ class TenantDatabaseService implements TenantDatabaseServiceInterface
             $tenantModel->refresh();
             
             // Obter nome do banco de dados que será criado
-            $databaseName = $tenantModel->database()->getName();
+            $databaseNameEsperado = $tenantModel->database()->getName();
             
-            // Verificar se o banco de dados já existe usando conexão central (PostgreSQL)
-            try {
-                // Usar conexão padrão (pode ser 'pgsql' ou configurada no .env)
+            // 🔥 MELHORIA: Tentar usar pool de bancos primeiro (reduz latência de 15s para 200ms)
+            $databaseName = null;
+            if ($this->poolService && $this->poolService->temBancosDisponiveis()) {
+                $bancoDoPool = $this->poolService->obterBancoDoPool();
+                
+                if ($bancoDoPool) {
+                    // Renomear banco do pool para o nome esperado do tenant
+                    try {
+                        DB::statement("ALTER DATABASE \"{$bancoDoPool}\" RENAME TO \"{$databaseNameEsperado}\"");
+                        $databaseName = $databaseNameEsperado;
+                        
+                        Log::info('TenantDatabaseService - Banco obtido do pool e renomeado', [
+                            'tenant_id' => $tenant->id,
+                            'banco_pool' => $bancoDoPool,
+                            'banco_final' => $databaseNameEsperado,
+                        ]);
+                    } catch (\Exception $renameException) {
+                        Log::warning('TenantDatabaseService - Erro ao renomear banco do pool, criando novo', [
+                            'tenant_id' => $tenant->id,
+                            'error' => $renameException->getMessage(),
+                        ]);
+                        // Continuar com criação normal
+                    }
+                }
+            }
+            
+            // Se não conseguiu usar pool, criar banco normalmente
+            if (!$databaseName) {
+                $databaseName = $databaseNameEsperado;
+                
+                // Verificar se o banco de dados já existe usando conexão central (PostgreSQL)
+                try {
+                    // Usar conexão padrão (pode ser 'pgsql' ou configurada no .env)
                 $centralConnection = \Illuminate\Support\Facades\DB::connection();
                 // PostgreSQL: verificar se o banco existe
                 $databases = $centralConnection->select(
@@ -158,10 +193,11 @@ class TenantDatabaseService implements TenantDatabaseServiceInterface
                     'tenant_id' => $tenant->id,
                     'error' => $checkException->getMessage(),
                 ]);
+                }
+                
+                // Criar banco de dados (apenas se não usou pool)
+                CreateDatabase::dispatchSync($tenantModel);
             }
-            
-            // Criar banco de dados
-            CreateDatabase::dispatchSync($tenantModel);
         } catch (\Exception $e) {
             // Verificar se o erro é porque o banco já existe
             if (str_contains($e->getMessage(), 'already exists') || 

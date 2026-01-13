@@ -95,6 +95,10 @@ Route::prefix('v1')->group(function () {
     // Rate limiting aumentado para desenvolvimento/testes
     Route::get('/cadastro-publico/consultar-cnpj/{cnpj}', [\App\Http\Controllers\Public\CadastroPublicoController::class, 'consultarCnpj'])
         ->middleware(['throttle:30,1', 'throttle:100,60']); // 30/min, 100/hora (aumentado para testes)
+    
+    // Verificação de email em tempo real (para validação onBlur)
+    Route::get('/cadastro-publico/verificar-email/{email}', [\App\Http\Controllers\Public\CadastroPublicoController::class, 'verificarEmail'])
+        ->middleware(['throttle:20,1', 'throttle:100,60']); // 20/min, 100/hora
 
     // Cadastro público de afiliados (sem autenticação)
     Route::post('/afiliados/cadastro-publico', [\App\Http\Controllers\Public\CadastroAfiliadoController::class, 'store'])

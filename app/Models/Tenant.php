@@ -81,6 +81,13 @@ class Tenant extends BaseTenant implements TenantWithDatabase
         'representante_legal_cpf',
         'representante_legal_cargo',
         'logo',
+        // 🔥 MELHORIA: UTM Tracking (contexto de marketing)
+        'utm_source',
+        'utm_medium',
+        'utm_campaign',
+        'utm_term',
+        'utm_content',
+        'fingerprint',
         // 🔥 CACHE: Esses campos são apenas cache/espelho da assinatura do usuário
         // A fonte da verdade é a assinatura do usuário (user_id na tabela assinaturas)
         'plano_atual_id', // Cache do plano_atual_id da assinatura do usuário

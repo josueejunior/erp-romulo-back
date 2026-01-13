@@ -86,6 +86,12 @@ final class CadastroPublicoDTO
             idempotencyKey: $data['idempotency_key'] ?? $data['idempotencyKey'] ?? null,
             referenciaAfiliado: $data['ref'] ?? $data['referencia_afiliado'] ?? $data['referenciaAfiliado'] ?? null,
             sessionId: $data['session_id'] ?? $data['sessionId'] ?? null,
+            utmSource: $data['utm_source'] ?? $data['utmSource'] ?? null,
+            utmMedium: $data['utm_medium'] ?? $data['utmMedium'] ?? null,
+            utmCampaign: $data['utm_campaign'] ?? $data['utmCampaign'] ?? null,
+            utmTerm: $data['utm_term'] ?? $data['utmTerm'] ?? null,
+            utmContent: $data['utm_content'] ?? $data['utmContent'] ?? null,
+            fingerprint: $data['fingerprint'] ?? null,
         );
     }
 }
