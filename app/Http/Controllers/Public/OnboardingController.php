@@ -107,7 +107,7 @@ class OnboardingController extends Controller
                 email: $user?->email,
             );
 
-            // Executar Use Case
+            // Executar Use Case (já calcula próxima etapa internamente)
             $onboardingDomain = $this->gerenciarOnboardingUseCase->marcarEtapaConcluida($dto);
 
             // Buscar modelo para apresentação
@@ -120,9 +120,14 @@ class OnboardingController extends Controller
                 ], 500);
             }
 
+            // 🔥 MELHORIA: Presenter já inclui next_recommended_step
+            $responseData = $this->presenter->present($onboardingModel);
+
             return response()->json([
                 'success' => true,
-                'data' => $this->presenter->present($onboardingModel),
+                'data' => $responseData,
+                // 🔥 MELHORIA: Incluir próxima etapa recomendada explicitamente na resposta
+                'next_recommended_step' => $responseData['next_recommended_step'] ?? null,
             ]);
         } catch (DomainException $e) {
             return response()->json([

@@ -292,7 +292,7 @@ final class CadastrarEmpresaPublicamenteUseCase
             }
 
             // 5. Criar registro de onboarding (sempre com tutorial - com trial criado)
-            $this->criarOnboarding(
+            $onboardingCriado = $this->criarOnboarding(
                 $tenantResult['tenant']->id, 
                 $tenantResult['admin_user']->id, 
                 $dto->adminEmail,
@@ -371,11 +371,25 @@ final class CadastrarEmpresaPublicamenteUseCase
                 ]);
             }
 
+            // 🔥 MELHORIA: Buscar dados do onboarding para incluir no payload (Pre-fetching)
+            $onboardingData = null;
+            if ($onboardingCriado) {
+                try {
+                    $onboardingPresenter = app(\App\Application\Onboarding\Presenters\OnboardingApiPresenter::class);
+                    $onboardingData = $onboardingPresenter->presentDomain($onboardingCriado);
+                } catch (\Exception $e) {
+                    Log::warning('CadastrarEmpresaPublicamenteUseCase - Erro ao buscar dados do onboarding para payload', [
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
             $result = [
                 'tenant' => $tenantResult['tenant'],
                 'empresa' => $tenantResult['empresa'],
                 'admin_user' => $tenantResult['admin_user'],
                 'token' => $token, // 🔥 NOVO: Token para auto-login
+                'onboarding' => $onboardingData, // 🔥 MELHORIA: Status do onboarding (Pre-fetching)
                 'assinatura' => $assinaturaTrial, // 🔥 MELHORIA: Trial automático criado
                 'plano' => $planoTrial, // Plano gratuito do trial
                 'data_fim' => $dataFimTrial, // Data fim do trial (3 dias)
@@ -983,8 +997,9 @@ final class CadastrarEmpresaPublicamenteUseCase
      * Cria registro de onboarding para o novo usuário
      * 
      * @param bool $concluirAutomaticamente Se true, conclui o onboarding automaticamente (para planos pagos)
+     * @return \App\Domain\Onboarding\Entities\OnboardingProgress|null Entidade de domínio do onboarding criado
      */
-    private function criarOnboarding(int $tenantId, int $userId, string $email, bool $concluirAutomaticamente = false): void
+    private function criarOnboarding(int $tenantId, int $userId, string $email, bool $concluirAutomaticamente = false): ?\App\Domain\Onboarding\Entities\OnboardingProgress
     {
         try {
             // Criar DTO para iniciar onboarding
@@ -1024,6 +1039,8 @@ final class CadastrarEmpresaPublicamenteUseCase
                     'onboarding_id' => $onboarding->id,
                 ]);
             }
+            
+            return $onboarding;
         } catch (\Exception $e) {
             Log::error('Erro ao criar onboarding durante cadastro público', [
                 'error' => $e->getMessage(),

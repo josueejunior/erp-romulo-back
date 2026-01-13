@@ -318,6 +318,11 @@ class CadastroPublicoController extends Controller
             $response['data']['token_type'] = 'Bearer';
         }
 
+        // 🔥 MELHORIA: Incluir dados do onboarding no payload (Pre-fetching)
+        if (isset($result['onboarding']) && $result['onboarding']) {
+            $response['data']['onboarding'] = $result['onboarding'];
+        }
+
         // 🔥 MELHORIA: Incluir assinatura trial se foi criada automaticamente
         if ($assinatura && $plano && $dataFim) {
             $response['data']['assinatura'] = [

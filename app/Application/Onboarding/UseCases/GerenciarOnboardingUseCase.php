@@ -69,6 +69,8 @@ final class GerenciarOnboardingUseCase
     /**
      * Marca uma etapa como concluída
      * 
+     * 🔥 MELHORIA: Calcula automaticamente próxima etapa recomendada
+     * 
      * @return OnboardingProgress Entidade de domínio
      */
     public function marcarEtapaConcluida(MarcarEtapaDTO $dto): OnboardingProgress
@@ -82,10 +84,15 @@ final class GerenciarOnboardingUseCase
         // Persistir alterações
         $onboardingSalvo = $this->repository->atualizar($onboardingAtualizado);
 
+        // 🔥 MELHORIA: Calcular próxima etapa recomendada
+        $todasEtapas = ['welcome', 'dashboard', 'processos', 'orcamentos', 'fornecedores', 'documentos', 'orgaos', 'setores', 'complete'];
+        $proximaEtapa = $onboardingSalvo->getProximaEtapaRecomendada($todasEtapas);
+
         Log::info('GerenciarOnboardingUseCase - Etapa concluída', [
             'onboarding_id' => $onboardingSalvo->id,
             'etapa' => $dto->etapa,
             'progresso' => $onboardingSalvo->progressoPercentual,
+            'next_recommended_step' => $proximaEtapa, // 🔥 NOVO: Próxima etapa recomendada
         ]);
 
         return $onboardingSalvo;
