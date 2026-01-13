@@ -33,13 +33,14 @@ final class CriarPagamentoComissaoUseCase
     {
         return DB::transaction(function () use ($dto, $pagoPor) {
             // Buscar comissões
+            // 🔥 Permitir pagar comissões 'disponivel' ou 'pendente' (mas priorizar disponivel)
             $comissoes = AfiliadoComissaoRecorrente::whereIn('id', $dto->comissaoIds)
                 ->where('afiliado_id', $dto->afiliadoId)
-                ->where('status', 'pendente')
+                ->whereIn('status', ['pendente', 'disponivel'])
                 ->get();
 
             if ($comissoes->isEmpty()) {
-                throw new DomainException('Nenhuma comissão pendente encontrada para os IDs fornecidos.');
+                throw new DomainException('Nenhuma comissão disponível ou pendente encontrada para os IDs fornecidos.');
             }
 
             // Calcular valor total
