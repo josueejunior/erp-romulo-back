@@ -94,14 +94,22 @@ class OnboardingProgressRepository implements OnboardingProgressRepositoryInterf
     ): ?OnboardingProgress {
         $query = OnboardingProgressModel::query();
 
-        if ($tenantId) {
-            $query->where('tenant_id', $tenantId);
-        } elseif ($userId) {
+        // 🔥 CORREÇÃO: Priorizar userId e email (mais estáveis que tenant_id)
+        // Se temos userId, buscar por userId (mais confiável)
+        if ($userId) {
             $query->where('user_id', $userId);
-        } elseif ($sessionId) {
-            $query->where('session_id', $sessionId);
-        } elseif ($email) {
+        } 
+        // Se temos email mas não userId, buscar por email
+        elseif ($email) {
             $query->where('email', $email);
+        }
+        // Se temos tenant_id, buscar por tenant_id
+        elseif ($tenantId) {
+            $query->where('tenant_id', $tenantId);
+        }
+        // Por último, tentar sessionId
+        elseif ($sessionId) {
+            $query->where('session_id', $sessionId);
         } else {
             return null;
         }
@@ -118,14 +126,15 @@ class OnboardingProgressRepository implements OnboardingProgressRepositoryInterf
     ): ?OnboardingProgress {
         $query = OnboardingProgressModel::query();
 
-        if ($tenantId) {
-            $query->where('tenant_id', $tenantId);
-        } elseif ($userId) {
+        // 🔥 CORREÇÃO: Priorizar userId e email (mais estáveis que tenant_id)
+        if ($userId) {
             $query->where('user_id', $userId);
-        } elseif ($sessionId) {
-            $query->where('session_id', $sessionId);
         } elseif ($email) {
             $query->where('email', $email);
+        } elseif ($tenantId) {
+            $query->where('tenant_id', $tenantId);
+        } elseif ($sessionId) {
+            $query->where('session_id', $sessionId);
         } else {
             return null;
         }
@@ -142,14 +151,15 @@ class OnboardingProgressRepository implements OnboardingProgressRepositoryInterf
     ): bool {
         $query = OnboardingProgressModel::query();
 
-        if ($tenantId) {
-            $query->where('tenant_id', $tenantId);
-        } elseif ($userId) {
+        // 🔥 CORREÇÃO: Priorizar userId e email (mais estáveis que tenant_id)
+        if ($userId) {
             $query->where('user_id', $userId);
-        } elseif ($sessionId) {
-            $query->where('session_id', $sessionId);
         } elseif ($email) {
             $query->where('email', $email);
+        } elseif ($tenantId) {
+            $query->where('tenant_id', $tenantId);
+        } elseif ($sessionId) {
+            $query->where('session_id', $sessionId);
         } else {
             return false;
         }
