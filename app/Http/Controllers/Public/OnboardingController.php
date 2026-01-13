@@ -236,14 +236,35 @@ class OnboardingController extends Controller
     public function concluir(ConcluirOnboardingRequest $request): JsonResponse
     {
         try {
+            Log::info('OnboardingController::concluir (Public) - INÍCIO', [
+                'request_data' => $request->validated(),
+                'request_all' => $request->all(),
+            ]);
+            
             // Obter contexto do trait (já inicializado pelo middleware)
             $tenantId = $this->getTenantId();
             $userId = $this->getUserId();
             $user = $this->getUser();
             $email = $user?->email;
             
+            Log::info('OnboardingController::concluir (Public) - Dados do contexto', [
+                'tenantId' => $tenantId,
+                'tenantId_type' => gettype($tenantId),
+                'userId' => $userId,
+                'userId_type' => gettype($userId),
+                'email' => $email,
+                'user_exists' => $user !== null,
+            ]);
+            
             // Converter tenantId de string para int se necessário
             $tenantIdInt = $tenantId ? (int) $tenantId : null;
+            
+            Log::info('OnboardingController::concluir (Public) - Criando DTO', [
+                'tenantIdInt' => $tenantIdInt,
+                'userId' => $userId,
+                'email' => $email,
+                'request_validated' => $request->validated(),
+            ]);
             
             // Criar DTO com dados do request e contexto
             $dto = ConcluirOnboardingDTO::fromRequest(
@@ -252,9 +273,19 @@ class OnboardingController extends Controller
                 userId: $userId,
                 email: $email,
             );
+            
+            Log::info('OnboardingController::concluir (Public) - DTO criado com sucesso', [
+                'dto_tenantId' => $dto->tenantId,
+                'dto_userId' => $dto->userId,
+                'dto_email' => $dto->email,
+            ]);
 
             // Executar Use Case
+            Log::info('OnboardingController::concluir (Public) - Executando UseCase');
             $onboardingDomain = $this->gerenciarOnboardingUseCase->concluir($dto);
+            Log::info('OnboardingController::concluir (Public) - UseCase executado', [
+                'onboarding_id' => $onboardingDomain->id,
+            ]);
 
             // Buscar modelo para apresentação
             $onboardingModel = $this->repository->buscarModeloPorId($onboardingDomain->id);
@@ -281,12 +312,24 @@ class OnboardingController extends Controller
             // Capturar erro de validação do DTO
             Log::warning('OnboardingController::concluir (Public) - Dados de identificação inválidos', [
                 'error' => $e->getMessage(),
+                'error_file' => $e->getFile(),
+                'error_line' => $e->getLine(),
+                'tenantId' => $tenantId ?? null,
+                'userId' => $userId ?? null,
+                'email' => $email ?? null,
             ]);
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),
             ], 400);
         } catch (DomainException $e) {
+            Log::warning('OnboardingController::concluir (Public) - DomainException', [
+                'error' => $e->getMessage(),
+                'error_file' => $e->getFile(),
+                'error_line' => $e->getLine(),
+                'tenantId' => $tenantId ?? null,
+                'userId' => $userId ?? null,
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),
@@ -294,7 +337,12 @@ class OnboardingController extends Controller
         } catch (\Exception $e) {
             Log::error('OnboardingController::concluir (Public) - Erro inesperado', [
                 'error' => $e->getMessage(),
+                'error_file' => $e->getFile(),
+                'error_line' => $e->getLine(),
+                'error_class' => get_class($e),
                 'trace' => $e->getTraceAsString(),
+                'tenantId' => $tenantId ?? null,
+                'userId' => $userId ?? null,
             ]);
             return response()->json([
                 'success' => false,

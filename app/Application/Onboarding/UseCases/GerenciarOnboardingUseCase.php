@@ -122,24 +122,46 @@ final class GerenciarOnboardingUseCase
      */
     public function concluir(ConcluirOnboardingDTO $dto): OnboardingProgress
     {
+        Log::info('GerenciarOnboardingUseCase::concluir - INÍCIO', [
+            'dto_onboardingId' => $dto->onboardingId,
+            'dto_tenantId' => $dto->tenantId,
+            'dto_userId' => $dto->userId,
+            'dto_sessionId' => $dto->sessionId,
+            'dto_email' => $dto->email,
+        ]);
+
         // Buscar onboarding
         $onboarding = $this->buscarOuFalhar($dto);
 
+        Log::info('GerenciarOnboardingUseCase::concluir - Onboarding encontrado', [
+            'onboarding_id' => $onboarding->id,
+            'onboarding_concluido' => $onboarding->onboardingConcluido,
+        ]);
+
         // Validar que pode concluir
         if (!$onboarding->podeConcluir()) {
+            Log::warning('GerenciarOnboardingUseCase::concluir - Onboarding já está concluído', [
+                'onboarding_id' => $onboarding->id,
+            ]);
             throw new DomainException('Onboarding já está concluído.');
         }
 
         // Usar método da entidade para concluir
         $onboardingConcluido = $onboarding->concluir();
 
+        Log::info('GerenciarOnboardingUseCase::concluir - Onboarding marcado como concluído na entidade', [
+            'onboarding_id' => $onboardingConcluido->id,
+            'concluido_em' => $onboardingConcluido->concluidoEm?->toIso8601String(),
+        ]);
+
         // Persistir alterações
         $onboardingSalvo = $this->repository->atualizar($onboardingConcluido);
 
-        Log::info('GerenciarOnboardingUseCase - Onboarding concluído', [
+        Log::info('GerenciarOnboardingUseCase::concluir - Onboarding concluído e persistido', [
             'onboarding_id' => $onboardingSalvo->id,
             'tenant_id' => $onboardingSalvo->tenantId,
             'user_id' => $onboardingSalvo->userId,
+            'concluido_em' => $onboardingSalvo->concluidoEm?->toIso8601String(),
         ]);
 
         return $onboardingSalvo;
@@ -181,16 +203,40 @@ final class GerenciarOnboardingUseCase
      */
     private function buscarOuFalhar(MarcarEtapaDTO|MarcarChecklistItemDTO|ConcluirOnboardingDTO $dto): OnboardingProgress
     {
+        Log::info('GerenciarOnboardingUseCase::buscarOuFalhar - INÍCIO', [
+            'dto_onboardingId' => $dto->onboardingId ?? null,
+            'dto_tenantId' => $dto->tenantId ?? null,
+            'dto_userId' => $dto->userId ?? null,
+            'dto_sessionId' => $dto->sessionId ?? null,
+            'dto_email' => $dto->email ?? null,
+        ]);
+
         // Se tem onboarding_id, buscar por ID
         if ($dto->onboardingId !== null) {
+            Log::info('GerenciarOnboardingUseCase::buscarOuFalhar - Buscando por ID', [
+                'onboarding_id' => $dto->onboardingId,
+            ]);
             $onboarding = $this->repository->buscarPorId($dto->onboardingId);
             if (!$onboarding) {
+                Log::warning('GerenciarOnboardingUseCase::buscarOuFalhar - Onboarding não encontrado por ID', [
+                    'onboarding_id' => $dto->onboardingId,
+                ]);
                 throw new DomainException('Onboarding não encontrado.');
             }
+            Log::info('GerenciarOnboardingUseCase::buscarOuFalhar - Onboarding encontrado por ID', [
+                'onboarding_id' => $onboarding->id,
+            ]);
             return $onboarding;
         }
 
         // Caso contrário, buscar por critérios
+        Log::info('GerenciarOnboardingUseCase::buscarOuFalhar - Buscando por critérios', [
+            'tenantId' => $dto->tenantId,
+            'userId' => $dto->userId,
+            'sessionId' => $dto->sessionId,
+            'email' => $dto->email,
+        ]);
+
         $onboarding = $this->repository->buscarPorCritérios(
             tenantId: $dto->tenantId,
             userId: $dto->userId,
@@ -199,8 +245,18 @@ final class GerenciarOnboardingUseCase
         );
 
         if (!$onboarding) {
+            Log::warning('GerenciarOnboardingUseCase::buscarOuFalhar - Onboarding não encontrado por critérios', [
+                'tenantId' => $dto->tenantId,
+                'userId' => $dto->userId,
+                'sessionId' => $dto->sessionId,
+                'email' => $dto->email,
+            ]);
             throw new DomainException('Onboarding não encontrado. Inicie o onboarding primeiro.');
         }
+
+        Log::info('GerenciarOnboardingUseCase::buscarOuFalhar - Onboarding encontrado por critérios', [
+            'onboarding_id' => $onboarding->id,
+        ]);
 
         return $onboarding;
     }
