@@ -402,7 +402,42 @@ final class CadastrarEmpresaPublicamenteUseCase
         $proximoIdDisponivel = $this->databaseService->encontrarProximoNumeroDisponivel();
         
         // 3. Criar tenant no banco
-        $tenant = $this->tenantRepository->criarComId($tenant, $proximoIdDisponivel);
+        // 🔥 CORREÇÃO: Capturar erro de violação de constraint única (CNPJ duplicado)
+        try {
+            $tenant = $this->tenantRepository->criarComId($tenant, $proximoIdDisponivel);
+        } catch (\Illuminate\Database\QueryException $e) {
+            // Verificar se é erro de violação de constraint única de CNPJ
+            if ($e->getCode() === '23505' || str_contains($e->getMessage(), 'tenants_cnpj_unique')) {
+                Log::warning('CadastrarEmpresaPublicamenteUseCase::criarTenantEUsuario - CNPJ já existe no banco', [
+                    'cnpj' => $cnpjNormalizado,
+                    'error' => $e->getMessage(),
+                ]);
+                
+                // Lançar exceção de domínio para ser capturada pelo controller
+                throw new CnpjJaCadastradoException(
+                    "Este CNPJ já está cadastrado no sistema. Se você é o responsável, faça login para acessar sua conta.",
+                    cnpj: $cnpjNormalizado
+                );
+            }
+            
+            // Se não for erro de CNPJ duplicado, relançar a exceção
+            throw $e;
+        } catch (\PDOException $e) {
+            // PostgreSQL retorna PDOException para constraint violations
+            if ($e->getCode() === '23505' || str_contains($e->getMessage(), 'tenants_cnpj_unique') || str_contains($e->getMessage(), 'duplicate key')) {
+                Log::warning('CadastrarEmpresaPublicamenteUseCase::criarTenantEUsuario - CNPJ já existe no banco (PDOException)', [
+                    'cnpj' => $cnpjNormalizado,
+                    'error' => $e->getMessage(),
+                ]);
+                
+                throw new CnpjJaCadastradoException(
+                    "Este CNPJ já está cadastrado no sistema. Se você é o responsável, faça login para acessar sua conta.",
+                    cnpj: $cnpjNormalizado
+                );
+            }
+            
+            throw $e;
+        }
 
         try {
             // 4. Criar banco de dados
