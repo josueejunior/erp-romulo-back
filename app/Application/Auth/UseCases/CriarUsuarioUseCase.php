@@ -75,8 +75,32 @@ class CriarUsuarioUseCase
                 empresaAtivaId: $dto->empresaId,
             );
 
-            // Persistir e associar empresa (infraestrutura)
-            $user = $this->userRepository->criar($user, $dto->empresaId, $dto->role);
+            // 🔥 CORREÇÃO: Usar transação para evitar race conditions
+            // E capturar exceção de constraint única do PostgreSQL
+            try {
+                // Persistir e associar empresa (infraestrutura)
+                $user = $this->userRepository->criar($user, $dto->empresaId, $dto->role);
+            } catch (\Illuminate\Database\QueryException $e) {
+                // Capturar erro de constraint única (PostgreSQL)
+                if ($e->getCode() === '23505' || str_contains($e->getMessage(), 'duplicate key value violates unique constraint')) {
+                    \Log::warning('CriarUsuarioUseCase - Constraint única violada (race condition ou email já existe)', [
+                        'email' => $email->value,
+                        'error_code' => $e->getCode(),
+                        'error_message' => $e->getMessage(),
+                    ]);
+                    
+                    // Verificar novamente se email existe (pode ter sido criado entre a verificação e a inserção)
+                    if ($this->userRepository->emailExiste($email->value)) {
+                        throw new DomainException('Este e-mail já está cadastrado.');
+                    } else {
+                        // Se não existe, pode ser problema de case sensitivity ou race condition
+                        // Tentar buscar diretamente no banco
+                        throw new DomainException('Erro ao criar usuário. Este e-mail pode já estar cadastrado. Tente novamente.');
+                    }
+                }
+                // Relançar outras exceções
+                throw $e;
+            }
 
             \Log::info('CriarUsuarioUseCase - Usuário criado no repository', [
                 'user_id' => $user->id,

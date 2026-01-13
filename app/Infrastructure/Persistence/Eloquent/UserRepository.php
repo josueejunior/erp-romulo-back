@@ -51,11 +51,15 @@ class UserRepository implements UserRepositoryInterface
         string $email,
         string $senha
     ): User {
+        // 🔥 CORREÇÃO: Normalizar email para lowercase
+        $email = strtolower($email);
+        
         // 🔥 SEGURANÇA: Verificar se já existe usuário com esse email no tenant
         // Pode acontecer de uma tentativa anterior ter criado o tenant e empresa mas falhado ao criar usuário
         // ou ter criado parcialmente um usuário que precisa ser atualizado
+        // 🔥 CORREÇÃO: Usar LOWER() para comparação case-insensitive
         $existingUser = UserModel::withTrashed()
-            ->where('email', $email)
+            ->whereRaw('LOWER(email) = ?', [strtolower($email)])
             ->first();
         
         if ($existingUser) {
@@ -118,7 +122,12 @@ class UserRepository implements UserRepositoryInterface
             'role' => $role,
         ]);
 
-        $model = UserModel::create($this->toArray($user));
+        // 🔥 CORREÇÃO: Normalizar email para lowercase antes de inserir
+        // Isso garante consistência e evita problemas de case sensitivity
+        $userData = $this->toArray($user);
+        $userData['email'] = strtolower($userData['email']);
+        
+        $model = UserModel::create($userData);
 
         \Log::info('UserRepository::criar - Model criado', [
             'user_id' => $model->id,
@@ -178,10 +187,15 @@ class UserRepository implements UserRepositoryInterface
             'current_database' => $currentDatabase,
         ]);
 
+        // 🔥 CORREÇÃO: Usar LOWER() para comparação case-insensitive (PostgreSQL é case-sensitive)
+        // Isso garante que emails como "Email@Example.com" e "email@example.com" sejam tratados como iguais
+        $emailLower = strtolower($email);
+        
         // 🔥 CORREÇÃO CRÍTICA: A constraint unique do PostgreSQL NÃO respeita soft deletes
         // Se existe um usuário deletado com esse email, a constraint bloqueia a inserção
         // Precisamos verificar INCLUINDO usuários deletados para detectar esse caso
-        $query = UserModel::withTrashed()->where('email', $email);
+        $query = UserModel::withTrashed()
+            ->whereRaw('LOWER(email) = ?', [$emailLower]);
         
         if ($excluirUserId) {
             $query->where('id', '!=', $excluirUserId);
@@ -195,7 +209,9 @@ class UserRepository implements UserRepositoryInterface
             if ($userFound->trashed()) {
                 \Log::warning('UserRepository::emailExiste - Email encontrado mas usuário está deletado (soft delete). Constraint unique do PostgreSQL ainda bloqueia criação!', [
                     'email' => $email,
+                    'email_lower' => $emailLower,
                     'user_id' => $userFound->id,
+                    'user_email' => $userFound->email,
                     'is_trashed' => true,
                     'tenant_id' => $tenantId,
                     'deleted_at' => $userFound->getAttribute($userFound->getDeletedAtColumn()),
@@ -211,7 +227,9 @@ class UserRepository implements UserRepositoryInterface
             // Usuário ativo encontrado
             \Log::warning('UserRepository::emailExiste - Email encontrado (usuário ativo)', [
                 'email' => $email,
+                'email_lower' => $emailLower,
                 'user_id' => $userFound->id ?? null,
+                'user_email' => $userFound->email ?? null,
                 'user_name' => $userFound->name ?? null,
                 'tenant_id' => $tenantId,
                 'excluir_user_id' => $excluirUserId,
@@ -221,6 +239,7 @@ class UserRepository implements UserRepositoryInterface
         } else {
             \Log::debug('UserRepository::emailExiste - Email não encontrado', [
                 'email' => $email,
+                'email_lower' => $emailLower,
                 'tenant_id' => $tenantId,
                 'current_database' => $currentDatabase,
             ]);
