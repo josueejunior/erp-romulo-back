@@ -24,37 +24,37 @@ return new class extends Migration
                 ->comment('Período de carência em dias (padrão: 15 dias)');
         });
         
-        // Para PostgreSQL, precisamos alterar o tipo do enum
-        // Primeiro, alterar coluna para text temporariamente
-        DB::statement("
-            ALTER TABLE afiliado_comissoes_recorrentes 
-            ALTER COLUMN status TYPE text
-        ");
-        
-        // Recriar o enum com novo valor
+        // Para PostgreSQL, precisamos adicionar o novo valor ao enum existente
+        // O Laravel cria o enum com nome baseado na tabela e coluna
+        // Vamos buscar o nome do enum e adicionar o novo valor
         DB::statement("
             DO \$\$ 
+            DECLARE
+                enum_type_name text;
             BEGIN
-                IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'afiliado_comissao_status_enum') THEN
-                    CREATE TYPE afiliado_comissao_status_enum AS ENUM ('pendente', 'disponivel', 'paga', 'cancelada');
-                ELSE
-                    -- Se enum já existe, adicionar novo valor se não existir
+                -- Buscar o nome do tipo enum usado pela coluna status
+                SELECT t.typname INTO enum_type_name
+                FROM pg_type t
+                JOIN pg_attribute a ON a.atttypid = t.oid
+                JOIN pg_class c ON c.oid = a.attrelid
+                WHERE c.relname = 'afiliado_comissoes_recorrentes'
+                  AND a.attname = 'status'
+                  AND t.typtype = 'e'
+                LIMIT 1;
+                
+                -- Se encontrou o enum, adicionar novo valor se não existir
+                IF enum_type_name IS NOT NULL THEN
                     IF NOT EXISTS (
-                        SELECT 1 FROM pg_enum 
-                        WHERE enumlabel = 'disponivel' 
-                        AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'afiliado_comissao_status_enum')
+                        SELECT 1 FROM pg_enum e
+                        JOIN pg_type t ON t.oid = e.enumtypid
+                        WHERE t.typname = enum_type_name
+                          AND e.enumlabel = 'disponivel'
                     ) THEN
-                        ALTER TYPE afiliado_comissao_status_enum ADD VALUE 'disponivel';
+                        -- PostgreSQL não suporta IF NOT EXISTS no ADD VALUE, mas já verificamos acima
+                        EXECUTE format('ALTER TYPE %I ADD VALUE ''disponivel''', enum_type_name);
                     END IF;
                 END IF;
             END \$\$;
-        ");
-        
-        // Converter de volta para enum
-        DB::statement("
-            ALTER TABLE afiliado_comissoes_recorrentes 
-            ALTER COLUMN status TYPE afiliado_comissao_status_enum 
-            USING status::afiliado_comissao_status_enum
         ");
         
         // Atualizar valores existentes que já passaram da carência
