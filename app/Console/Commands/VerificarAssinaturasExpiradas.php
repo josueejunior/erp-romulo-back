@@ -141,27 +141,40 @@ class VerificarAssinaturasExpiradas extends Command
                             }
                         }
 
-                        // Tentar cobrança automática (se configurado e se tem método de pagamento salvo)
-                        if ($cobrar && $foraGracePeriod && $assinatura->metodo_pagamento && $assinatura->metodo_pagamento !== 'gratuito') {
-                            $this->line("     💳 Tentando cobrança automática...");
-                            
-                            try {
-                                $cobrancaUseCase = app(\App\Application\Assinatura\UseCases\CobrarAssinaturaExpiradaUseCase::class);
-                                $resultado = $cobrancaUseCase->executar($tenant->id, $assinatura->id);
+                        // 🔥 MELHORIA: Grace Period Ativo - Tentar cobrança automática durante grace period
+                        // Não espera expirar completamente, tenta cobrar antes de suspender
+                        $estaNoGracePeriod = $diasExpirado > 0 && $diasExpirado <= $diasGracePeriod;
+                        
+                        if ($cobrar && ($estaNoGracePeriod || $foraGracePeriod) && $assinatura->metodo_pagamento && $assinatura->metodo_pagamento !== 'gratuito') {
+                            // Verificar se tem cartão salvo (External Vaulting)
+                            if ($assinatura->hasCardToken() && $assinatura->podeTentarCobranca()) {
+                                $this->line("     💳 Tentando cobrança automática...");
                                 
-                                if ($resultado['sucesso']) {
-                                    $this->info("     ✅ Cobrança automática realizada com sucesso!");
+                                try {
+                                    // Processar em background (Fire and Forget)
+                                    \App\Jobs\ProcessarCobrancaRecorrente::dispatch($tenant->id, $assinatura->id);
+                                    
+                                    $this->info("     ✅ Cobrança automática agendada para processamento em background");
                                     $totalCobradas++;
-                                } else {
-                                    $this->warn("     ⚠️  {$resultado['mensagem']}");
+                                    
+                                    Log::info('VerificarAssinaturasExpiradas - Cobrança automática agendada', [
+                                        'tenant_id' => $tenant->id,
+                                        'assinatura_id' => $assinatura->id,
+                                        'dias_expirado' => $diasExpirado,
+                                        'esta_no_grace_period' => $estaNoGracePeriod,
+                                    ]);
+                                } catch (\Exception $e) {
+                                    $this->error("     ❌ Erro ao agendar cobrança automática: {$e->getMessage()}");
+                                    Log::error('Erro ao agendar cobrança automática', [
+                                        'tenant_id' => $tenant->id,
+                                        'assinatura_id' => $assinatura->id,
+                                        'error' => $e->getMessage(),
+                                    ]);
                                 }
-                            } catch (\Exception $e) {
-                                $this->error("     ❌ Erro ao tentar cobrança automática: {$e->getMessage()}");
-                                Log::error('Erro ao tentar cobrança automática', [
-                                    'tenant_id' => $tenant->id,
-                                    'assinatura_id' => $assinatura->id,
-                                    'error' => $e->getMessage(),
-                                ]);
+                            } elseif (!$assinatura->hasCardToken()) {
+                                $this->warn("     ⚠️  Cartão não salvo - cobrança automática não disponível");
+                            } elseif (!$assinatura->podeTentarCobranca()) {
+                                $this->warn("     ⚠️  Limite de tentativas atingido - aguardando intervalo");
                             }
                         }
 

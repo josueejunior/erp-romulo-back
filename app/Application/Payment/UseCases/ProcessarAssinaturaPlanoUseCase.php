@@ -143,7 +143,7 @@ class ProcessarAssinaturaPlanoUseCase
 
             // Se aprovado, criar assinatura
             if ($paymentResult->isApproved()) {
-                $assinatura = $this->criarAssinatura($tenant, $plano, $paymentResult, $diasValidade, $periodo);
+                $assinatura = $this->criarAssinatura($tenant, $plano, $paymentResult, $diasValidade, $periodo, $paymentRequest);
                 
                 // Atualizar evento com assinaturaId criado (se necessário para listeners)
                 // Por enquanto, o evento já foi disparado, mas listeners podem buscar depois
@@ -183,13 +183,16 @@ class ProcessarAssinaturaPlanoUseCase
 
     /**
      * Cria assinatura aprovada
+     * 
+     * 🔥 MELHORIA: Cria Customer no Mercado Pago se pagamento for com cartão
      */
     private function criarAssinatura(
         Tenant $tenant,
         Plano $plano,
         PaymentResult $paymentResult,
         int $diasValidade,
-        string $periodo
+        string $periodo,
+        PaymentRequest $paymentRequest
     ): Assinatura {
         return DB::transaction(function () use ($tenant, $plano, $paymentResult, $diasValidade, $periodo) {
             $dataInicio = Carbon::now();
@@ -239,6 +242,36 @@ class ProcessarAssinaturaPlanoUseCase
                 ]);
             }
 
+            // 🔥 MELHORIA: Criar Customer no Mercado Pago se pagamento for com cartão
+            $customerId = null;
+            $cardId = null;
+            
+            if ($paymentRequest->cardToken && $paymentResult->paymentMethod === 'credit_card') {
+                try {
+                    $customerData = $this->paymentProvider->createCustomerAndCard(
+                        email: $paymentRequest->payerEmail,
+                        cardToken: $paymentRequest->cardToken,
+                        cpf: $paymentRequest->payerCpf
+                    );
+                    
+                    $customerId = $customerData['customer_id'];
+                    $cardId = $customerData['card_id'];
+                    
+                    Log::info('Customer e Card criados no Mercado Pago durante assinatura', [
+                        'tenant_id' => $tenant->id,
+                        'customer_id' => $customerId,
+                        'card_id' => $cardId,
+                    ]);
+                } catch (\Exception $e) {
+                    // Não bloquear criação da assinatura se falhar ao criar Customer
+                    // A assinatura será criada, mas sem possibilidade de cobrança automática
+                    Log::warning('Erro ao criar Customer/Card no Mercado Pago (não bloqueia assinatura)', [
+                        'tenant_id' => $tenant->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
             // Criar nova assinatura
             $assinatura = Assinatura::create([
                 'tenant_id' => $tenant->id,
@@ -251,6 +284,9 @@ class ProcessarAssinaturaPlanoUseCase
                 'metodo_pagamento' => $paymentResult->paymentMethod,
                 'transacao_id' => $paymentResult->externalId,
                 'dias_grace_period' => 7,
+                // 🔥 MELHORIA: Salvar IDs do Customer/Card para cobrança futura
+                'mercado_pago_customer_id' => $customerId,
+                'mercado_pago_card_id' => $cardId,
             ]);
 
             // CRÍTICO: Atualizar tenant com plano e assinatura atuais

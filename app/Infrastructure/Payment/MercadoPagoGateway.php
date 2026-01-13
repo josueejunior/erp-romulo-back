@@ -689,4 +689,215 @@ class MercadoPagoGateway implements PaymentProviderInterface
             default => "Pagamento recusado: {$statusDetail}. Entre em contato com o suporte se o problema persistir.",
         };
     }
+
+    /**
+     * Cria um Customer no Mercado Pago e salva o cartão
+     * 
+     * 🔥 MELHORIA: External Vaulting - Retorna apenas customer_id e card_id (não são dados sensíveis)
+     * 
+     * @param string $email Email do cliente
+     * @param string $cardToken Token do cartão (gerado pelo frontend)
+     * @param string|null $cpf CPF do cliente (opcional)
+     * @return array ['customer_id' => string, 'card_id' => string]
+     * @throws DomainException Em caso de erro
+     */
+    public function createCustomerAndCard(string $email, string $cardToken, ?string $cpf = null): array
+    {
+        $this->initialize();
+
+        try {
+            // Criar Customer no Mercado Pago
+            $customerClient = new \MercadoPago\Client\Customer\CustomerClient();
+            
+            $customerData = [
+                'email' => $email,
+            ];
+
+            if ($cpf) {
+                $cpfLimpo = preg_replace('/\D/', '', $cpf);
+                if (strlen($cpfLimpo) === 11) {
+                    $customerData['identification'] = [
+                        'type' => 'CPF',
+                        'number' => $cpfLimpo,
+                    ];
+                }
+            }
+
+            $customer = $customerClient->create($customerData);
+
+            // Converter para array se necessário
+            if (is_object($customer)) {
+                if (method_exists($customer, 'toArray')) {
+                    $customer = $customer->toArray();
+                } elseif (method_exists($customer, 'getContent')) {
+                    $customer = $customer->getContent();
+                } else {
+                    $customer = (array) $customer;
+                }
+            }
+
+            if (!is_array($customer) || !isset($customer['id'])) {
+                throw new DomainException('Erro ao criar Customer no Mercado Pago: resposta inválida.');
+            }
+
+            $customerId = (string) $customer['id'];
+
+            // Salvar cartão no Customer
+            $cardClient = new \MercadoPago\Client\Card\CardClient();
+            
+            $cardData = [
+                'token' => $cardToken,
+            ];
+
+            $card = $cardClient->create($customerId, $cardData);
+
+            // Converter para array se necessário
+            if (is_object($card)) {
+                if (method_exists($card, 'toArray')) {
+                    $card = $card->toArray();
+                } elseif (method_exists($card, 'getContent')) {
+                    $card = $card->getContent();
+                } else {
+                    $card = (array) $card;
+                }
+            }
+
+            if (!is_array($card) || !isset($card['id'])) {
+                throw new DomainException('Erro ao salvar cartão no Mercado Pago: resposta inválida.');
+            }
+
+            $cardId = (string) $card['id'];
+
+            Log::info('Customer e Card criados no Mercado Pago', [
+                'customer_id' => $customerId,
+                'card_id' => $cardId,
+                'email' => $email,
+            ]);
+
+            return [
+                'customer_id' => $customerId,
+                'card_id' => $cardId,
+            ];
+
+        } catch (\MercadoPago\Exceptions\MPApiException $e) {
+            $apiResponse = $e->getApiResponse();
+            $content = $apiResponse ? $apiResponse->getContent() : null;
+            
+            $errorMessage = 'Erro ao criar Customer/Card no Mercado Pago';
+            if ($content && isset($content['message'])) {
+                $errorMessage = $content['message'];
+            }
+
+            Log::error('Erro ao criar Customer/Card no Mercado Pago', [
+                'exception' => $e->getMessage(),
+                'api_response' => $content,
+                'email' => $email,
+            ]);
+
+            throw new DomainException("Erro ao salvar método de pagamento: {$errorMessage}");
+        } catch (\Exception $e) {
+            Log::error('Exceção ao criar Customer/Card no Mercado Pago', [
+                'exception' => $e->getMessage(),
+                'email' => $email,
+            ]);
+
+            throw new DomainException("Erro ao salvar método de pagamento: {$e->getMessage()}");
+        }
+    }
+
+    /**
+     * Processa um pagamento usando um card_id salvo (one-click buy)
+     * 
+     * @param PaymentRequest $request Dados do pagamento (sem cardToken)
+     * @param string $customerId ID do Customer no Mercado Pago
+     * @param string $cardId ID do Cartão salvo no Mercado Pago
+     * @param string $idempotencyKey Chave de idempotência
+     * @return PaymentResult Resultado do pagamento
+     * @throws DomainException Em caso de erro
+     */
+    public function processPaymentWithSavedCard(
+        PaymentRequest $request,
+        string $customerId,
+        string $cardId,
+        string $idempotencyKey
+    ): PaymentResult {
+        $this->initialize();
+
+        try {
+            // Preparar dados do pagamento usando card_id
+            $paymentData = [
+                'transaction_amount' => (float) round($request->amount->toReais(), 2),
+                'description' => substr($request->description, 0, 255),
+                'payer' => [
+                    'id' => $customerId, // ID do Customer no MP
+                ],
+                'payment_method_id' => 'credit_card',
+                'token' => $cardId, // Usar card_id como token
+                'installments' => (int) ($request->installments ?? 1),
+            ];
+
+            // External reference
+            if ($request->externalReference) {
+                $paymentData['external_reference'] = substr($request->externalReference, 0, 256);
+            } else {
+                $paymentData['external_reference'] = substr($idempotencyKey, 0, 256);
+            }
+
+            // Metadados
+            if ($request->metadata && is_array($request->metadata)) {
+                $paymentData['metadata'] = $request->metadata;
+            }
+
+            $paymentData['statement_descriptor'] = 'SISTEMA ROMULO';
+
+            Log::info('Processando pagamento com cartão salvo', [
+                'customer_id' => $customerId,
+                'card_id' => $cardId,
+                'amount' => $paymentData['transaction_amount'],
+                'idempotency_key' => $idempotencyKey,
+            ]);
+
+            // Criar pagamento
+            $payment = $this->paymentClient->create($paymentData);
+
+            // Verificar erros
+            if (is_array($payment) && isset($payment['error'])) {
+                $errorMessage = $payment['error']['message'] ?? 'Erro desconhecido no pagamento';
+                Log::error('Erro ao processar pagamento com cartão salvo', [
+                    'error' => $payment['error'],
+                    'customer_id' => $customerId,
+                    'card_id' => $cardId,
+                ]);
+                throw new DomainException("Erro no pagamento: {$errorMessage}");
+            }
+
+            return $this->mapPaymentToResult($payment);
+
+        } catch (\MercadoPago\Exceptions\MPApiException $e) {
+            $apiResponse = $e->getApiResponse();
+            $content = $apiResponse ? $apiResponse->getContent() : null;
+            
+            $errorMessage = 'Erro ao processar pagamento com cartão salvo';
+            if ($content && isset($content['message'])) {
+                $errorMessage = $content['message'];
+            }
+
+            Log::error('Erro ao processar pagamento com cartão salvo', [
+                'exception' => $e->getMessage(),
+                'api_response' => $content,
+                'customer_id' => $customerId,
+                'card_id' => $cardId,
+            ]);
+
+            throw new DomainException("Erro ao processar pagamento: {$errorMessage}");
+        } catch (\Exception $e) {
+            Log::error('Exceção ao processar pagamento com cartão salvo', [
+                'exception' => $e->getMessage(),
+                'customer_id' => $customerId,
+                'card_id' => $cardId,
+            ]);
+
+            throw new DomainException("Erro ao processar pagamento: {$e->getMessage()}");
+        }
+    }
 }

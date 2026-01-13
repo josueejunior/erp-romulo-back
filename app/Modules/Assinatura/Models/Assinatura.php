@@ -27,6 +27,12 @@ class Assinatura extends BaseModel
         'transacao_id',
         'dias_grace_period',
         'observacoes',
+        // 🔥 MELHORIA: External Vaulting - IDs do Mercado Pago (não são dados sensíveis)
+        'mercado_pago_customer_id',
+        'mercado_pago_card_id',
+        'mercado_pago_subscription_id',
+        'ultima_tentativa_cobranca',
+        'tentativas_cobranca',
     ];
 
     protected function casts(): array
@@ -37,6 +43,8 @@ class Assinatura extends BaseModel
             'data_cancelamento' => 'date',
             'valor_pago' => 'decimal:2',
             'dias_grace_period' => 'integer',
+            'ultima_tentativa_cobranca' => 'datetime',
+            'tentativas_cobranca' => 'integer',
         ]);
     }
 
@@ -140,6 +148,39 @@ class Assinatura extends BaseModel
         $this->status = 'ativa';
         $this->data_cancelamento = null;
         $this->save();
+    }
+
+    /**
+     * Verifica se a assinatura tem cartão salvo (permite cobrança automática)
+     * 
+     * 🔥 MELHORIA: External Vaulting - Verifica se tem customer_id e card_id salvos
+     */
+    public function hasCardToken(): bool
+    {
+        return !empty($this->mercado_pago_customer_id) && !empty($this->mercado_pago_card_id);
+    }
+
+    /**
+     * Verifica se pode tentar cobrança automática novamente
+     * (evita tentativas excessivas)
+     */
+    public function podeTentarCobranca(): bool
+    {
+        // Máximo de 3 tentativas
+        if ($this->tentativas_cobranca >= 3) {
+            return false;
+        }
+
+        // Se nunca tentou, pode tentar
+        if (!$this->ultima_tentativa_cobranca) {
+            return true;
+        }
+
+        // Aguardar pelo menos 24 horas entre tentativas
+        $ultimaTentativa = Carbon::parse($this->ultima_tentativa_cobranca);
+        $hoje = Carbon::now();
+        
+        return $hoje->diffInHours($ultimaTentativa) >= 24;
     }
 }
 

@@ -47,6 +47,36 @@ interface PaymentProviderInterface
      * @return bool True se válido
      */
     public function validateWebhookSignature(array $payload, string $signature): bool;
+
+    /**
+     * Cria um Customer no gateway e salva o cartão
+     * 
+     * 🔥 MELHORIA: External Vaulting - Salva apenas customer_id e card_id (não são dados sensíveis)
+     * 
+     * @param string $email Email do cliente
+     * @param string $cardToken Token do cartão (gerado pelo frontend)
+     * @param string|null $cpf CPF do cliente (opcional)
+     * @return array ['customer_id' => string, 'card_id' => string]
+     * @throws \App\Domain\Exceptions\DomainException Em caso de erro
+     */
+    public function createCustomerAndCard(string $email, string $cardToken, ?string $cpf = null): array;
+
+    /**
+     * Processa um pagamento usando um card_id salvo (one-click buy)
+     * 
+     * @param PaymentRequest $request Dados do pagamento (sem cardToken, usar card_id)
+     * @param string $customerId ID do Customer no gateway
+     * @param string $cardId ID do Cartão salvo no gateway
+     * @param string $idempotencyKey Chave de idempotência
+     * @return PaymentResult Resultado do pagamento
+     * @throws \App\Domain\Exceptions\DomainException Em caso de erro
+     */
+    public function processPaymentWithSavedCard(
+        PaymentRequest $request,
+        string $customerId,
+        string $cardId,
+        string $idempotencyKey
+    ): PaymentResult;
 }
 
 
