@@ -85,6 +85,15 @@ class UserReadRepository implements UserReadRepositoryInterface
     public function listarSemPaginacao(array $filtros = []): array
     {
         $this->checkTenancyContext();
+        
+        $tenantId = tenancy()->tenant?->id;
+        $databaseName = DB::connection()->getDatabaseName();
+        
+        Log::info('UserReadRepository::listarSemPaginacao - Iniciando', [
+            'tenant_id' => $tenantId,
+            'database' => $databaseName,
+            'filtros' => $filtros,
+        ]);
 
         try {
             $query = $this->getIsolatedUserQuery()
@@ -98,15 +107,71 @@ class UserReadRepository implements UserReadRepositoryInterface
                     $q->whereHas('empresas', fn($e) => $e->where('empresas.id', $filtros['empresa_id']));
                 });
 
+            // 🔥 LOG: Verificar se o email específico existe antes de buscar todos
+            $emailProcurado = 'camargo.representacoesbr@gmail.com';
+            $emailProcuradoLower = strtolower($emailProcurado);
+            $existeNaQuery = (clone $query)->whereRaw('LOWER(email) = ?', [$emailProcuradoLower])->exists();
+            Log::info('UserReadRepository::listarSemPaginacao - Verificando email específico', [
+                'email_procurado' => $emailProcurado,
+                'email_lower' => $emailProcuradoLower,
+                'existe_na_query' => $existeNaQuery,
+                'tenant_id' => $tenantId,
+                'database' => $databaseName,
+            ]);
+
             $users = $query->orderBy('name')->get();
+            
+            Log::info('UserReadRepository::listarSemPaginacao - Usuários encontrados', [
+                'total_usuarios' => $users->count(),
+                'tenant_id' => $tenantId,
+                'database' => $databaseName,
+            ]);
+
+            // 🔥 LOG: Verificar se o email específico está nos resultados
+            $emailEncontrado = false;
+            $userEncontrado = null;
+            foreach ($users as $user) {
+                if (strtolower($user->email) === $emailProcuradoLower) {
+                    $emailEncontrado = true;
+                    $userEncontrado = $user;
+                    Log::info('UserReadRepository::listarSemPaginacao - Email encontrado nos resultados', [
+                        'user_id' => $user->id,
+                        'email' => $user->email,
+                        'name' => $user->name,
+                        'deleted_at' => $user->deleted_at,
+                        'is_trashed' => $user->trashed(),
+                        'empresa_ativa_id' => $user->empresa_ativa_id,
+                        'tenant_id' => $tenantId,
+                    ]);
+                    break;
+                }
+            }
+            
+            if ($existeNaQuery && !$emailEncontrado) {
+                Log::warning('UserReadRepository::listarSemPaginacao - Email existe na query mas não está nos resultados', [
+                    'email' => $emailProcurado,
+                    'tenant_id' => $tenantId,
+                    'database' => $databaseName,
+                ]);
+            }
 
             // Transforma os itens usando o método map que já criamos
-            return $users->map(fn($user) => $this->mapUserToArray($user))->toArray();
+            $result = $users->map(fn($user) => $this->mapUserToArray($user))->toArray();
+            
+            Log::info('UserReadRepository::listarSemPaginacao - Concluído', [
+                'total_resultados' => count($result),
+                'email_encontrado' => $emailEncontrado,
+                'tenant_id' => $tenantId,
+            ]);
+            
+            return $result;
 
         } catch (\Exception $e) {
             Log::error("Erro ao listar usuários sem paginação: " . $e->getMessage(), [
-                'tenant_id' => tenancy()->tenant?->id,
+                'tenant_id' => $tenantId,
+                'database' => $databaseName,
                 'filtros' => $filtros,
+                'trace' => $e->getTraceAsString(),
             ]);
             return [];
         }

@@ -156,12 +156,19 @@ class UserLookupRepository implements UserLookupRepositoryInterface
     
     public function buscarComFiltros(array $filtros = []): array
     {
+        Log::info('UserLookupRepository::buscarComFiltros - Iniciando busca', [
+            'filtros' => $filtros,
+        ]);
+        
         $query = UserLookupModel::query()
             ->whereNull('deleted_at');
         
         // Filtro de busca (email ou CNPJ)
         if (!empty($filtros['search'])) {
             $search = $filtros['search'];
+            Log::debug('UserLookupRepository::buscarComFiltros - Aplicando filtro de busca', [
+                'search' => $search,
+            ]);
             $query->where(function($q) use ($search) {
                 $q->where('email', 'ilike', "%{$search}%")
                   ->orWhere('cnpj', 'like', "%{$search}%");
@@ -170,6 +177,9 @@ class UserLookupRepository implements UserLookupRepositoryInterface
         
         // Filtro de status
         if (!empty($filtros['status']) && $filtros['status'] !== 'all') {
+            Log::debug('UserLookupRepository::buscarComFiltros - Aplicando filtro de status', [
+                'status' => $filtros['status'],
+            ]);
             $query->where('status', $filtros['status']);
         }
         
@@ -177,12 +187,55 @@ class UserLookupRepository implements UserLookupRepositoryInterface
         $perPage = $filtros['per_page'] ?? 15;
         $page = $filtros['page'] ?? 1;
         
+        // 🔥 LOG: Buscar email específico para debug
+        $emailProcurado = 'camargo.representacoesbr@gmail.com';
+        $emailProcuradoLower = strtolower($emailProcurado);
+        $existeNaQuery = (clone $query)->whereRaw('LOWER(email) = ?', [$emailProcuradoLower])->exists();
+        Log::info('UserLookupRepository::buscarComFiltros - Verificando email específico', [
+            'email_procurado' => $emailProcurado,
+            'email_lower' => $emailProcuradoLower,
+            'existe_na_query' => $existeNaQuery,
+            'sql_aproximado' => $query->toSql(),
+        ]);
+        
         $paginator = $query->orderBy('email')
             ->orderBy('tenant_id')
             ->paginate($perPage, ['*'], 'page', $page);
         
         $data = $paginator->items();
         $lookups = array_map(fn($model) => $this->toDomain($model), $data);
+        
+        // 🔥 LOG: Verificar se o email específico está nos resultados
+        $emailEncontrado = false;
+        foreach ($lookups as $lookup) {
+            if (strtolower($lookup->email) === $emailProcuradoLower) {
+                $emailEncontrado = true;
+                Log::info('UserLookupRepository::buscarComFiltros - Email encontrado nos resultados', [
+                    'email' => $lookup->email,
+                    'tenant_id' => $lookup->tenantId,
+                    'user_id' => $lookup->userId,
+                    'status' => $lookup->status,
+                ]);
+                break;
+            }
+        }
+        
+        if (!$emailEncontrado && $existeNaQuery) {
+            Log::warning('UserLookupRepository::buscarComFiltros - Email existe na query mas não está nos resultados (pode ser paginação)', [
+                'email' => $emailProcurado,
+                'total' => $paginator->total(),
+                'per_page' => $paginator->perPage(),
+                'current_page' => $paginator->currentPage(),
+            ]);
+        }
+        
+        Log::info('UserLookupRepository::buscarComFiltros - Busca concluída', [
+            'total' => $paginator->total(),
+            'per_page' => $paginator->perPage(),
+            'current_page' => $paginator->currentPage(),
+            'resultados_count' => count($lookups),
+            'email_encontrado' => $emailEncontrado,
+        ]);
         
         return [
             'data' => $lookups,

@@ -123,18 +123,98 @@ class AdminUserController extends Controller
                         // Usar listarSemPaginacao e filtrar pelos IDs necessários
                         $userIds = array_map(fn($l) => $l->userId, $lookupsDoTenant);
                         
-                        $detalhes = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($userIds) {
+                        Log::info('AdminUserController::indexGlobal - Buscando detalhes dos usuários', [
+                            'tenant_id' => $tenantId,
+                            'user_ids' => $userIds,
+                            'lookups_count' => count($lookupsDoTenant),
+                        ]);
+                        
+                        // 🔥 LOG: Verificar se o email específico está nos lookups deste tenant
+                        $emailProcurado = 'camargo.representacoesbr@gmail.com';
+                        $emailProcuradoLower = strtolower($emailProcurado);
+                        $lookupDoEmail = collect($lookupsDoTenant)->first(function($l) use ($emailProcuradoLower) {
+                            return strtolower($l->email) === $emailProcuradoLower;
+                        });
+                        
+                        if ($lookupDoEmail) {
+                            Log::info('AdminUserController::indexGlobal - Email encontrado nos lookups do tenant', [
+                                'tenant_id' => $tenantId,
+                                'user_id' => $lookupDoEmail->userId,
+                                'email' => $lookupDoEmail->email,
+                                'status' => $lookupDoEmail->status,
+                            ]);
+                        } else {
+                            Log::warning('AdminUserController::indexGlobal - Email NÃO encontrado nos lookups do tenant', [
+                                'tenant_id' => $tenantId,
+                                'email_procurado' => $emailProcurado,
+                                'lookups_emails' => array_map(fn($l) => $l->email, $lookupsDoTenant),
+                            ]);
+                        }
+                        
+                        $detalhes = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($userIds, $emailProcuradoLower) {
                             // Buscar todos os usuários e filtrar pelos IDs necessários
                             $todosUsuarios = $this->userReadRepository->listarSemPaginacao([]);
-                            return array_filter($todosUsuarios, fn($user) => in_array($user['id'], $userIds));
+                            
+                            // 🔥 LOG: Verificar se o email está nos usuários retornados
+                            $emailEncontrado = false;
+                            foreach ($todosUsuarios as $user) {
+                                if (strtolower($user['email'] ?? '') === $emailProcuradoLower) {
+                                    $emailEncontrado = true;
+                                    Log::info('AdminUserController::indexGlobal - Email encontrado nos usuários do tenant', [
+                                        'user_id' => $user['id'],
+                                        'email' => $user['email'],
+                                        'name' => $user['name'],
+                                        'deleted_at' => $user['deleted_at'] ?? null,
+                                    ]);
+                                    break;
+                                }
+                            }
+                            
+                            if (!$emailEncontrado) {
+                                Log::warning('AdminUserController::indexGlobal - Email NÃO encontrado nos usuários do tenant', [
+                                    'email_procurado' => $emailProcuradoLower,
+                                    'total_usuarios' => count($todosUsuarios),
+                                    'user_ids_procurados' => $userIds,
+                                ]);
+                            }
+                            
+                            $filtrados = array_filter($todosUsuarios, fn($user) => in_array($user['id'], $userIds));
+                            
+                            Log::info('AdminUserController::indexGlobal - Usuários filtrados', [
+                                'total_antes_filtro' => count($todosUsuarios),
+                                'total_depois_filtro' => count($filtrados),
+                                'user_ids_procurados' => $userIds,
+                                'user_ids_encontrados' => array_map(fn($u) => $u['id'], $filtrados),
+                            ]);
+                            
+                            return $filtrados;
                         });
                         
                         // Consolidar dados
                         foreach ($detalhes as $user) {
                             $lookup = collect($lookupsDoTenant)->firstWhere('userId', $user['id']);
-                            if (!$lookup) continue;
+                            if (!$lookup) {
+                                Log::warning('AdminUserController::indexGlobal - Lookup não encontrado para usuário', [
+                                    'user_id' => $user['id'],
+                                    'user_email' => $user['email'] ?? null,
+                                    'tenant_id' => $tenantId,
+                                ]);
+                                continue;
+                            }
                             
                             $email = $user['email'];
+                            
+                            // 🔥 LOG: Verificar se é o email específico
+                            $emailProcurado = 'camargo.representacoesbr@gmail.com';
+                            if (strtolower($email) === strtolower($emailProcurado)) {
+                                Log::info('AdminUserController::indexGlobal - Processando email específico', [
+                                    'user_id' => $user['id'],
+                                    'email' => $email,
+                                    'name' => $user['name'] ?? null,
+                                    'deleted_at' => $user['deleted_at'] ?? null,
+                                    'tenant_id' => $tenantId,
+                                ]);
+                            }
                             
                             // Enriquecer empresas com informações do tenant
                             $empresasComTenant = array_map(function ($empresa) use ($tenantDomain) {
