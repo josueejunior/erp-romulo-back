@@ -182,7 +182,34 @@ final class CadastrarEmpresaPublicamenteUseCase
             $this->validarDuplicidadesService->validarCnpj($dto->cnpj);
 
             // 2. Criar tenant com empresa e usuário admin
+            Log::info('CadastrarEmpresaPublicamenteUseCase - Criando tenant e usuário', [
+                'correlation_id' => $correlationId,
+                'admin_name' => $dto->adminName,
+                'admin_email' => $dto->adminEmail,
+                'has_admin_password' => !empty($dto->adminPassword),
+            ]);
+            
             $tenantResult = $this->criarTenantEUsuario($dto);
+            
+            // 🔥 VALIDAÇÃO: Verificar se admin_user foi criado
+            if (!isset($tenantResult['admin_user']) || $tenantResult['admin_user'] === null) {
+                Log::error('CadastrarEmpresaPublicamenteUseCase - admin_user não foi criado!', [
+                    'correlation_id' => $correlationId,
+                    'tenant_result_keys' => array_keys($tenantResult),
+                    'admin_name' => $dto->adminName,
+                    'admin_email' => $dto->adminEmail,
+                    'has_password' => !empty($dto->adminPassword),
+                ]);
+                
+                throw new DomainException('Erro ao criar usuário administrador. Verifique os dados informados.');
+            }
+            
+            Log::info('CadastrarEmpresaPublicamenteUseCase - Tenant e usuário criados com sucesso', [
+                'correlation_id' => $correlationId,
+                'tenant_id' => $tenantResult['tenant']->id ?? null,
+                'empresa_id' => $tenantResult['empresa']->id ?? null,
+                'admin_user_id' => $tenantResult['admin_user']->id ?? null,
+            ]);
 
             // 3. Marcar referência como concluída (se houver)
             if ($referenciaAfiliado) {
@@ -379,7 +406,19 @@ final class CadastrarEmpresaPublicamenteUseCase
 
                 // 10. Criar usuário administrador
                 $adminUser = null;
+                
+                Log::info('CadastrarEmpresaPublicamenteUseCase::criarTenantEUsuario - Verificando dados admin', [
+                    'tenant_id' => $tenant->id,
+                    'empresa_id' => $empresa->id,
+                    'tem_dados_admin' => $tenantDTO->temDadosAdmin(),
+                    'admin_name' => $tenantDTO->adminName,
+                    'admin_email' => $tenantDTO->adminEmail,
+                    'has_admin_password' => !empty($tenantDTO->adminPassword),
+                ]);
+                
                 if ($tenantDTO->temDadosAdmin()) {
+                    Log::info('CadastrarEmpresaPublicamenteUseCase::criarTenantEUsuario - Criando admin user');
+                    
                     $adminUser = $this->userRepository->criarAdministrador(
                         tenantId: $tenant->id,
                         empresaId: $empresa->id,
@@ -387,6 +426,16 @@ final class CadastrarEmpresaPublicamenteUseCase
                         email: $tenantDTO->adminEmail,
                         senha: $tenantDTO->adminPassword,
                     );
+                    
+                    Log::info('CadastrarEmpresaPublicamenteUseCase::criarTenantEUsuario - Admin user criado', [
+                        'admin_user_id' => $adminUser->id ?? null,
+                    ]);
+                } else {
+                    Log::warning('CadastrarEmpresaPublicamenteUseCase::criarTenantEUsuario - Dados admin incompletos, não criando usuário', [
+                        'admin_name' => $tenantDTO->adminName,
+                        'admin_email' => $tenantDTO->adminEmail,
+                        'has_password' => !empty($tenantDTO->adminPassword),
+                    ]);
                 }
 
                 // 11. Finalizar contexto do tenant
