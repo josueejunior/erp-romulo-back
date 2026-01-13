@@ -76,32 +76,37 @@ class OnboardingController extends BaseApiController
                 'dto_email' => $dto->email,
             ]);
 
-            // Buscar progresso
+            // 🔥 CORREÇÃO: Verificar primeiro se já foi concluído (antes de buscar progresso)
+            // Isso evita criar um novo onboarding se já foi concluído
+            $jaConcluido = $this->gerenciarOnboardingUseCase->estaConcluido($dto);
+            
+            if ($jaConcluido) {
+                Log::info('OnboardingController::status - Onboarding já foi concluído para este usuário', [
+                    'user_id' => $user->id,
+                    'tenant_id' => $tenantId,
+                    'email' => $user->email,
+                ]);
+                // Se já foi concluído, retornar que está concluído (não criar novo)
+                return response()->json([
+                    'success' => true,
+                    'data' => [
+                        'onboarding_concluido' => true,
+                        'progresso_percentual' => 100,
+                        'etapas_concluidas' => [],
+                        'checklist' => [],
+                        'pode_ver_planos' => true,
+                    ],
+                ]);
+            }
+            
+            // Buscar progresso (apenas se não estiver concluído)
             $onboardingDomain = $this->gerenciarOnboardingUseCase->buscarProgresso($dto);
 
             if (!$onboardingDomain) {
-                // 🔥 CORREÇÃO: Verificar se já existe um onboarding concluído antes de criar novo
-                $jaConcluido = $this->gerenciarOnboardingUseCase->estaConcluido($dto);
-                
-                if ($jaConcluido) {
-                    Log::info('OnboardingController::status - Onboarding já foi concluído, mas não encontrado na busca. Isso pode indicar problema na busca.', [
-                        'user_id' => $user->id,
-                        'tenant_id' => $tenantId,
-                    ]);
-                    // Se já foi concluído, retornar um objeto indicando que está concluído
-                    // Mas isso não deveria acontecer - a busca deveria encontrar
-                    return response()->json([
-                        'success' => true,
-                        'data' => [
-                            'onboarding_concluido' => true,
-                            'message' => 'Onboarding já foi concluído',
-                        ],
-                    ]);
-                }
-                
                 Log::info('OnboardingController::status - Onboarding não encontrado e não concluído, criando novo', [
                     'user_id' => $user->id,
                     'tenant_id' => $tenantId,
+                    'email' => $user->email,
                 ]);
                 // Se não existe e não foi concluído, criar um novo
                 $iniciarDto = IniciarOnboardingDTO::fromRequest(
