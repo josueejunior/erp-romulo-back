@@ -31,6 +31,9 @@ class AfiliadoComissaoRecorrente extends Model
         'status',
         'data_pagamento_afiliado',
         'observacoes',
+        // Novos campos de carência
+        'data_disponivel_em',
+        'dias_carencia',
     ];
 
     protected function casts(): array
@@ -40,9 +43,11 @@ class AfiliadoComissaoRecorrente extends Model
             'data_fim_ciclo' => 'date',
             'data_pagamento_cliente' => 'date',
             'data_pagamento_afiliado' => 'date',
+            'data_disponivel_em' => 'date',
             'valor_pago_cliente' => 'decimal:2',
             'comissao_percentual' => 'decimal:2',
             'valor_comissao' => 'decimal:2',
+            'dias_carencia' => 'integer',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
         ];

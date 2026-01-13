@@ -222,7 +222,8 @@ final class CadastrarEmpresaPublicamenteUseCase
 
             // 4. Registrar afiliado na empresa (se aplicável)
             if ($dto->afiliacao) {
-                $this->registrarAfiliado($tenantResult['empresa'], $dto->afiliacao);
+                // 🔥 VALIDAÇÃO DE SELF-REFERRAL: Passar CNPJ para validação
+                $this->registrarAfiliado($tenantResult['empresa'], $dto->afiliacao, $dto->cnpj);
                 
                 // Marcar cupom como aplicado na referência
                 if ($referenciaAfiliado) {
@@ -557,14 +558,17 @@ final class CadastrarEmpresaPublicamenteUseCase
     /**
      * Registra afiliado na empresa
      */
-    private function registrarAfiliado($empresa, $afiliacao): void
+    private function registrarAfiliado($empresa, $afiliacao, string $cnpj): void
     {
         try {
+            // 🔥 VALIDAÇÃO DE SELF-REFERRAL: Passar CNPJ para validação
             $this->registrarAfiliadoNaEmpresaUseCase->executar(
                 empresaId: $empresa->id,
                 afiliadoId: $afiliacao->afiliadoId,
                 codigo: $afiliacao->codigo,
-                descontoAplicado: $afiliacao->descontoAplicado
+                descontoAplicado: $afiliacao->descontoAplicado,
+                cnpjEmpresa: $cnpj,
+                cpfRepresentante: null // Pode ser adicionado se necessário
             );
         } catch (\Exception $e) {
             Log::error('Erro ao registrar afiliado na empresa durante cadastro público', [
