@@ -90,11 +90,6 @@
             @endif
         </div>
         
-        <p><strong>Próximos Passos:</strong></p>
-        <ul>
-            <li>Agora você pode criar usuários para acessar o sistema</li>
-        </ul>
-        
         <p>Se você tiver alguma dúvida, não hesite em entrar em contato conosco.</p>
         
         <p>Atenciosamente,<br>
