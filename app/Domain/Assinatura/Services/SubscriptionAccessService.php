@@ -43,7 +43,15 @@ final class SubscriptionAccessService
             || $path === 'api/v1/dashboard' 
             || str_ends_with($path, '/dashboard');
         
-        return $isDashboardRoute;
+        // 🔥 Planos são públicos - podem ser visualizados sem assinatura
+        // Importante para a tela de cadastro e escolha de planos funcionar
+        $isPlanosRoute = $routeName === 'planos' 
+            || $routeName === 'planos.list' 
+            || $routeName === 'planos.get'
+            || $path === 'api/v1/planos' 
+            || preg_match('#^api/v1/planos(/\d+)?$#', $path);
+        
+        return $isDashboardRoute || $isPlanosRoute;
     }
 
     /**
