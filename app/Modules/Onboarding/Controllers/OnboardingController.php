@@ -15,10 +15,15 @@ use App\Application\Onboarding\Presenters\OnboardingApiPresenter;
 use App\Domain\Onboarding\Repositories\OnboardingProgressRepositoryInterface;
 use App\Http\Requests\Onboarding\MarcarEtapaRequest;
 use App\Http\Requests\Onboarding\ConcluirOnboardingRequest;
+use App\Application\Assinatura\UseCases\CriarAssinaturaUseCase;
+use App\Application\Assinatura\DTOs\CriarAssinaturaDTO;
+use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
+use App\Domain\Plano\Repositories\PlanoRepositoryInterface;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use App\Domain\Exceptions\DomainException;
+use Carbon\Carbon;
 
 /**
  * Controller para gerenciamento de onboarding (usuários autenticados)
@@ -37,6 +42,9 @@ class OnboardingController extends BaseApiController
         private readonly GerenciarOnboardingUseCase $gerenciarOnboardingUseCase,
         private readonly OnboardingProgressRepositoryInterface $repository,
         private readonly OnboardingApiPresenter $presenter,
+        private readonly CriarAssinaturaUseCase $criarAssinaturaUseCase,
+        private readonly AssinaturaRepositoryInterface $assinaturaRepository,
+        private readonly PlanoRepositoryInterface $planoRepository,
     ) {}
 
     /**
@@ -303,6 +311,9 @@ class OnboardingController extends BaseApiController
             // Executar Use Case
             $onboardingDomain = $this->gerenciarOnboardingUseCase->concluir($dto);
 
+            // 🔥 NOVO: Criar plano gratuito de 3 dias após concluir tutorial
+            $this->criarPlanoGratuito3Dias($user, $tenantId);
+
             // Buscar modelo para apresentação
             $onboardingModel = $this->repository->buscarModeloPorId($onboardingDomain->id);
 
@@ -350,6 +361,98 @@ class OnboardingController extends BaseApiController
                 'success' => false,
                 'message' => 'Erro ao concluir onboarding.',
             ], 500);
+        }
+    }
+
+    /**
+     * Cria plano gratuito de 3 dias após tutorial concluído
+     * 
+     * @param \App\Models\User $user
+     * @param int|null $tenantId
+     * @return void
+     */
+    private function criarPlanoGratuito3Dias($user, ?int $tenantId): void
+    {
+        try {
+            // Verificar se usuário já tem assinatura ativa
+            $assinaturaExistente = $this->assinaturaRepository->buscarAssinaturaAtualPorUsuario($user->id);
+            
+            if ($assinaturaExistente) {
+                Log::info('OnboardingController::criarPlanoGratuito3Dias - Usuário já possui assinatura, não criando trial', [
+                    'user_id' => $user->id,
+                    'assinatura_id' => $assinaturaExistente->id,
+                    'status' => $assinaturaExistente->status,
+                ]);
+                return;
+            }
+
+            // Buscar plano gratuito (preco_mensal = 0)
+            $planosAtivos = $this->planoRepository->listar(['ativo' => true]);
+            $planoGratuito = null;
+            
+            // Iterar sobre os planos para encontrar o gratuito
+            foreach ($planosAtivos as $plano) {
+                $precoMensal = $plano->precoMensal ?? 0;
+                if ($precoMensal == 0 || $precoMensal === null) {
+                    $planoGratuito = $plano;
+                    break;
+                }
+            }
+
+            if (!$planoGratuito) {
+                Log::warning('OnboardingController::criarPlanoGratuito3Dias - Plano gratuito não encontrado', [
+                    'user_id' => $user->id,
+                ]);
+                return;
+            }
+
+            // Calcular data fim (3 dias a partir de agora)
+            $dataInicio = Carbon::now();
+            $dataFim = $dataInicio->copy()->addDays(3);
+
+            // Obter empresa do usuário
+            $empresaId = $user->empresa_ativa_id ?? null;
+            if (!$empresaId) {
+                Log::warning('OnboardingController::criarPlanoGratuito3Dias - Usuário não tem empresa ativa', [
+                    'user_id' => $user->id,
+                ]);
+                return;
+            }
+
+            // Criar DTO de assinatura trial usando construtor direto (mais seguro)
+            $assinaturaTrialDTO = new CriarAssinaturaDTO(
+                userId: $user->id,
+                planoId: $planoGratuito->id,
+                status: 'ativa',
+                dataInicio: $dataInicio,
+                dataFim: $dataFim,
+                valorPago: 0,
+                metodoPagamento: 'gratuito',
+                transacaoId: null,
+                diasGracePeriod: 0,
+                observacoes: 'Trial automático de 3 dias - criado após conclusão do tutorial',
+                tenantId: $tenantId,
+                empresaId: $empresaId,
+            );
+
+            // Criar assinatura trial
+            $assinaturaTrial = $this->criarAssinaturaUseCase->executar($assinaturaTrialDTO);
+
+            Log::info('OnboardingController::criarPlanoGratuito3Dias - Trial de 3 dias criado com sucesso', [
+                'user_id' => $user->id,
+                'tenant_id' => $tenantId,
+                'empresa_id' => $empresaId,
+                'assinatura_id' => $assinaturaTrial->id,
+                'plano_id' => $planoGratuito->id,
+                'data_fim' => $dataFim->toDateString(),
+            ]);
+        } catch (\Exception $e) {
+            // Não falhar a conclusão do tutorial se houver erro ao criar trial
+            Log::error('OnboardingController::criarPlanoGratuito3Dias - Erro ao criar trial', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
         }
     }
 }
