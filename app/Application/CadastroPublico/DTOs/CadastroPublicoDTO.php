@@ -34,6 +34,7 @@ final class CadastroPublicoDTO
         public readonly ?string $estado = null,
         public readonly ?string $cep = null,
         public readonly ?array $telefones = null,
+        public readonly string $whatsapp, // 🔥 NOVO: WhatsApp obrigatório
         public readonly ?string $logo = null,
         
         // Dados do Usuário Administrador
@@ -69,6 +70,32 @@ final class CadastroPublicoDTO
         if (empty($data['cnpj'])) {
             throw new DomainException('CNPJ é obrigatório para cadastro de empresa.');
         }
+        
+        // 🔥 NOVO: Validar que WhatsApp está presente (obrigatório)
+        if (empty($data['whatsapp'])) {
+            throw new DomainException('WhatsApp é obrigatório para cadastro de empresa.');
+        }
+        
+        // 🔥 NOVO: Processar telefones incluindo WhatsApp
+        $telefones = $data['telefones'] ?? [];
+        $whatsappLimpo = preg_replace('/\D/', '', $data['whatsapp']);
+        
+        // Adicionar WhatsApp aos telefones se não estiver presente
+        $whatsappJaExiste = false;
+        foreach ($telefones as $telefone) {
+            if (isset($telefone['tipo']) && $telefone['tipo'] === 'whatsapp') {
+                $whatsappJaExiste = true;
+                break;
+            }
+        }
+        
+        if (!$whatsappJaExiste) {
+            $telefones[] = [
+                'numero' => $whatsappLimpo,
+                'tipo' => 'whatsapp',
+                'principal' => true,
+            ];
+        }
 
         return new self(
             planoId: isset($data['plano_id']) ? (int) $data['plano_id'] : null,
@@ -80,7 +107,8 @@ final class CadastroPublicoDTO
             cidade: $data['cidade'] ?? null,
             estado: $data['estado'] ?? null,
             cep: $data['cep'] ?? null,
-            telefones: $data['telefones'] ?? null,
+            telefones: !empty($telefones) ? $telefones : null,
+            whatsapp: $whatsappLimpo,
             logo: $data['logo'] ?? null,
             adminName: $data['admin_name'],
             adminEmail: $data['admin_email'],
