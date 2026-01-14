@@ -701,7 +701,21 @@ class ApplicationContext implements ApplicationContextContract
             // 🔥 NOVO: Buscar assinatura da empresa, não do usuário
             $assinatura = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($this->empresaId);
             
+            Log::debug('ApplicationContext::validateAssinatura - Busca de assinatura', [
+                'empresa_id' => $this->empresaId,
+                'assinatura_encontrada' => $assinatura !== null,
+                'assinatura_id' => $assinatura?->id,
+                'assinatura_status' => $assinatura?->status,
+                'assinatura_data_fim' => $assinatura?->dataFim?->toDateString(),
+                'plano_id' => $assinatura?->planoId,
+            ]);
+            
             if (!$assinatura) {
+                Log::warning('ApplicationContext::validateAssinatura - Assinatura não encontrada', [
+                    'empresa_id' => $this->empresaId,
+                    'user_id' => $this->user?->id,
+                ]);
+                
                 $this->assinaturaCache = [
                     'pode_acessar' => false,
                     'code' => 'NO_SUBSCRIPTION',
@@ -796,6 +810,22 @@ class ApplicationContext implements ApplicationContextContract
         $this->tenancyInitialized = false;
         $this->assinaturaCache = null;
         $this->bootstrapCallCount = 0;
+    }
+    
+    /**
+     * 🔥 NOVO: Limpar cache de assinatura (útil quando assinatura é criada/atualizada)
+     * 
+     * Força uma nova busca da assinatura na próxima verificação
+     */
+    public function limparCacheAssinatura(): void
+    {
+        $this->assinaturaCache = null;
+        $this->assinatura = null; // Força nova busca também
+        
+        Log::debug('ApplicationContext::limparCacheAssinatura - Cache de assinatura limpo', [
+            'empresa_id' => $this->empresaId,
+            'user_id' => $this->user?->id,
+        ]);
     }
     
     /**

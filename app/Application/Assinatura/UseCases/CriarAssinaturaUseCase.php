@@ -12,6 +12,7 @@ use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
 use App\Domain\Exceptions\DomainException;
 use App\Modules\Assinatura\Models\Plano;
 use App\Modules\Auth\Models\User;
+use App\Services\ApplicationContext;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 
@@ -150,6 +151,23 @@ class CriarAssinaturaUseCase
                 emailDestino: $emailDestino,
             )
         );
+
+        // 🔥 NOVO: Limpar cache do ApplicationContext para forçar nova busca da assinatura
+        try {
+            $context = app(ApplicationContext::class);
+            if ($context->isInitialized()) {
+                $context->limparCacheAssinatura();
+                Log::debug('CriarAssinaturaUseCase - Cache de assinatura limpo no ApplicationContext', [
+                    'empresa_id' => $empresaId,
+                    'assinatura_id' => $assinaturaSalva->id,
+                ]);
+            }
+        } catch (\Exception $e) {
+            // Não falhar se não conseguir limpar cache
+            Log::warning('CriarAssinaturaUseCase - Erro ao limpar cache do ApplicationContext', [
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         return $assinaturaSalva;
     }

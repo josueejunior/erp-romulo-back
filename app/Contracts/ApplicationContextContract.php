@@ -98,6 +98,13 @@ interface ApplicationContextContract
      * @return int|null
      */
     public function getTenantIdOrNull(): ?int;
+    
+    /**
+     * 🔥 NOVO: Limpar cache de assinatura (útil quando assinatura é criada/atualizada)
+     * 
+     * Força uma nova busca da assinatura na próxima verificação
+     */
+    public function limparCacheAssinatura(): void;
 }
 
 

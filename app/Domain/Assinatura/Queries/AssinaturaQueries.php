@@ -144,6 +144,9 @@ final class AssinaturaQueries
 
     /**
      * Query base para assinaturas válidas (não canceladas/expiradas)
+     * 
+     * 🔥 IMPORTANTE: Inclui status 'ativa', 'trial', 'pendente', 'aguardando_pagamento'
+     * Exclui apenas 'cancelada' e 'expirada'
      */
     private static function baseQueryValida(): Builder
     {
