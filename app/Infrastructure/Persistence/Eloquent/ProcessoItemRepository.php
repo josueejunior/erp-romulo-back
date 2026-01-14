@@ -99,7 +99,16 @@ class ProcessoItemRepository implements ProcessoItemRepositoryInterface
 
     public function criar(ProcessoItem $processoItem): ProcessoItem
     {
-        $model = ProcessoItemModel::create($this->toArray($processoItem));
+        // Buscar empresa_id do processo relacionado
+        $processoModel = \App\Modules\Processo\Models\Processo::find($processoItem->processoId);
+        if (!$processoModel) {
+            throw new \DomainException('Processo não encontrado para criar item.');
+        }
+        
+        $data = $this->toArray($processoItem);
+        $data['empresa_id'] = $processoModel->empresa_id;
+        
+        $model = ProcessoItemModel::create($data);
         return $this->toDomain($model->fresh());
     }
 
