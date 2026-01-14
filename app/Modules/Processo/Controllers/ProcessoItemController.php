@@ -238,12 +238,12 @@ class ProcessoItemController extends BaseApiController
      * 
      * ✅ DDD: Usa Use Case
      */
-    public function destroy(Request $request, $id)
+    public function destroy(Request $request)
     {
         try {
             $route = $request->route();
             $processoId = (int) $route->parameter('processo');
-            $itemId = (int) $id;
+            $itemId = (int) $route->parameter('item');
             
             if (!$processoId) {
                 return response()->json(['message' => 'Processo não fornecido'], 400);
@@ -267,7 +267,7 @@ class ProcessoItemController extends BaseApiController
             \Log::error('Erro ao excluir item de processo', [
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
-                'item_id' => $id,
+                'item_id' => $itemId ?? null,
             ]);
             return response()->json(['message' => $e->getMessage()], 500);
         }
