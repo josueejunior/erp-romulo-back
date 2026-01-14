@@ -341,7 +341,7 @@ final class CadastrarEmpresaPublicamenteUseCase
                     'user_id' => $tenantResult['admin_user']->id,
                     'plano_id' => $planoGratuito->id,
                     'plano_nome' => $planoGratuito->nome,
-                    'plano_preco_mensal' => $planoGratuito->preco_mensal,
+                    'plano_preco_mensal' => $planoGratuito->precoMensal,
                     'status' => 'ativa',
                     'data_inicio' => $dataInicio->toDateString(),
                     'data_fim' => $dataFimTrial->toDateString(),

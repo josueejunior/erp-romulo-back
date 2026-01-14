@@ -458,7 +458,7 @@ class OnboardingController extends BaseApiController
                 'empresa_id' => $empresaId,
                 'plano_id' => $planoGratuito->id,
                 'plano_nome' => $planoGratuito->nome,
-                'plano_preco_mensal' => $planoGratuito->preco_mensal,
+                'plano_preco_mensal' => $planoGratuito->precoMensal,
                 'status' => 'ativa',
                 'data_fim' => $dataFim->toDateString(),
             ]);
