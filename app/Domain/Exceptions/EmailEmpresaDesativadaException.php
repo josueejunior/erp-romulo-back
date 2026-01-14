@@ -38,3 +38,4 @@ final class EmailEmpresaDesativadaException extends DomainException
 }
 
 
+

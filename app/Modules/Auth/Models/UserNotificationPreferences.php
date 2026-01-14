@@ -84,3 +84,4 @@ class UserNotificationPreferences extends Model
     }
 }
 
+

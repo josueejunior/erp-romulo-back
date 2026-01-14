@@ -10,10 +10,10 @@ use Illuminate\Support\Facades\DB;
  * Seeder para criar planos de assinatura
  * 
  * Este seeder cria planos padrão para o sistema:
- * - Essencial: Operação completa, mas sem visão estratégica
- * - Profissional: Visão estratégica e previsibilidade
- * - Master: Controle total e escalabilidade
- * - Ilimitado: Sem limites, máxima escalabilidade
+ * - Essencial: R$ 97,30/mês - Operação completa, mas sem visão estratégica
+ * - Profissional: R$ 120,40/mês - Visão estratégica e previsibilidade
+ * - Master: R$ 160,30/mês - Controle total e escalabilidade
+ * - Ilimitado: R$ 300,30/mês - Sem limites, máxima escalabilidade
  */
 class PlanosSeeder extends Seeder
 {
@@ -32,29 +32,9 @@ class PlanosSeeder extends Seeder
 
         $planos = [
             [
-                'nome' => 'Gratuito',
-                'descricao' => 'Plano de teste gratuito para conhecer o sistema. Ideal para avaliação inicial.',
-                'preco_mensal' => 0.00,
-                'preco_anual' => null,
-                'limite_processos' => 2, // Limite reduzido para teste
-                'restricao_diaria' => true, // 1 processo por dia
-                'limite_usuarios' => 1, // Apenas 1 usuário
-                'limite_armazenamento_mb' => null,
-                'recursos_disponiveis' => [
-                    'cadastros_completos',
-                    'processos_todas_etapas',
-                    'itens_processo',
-                    'formacao_precos',
-                    'execucao',
-                    'controle_operacional',
-                ],
-                'ativo' => true,
-                'ordem' => 0, // Primeiro na lista
-            ],
-            [
                 'nome' => 'Essencial',
                 'descricao' => 'Operação completa, mas sem visão estratégica. Ideal para empresas que estão começando.',
-                'preco_mensal' => 97.00,
+                'preco_mensal' => 97.30,
                 'preco_anual' => null,
                 'limite_processos' => 5,
                 'restricao_diaria' => true, // 1 processo por dia
@@ -74,7 +54,7 @@ class PlanosSeeder extends Seeder
             [
                 'nome' => 'Profissional',
                 'descricao' => 'Visão estratégica e previsibilidade. Inclui todos os recursos do Essencial, além de calendários, relatórios e funcionalidades avançadas.',
-                'preco_mensal' => 120.00,
+                'preco_mensal' => 120.40,
                 'preco_anual' => null,
                 'limite_processos' => 20,
                 'restricao_diaria' => true, // 1 processo por dia
@@ -99,7 +79,7 @@ class PlanosSeeder extends Seeder
             [
                 'nome' => 'Master',
                 'descricao' => 'Controle total e escalabilidade. Inclui todas as funcionalidades do Profissional, além de gestão financeira completa e histórico imutável.',
-                'preco_mensal' => 160.00,
+                'preco_mensal' => 160.30,
                 'preco_anual' => null,
                 'limite_processos' => 30,
                 'restricao_diaria' => false, // Sem restrição diária
@@ -126,7 +106,7 @@ class PlanosSeeder extends Seeder
             [
                 'nome' => 'Ilimitado',
                 'descricao' => 'Sem limites, máxima escalabilidade. Inclui todas as funcionalidades do Master, com processos e usuários ilimitados.',
-                'preco_mensal' => 299.00,
+                'preco_mensal' => 300.30,
                 'preco_anual' => null,
                 'limite_processos' => null, // Ilimitado
                 'restricao_diaria' => false, // Sem restrição diária
