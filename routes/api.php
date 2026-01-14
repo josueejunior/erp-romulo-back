@@ -171,9 +171,9 @@ Route::prefix('v1')->group(function () {
             Route::put('/notificacoes', [\App\Http\Controllers\Public\ConfiguracoesController::class, 'atualizarNotificacoes']);
         });
         
-        // Buscar cupom automático de afiliado (protegido por onboarding - só após tutorial concluído)
-        Route::get('/planos/cupom-automatico', [\App\Http\Controllers\Public\AfiliadoReferenciaController::class, 'buscarCupomAutomatico'])
-            ->middleware(['onboarding.completo']);
+        // Buscar cupom automático de afiliado (opcional - pode não existir)
+        // 🔥 CORREÇÃO: Removido middleware onboarding.completo - rota é opcional e não deve bloquear
+        Route::get('/planos/cupom-automatico', [\App\Http\Controllers\Public\AfiliadoReferenciaController::class, 'buscarCupomAutomatico']);
         
         // Rotas de comissões para afiliados (autenticadas)
         Route::prefix('afiliado')->middleware(['auth:api'])->group(function () {

@@ -69,6 +69,32 @@ class CheckOnboarding
             ]);
         }
 
+        // 🔥 NOVO: Verificar se tem assinatura ativa - se tiver, permitir acesso mesmo sem concluir tutorial
+        try {
+            $empresaId = $user->empresa_ativa_id ?? null;
+            if ($empresaId) {
+                // Usar ApplicationContext para verificar assinatura (já está inicializado)
+                $context = app(\App\Contracts\ApplicationContextContract::class);
+                if ($context->isInitialized()) {
+                    $resultadoAssinatura = $context->validateAssinatura();
+                    if ($resultadoAssinatura['pode_acessar'] ?? false) {
+                        Log::info('CheckOnboarding - Assinatura ativa encontrada, permitindo acesso mesmo sem tutorial concluído', [
+                            'user_id' => $user->id,
+                            'empresa_id' => $empresaId,
+                            'route' => $request->path(),
+                        ]);
+                        return $next($request);
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            // Se der erro ao verificar assinatura, continuar com verificação de onboarding
+            Log::debug('CheckOnboarding - Erro ao verificar assinatura, continuando com verificação de onboarding', [
+                'error' => $e->getMessage(),
+                'user_id' => $user->id,
+            ]);
+        }
+
         // Para planos gratuitos, verificar se onboarding está concluído
         $dto = new BuscarProgressoDTO(
             tenantId: tenancy()->tenant?->id ?? null,
