@@ -191,7 +191,27 @@ class AssinaturaRepository implements AssinaturaRepositoryInterface
      */
     public function buscarAssinaturaAtualPorEmpresa(int $empresaId): ?Assinatura
     {
+        \Log::info('🔥 AssinaturaRepository::buscarAssinaturaAtualPorEmpresa - Buscando assinatura', [
+            'empresa_id' => $empresaId,
+        ]);
+        
         $model = AssinaturaQueries::assinaturaAtualPorEmpresa($empresaId);
+        
+        if ($model) {
+            \Log::info('✅ AssinaturaRepository::buscarAssinaturaAtualPorEmpresa - Assinatura encontrada', [
+                'empresa_id' => $empresaId,
+                'assinatura_id' => $model->id,
+                'status' => $model->status,
+                'plano_id' => $model->plano_id,
+                'data_fim' => $model->data_fim?->toDateString(),
+                'user_id' => $model->user_id,
+            ]);
+        } else {
+            \Log::warning('❌ AssinaturaRepository::buscarAssinaturaAtualPorEmpresa - Assinatura NÃO encontrada', [
+                'empresa_id' => $empresaId,
+            ]);
+        }
+        
         return $model ? $this->toDomain($model) : null;
     }
 

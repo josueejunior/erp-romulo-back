@@ -87,7 +87,12 @@ class CheckSubscription
         }
         
         // Verificar assinatura
-        Log::info('🔍 CheckSubscription::handle - Verificando assinatura');
+        Log::info('🔍 CheckSubscription::handle - Verificando assinatura', [
+            'user_id' => $this->context->getUser()?->id,
+            'empresa_id' => $this->context->getEmpresaIdOrNull(),
+            'tenant_id' => $this->context->getTenantIdOrNull(),
+        ]);
+        
         $resultado = $this->context->validateAssinatura();
         
         Log::info('🔍 CheckSubscription::handle - Resultado da validação', [
@@ -95,15 +100,29 @@ class CheckSubscription
             'code' => $resultado['code'] ?? null,
             'message' => $resultado['message'] ?? null,
             'user_id' => $this->context->getUser()?->id,
+            'empresa_id' => $this->context->getEmpresaIdOrNull(),
         ]);
         
         if (!$resultado['pode_acessar']) {
-            Log::warning('❌ CheckSubscription::handle - Acesso negado', [
+            // 🔥 DEBUG: Buscar assinatura diretamente para ver o que está acontecendo
+            $assinaturaDireta = $this->context->assinatura();
+            $empresaId = $this->context->getEmpresaIdOrNull();
+            
+            Log::warning('❌ CheckSubscription::handle - Acesso negado - DEBUG COMPLETO', [
                 'user_id' => $this->context->getUser()?->id,
+                'empresa_id' => $empresaId,
+                'tenant_id' => $this->context->getTenantIdOrNull(),
                 'code' => $resultado['code'] ?? null,
                 'message' => $resultado['message'] ?? null,
                 'path' => $path,
                 'route_name' => $routeName,
+                'assinatura_direta' => $assinaturaDireta ? [
+                    'id' => $assinaturaDireta->id,
+                    'status' => $assinaturaDireta->status,
+                    'plano_id' => $assinaturaDireta->planoId,
+                    'data_fim' => $assinaturaDireta->dataFim?->toDateString(),
+                    'empresa_id' => $assinaturaDireta->empresaId,
+                ] : null,
             ]);
             
             return response()->json([

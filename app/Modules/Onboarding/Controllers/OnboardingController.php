@@ -436,16 +436,51 @@ class OnboardingController extends BaseApiController
             );
 
             // Criar assinatura trial
+            Log::info('🔥 OnboardingController::criarPlanoGratuito3Dias - Criando assinatura trial', [
+                'user_id' => $user->id,
+                'tenant_id' => $tenantId,
+                'empresa_id' => $empresaId,
+                'plano_id' => $planoGratuito->id,
+                'plano_nome' => $planoGratuito->nome,
+                'plano_preco_mensal' => $planoGratuito->preco_mensal,
+                'status' => 'ativa',
+                'data_fim' => $dataFim->toDateString(),
+            ]);
+            
             $assinaturaTrial = $this->criarAssinaturaUseCase->executar($assinaturaTrialDTO);
 
-            Log::info('OnboardingController::criarPlanoGratuito3Dias - Trial de 3 dias criado com sucesso', [
+            Log::info('🔥 OnboardingController::criarPlanoGratuito3Dias - Trial de 3 dias criado com sucesso', [
                 'user_id' => $user->id,
                 'tenant_id' => $tenantId,
                 'empresa_id' => $empresaId,
                 'assinatura_id' => $assinaturaTrial->id,
                 'plano_id' => $planoGratuito->id,
+                'status' => $assinaturaTrial->status,
                 'data_fim' => $dataFim->toDateString(),
             ]);
+            
+            // 🔥 NOVO: Verificar se assinatura foi realmente criada e pode ser encontrada
+            try {
+                $assinaturaVerificada = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($empresaId);
+                if ($assinaturaVerificada) {
+                    Log::info('✅ OnboardingController::criarPlanoGratuito3Dias - Assinatura verificada após criação', [
+                        'empresa_id' => $empresaId,
+                        'assinatura_id' => $assinaturaVerificada->id,
+                        'status' => $assinaturaVerificada->status,
+                        'plano_id' => $assinaturaVerificada->planoId,
+                    ]);
+                } else {
+                    Log::error('❌ OnboardingController::criarPlanoGratuito3Dias - Assinatura NÃO encontrada após criação!', [
+                        'empresa_id' => $empresaId,
+                        'assinatura_id_criada' => $assinaturaTrial->id,
+                    ]);
+                }
+            } catch (\Exception $e) {
+                Log::error('❌ OnboardingController::criarPlanoGratuito3Dias - Erro ao verificar assinatura após criação', [
+                    'empresa_id' => $empresaId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         } catch (\Exception $e) {
             // Não falhar a conclusão do tutorial se houver erro ao criar trial
             Log::error('OnboardingController::criarPlanoGratuito3Dias - Erro ao criar trial', [

@@ -307,15 +307,52 @@ final class CadastrarEmpresaPublicamenteUseCase
                     );
                     
                     // Criar assinatura trial
+                    Log::info('🔥 CadastrarEmpresaPublicamenteUseCase - Criando assinatura trial', [
+                        'tenant_id' => $tenantResult['tenant']->id,
+                        'empresa_id' => $tenantResult['empresa']->id,
+                        'user_id' => $tenantResult['admin_user']->id,
+                        'plano_id' => $planoGratuito->id,
+                        'plano_nome' => $planoGratuito->nome,
+                        'plano_preco_mensal' => $planoGratuito->preco_mensal,
+                        'status' => 'ativa',
+                        'data_fim' => $dataFimTrial->toDateString(),
+                    ]);
+                    
                     $assinaturaTrial = $this->criarAssinaturaUseCase->executar($assinaturaTrialDTO);
                     $planoTrial = $planoGratuito;
                     
-                    Log::info('CadastrarEmpresaPublicamenteUseCase - Trial automático criado com sucesso', [
+                    Log::info('🔥 CadastrarEmpresaPublicamenteUseCase - Trial automático criado com sucesso', [
                         'tenant_id' => $tenantResult['tenant']->id,
+                        'empresa_id' => $tenantResult['empresa']->id,
+                        'user_id' => $tenantResult['admin_user']->id,
                         'assinatura_id' => $assinaturaTrial->id,
                         'plano_id' => $planoGratuito->id,
+                        'status' => $assinaturaTrial->status,
                         'data_fim' => $dataFimTrial->toDateString(),
                     ]);
+                    
+                    // 🔥 NOVO: Verificar se assinatura foi realmente criada e pode ser encontrada
+                    try {
+                        $assinaturaVerificada = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($tenantResult['empresa']->id);
+                        if ($assinaturaVerificada) {
+                            Log::info('✅ CadastrarEmpresaPublicamenteUseCase - Assinatura verificada após criação', [
+                                'empresa_id' => $tenantResult['empresa']->id,
+                                'assinatura_id' => $assinaturaVerificada->id,
+                                'status' => $assinaturaVerificada->status,
+                                'plano_id' => $assinaturaVerificada->planoId,
+                            ]);
+                        } else {
+                            Log::error('❌ CadastrarEmpresaPublicamenteUseCase - Assinatura NÃO encontrada após criação!', [
+                                'empresa_id' => $tenantResult['empresa']->id,
+                                'assinatura_id_criada' => $assinaturaTrial->id,
+                            ]);
+                        }
+                    } catch (\Exception $e) {
+                        Log::error('❌ CadastrarEmpresaPublicamenteUseCase - Erro ao verificar assinatura após criação', [
+                            'empresa_id' => $tenantResult['empresa']->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
                 } else {
                     Log::warning('CadastrarEmpresaPublicamenteUseCase - Plano gratuito não encontrado, trial não será criado', [
                         'tenant_id' => $tenantResult['tenant']->id,
