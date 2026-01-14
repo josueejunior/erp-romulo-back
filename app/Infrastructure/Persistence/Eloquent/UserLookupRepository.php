@@ -187,17 +187,6 @@ class UserLookupRepository implements UserLookupRepositoryInterface
         $perPage = $filtros['per_page'] ?? 15;
         $page = $filtros['page'] ?? 1;
         
-        // 🔥 LOG: Buscar email específico para debug
-        $emailProcurado = 'camargo.representacoesbr@gmail.com';
-        $emailProcuradoLower = strtolower($emailProcurado);
-        $existeNaQuery = (clone $query)->whereRaw('LOWER(email) = ?', [$emailProcuradoLower])->exists();
-        Log::info('UserLookupRepository::buscarComFiltros - Verificando email específico', [
-            'email_procurado' => $emailProcurado,
-            'email_lower' => $emailProcuradoLower,
-            'existe_na_query' => $existeNaQuery,
-            'sql_aproximado' => $query->toSql(),
-        ]);
-        
         $paginator = $query->orderBy('email')
             ->orderBy('tenant_id')
             ->paginate($perPage, ['*'], 'page', $page);

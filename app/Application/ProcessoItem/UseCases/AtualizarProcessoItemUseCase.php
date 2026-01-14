@@ -10,9 +10,12 @@ use App\Domain\Exceptions\NotFoundException;
 use App\Domain\Exceptions\ProcessoEmExecucaoException;
 use App\Domain\Exceptions\EntidadeNaoPertenceException;
 use DomainException;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Use Case: Atualizar Item de Processo
+ * 
+ * 🔒 ROBUSTEZ: Usa transação para garantir atomicidade da atualização
  */
 class AtualizarProcessoItemUseCase
 {
@@ -60,50 +63,55 @@ class AtualizarProcessoItemUseCase
             throw new ProcessoEmExecucaoException('Não é possível editar itens de processos em execução.', $dto->processoId);
         }
         
-        // Criar nova instância com valores atualizados (imutabilidade)
-        $processoItemAtualizado = new ProcessoItem(
-            id: $dto->processoItemId,
-            processoId: $dto->processoId,
-            empresaId: $itemExistente->empresaId,
-            fornecedorId: $dto->fornecedorId ?? $itemExistente->fornecedorId,
-            transportadoraId: $dto->transportadoraId ?? $itemExistente->transportadoraId,
-            numeroItem: $dto->numeroItem ?? $itemExistente->numeroItem,
-            codigoInterno: $dto->codigoInterno ?? $itemExistente->codigoInterno,
-            quantidade: $dto->quantidade ?? $itemExistente->quantidade,
-            unidade: $dto->unidade ?? $itemExistente->unidade,
-            especificacaoTecnica: $dto->especificacaoTecnica ?? $itemExistente->especificacaoTecnica,
-            marcaModeloReferencia: $dto->marcaModeloReferencia ?? $itemExistente->marcaModeloReferencia,
-            observacoesEdital: $dto->observacoesEdital ?? $itemExistente->observacoesEdital,
-            exigeAtestado: $dto->exigeAtestado ?? $itemExistente->exigeAtestado,
-            quantidadeMinimaAtestado: $dto->quantidadeMinimaAtestado ?? $itemExistente->quantidadeMinimaAtestado,
-            quantidadeAtestadoCapTecnica: $dto->quantidadeAtestadoCapTecnica ?? $itemExistente->quantidadeAtestadoCapTecnica,
-            valorEstimado: $dto->valorEstimado ?? $itemExistente->valorEstimado,
-            valorEstimadoTotal: $itemExistente->calcularValorEstimadoTotal(), // Recalcular baseado nos valores atualizados
-            fonteValor: $itemExistente->fonteValor,
-            valorMinimoVenda: $itemExistente->valorMinimoVenda,
-            valorFinalSessao: $itemExistente->valorFinalSessao,
-            valorArrematado: $itemExistente->valorArrematado,
-            dataDisputa: $itemExistente->dataDisputa,
-            valorNegociado: $itemExistente->valorNegociado,
-            classificacao: $itemExistente->classificacao,
-            statusItem: $itemExistente->statusItem,
-            situacaoFinal: $itemExistente->situacaoFinal,
-            chanceArremate: $itemExistente->chanceArremate,
-            chancePercentual: $itemExistente->chancePercentual,
-            temChance: $itemExistente->temChance,
-            lembretes: $itemExistente->lembretes,
-            observacoes: $dto->observacoes ?? $itemExistente->observacoes,
-            valorVencido: $itemExistente->valorVencido,
-            valorEmpenhado: $itemExistente->valorEmpenhado,
-            valorFaturado: $itemExistente->valorFaturado,
-            valorPago: $itemExistente->valorPago,
-            saldoAberto: $itemExistente->saldoAberto,
-            lucroBruto: $itemExistente->lucroBruto,
-            lucroLiquido: $itemExistente->lucroLiquido,
-        );
-        
-        // Persistir alterações
-        return $this->processoItemRepository->atualizar($processoItemAtualizado);
+        // 🔒 ROBUSTEZ: Usar transação para garantir atomicidade
+        // Embora neste caso específico haja apenas uma operação de escrita,
+        // usar transação garante consistência e facilita futuras extensões
+        return DB::transaction(function () use ($dto, $itemExistente) {
+            // Criar nova instância com valores atualizados (imutabilidade)
+            $processoItemAtualizado = new ProcessoItem(
+                id: $dto->processoItemId,
+                processoId: $dto->processoId,
+                empresaId: $itemExistente->empresaId,
+                fornecedorId: $dto->fornecedorId ?? $itemExistente->fornecedorId,
+                transportadoraId: $dto->transportadoraId ?? $itemExistente->transportadoraId,
+                numeroItem: $dto->numeroItem ?? $itemExistente->numeroItem,
+                codigoInterno: $dto->codigoInterno ?? $itemExistente->codigoInterno,
+                quantidade: $dto->quantidade ?? $itemExistente->quantidade,
+                unidade: $dto->unidade ?? $itemExistente->unidade,
+                especificacaoTecnica: $dto->especificacaoTecnica ?? $itemExistente->especificacaoTecnica,
+                marcaModeloReferencia: $dto->marcaModeloReferencia ?? $itemExistente->marcaModeloReferencia,
+                observacoesEdital: $dto->observacoesEdital ?? $itemExistente->observacoesEdital,
+                exigeAtestado: $dto->exigeAtestado ?? $itemExistente->exigeAtestado,
+                quantidadeMinimaAtestado: $dto->quantidadeMinimaAtestado ?? $itemExistente->quantidadeMinimaAtestado,
+                quantidadeAtestadoCapTecnica: $dto->quantidadeAtestadoCapTecnica ?? $itemExistente->quantidadeAtestadoCapTecnica,
+                valorEstimado: $dto->valorEstimado ?? $itemExistente->valorEstimado,
+                valorEstimadoTotal: $itemExistente->calcularValorEstimadoTotal(), // Recalcular baseado nos valores atualizados
+                fonteValor: $itemExistente->fonteValor,
+                valorMinimoVenda: $itemExistente->valorMinimoVenda,
+                valorFinalSessao: $itemExistente->valorFinalSessao,
+                valorArrematado: $itemExistente->valorArrematado,
+                dataDisputa: $itemExistente->dataDisputa,
+                valorNegociado: $itemExistente->valorNegociado,
+                classificacao: $itemExistente->classificacao,
+                statusItem: $itemExistente->statusItem,
+                situacaoFinal: $itemExistente->situacaoFinal,
+                chanceArremate: $itemExistente->chanceArremate,
+                chancePercentual: $itemExistente->chancePercentual,
+                temChance: $itemExistente->temChance,
+                lembretes: $itemExistente->lembretes,
+                observacoes: $dto->observacoes ?? $itemExistente->observacoes,
+                valorVencido: $itemExistente->valorVencido,
+                valorEmpenhado: $itemExistente->valorEmpenhado,
+                valorFaturado: $itemExistente->valorFaturado,
+                valorPago: $itemExistente->valorPago,
+                saldoAberto: $itemExistente->saldoAberto,
+                lucroBruto: $itemExistente->lucroBruto,
+                lucroLiquido: $itemExistente->lucroLiquido,
+            );
+            
+            // Persistir alterações
+            return $this->processoItemRepository->atualizar($processoItemAtualizado);
+        });
     }
 }
 

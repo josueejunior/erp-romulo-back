@@ -107,18 +107,6 @@ class UserReadRepository implements UserReadRepositoryInterface
                     $q->whereHas('empresas', fn($e) => $e->where('empresas.id', $filtros['empresa_id']));
                 });
 
-            // 🔥 LOG: Verificar se o email específico existe antes de buscar todos
-            $emailProcurado = 'camargo.representacoesbr@gmail.com';
-            $emailProcuradoLower = strtolower($emailProcurado);
-            $existeNaQuery = (clone $query)->whereRaw('LOWER(email) = ?', [$emailProcuradoLower])->exists();
-            Log::info('UserReadRepository::listarSemPaginacao - Verificando email específico', [
-                'email_procurado' => $emailProcurado,
-                'email_lower' => $emailProcuradoLower,
-                'existe_na_query' => $existeNaQuery,
-                'tenant_id' => $tenantId,
-                'database' => $databaseName,
-            ]);
-
             $users = $query->orderBy('name')->get();
             
             Log::info('UserReadRepository::listarSemPaginacao - Usuários encontrados', [
