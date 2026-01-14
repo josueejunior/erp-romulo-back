@@ -269,10 +269,16 @@ final class CadastrarEmpresaPublicamenteUseCase
             try {
                 // Buscar plano gratuito (preco_mensal = 0)
                 $planosAtivos = $this->planoRepository->listar(['ativo' => true]);
-                $planoGratuito = $planosAtivos->first(function ($plano) {
+                $planoGratuito = null;
+                
+                // Iterar sobre os planos para encontrar o gratuito
+                foreach ($planosAtivos as $plano) {
                     $precoMensal = $plano->precoMensal ?? 0;
-                    return $precoMensal == 0 || $precoMensal === null;
-                });
+                    if ($precoMensal == 0 || $precoMensal === null) {
+                        $planoGratuito = $plano;
+                        break;
+                    }
+                }
                 
                 if ($planoGratuito) {
                     Log::info('CadastrarEmpresaPublicamenteUseCase - Plano gratuito encontrado, criando trial automático', [
@@ -284,19 +290,21 @@ final class CadastrarEmpresaPublicamenteUseCase
                     $dataInicio = Carbon::now();
                     $dataFimTrial = $dataInicio->copy()->addDays(3);
                     
-                    // Criar DTO de assinatura trial
-                    $assinaturaTrialDTO = CriarAssinaturaDTO::fromArray([
-                        'user_id' => $tenantResult['admin_user']->id,
-                        'plano_id' => $planoGratuito->id,
-                        'status' => 'trial', // Status trial
-                        'data_inicio' => $dataInicio->toDateString(),
-                        'data_fim' => $dataFimTrial->toDateString(),
-                        'valor_pago' => 0,
-                        'metodo_pagamento' => 'gratuito',
-                        'observacoes' => 'Trial automático de 3 dias - criado no cadastro público',
-                        'tenant_id' => $tenantResult['tenant']->id,
-                        'empresa_id' => $tenantResult['empresa']->id,
-                    ]);
+                    // Criar DTO de assinatura trial usando construtor direto (mais seguro)
+                    $assinaturaTrialDTO = new CriarAssinaturaDTO(
+                        userId: $tenantResult['admin_user']->id,
+                        planoId: $planoGratuito->id,
+                        status: 'ativa', // 🔥 CORREÇÃO: Status 'ativa' para ser reconhecida como válida
+                        dataInicio: $dataInicio,
+                        dataFim: $dataFimTrial,
+                        valorPago: 0,
+                        metodoPagamento: 'gratuito',
+                        transacaoId: null,
+                        diasGracePeriod: 0,
+                        observacoes: 'Trial automático de 3 dias - criado no cadastro público',
+                        tenantId: $tenantResult['tenant']->id,
+                        empresaId: $tenantResult['empresa']->id,
+                    );
                     
                     // Criar assinatura trial
                     $assinaturaTrial = $this->criarAssinaturaUseCase->executar($assinaturaTrialDTO);

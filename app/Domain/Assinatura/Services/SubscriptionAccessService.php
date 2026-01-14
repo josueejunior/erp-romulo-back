@@ -52,13 +52,22 @@ final class SubscriptionAccessService
             || $path === 'api/v1/planos' 
             || preg_match('#^api/v1/planos(/\d+)?$#', $path);
         
-        $isExempt = $isDashboardRoute || $isPlanosRoute;
+        // 🔥 Onboarding deve ser acessível mesmo sem assinatura (para permitir tutorial)
+        $isOnboardingRoute = $routeName === 'onboarding.*'
+            || str_starts_with($routeName, 'onboarding.')
+            || $path === 'api/v1/onboarding/status'
+            || $path === 'api/v1/onboarding/concluir'
+            || $path === 'api/v1/onboarding/marcar-etapa'
+            || preg_match('#^api/v1/onboarding/#', $path);
+        
+        $isExempt = $isDashboardRoute || $isPlanosRoute || $isOnboardingRoute;
         
         Log::info('🔍 SubscriptionAccessService::isRouteExemptFromSubscriptionCheck', [
             'route_name' => $routeName,
             'path' => $path,
             'is_dashboard_route' => $isDashboardRoute,
             'is_planos_route' => $isPlanosRoute,
+            'is_onboarding_route' => $isOnboardingRoute ?? false,
             'is_exempt' => $isExempt,
         ]);
         
