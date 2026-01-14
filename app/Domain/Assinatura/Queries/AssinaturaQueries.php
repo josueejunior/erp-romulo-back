@@ -33,49 +33,9 @@ final class AssinaturaQueries
      */
     public static function assinaturaAtualPorEmpresa(int $empresaId): ?AssinaturaModel
     {
-        \Log::debug('🔥 AssinaturaQueries::assinaturaAtualPorEmpresa - Executando query', [
-            'empresa_id' => $empresaId,
-        ]);
-        
-        $query = self::baseQueryValida()
-            ->where('empresa_id', $empresaId);
-        
-        // 🔥 DEBUG: Log da query SQL
-        \Log::debug('🔥 AssinaturaQueries::assinaturaAtualPorEmpresa - Query SQL', [
-            'sql' => $query->toSql(),
-            'bindings' => $query->getBindings(),
-        ]);
-        
-        $result = $query->first();
-        
-        if ($result) {
-            \Log::info('✅ AssinaturaQueries::assinaturaAtualPorEmpresa - Resultado encontrado', [
-                'empresa_id' => $empresaId,
-                'assinatura_id' => $result->id,
-                'status' => $result->status,
-                'plano_id' => $result->plano_id,
-                'data_fim' => $result->data_fim?->toDateString(),
-            ]);
-        } else {
-            // 🔥 DEBUG: Verificar se há assinaturas com outros status
-            $todasAssinaturas = AssinaturaModel::where('empresa_id', $empresaId)
-                ->orderByDesc('data_fim')
-                ->orderByDesc('criado_em')
-                ->get(['id', 'status', 'plano_id', 'data_fim', 'empresa_id']);
-            
-            \Log::warning('❌ AssinaturaQueries::assinaturaAtualPorEmpresa - Nenhuma assinatura válida encontrada', [
-                'empresa_id' => $empresaId,
-                'total_assinaturas_empresa' => $todasAssinaturas->count(),
-                'assinaturas_encontradas' => $todasAssinaturas->map(fn($a) => [
-                    'id' => $a->id,
-                    'status' => $a->status,
-                    'plano_id' => $a->plano_id,
-                    'data_fim' => $a->data_fim?->toDateString(),
-                ])->toArray(),
-            ]);
-        }
-        
-        return $result;
+        return self::baseQueryValida()
+            ->where('empresa_id', $empresaId)
+            ->first();
     }
 
     /**

@@ -54,75 +54,27 @@ class CheckSubscription
         $routeName = $request->route()?->getName() ?? '';
         $method = $request->method();
 
-        Log::info('🔍 CheckSubscription::handle - Iniciando verificação', [
-            'path' => $path,
-            'route_name' => $routeName,
-            'method' => $method,
-            'url' => $request->fullUrl(),
-        ]);
-
         // Garantir que o contexto foi inicializado
         if (!$this->context->isInitialized()) {
-            Log::info('🔍 CheckSubscription::handle - Contexto não inicializado, bootstrapping');
             $this->context->bootstrap($request);
         }
         
-        // ✅ DDD: Usar Domain Service para verificar se rota está isenta de validação
+        // Usar Domain Service para verificar se rota está isenta de validação
         $isExempt = $this->subscriptionAccessService->isRouteExemptFromSubscriptionCheck($routeName, $path);
         
-        Log::info('🔍 CheckSubscription::handle - Verificação de isenção', [
-            'path' => $path,
-            'route_name' => $routeName,
-            'is_exempt' => $isExempt,
-            'user_id' => $this->context->getUser()?->id,
-        ]);
-        
         if ($isExempt) {
-            Log::info('✅ CheckSubscription::handle - Rota isenta de validação de assinatura', [
-                'user_id' => $this->context->getUser()?->id,
-                'route' => $routeName,
-                'path' => $path,
-            ]);
             return $next($request);
         }
         
         // Verificar assinatura
-        Log::info('🔍 CheckSubscription::handle - Verificando assinatura', [
-            'user_id' => $this->context->getUser()?->id,
-            'empresa_id' => $this->context->getEmpresaIdOrNull(),
-            'tenant_id' => $this->context->getTenantIdOrNull(),
-        ]);
-        
         $resultado = $this->context->validateAssinatura();
         
-        Log::info('🔍 CheckSubscription::handle - Resultado da validação', [
-            'pode_acessar' => $resultado['pode_acessar'] ?? false,
-            'code' => $resultado['code'] ?? null,
-            'message' => $resultado['message'] ?? null,
-            'user_id' => $this->context->getUser()?->id,
-            'empresa_id' => $this->context->getEmpresaIdOrNull(),
-        ]);
-        
         if (!$resultado['pode_acessar']) {
-            // 🔥 DEBUG: Buscar assinatura diretamente para ver o que está acontecendo
-            $assinaturaDireta = $this->context->assinatura();
-            $empresaId = $this->context->getEmpresaIdOrNull();
-            
-            Log::warning('❌ CheckSubscription::handle - Acesso negado - DEBUG COMPLETO', [
+            Log::warning('CheckSubscription::handle - Acesso negado', [
                 'user_id' => $this->context->getUser()?->id,
-                'empresa_id' => $empresaId,
-                'tenant_id' => $this->context->getTenantIdOrNull(),
+                'empresa_id' => $this->context->getEmpresaIdOrNull(),
                 'code' => $resultado['code'] ?? null,
-                'message' => $resultado['message'] ?? null,
                 'path' => $path,
-                'route_name' => $routeName,
-                'assinatura_direta' => $assinaturaDireta ? [
-                    'id' => $assinaturaDireta->id,
-                    'status' => $assinaturaDireta->status,
-                    'plano_id' => $assinaturaDireta->planoId,
-                    'data_fim' => $assinaturaDireta->dataFim?->toDateString(),
-                    'empresa_id' => $assinaturaDireta->empresaId,
-                ] : null,
             ]);
             
             return response()->json([
@@ -136,15 +88,12 @@ class CheckSubscription
 
         // Se pode acessar mas tem warning (grace period), adicionar headers
         if (isset($resultado['warning']) && $resultado['warning']) {
-            Log::info('⚠️ CheckSubscription::handle - Acesso permitido com warning (grace period)');
             return $next($request)->withHeaders([
                 'X-Subscription-Warning' => 'true',
                 'X-Subscription-Expired-Days' => $resultado['warning']['dias_expirado'] ?? 0,
             ]);
         }
 
-        // Tudo OK, permitir acesso
-        Log::info('✅ CheckSubscription::handle - Acesso permitido');
         return $next($request);
     }
 }

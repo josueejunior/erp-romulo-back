@@ -701,17 +701,6 @@ class ApplicationContext implements ApplicationContextContract
             // 🔥 NOVO: Buscar assinatura da empresa, não do usuário
             $assinatura = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($this->empresaId);
             
-            Log::info('🔥 ApplicationContext::validateAssinatura - Busca de assinatura', [
-                'empresa_id' => $this->empresaId,
-                'user_id' => $this->user?->id,
-                'tenant_id' => $this->tenantId,
-                'assinatura_encontrada' => $assinatura !== null,
-                'assinatura_id' => $assinatura?->id,
-                'assinatura_status' => $assinatura?->status,
-                'assinatura_data_fim' => $assinatura?->dataFim?->toDateString(),
-                'plano_id' => $assinatura?->planoId,
-                'cache_limpo' => $this->assinaturaCache === null,
-            ]);
             
             if (!$assinatura) {
                 Log::warning('ApplicationContext::validateAssinatura - Assinatura não encontrada', [
@@ -761,14 +750,6 @@ class ApplicationContext implements ApplicationContextContract
                     'warning' => true,
                     'dias_expirado' => $diasExpirado,
                 ] : null;
-                
-                Log::info('✅ ApplicationContext::validateAssinatura - Assinatura ATIVA, permitindo acesso', [
-                    'empresa_id' => $this->empresaId,
-                    'assinatura_id' => $assinatura->id,
-                    'status' => $assinatura->status,
-                    'dias_restantes' => $diasRestantes,
-                    'esta_no_grace_period' => $estaNoGracePeriod,
-                ]);
                 
                 $this->assinaturaCache = [
                     'pode_acessar' => true,

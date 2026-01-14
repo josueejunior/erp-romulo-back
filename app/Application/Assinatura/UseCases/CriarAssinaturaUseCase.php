@@ -110,29 +110,7 @@ class CriarAssinaturaUseCase
         );
 
         // Salvar usando repository
-        Log::info('🔥 CriarAssinaturaUseCase - Salvando assinatura no banco', [
-            'user_id' => $dto->userId,
-            'empresa_id' => $empresaId,
-            'plano_id' => $dto->planoId,
-            'status' => $dto->status,
-            'data_inicio' => $dto->dataInicio?->toDateString(),
-            'data_fim' => $dto->dataFim?->toDateString(),
-            'valor_pago' => $valorPago,
-        ]);
-        
         $assinaturaSalva = $this->assinaturaRepository->salvar($assinatura);
-        
-        Log::info('🔥 CriarAssinaturaUseCase - Assinatura salva com sucesso', [
-            'assinatura_id' => $assinaturaSalva->id,
-            'user_id' => $dto->userId,
-            'empresa_id' => $empresaId,
-            'plano_id' => $plano->id,
-            'plano_nome' => $plano->nome,
-            'plano_preco_mensal' => $plano->preco_mensal,
-            'status' => $assinaturaSalva->status,
-            'data_inicio' => $assinaturaSalva->dataInicio?->toDateString(),
-            'data_fim' => $assinaturaSalva->dataFim?->toDateString(),
-        ]);
 
         // Se tenant foi fornecido e for a primeira assinatura ou se for ativa, atualizar tenant (compatibilidade)
         if ($tenantModel && (!$tenantModel->assinatura_atual_id || $dto->status === 'ativa')) {
@@ -141,12 +119,6 @@ class CriarAssinaturaUseCase
                 'assinatura_atual_id' => $assinaturaSalva->id,
             ]);
 
-            Log::info('🔥 CriarAssinaturaUseCase - Tenant atualizado com assinatura', [
-                'user_id' => $dto->userId,
-                'tenant_id' => $dto->tenantId,
-                'assinatura_id' => $assinaturaSalva->id,
-                'plano_id' => $plano->id,
-            ]);
         }
 
         // Buscar email do usuário para notificação
@@ -168,29 +140,14 @@ class CriarAssinaturaUseCase
             )
         );
 
-        // 🔥 NOVO: Limpar cache do ApplicationContext para forçar nova busca da assinatura
+        // Limpar cache do ApplicationContext para forçar nova busca da assinatura
         try {
             $context = app(ApplicationContext::class);
             if ($context->isInitialized()) {
                 $context->limparCacheAssinatura();
-                Log::info('🔥 CriarAssinaturaUseCase - Cache de assinatura limpo no ApplicationContext', [
-                    'empresa_id' => $empresaId,
-                    'assinatura_id' => $assinaturaSalva->id,
-                    'context_initialized' => true,
-                ]);
-            } else {
-                Log::info('🔥 CriarAssinaturaUseCase - ApplicationContext não inicializado, cache não limpo', [
-                    'empresa_id' => $empresaId,
-                    'assinatura_id' => $assinaturaSalva->id,
-                ]);
             }
         } catch (\Exception $e) {
             // Não falhar se não conseguir limpar cache
-            Log::warning('🔥 CriarAssinaturaUseCase - Erro ao limpar cache do ApplicationContext', [
-                'empresa_id' => $empresaId,
-                'assinatura_id' => $assinaturaSalva->id,
-                'error' => $e->getMessage(),
-            ]);
         }
 
         return $assinaturaSalva;
