@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
  * Seeder para criar planos de assinatura
  * 
  * Este seeder cria planos padrão para o sistema:
+ * - Gratuito: R$ 0,00/mês - Trial de 3 dias para novos usuários
  * - Essencial: R$ 277,14/mês - Operação completa, mas sem visão estratégica
  * - Profissional: R$ 342,86/mês - Visão estratégica e previsibilidade
  * - Master: R$ 457,14/mês - Controle total e escalabilidade
@@ -31,6 +32,26 @@ class PlanosSeeder extends Seeder
         }
 
         $planos = [
+            [
+                'nome' => 'Gratuito',
+                'descricao' => 'Plano gratuito de teste de 3 dias. Ideal para conhecer o sistema antes de contratar um plano pago.',
+                'preco_mensal' => 0,
+                'preco_anual' => null,
+                'limite_processos' => 3,
+                'restricao_diaria' => true, // 1 processo por dia
+                'limite_usuarios' => 1, // Apenas o administrador
+                'limite_armazenamento_mb' => 100, // 100MB de armazenamento
+                'recursos_disponiveis' => [
+                    'cadastros_completos', // órgãos/setores, fornecedores/transportadoras
+                    'processos_todas_etapas', // participação, disputa, julgamento e habilitação, execução
+                    'itens_processo', // cadastro completo, orçamentos, escolha de fornecedor
+                    'formacao_precos', // calculadora, preço mínimo
+                    'execucao', // contratos, AFs, empenhos, NF-e de entrada e saída
+                    'controle_operacional', // status dos itens, saldo por processo
+                ],
+                'ativo' => true,
+                'ordem' => 0,
+            ],
             [
                 'nome' => 'Essencial',
                 'descricao' => 'Operação completa, mas sem visão estratégica. Ideal para empresas que estão começando.',
@@ -149,11 +170,13 @@ class PlanosSeeder extends Seeder
             $this->command->info('');
             $this->command->info('Planos disponíveis:');
             foreach ($planos as $planoData) {
-                $precoMensal = number_format($planoData['preco_mensal'], 2, ',', '.');
+                $precoMensal = $planoData['preco_mensal'] > 0 
+                    ? 'R$ ' . number_format($planoData['preco_mensal'], 2, ',', '.') . '/mês'
+                    : 'Gratuito (Trial 3 dias)';
                 $limiteProcessos = $planoData['limite_processos'] ?? 'Ilimitado';
                 $limiteUsuarios = $planoData['limite_usuarios'] ?? 'Ilimitado';
                 $restricaoDiaria = $planoData['restricao_diaria'] ? '1 por dia' : 'Sem restrição';
-                $this->command->info("  • {$planoData['nome']}: R$ {$precoMensal}/mês - {$limiteProcessos} processos/mês - {$limiteUsuarios} usuários - {$restricaoDiaria}");
+                $this->command->info("  • {$planoData['nome']}: {$precoMensal} - {$limiteProcessos} processos/mês - {$limiteUsuarios} usuários - {$restricaoDiaria}");
             }
             $this->command->info('═══════════════════════════════════════════════════════');
             
