@@ -64,6 +64,7 @@ class AtualizarProcessoItemUseCase
         $processoItemAtualizado = new ProcessoItem(
             id: $dto->processoItemId,
             processoId: $dto->processoId,
+            empresaId: $itemExistente->empresaId,
             fornecedorId: $dto->fornecedorId ?? $itemExistente->fornecedorId,
             transportadoraId: $dto->transportadoraId ?? $itemExistente->transportadoraId,
             numeroItem: $dto->numeroItem ?? $itemExistente->numeroItem,

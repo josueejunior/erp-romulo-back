@@ -3,6 +3,7 @@
 namespace App\Application\ProcessoItem\UseCases;
 
 use App\Application\ProcessoItem\DTOs\CriarProcessoItemDTO;
+use App\Application\Shared\Traits\HasApplicationContext;
 use App\Domain\ProcessoItem\Entities\ProcessoItem;
 use App\Domain\ProcessoItem\Repositories\ProcessoItemRepositoryInterface;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
@@ -12,9 +13,12 @@ use DomainException;
 
 /**
  * Use Case: Criar Item de Processo
+ * 
+ * Usa o trait HasApplicationContext para resolver empresa_id de forma robusta.
  */
 class CriarProcessoItemUseCase
 {
+    use HasApplicationContext;
     public function __construct(
         private ProcessoItemRepositoryInterface $processoItemRepository,
         private ProcessoRepositoryInterface $processoRepository,
@@ -25,6 +29,9 @@ class CriarProcessoItemUseCase
      */
     public function executar(CriarProcessoItemDTO $dto): ProcessoItem
     {
+        // Resolver empresa_id usando o trait (fallbacks robustos)
+        $empresaId = $this->resolveEmpresaId($dto->empresaId ?? null);
+        
         // Buscar processo existente
         $processo = $this->processoRepository->buscarPorId($dto->processoId);
         
@@ -32,8 +39,8 @@ class CriarProcessoItemUseCase
             throw new NotFoundException('Processo', $dto->processoId);
         }
         
-        // Validar que o processo pertence à empresa
-        if ($processo->empresaId !== $dto->empresaId) {
+        // Validar que o processo pertence à empresa (no UseCase, não no repositório)
+        if ($processo->empresaId !== $empresaId) {
             throw new DomainException('Processo não pertence à empresa ativa.');
         }
         
@@ -59,10 +66,11 @@ class CriarProcessoItemUseCase
             ? round($dto->quantidade * $dto->valorEstimado, 2) 
             : 0.0;
         
-        // Criar entidade ProcessoItem
+        // Criar entidade ProcessoItem (empresaId vem do contexto, não é inferido)
         $processoItem = new ProcessoItem(
             id: null,
             processoId: $dto->processoId,
+            empresaId: $empresaId,
             fornecedorId: $dto->fornecedorId,
             transportadoraId: $dto->transportadoraId,
             numeroItem: (string) $numeroItem,

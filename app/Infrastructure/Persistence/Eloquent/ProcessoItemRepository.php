@@ -17,6 +17,7 @@ class ProcessoItemRepository implements ProcessoItemRepositoryInterface
         return new ProcessoItem(
             id: $model->id,
             processoId: $model->processo_id,
+            empresaId: $model->empresa_id,
             fornecedorId: $model->fornecedor_id,
             transportadoraId: $model->transportadora_id,
             numeroItem: $model->numero_item,
@@ -58,6 +59,7 @@ class ProcessoItemRepository implements ProcessoItemRepositoryInterface
     private function toArray(ProcessoItem $processoItem): array
     {
         return [
+            'empresa_id' => $processoItem->empresaId,
             'processo_id' => $processoItem->processoId,
             'fornecedor_id' => $processoItem->fornecedorId,
             'transportadora_id' => $processoItem->transportadoraId,
@@ -99,15 +101,7 @@ class ProcessoItemRepository implements ProcessoItemRepositoryInterface
 
     public function criar(ProcessoItem $processoItem): ProcessoItem
     {
-        // Buscar empresa_id do processo relacionado
-        $processoModel = \App\Modules\Processo\Models\Processo::find($processoItem->processoId);
-        if (!$processoModel) {
-            throw new \DomainException('Processo não encontrado para criar item.');
-        }
-        
         $data = $this->toArray($processoItem);
-        $data['empresa_id'] = $processoModel->empresa_id;
-        
         $model = ProcessoItemModel::create($data);
         return $this->toDomain($model->fresh());
     }

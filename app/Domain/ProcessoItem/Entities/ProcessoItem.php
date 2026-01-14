@@ -13,6 +13,7 @@ class ProcessoItem
     public function __construct(
         public readonly ?int $id,
         public readonly int $processoId,
+        public readonly int $empresaId,
         public readonly ?int $fornecedorId = null,
         public readonly ?int $transportadoraId = null,
         public readonly ?string $numeroItem = null,
@@ -56,6 +57,10 @@ class ProcessoItem
     {
         if ($this->processoId <= 0) {
             throw new DomainException('O ID do processo é obrigatório.');
+        }
+
+        if ($this->empresaId <= 0) {
+            throw new DomainException('O ID da empresa é obrigatório.');
         }
 
         if ($this->quantidade < 0) {
