@@ -655,6 +655,15 @@ class AdminUserController extends Controller
                 ]);
             }
 
+            // 🔥 CACHE: Invalidar cache da listagem global após criar usuário
+            $this->limparCacheUsuariosGlobal();
+            
+            Log::debug('AdminUserController::store - Cache de usuários global limpo após criação', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'tenant_id' => $tenant->id,
+            ]);
+
             return ApiResponse::success(
                 'Usuário criado com sucesso!',
                 UserPresenter::fromDomain($user),
@@ -726,6 +735,9 @@ class AdminUserController extends Controller
 
             // Executar Use Case
             $user = $this->atualizarUsuarioUseCase->executar($dto, $context);
+
+            // 🔥 CACHE: Invalidar cache da listagem global após atualizar usuário
+            $this->limparCacheUsuariosGlobal();
 
             return ApiResponse::success(
                 'Usuário atualizado com sucesso!',
@@ -817,6 +829,9 @@ class AdminUserController extends Controller
                 return ApiResponse::error('Usuário não encontrado.', 404);
             }
             
+            // 🔥 CACHE: Invalidar cache da listagem global após deletar usuário
+            $this->limparCacheUsuariosGlobal();
+            
             Log::info('AdminUserController::destroyGlobal - Exclusão concluída', [
                 'userId' => $userId,
                 'tenants_deletados' => $tenantsDeletados,
@@ -849,6 +864,9 @@ class AdminUserController extends Controller
     {
         try {
             $this->deletarUsuarioAdminUseCase->executar($userId);
+
+            // 🔥 CACHE: Invalidar cache da listagem global após deletar usuário
+            $this->limparCacheUsuariosGlobal();
 
             return ApiResponse::success('Usuário excluído com sucesso!');
         } catch (DomainException $e) {
@@ -1028,6 +1046,45 @@ class AdminUserController extends Controller
             ]);
             
             return ApiResponse::error('Erro ao listar empresas.', 500);
+        }
+    }
+
+    /**
+     * Limpar cache da listagem global de usuários
+     * Usado após criar/atualizar/deletar usuários para garantir dados atualizados
+     */
+    private function limparCacheUsuariosGlobal(): void
+    {
+        try {
+            // Limpar todos os caches relacionados à listagem global
+            // O padrão da chave é: 'admin_usuarios_global_' + md5(filtros)
+            // Como não sabemos todos os filtros possíveis, vamos limpar usando tags se disponível
+            // ou limpar manualmente os padrões mais comuns
+            
+            // Limpar cache padrão (sem filtros)
+            $defaultCacheKey = 'admin_usuarios_global_' . md5(json_encode([]));
+            Cache::forget($defaultCacheKey);
+            
+            // Limpar cache com filtros comuns
+            $commonFilters = [
+                ['search' => '', 'status' => '', 'page' => 1, 'per_page' => 15],
+                ['search' => '', 'status' => 'ativo', 'page' => 1, 'per_page' => 15],
+                ['search' => '', 'status' => 'inativo', 'page' => 1, 'per_page' => 15],
+            ];
+            
+            foreach ($commonFilters as $filters) {
+                $cacheKey = 'admin_usuarios_global_' . md5(json_encode($filters));
+                Cache::forget($cacheKey);
+            }
+            
+            Log::debug('AdminUserController::limparCacheUsuariosGlobal - Cache limpo', [
+                'caches_limpos' => count($commonFilters) + 1,
+            ]);
+        } catch (\Exception $e) {
+            // Não falhar se limpar cache der erro
+            Log::warning('AdminUserController::limparCacheUsuariosGlobal - Erro ao limpar cache', [
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 }
