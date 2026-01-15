@@ -230,9 +230,12 @@ class UserRepository implements UserRepositoryInterface
         // Normalizar email para lowercase
         $emailLower = strtolower($email);
         
-        // Global Scope aplica filtro de tenant automaticamente
-        // Não precisa adicionar where('tenant_id', ...) manualmente
-        $query = UserModel::withTrashed()
+        // ⚠️ CRÍTICO: Remover Global Scope temporariamente para verificação de email
+        // O Global Scope pode filtrar usuários que ainda não foram vinculados a empresas,
+        // mas precisamos verificar se o email existe independentemente do relacionamento.
+        // Como estamos dentro do contexto do tenant (banco tenant_*), não precisamos do filtro adicional.
+        $query = UserModel::withoutGlobalScopes()
+            ->withTrashed()
             ->whereRaw('LOWER(email) = ?', [$emailLower]);
         
         if ($excluirUserId) {

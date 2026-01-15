@@ -91,13 +91,11 @@ class CriarUsuarioUseCase
                             'error_message' => $e->getMessage(),
                         ]);
                         
-                        // Verificar novamente se email existe (pode ter sido criado entre a verificação e a inserção)
-                        if ($this->userRepository->emailExiste($email->value)) {
-                            throw new DomainException('Este e-mail já está cadastrado.');
-                        } else {
-                            // Se não existe, pode ser problema de case sensitivity ou race condition
-                            throw new DomainException('Erro ao criar usuário. Este e-mail pode já estar cadastrado. Tente novamente.');
-                        }
+                        // ⚠️ CRÍTICO: Quando a constraint única é violada, a transação é abortada pelo PostgreSQL.
+                        // Não podemos fazer queries dentro de uma transação abortada.
+                        // A melhor solução é assumir que o email já existe e lançar a exceção diretamente.
+                        // O rollback será feito automaticamente pelo Laravel quando a exceção for lançada.
+                        throw new DomainException('Este e-mail já está cadastrado.');
                     }
                     // Relançar outras exceções
                     throw $e;
