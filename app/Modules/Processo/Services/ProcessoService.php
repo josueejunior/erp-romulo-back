@@ -183,11 +183,24 @@ class ProcessoService extends BaseService
                 ->where('empresa_id', $empresaId)
                 ->whereNotNull('empresa_id')
                 ->count();
+            
+            // Verificar orçamentos por processo_item_id
+            $orcamentosPorItem = \DB::table('orcamento_itens')
+                ->join('orcamentos', 'orcamento_itens.orcamento_id', '=', 'orcamentos.id')
+                ->where('orcamentos.empresa_id', $empresaId)
+                ->whereNotNull('orcamentos.empresa_id')
+                ->select('orcamento_itens.processo_item_id', 'orcamentos.id as orcamento_id')
+                ->get()
+                ->groupBy('processo_item_id')
+                ->map(fn($group) => $group->count())
+                ->toArray();
+            
             \Log::debug('ProcessoService::list() - Verificação de orçamentos no banco', [
                 'tenant_id' => tenancy()->tenant?->id,
                 'empresa_id' => $empresaId,
                 'total_orcamentos' => $totalOrcamentos,
                 'total_orcamento_itens' => $totalOrcamentoItens,
+                'orcamentos_por_item' => $orcamentosPorItem,
             ]);
         }
         

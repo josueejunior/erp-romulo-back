@@ -80,28 +80,42 @@ class ProcessoItemResource extends JsonResource
                 ]
             ),
             'orcamentos' => $this->when(
-                $this->relationLoaded('orcamentos'),
+                true, // Sempre executar para ter logs
                 function () {
-                    $orcamentos = $this->orcamentos;
-                    \Log::debug('ProcessoItemResource::toArray - Orçamentos carregados', [
+                    $relationLoaded = $this->relationLoaded('orcamentos');
+                    $orcamentos = $relationLoaded ? $this->orcamentos : null;
+                    
+                    \Log::debug('ProcessoItemResource::toArray - Verificando orçamentos', [
                         'tenant_id' => tenancy()->tenant?->id,
                         'empresa_id' => $this->empresa_id ?? null,
                         'processo_item_id' => $this->id,
+                        'relation_loaded' => $relationLoaded,
+                        'orcamentos_is_null' => $orcamentos === null,
+                        'orcamentos_is_collection' => $orcamentos instanceof \Illuminate\Support\Collection,
                         'total_orcamentos' => $orcamentos ? $orcamentos->count() : 0,
                         'orcamento_ids' => $orcamentos ? $orcamentos->pluck('id')->toArray() : [],
-                        'relation_loaded' => $this->relationLoaded('orcamentos'),
+                        'relations_loaded' => array_keys($this->getRelations()),
                     ]);
-                    return OrcamentoResource::collection($orcamentos);
-                },
-                function () {
-                    // Log quando o relacionamento NÃO está carregado
-                    \Log::warning('ProcessoItemResource::toArray - Relacionamento orcamentos NÃO carregado', [
-                        'tenant_id' => tenancy()->tenant?->id,
-                        'empresa_id' => $this->empresa_id ?? null,
-                        'processo_item_id' => $this->id,
-                        'relation_loaded' => $this->relationLoaded('orcamentos'),
-                        'relations_loaded' => $this->getRelations(),
-                    ]);
+                    
+                    if ($relationLoaded && $orcamentos && $orcamentos->count() > 0) {
+                        return OrcamentoResource::collection($orcamentos);
+                    }
+                    
+                    // Se não está carregado, retornar array vazio mas logar
+                    if (!$relationLoaded) {
+                        \Log::warning('ProcessoItemResource::toArray - Relacionamento orcamentos NÃO carregado', [
+                            'tenant_id' => tenancy()->tenant?->id,
+                            'empresa_id' => $this->empresa_id ?? null,
+                            'processo_item_id' => $this->id,
+                        ]);
+                    } else if ($orcamentos && $orcamentos->count() === 0) {
+                        \Log::info('ProcessoItemResource::toArray - Relacionamento carregado mas vazio', [
+                            'tenant_id' => tenancy()->tenant?->id,
+                            'empresa_id' => $this->empresa_id ?? null,
+                            'processo_item_id' => $this->id,
+                        ]);
+                    }
+                    
                     return [];
                 }
             ),
