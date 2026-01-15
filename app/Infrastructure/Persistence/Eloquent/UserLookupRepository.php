@@ -197,8 +197,17 @@ class UserLookupRepository implements UserLookupRepositoryInterface
         
         // ✅ DEBUG: Contar total de registros antes de aplicar filtros
         $totalSemFiltros = UserLookupModel::whereNull('deleted_at')->count();
+        $todosRegistros = UserLookupModel::whereNull('deleted_at')->get(['id', 'email', 'cnpj', 'tenant_id', 'user_id', 'status']);
         Log::info('UserLookupRepository::buscarComFiltros - Total de registros na tabela (sem filtros)', [
             'total' => $totalSemFiltros,
+            'registros_detalhes' => $todosRegistros->map(fn($r) => [
+                'id' => $r->id,
+                'email' => $r->email,
+                'cnpj' => $r->cnpj,
+                'tenant_id' => $r->tenant_id,
+                'user_id' => $r->user_id,
+                'status' => $r->status,
+            ])->toArray(),
         ]);
         
         $query = UserLookupModel::query()
@@ -245,11 +254,24 @@ class UserLookupRepository implements UserLookupRepositoryInterface
         $data = $paginator->items();
         $lookups = array_map(fn($model) => $this->toDomain($model), $data);
         
+        // ✅ DEBUG: Log detalhado dos resultados encontrados
+        $resultadosDetalhes = array_map(function ($lookup) {
+            return [
+                'id' => $lookup->id,
+                'email' => $lookup->email,
+                'cnpj' => $lookup->cnpj,
+                'tenant_id' => $lookup->tenantId,
+                'user_id' => $lookup->userId,
+                'status' => $lookup->status,
+            ];
+        }, $lookups);
+        
         Log::info('UserLookupRepository::buscarComFiltros - Busca concluída', [
             'total' => $paginator->total(),
             'per_page' => $paginator->perPage(),
             'current_page' => $paginator->currentPage(),
             'resultados_count' => count($lookups),
+            'resultados_detalhes' => $resultadosDetalhes,
         ]);
         
         return [
