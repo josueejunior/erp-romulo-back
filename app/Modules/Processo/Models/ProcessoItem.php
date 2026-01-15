@@ -10,9 +10,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use App\Database\Schema\Blueprint;
+use App\Models\Traits\HasSoftDeletesWithEmpresa;
+use App\Models\Traits\BelongsToEmpresaTrait;
 
 class ProcessoItem extends BaseModel
 {
+    use HasSoftDeletesWithEmpresa, BelongsToEmpresaTrait;
+    
     protected $table = 'processo_itens';
 
     protected $fillable = [

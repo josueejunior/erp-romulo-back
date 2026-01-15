@@ -5,9 +5,13 @@ namespace App\Modules\Processo\Models;
 use App\Models\BaseModel;
 use App\Modules\Documento\Models\DocumentoHabilitacao;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\Concerns\HasEmpresaScope;
+use App\Models\Traits\BelongsToEmpresaTrait;
 
 class ProcessoDocumento extends BaseModel
 {
+    use HasEmpresaScope, BelongsToEmpresaTrait;
+    
     protected $table = 'processo_documentos';
 
     protected $fillable = [

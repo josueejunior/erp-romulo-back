@@ -6,10 +6,12 @@ use App\Models\BaseModel;
 use Carbon\Carbon;
 use App\Models\Traits\HasTimestampsCustomizados;
 use App\Models\Tenant;
+use App\Models\Concerns\HasEmpresaScope;
+use App\Models\Traits\BelongsToEmpresaTrait;
 
 class Assinatura extends BaseModel
 {
-    use HasTimestampsCustomizados;
+    use HasTimestampsCustomizados, HasEmpresaScope, BelongsToEmpresaTrait;
     
     public $timestamps = true;
 

@@ -2,12 +2,14 @@
 
 namespace App\Modules\Orcamento\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\BaseModel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Models\Concerns\HasEmpresaScope;
+use App\Models\Traits\BelongsToEmpresaTrait;
 
-class Notificacao extends Model
+class Notificacao extends BaseModel
 {
-    use HasFactory;
+    use HasFactory, HasEmpresaScope, BelongsToEmpresaTrait;
 
     protected $table = 'notificacoes';
 
@@ -24,13 +26,14 @@ class Notificacao extends Model
         'dados_adicionais'
     ];
 
-    protected $casts = [
-        'lido' => 'boolean',
-        'lido_em' => 'datetime',
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
-        'dados_adicionais' => 'array'
-    ];
+    protected function casts(): array
+    {
+        return [
+            'lido' => 'boolean',
+            'lido_em' => 'datetime',
+            'dados_adicionais' => 'array'
+        ];
+    }
 
     public function usuario()
     {

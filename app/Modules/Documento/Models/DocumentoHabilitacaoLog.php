@@ -2,10 +2,13 @@
 
 namespace App\Modules\Documento\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\BaseModel;
+use App\Models\Concerns\HasEmpresaScope;
 
-class DocumentoHabilitacaoLog extends Model
+class DocumentoHabilitacaoLog extends BaseModel
 {
+    use HasEmpresaScope;
+    
     protected $table = 'documento_habilitacao_logs';
 
     protected $fillable = [
@@ -18,7 +21,10 @@ class DocumentoHabilitacaoLog extends Model
         'meta',
     ];
 
-    protected $casts = [
-        'meta' => 'array',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'meta' => 'array',
+        ];
+    }
 }

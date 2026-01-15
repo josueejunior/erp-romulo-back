@@ -6,9 +6,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use App\Models\BaseModel;
 use App\Modules\Processo\Models\ProcessoItem;
+use App\Models\Concerns\HasEmpresaScope;
+use App\Models\Traits\BelongsToEmpresaTrait;
 
 class OrcamentoItem extends BaseModel
 {
+    use HasEmpresaScope, BelongsToEmpresaTrait;
+    
     protected $table = 'orcamento_itens';
 
     protected $fillable = [
