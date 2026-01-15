@@ -152,13 +152,27 @@ class UserRepository implements UserRepositoryInterface
      * Vincular usuário a uma empresa com perfil específico
      * Método de infraestrutura para persistir relacionamento many-to-many
      * Se já existir vínculo, atualiza o perfil
+     * 
+     * 🔥 CORREÇÃO: Usa newFromBuilder para evitar Global Scope que filtra usuários sem empresas
      */
     public function vincularUsuarioEmpresa(int $userId, int $empresaId, string $perfil): void
     {
-        $model = UserModel::findOrFail($userId);
+        // 🔥 CORREÇÃO: Buscar dados do banco diretamente para evitar Global Scope
+        // O Global Scope filtra usuários sem empresas, mas estamos criando o vínculo agora
+        $userData = \DB::table('users')->where('id', $userId)->first();
         
-        // Verificar se já existe vínculo
-        $existeVinculo = $model->empresas()->where('empresas.id', $empresaId)->exists();
+        if (!$userData) {
+            throw new \RuntimeException("Usuário com ID {$userId} não encontrado para vincular empresa.");
+        }
+        
+        // Criar modelo a partir dos dados do banco (bypassa Global Scope)
+        $model = (new UserModel())->newFromBuilder($userData);
+        
+        // Verificar se já existe vínculo usando DB direto (mais confiável dentro de transação)
+        $existeVinculo = \DB::table('empresa_user')
+            ->where('user_id', $userId)
+            ->where('empresa_id', $empresaId)
+            ->exists();
         
         if ($existeVinculo) {
             // Atualizar perfil existente
