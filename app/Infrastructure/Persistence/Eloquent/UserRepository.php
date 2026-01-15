@@ -156,23 +156,34 @@ class UserRepository implements UserRepositoryInterface
         }
     }
 
+    /**
+     * Buscar usuário por ID
+     * 
+     * 🔥 SIMPLIFICADO: Global Scope cuida do isolamento automaticamente
+     */
     public function buscarPorId(int $id): ?User
     {
-        // 🔥 CORREÇÃO: Usar withTrashed para buscar também usuários inativos (soft deleted)
-        // Isso é necessário para operações de reativação e para evitar erros "Usuário não encontrado"
+        // Global Scope aplica filtro de tenant automaticamente
         $model = UserModel::withTrashed()->find($id);
         if (!$model) {
             return null;
         }
 
-        // Obter tenantId do contexto atual
+        // Obter tenantId do contexto (já filtrado pelo scope)
         $tenantId = tenancy()->tenant?->id ?? 0;
         return $this->toDomain($model, $tenantId);
     }
 
+    /**
+     * Buscar usuário por email
+     * 
+     * 🔥 SIMPLIFICADO: Global Scope cuida do isolamento automaticamente
+     */
     public function buscarPorEmail(string $email): ?User
     {
-        $model = UserModel::where('email', $email)->first();
+        // Global Scope aplica filtro de tenant automaticamente
+        // Email já é normalizado no modelo (lowercase)
+        $model = UserModel::where('email', strtolower($email))->first();
         if (!$model) {
             return null;
         }
