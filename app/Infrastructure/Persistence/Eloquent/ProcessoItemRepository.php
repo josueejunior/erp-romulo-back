@@ -142,9 +142,74 @@ class ProcessoItemRepository implements ProcessoItemRepositoryInterface
 
     public function atualizar(ProcessoItem $processoItem): ProcessoItem
     {
-        $model = ProcessoItemModel::findOrFail($processoItem->id);
-        $model->update($this->toArray($processoItem));
-        return $this->toDomain($model->fresh());
+        // ✅ CORREÇÃO CRÍTICA: Garantir que estamos atualizando APENAS o item específico pelo ID
+        // IMPORTANTE: Usar withoutGlobalScope temporariamente se necessário, mas validar empresa_id manualmente
+        
+        // Buscar modelo com validação explícita de empresa_id
+        $model = ProcessoItemModel::where('id', $processoItem->id)
+            ->where('empresa_id', $processoItem->empresaId)
+            ->firstOrFail();
+        
+        // Log para debug quando houver problemas de duplicatas
+        \Log::debug('ProcessoItemRepository::atualizar()', [
+            'item_id' => $processoItem->id,
+            'processo_id' => $processoItem->processoId,
+            'numero_item' => $processoItem->numeroItem,
+            'empresa_id' => $processoItem->empresaId,
+            'model_antes_update' => [
+                'id' => $model->id,
+                'processo_id' => $model->processo_id,
+                'numero_item' => $model->numero_item,
+                'empresa_id' => $model->empresa_id,
+                'especificacao_tecnica' => substr($model->especificacao_tecnica ?? '', 0, 50),
+            ],
+        ]);
+        
+        // ✅ CRÍTICO: Converter para array SEM incluir o ID
+        $dataToUpdate = $this->toArray($processoItem);
+        
+        // ✅ GARANTIA ABSOLUTA: Atualizar usando o modelo encontrado (mais seguro que update em massa)
+        // Isso garante que apenas UM registro será afetado
+        $model->fill($dataToUpdate);
+        $model->save();
+        
+        // Verificar se outros itens foram afetados acidentalmente (duplicatas com mesmo numero_item)
+        if ($processoItem->numeroItem) {
+            $outrosItensComMesmoNumero = ProcessoItemModel::where('id', '!=', $processoItem->id)
+                ->where('processo_id', $processoItem->processoId)
+                ->where('numero_item', $processoItem->numeroItem)
+                ->where('empresa_id', $processoItem->empresaId)
+                ->count();
+            
+            if ($outrosItensComMesmoNumero > 0) {
+                \Log::warning('ProcessoItemRepository::atualizar() - Itens duplicados detectados!', [
+                    'item_id' => $processoItem->id,
+                    'numero_item' => $processoItem->numeroItem,
+                    'processo_id' => $processoItem->processoId,
+                    'duplicatas_encontradas' => $outrosItensComMesmoNumero,
+                ]);
+            }
+        }
+        
+        // Recarregar para garantir dados atualizados
+        $model->refresh();
+        
+        // Verificar se o modelo atualizado corresponde ao esperado
+        if ($model->id !== $processoItem->id || $model->empresa_id !== $processoItem->empresaId) {
+            \Log::error('ProcessoItemRepository::atualizar() - Modelo incorreto após update!', [
+                'esperado' => [
+                    'id' => $processoItem->id,
+                    'empresa_id' => $processoItem->empresaId,
+                ],
+                'retornado' => [
+                    'id' => $model->id,
+                    'empresa_id' => $model->empresa_id,
+                ],
+            ]);
+            throw new \RuntimeException("Inconsistência detectada após atualização do item {$processoItem->id}");
+        }
+        
+        return $this->toDomain($model);
     }
 
     public function deletar(int $id): void
