@@ -10,6 +10,7 @@ use App\Domain\ProcessoItem\Repositories\ProcessoItemRepositoryInterface;
 use App\Domain\OrcamentoItem\Repositories\OrcamentoItemRepositoryInterface;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class OrcamentoService
 {
@@ -364,10 +365,51 @@ class OrcamentoService
      */
     public function listByItem(ProcessoItem $item): \Illuminate\Database\Eloquent\Collection
     {
-        return $item->orcamentos()
+        Log::info('OrcamentoService::listByItem - Iniciando listagem', [
+            'item_id' => $item->id,
+            'processo_id' => $item->processo_id,
+            'empresa_id' => $item->empresa_id,
+        ]);
+        
+        // Buscar orçamentos que pertencem ao item (via processo_item_id OU via processo_id + itens)
+        // Primeiro, buscar orçamentos diretamente vinculados ao item (processo_item_id)
+        $orcamentosDiretos = Orcamento::where('processo_item_id', $item->id)
             ->with(['fornecedor', 'transportadora', 'formacaoPreco'])
-            ->orderBy(\App\Database\Schema\Blueprint::CREATED_AT, 'desc')
+            ->orderBy('criado_em', 'desc')
             ->get();
+        
+        \Log::info('OrcamentoService::listByItem - Orçamentos diretos encontrados', [
+            'item_id' => $item->id,
+            'total_diretos' => $orcamentosDiretos->count(),
+            'orcamentos_ids' => $orcamentosDiretos->pluck('id')->toArray(),
+        ]);
+        
+        // Buscar orçamentos vinculados ao processo que têm itens vinculados a este item
+        $orcamentosViaItens = Orcamento::where('processo_id', $item->processo_id)
+            ->whereHas('itens', function ($query) use ($item) {
+                $query->where('processo_item_id', $item->id);
+            })
+            ->with(['fornecedor', 'transportadora', 'itens.processoItem', 'itens.formacaoPreco'])
+            ->orderBy('criado_em', 'desc')
+            ->get();
+        
+        \Log::info('OrcamentoService::listByItem - Orçamentos via itens encontrados', [
+            'item_id' => $item->id,
+            'processo_id' => $item->processo_id,
+            'total_via_itens' => $orcamentosViaItens->count(),
+            'orcamentos_ids' => $orcamentosViaItens->pluck('id')->toArray(),
+        ]);
+        
+        // Combinar e remover duplicatas
+        $todosOrcamentos = $orcamentosDiretos->merge($orcamentosViaItens)->unique('id');
+        
+        \Log::info('OrcamentoService::listByItem - Resultado final', [
+            'item_id' => $item->id,
+            'total_final' => $todosOrcamentos->count(),
+            'orcamentos_ids' => $todosOrcamentos->pluck('id')->toArray(),
+        ]);
+        
+        return $todosOrcamentos;
     }
 
     /**
