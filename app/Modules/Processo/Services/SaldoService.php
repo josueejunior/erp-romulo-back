@@ -308,7 +308,38 @@ class SaldoService
 
         $itensAtualizados = [];
         foreach ($itens as $item) {
+            // Recarregar item do banco para garantir que tem os valores mais recentes
+            $item->refresh();
+            
+            // Armazenar valores antes do cálculo para debug
+            $valoresAntes = [
+                'valor_arrematado' => $item->valor_arrematado,
+                'valor_negociado' => $item->valor_negociado,
+                'valor_final_sessao' => $item->valor_final_sessao,
+                'valor_estimado' => $item->valor_estimado,
+                'quantidade' => $item->quantidade,
+            ];
+            
+            // Recalcular valores
             $item->atualizarValoresFinanceiros();
+            
+            // Recarregar após salvar para garantir valores atualizados
+            $item->refresh();
+            
+            \Log::info('SaldoService::recalcularValoresFinanceirosItens - Item recalculado', [
+                'processo_id' => $processo->id,
+                'item_id' => $item->id,
+                'numero_item' => $item->numero_item,
+                'valores_antes' => $valoresAntes,
+                'valores_depois' => [
+                    'valor_vencido' => $item->valor_vencido,
+                    'valor_empenhado' => $item->valor_empenhado,
+                    'valor_faturado' => $item->valor_faturado,
+                    'valor_pago' => $item->valor_pago,
+                    'saldo_aberto' => $item->saldo_aberto,
+                ],
+            ]);
+            
             $itensAtualizados[] = [
                 'item_id' => $item->id,
                 'numero_item' => $item->numero_item,

@@ -250,9 +250,31 @@ class ProcessoItem extends BaseModel
         // O valor_arrematado, valor_negociado e valor_final_sessao são valores POR UNIDADE
         // Precisamos multiplicar pela quantidade para obter o valor TOTAL do item
         if ($this->isVencido()) {
-            $valorUnitario = $this->valor_arrematado ?? $this->valor_negociado ?? $this->valor_final_sessao ?? 0;
+            // Tentar obter valor unitário na ordem de preferência:
+            // 1. valor_arrematado (se houver)
+            // 2. valor_negociado (se houver)
+            // 3. valor_final_sessao (se houver)
+            // 4. valor_estimado (fallback se nenhum dos anteriores existir)
+            $valorUnitario = $this->valor_arrematado 
+                ?? $this->valor_negociado 
+                ?? $this->valor_final_sessao 
+                ?? ($this->valor_estimado ?? 0);
+            
             $quantidade = $this->quantidade ?? 1;
             $this->valor_vencido = round($valorUnitario * $quantidade, 2);
+            
+            // Log para debug
+            \Log::debug('ProcessoItem::atualizarValoresFinanceiros - valor_vencido calculado', [
+                'item_id' => $this->id,
+                'numero_item' => $this->numero_item,
+                'valor_arrematado' => $this->valor_arrematado,
+                'valor_negociado' => $this->valor_negociado,
+                'valor_final_sessao' => $this->valor_final_sessao,
+                'valor_estimado' => $this->valor_estimado,
+                'valor_unitario_escolhido' => $valorUnitario,
+                'quantidade' => $quantidade,
+                'valor_vencido' => $this->valor_vencido,
+            ]);
         } else {
             $this->valor_vencido = 0;
         }
