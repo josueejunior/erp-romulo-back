@@ -117,7 +117,8 @@ class OnboardingProgressRepository implements OnboardingProgressRepositoryInterf
 
         // 🔥 MELHORIA: Priorizar onboarding concluído (mais importante)
         // Ordenar por: concluído primeiro, depois por data de criação (mais recente)
-        $model = $query->orderBy('onboarding_concluido', 'desc')
+        // 🔥 CORREÇÃO: Usar orderByRaw para garantir que true vem antes de false
+        $model = $query->orderByRaw('onboarding_concluido DESC NULLS LAST')
                       ->orderBy('created_at', 'desc')
                       ->first();
         
@@ -125,10 +126,14 @@ class OnboardingProgressRepository implements OnboardingProgressRepositoryInterf
             'user_id' => $userId,
             'tenant_id' => $tenantId,
             'email' => $email,
+            'session_id' => $sessionId,
             'encontrado' => $model !== null,
             'onboarding_id' => $model?->id,
             'onboarding_concluido' => $model?->onboarding_concluido,
+            'onboarding_concluido_type' => gettype($model?->onboarding_concluido),
             'tenant_id_encontrado' => $model?->tenant_id,
+            'user_id_encontrado' => $model?->user_id,
+            'concluido_em' => $model?->concluido_em?->toIso8601String(),
         ]);
         
         return $model ? $this->toDomain($model) : null;
@@ -180,7 +185,17 @@ class OnboardingProgressRepository implements OnboardingProgressRepositoryInterf
             return false;
         }
 
-        return $query->where('onboarding_concluido', true)->exists();
+        $existe = $query->where('onboarding_concluido', true)->exists();
+        
+        Log::info('OnboardingProgressRepository::existeConcluidoPorCritérios - Verificação realizada', [
+            'user_id' => $userId,
+            'tenant_id' => $tenantId,
+            'email' => $email,
+            'session_id' => $sessionId,
+            'existe' => $existe,
+        ]);
+        
+        return $existe;
     }
 
     public function atualizar(OnboardingProgress $onboarding): OnboardingProgress
@@ -190,8 +205,39 @@ class OnboardingProgressRepository implements OnboardingProgressRepositoryInterf
         }
 
         $model = OnboardingProgressModel::findOrFail($onboarding->id);
-        $model->update($this->toArray($onboarding));
-        return $this->toDomain($model->fresh());
+        
+        // 🔥 CORREÇÃO: Log antes de atualizar para debug
+        $dataToUpdate = $this->toArray($onboarding);
+        Log::info('OnboardingProgressRepository::atualizar - Dados antes de atualizar', [
+            'onboarding_id' => $onboarding->id,
+            'onboarding_concluido_entidade' => $onboarding->onboardingConcluido,
+            'onboarding_concluido_array' => $dataToUpdate['onboarding_concluido'],
+            'onboarding_concluido_banco_antes' => $model->onboarding_concluido,
+            'concluido_em_entidade' => $onboarding->concluidoEm?->toIso8601String(),
+            'concluido_em_array' => $dataToUpdate['concluido_em'] ?? null,
+            'data_completa' => $dataToUpdate,
+        ]);
+        
+        // 🔥 CORREÇÃO: Garantir que o campo booleano está sendo salvo corretamente
+        // Usar update direto com cast explícito
+        $model->onboarding_concluido = (bool) $dataToUpdate['onboarding_concluido'];
+        if (isset($dataToUpdate['concluido_em'])) {
+            $model->concluido_em = $dataToUpdate['concluido_em'];
+        }
+        $model->etapas_concluidas = $dataToUpdate['etapas_concluidas'];
+        $model->checklist = $dataToUpdate['checklist'];
+        $model->progresso_percentual = $dataToUpdate['progresso_percentual'];
+        $model->save();
+        
+        // 🔥 CORREÇÃO: Verificar se foi salvo corretamente
+        $model->refresh();
+        Log::info('OnboardingProgressRepository::atualizar - Dados após atualizar', [
+            'onboarding_id' => $model->id,
+            'onboarding_concluido_banco_depois' => $model->onboarding_concluido,
+            'concluido_em_banco_depois' => $model->concluido_em?->toIso8601String(),
+        ]);
+        
+        return $this->toDomain($model);
     }
 
     public function buscarModeloPorId(int $id): ?OnboardingProgressModel

@@ -142,6 +142,27 @@ class OnboardingController extends BaseApiController
                     'tenant_id' => $onboardingDomain->tenantId,
                     'user_id' => $onboardingDomain->userId,
                 ]);
+                
+                // 🔥 CORREÇÃO CRÍTICA: Verificar se o onboarding encontrado está concluído
+                // Mesmo que estaConcluido() tenha retornado false, o onboarding pode estar concluído
+                if ($onboardingDomain->onboardingConcluido) {
+                    Log::info('OnboardingController::status - Onboarding encontrado está concluído, retornando como concluído', [
+                        'onboarding_id' => $onboardingDomain->id,
+                        'user_id' => $user->id,
+                        'tenant_id' => $tenantId,
+                        'email' => $user->email,
+                    ]);
+                    return response()->json([
+                        'success' => true,
+                        'data' => [
+                            'onboarding_concluido' => true,
+                            'progresso_percentual' => 100,
+                            'etapas_concluidas' => $onboardingDomain->etapasConcluidas ?? [],
+                            'checklist' => $onboardingDomain->checklist ?? [],
+                            'pode_ver_planos' => true,
+                        ],
+                    ]);
+                }
             }
 
             // Buscar modelo para apresentação
