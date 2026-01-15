@@ -234,9 +234,10 @@ class ResolveTenantContext
         try {
             $lookupRepository = app(\App\Domain\UsersLookup\Repositories\UserLookupRepositoryInterface::class);
             
-            // Buscar todos os registros do usuário por email
+            // Buscar todos os registros do usuário por email (ativos e inativos)
             $email = $user->email;
             $lookups = $lookupRepository->buscarAtivosPorEmail($email);
+            $lookupsTodos = $lookupRepository->buscarTodosPorEmail($email); // Buscar todos incluindo inativos
             
             // ✅ LOG DETALHADO: Listar todos os lookups encontrados
             $lookupsArray = [];
@@ -250,12 +251,25 @@ class ResolveTenantContext
                 ];
             }
             
+            $lookupsTodosArray = [];
+            foreach ($lookupsTodos as $lookup) {
+                $lookupsTodosArray[] = [
+                    'lookup_id' => $lookup->id ?? null,
+                    'tenant_id' => $lookup->tenantId ?? null,
+                    'user_id' => $lookup->userId ?? null,
+                    'email' => $lookup->email ?? null,
+                    'status' => $lookup->status ?? null,
+                ];
+            }
+            
             Log::info('ResolveTenantContext: Validando relação usuário-tenant', [
                 'user_id' => $user->id,
                 'user_email' => $email,
                 'tenant_id_solicitado' => $tenantId,
-                'total_lookups_encontrados' => count($lookups),
-                'lookups_detalhes' => $lookupsArray,
+                'total_lookups_ativos' => count($lookups),
+                'total_lookups_todos' => count($lookupsTodos),
+                'lookups_ativos_detalhes' => $lookupsArray,
+                'lookups_todos_detalhes' => $lookupsTodosArray,
             ]);
             
             // Verificar se há registro ativo para este tenant_id e user_id
@@ -327,15 +341,56 @@ class ResolveTenantContext
                 ]);
             }
             
-            // ✅ LOG FINAL: Resumo do que foi tentado
-            Log::error('ResolveTenantContext: ❌ VALIDAÇÃO FALHOU - Acesso negado', [
-                'user_id' => $user->id,
-                'user_email' => $email,
-                'tenant_id_solicitado' => $tenantId,
-                'tenants_validos_do_usuario' => array_map(fn($l) => $l->tenantId, $lookups),
-                'users_ids_validos' => array_map(fn($l) => $l->userId, $lookups),
-                'acao' => 'Nenhuma validação bem-sucedida. Acesso negado por segurança.',
-            ]);
+            // ✅ Se não encontrou nada, tentar buscar usuário em TODOS os tenants possíveis
+            if (empty($lookupsTodos)) {
+                Log::warning('ResolveTenantContext: ❌ Nenhum lookup encontrado - Buscando usuário em todos os tenants', [
+                    'user_id' => $user->id,
+                    'user_email' => $email,
+                ]);
+                
+                // Buscar em todos os tenants
+                $todosTenants = \App\Models\Tenant::all();
+                $tenantsComUsuario = [];
+                
+                foreach ($todosTenants as $t) {
+                    try {
+                        tenancy()->initialize($t);
+                        $userNoTenant = \App\Modules\Auth\Models\User::find($user->id);
+                        if ($userNoTenant && !$userNoTenant->trashed()) {
+                            $tenantsComUsuario[] = [
+                                'tenant_id' => $t->id,
+                                'tenant_razao_social' => $t->razao_social ?? null,
+                                'usuario_encontrado' => true,
+                            ];
+                        }
+                    } catch (\Exception $e) {
+                        // Ignorar erros ao inicializar tenant
+                    } finally {
+                        tenancy()->end();
+                    }
+                }
+                
+                Log::error('ResolveTenantContext: ❌ VALIDAÇÃO FALHOU - Usuário encontrado em outros tenants', [
+                    'user_id' => $user->id,
+                    'user_email' => $email,
+                    'tenant_id_solicitado' => $tenantId,
+                    'tenants_onde_usuario_existe' => $tenantsComUsuario,
+                    'total_tenants_verificados' => count($todosTenants),
+                    'problema' => 'Usuário não existe no tenant solicitado, mas pode existir em outros tenants.',
+                    'solucao' => 'Verificar se users_lookup está sincronizada ou se o tenant_id no header está correto.',
+                ]);
+            } else {
+                // ✅ LOG FINAL: Resumo do que foi tentado
+                Log::error('ResolveTenantContext: ❌ VALIDAÇÃO FALHOU - Acesso negado', [
+                    'user_id' => $user->id,
+                    'user_email' => $email,
+                    'tenant_id_solicitado' => $tenantId,
+                    'tenants_validos_do_usuario' => array_map(fn($l) => $l->tenantId, $lookupsTodos),
+                    'users_ids_validos' => array_map(fn($l) => $l->userId, $lookupsTodos),
+                    'status_dos_lookups' => array_map(fn($l) => ['tenant_id' => $l->tenantId, 'status' => $l->status], $lookupsTodos),
+                    'acao' => 'Nenhuma validação bem-sucedida. Acesso negado por segurança.',
+                ]);
+            }
             
             return false;
             
