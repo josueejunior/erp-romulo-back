@@ -115,15 +115,15 @@
         </div>
         
         @if($isNovaAssinatura)
-        <p>Sua assinatura está ativa e você já pode utilizar todos os recursos do plano contratado.</p>
-        
-        @if(($assinatura['status'] ?? 'ativa') === 'ativa')
-        <p style="font-size: 16px; font-weight: bold; color: #059669; margin: 20px 0;">🎉 Aproveite o sistema!</p>
-        @elseif(($assinatura['status'] ?? '') === 'pendente')
-        <p>Aguardando confirmação do pagamento. Você receberá uma notificação quando for aprovado.</p>
-        @endif
+            <p>Sua assinatura está ativa e você já pode utilizar todos os recursos do plano contratado.</p>
+            
+            @if(($assinatura['status'] ?? 'ativa') === 'ativa')
+                <p style="font-size: 16px; font-weight: bold; color: #059669; margin: 20px 0;">🎉 Aproveite o sistema!</p>
+            @elseif(($assinatura['status'] ?? '') === 'pendente')
+                <p>Aguardando confirmação do pagamento. Você receberá uma notificação quando for aprovado.</p>
+            @endif
         @else
-        <p>As alterações em sua assinatura já estão em vigor.</p>
+            <p>As alterações em sua assinatura já estão em vigor.</p>
         @endif
         
         <div class="footer">

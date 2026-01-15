@@ -158,24 +158,33 @@ class AtualizarAssinaturaAdminUseCase
         $assinaturaOriginal = \App\Modules\Assinatura\Models\Assinatura::find($assinaturaId);
         $statusAnterior = $assinaturaOriginal?->getOriginal('status') ?? $assinaturaOriginal?->status ?? 'pendente';
 
-        // Disparar evento de assinatura atualizada
-        // 🔥 FIX: status já é string na entidade, não precisa acessar ->value
-        // A entidade Assinatura tem $status como string e $statusEnum como enum
-        // O evento AssinaturaAtualizada espera string, então usamos $status diretamente
+        // ✅ CORRIGIDO: Disparar evento de assinatura atualizada FORA da transação
+        // Isso evita que erros no listener (como email) abortem a operação principal
+        // O evento será disparado após a transação ser commitada com sucesso
         $statusString = $assinaturaDomain->status;
         
-        $this->eventDispatcher->dispatch(
-            new AssinaturaAtualizada(
-                assinaturaId: $assinaturaId,
-                tenantId: $tenantId,
-                empresaId: $assinaturaDomain->empresaId ?? 0,
-                statusAnterior: $statusAnterior,
-                status: $statusString,
-                userId: $assinaturaDomain->userId,
-                planoId: $assinaturaModel->plano_id,
-                emailDestino: $emailDestino,
-            )
-        );
+        // Disparar evento após salvar (com try-catch para não quebrar o fluxo)
+        try {
+            $this->eventDispatcher->dispatch(
+                new AssinaturaAtualizada(
+                    assinaturaId: $assinaturaId,
+                    tenantId: $tenantId,
+                    empresaId: $assinaturaDomain->empresaId ?? 0,
+                    statusAnterior: $statusAnterior,
+                    status: $statusString,
+                    userId: $assinaturaDomain->userId,
+                    planoId: $assinaturaModel->plano_id,
+                    emailDestino: $emailDestino,
+                )
+            );
+        } catch (\Exception $e) {
+            // Não quebrar o fluxo se houver erro no evento (ex: template de email com erro)
+            Log::error('AtualizarAssinaturaAdminUseCase - Erro ao disparar evento AssinaturaAtualizada', [
+                'assinatura_id' => $assinaturaId,
+                'tenant_id' => $tenantId,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         return $assinaturaAtualizada;
     }
