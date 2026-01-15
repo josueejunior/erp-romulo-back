@@ -14,20 +14,30 @@ class UserRoleService implements UserRoleServiceInterface
 {
     public function atribuirRole(User $user, string $role): void
     {
-        // 🔥 CORREÇÃO: Dentro de transações, pode haver problemas de visibilidade
-        // Usar where() ao invés de find() para garantir busca no contexto correto
-        $model = UserModel::where('id', $user->id)->first();
+        // 🔥 CORREÇÃO CRÍTICA: O Global Scope do User filtra por whereHas('empresas')
+        // Quando o usuário é recém-criado, ainda não tem empresas vinculadas,
+        // então o scope filtra ele fora!
         
-        if (!$model) {
-            // Tentar novamente com refresh da conexão (pode ser problema de timing)
-            \DB::connection()->reconnect();
-            $model = UserModel::where('id', $user->id)->first();
+        // Verificar se existe no banco primeiro
+        $exists = \DB::table('users')->where('id', $user->id)->exists();
+        
+        if (!$exists) {
+            throw new \RuntimeException("Usuário com ID {$user->id} não encontrado para atribuir role.");
         }
         
-        if (!$model) {
-            throw new \RuntimeException("Usuário com ID {$user->id} não encontrado para atribuir role. Verifique se o usuário foi criado corretamente.");
+        // 🔥 SOLUÇÃO: Buscar dados do banco e criar modelo manualmente
+        // Isso evita o Global Scope que filtra usuários sem empresas
+        $userData = \DB::table('users')->where('id', $user->id)->first();
+        
+        if (!$userData) {
+            throw new \RuntimeException("Usuário com ID {$user->id} não encontrado no banco.");
         }
         
+        // Criar instância do modelo a partir dos dados do banco
+        // Isso bypassa o Global Scope porque não passa pela query builder
+        $model = (new UserModel())->newFromBuilder($userData);
+        
+        // Agora podemos usar assignRole normalmente
         $model->assignRole($role);
     }
 

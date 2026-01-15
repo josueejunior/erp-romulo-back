@@ -129,10 +129,23 @@ class UserRepository implements UserRepositoryInterface
         $model = UserModel::create($userData);
         
         // 🔥 CORREÇÃO: Garantir que o modelo está acessível dentro da transação
-        // Usar refresh() para garantir que está sincronizado com o banco
+        // Usar refresh() e setConnection para garantir visibilidade na transação atual
         $model->refresh();
         
+        // Forçar conexão atual para garantir que está na mesma transação
+        $model->setConnection($model->getConnectionName());
+        
         return $this->toDomain($model, $user->tenantId);
+    }
+    
+    /**
+     * Buscar modelo Eloquent por ID (método auxiliar para UserRoleService)
+     * Usa withoutGlobalScopes para garantir busca dentro de transações
+     */
+    public function buscarModeloEloquentPorId(int $id): ?UserModel
+    {
+        // Sem global scopes para garantir busca direta dentro de transações
+        return UserModel::withoutGlobalScopes()->find($id);
     }
 
     /**
