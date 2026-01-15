@@ -117,8 +117,8 @@ Route::prefix('v1')->group(function () {
         'auth.context',                // CAMADA 4: Identidade
         \App\Http\Middleware\ResolveTenantContext::class,  // CAMADA 5: Tenancy (usando classe completa para debug)
         \App\Http\Middleware\BootstrapApplicationContext::class,  // CAMADA 6: Bootstrap empresa (usando classe completa para debug)
-        'throttle:120,1',              // ✅ 120 requisições por minuto
-        'throttle:1000,60',            // ✅ 1000 requisições por hora
+        'throttle:300,1',              // ✅ 300 requisições por minuto (aumentado para uso normal)
+        'throttle:5000,60',            // ✅ 5000 requisições por hora (aumentado para uso intensivo)
     ])->group(function () {
         // Rotas que NÃO precisam de assinatura (exceções)
         Route::post('/auth/logout', [AuthController::class, 'logout']);
