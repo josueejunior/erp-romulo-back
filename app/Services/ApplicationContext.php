@@ -135,6 +135,40 @@ class ApplicationContext implements ApplicationContextContract
         // 3. Carregar empresa
         $this->empresa = Empresa::find($this->empresaId);
         
+        // 🔥 CORREÇÃO: Capturar tenant_id do tenancy se já estiver inicializado
+        // Isso garante que ApplicationContext tenha o tenant_id mesmo quando
+        // o tenancy foi inicializado pelo middleware ResolveTenantContext
+        if (tenancy()->initialized && tenancy()->tenant) {
+            $this->tenantId = tenancy()->tenant->id;
+            $this->tenant = tenancy()->tenant;
+            $this->tenancyInitialized = true;
+            
+            Log::debug('ApplicationContext::bootstrap() - Tenant capturado do tenancy', [
+                'tenant_id' => $this->tenantId,
+            ]);
+        } else {
+            // Tentar obter tenant_id do TenantContext se estiver disponível
+            if (\App\Domain\Shared\ValueObjects\TenantContext::has()) {
+                try {
+                    $tenantContext = \App\Domain\Shared\ValueObjects\TenantContext::get();
+                    if ($tenantContext) {
+                        $this->tenantId = $tenantContext->tenantId;
+                        $this->tenant = Tenant::find($this->tenantId);
+                        $this->tenancyInitialized = true;
+                        
+                        Log::debug('ApplicationContext::bootstrap() - Tenant capturado do TenantContext', [
+                            'tenant_id' => $this->tenantId,
+                        ]);
+                    }
+                } catch (\Exception $e) {
+                    // TenantContext não disponível - não é erro crítico se não precisarmos de tenant
+                    Log::debug('ApplicationContext::bootstrap() - Erro ao obter TenantContext', [
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        }
+        
         // 4. Disponibilizar no container (compatibilidade com código legado)
         app()->instance('current_empresa_id', $this->empresaId);
         $request->attributes->set('empresa_id', $this->empresaId);
@@ -143,6 +177,7 @@ class ApplicationContext implements ApplicationContextContract
         Log::shareContext([
             'empresa_id' => $this->empresaId,
             'user_id' => $this->user->id,
+            'tenant_id' => $this->tenantId,
         ]);
         
         $this->initialized = true;
@@ -150,6 +185,7 @@ class ApplicationContext implements ApplicationContextContract
         Log::debug('ApplicationContext::bootstrap() - Concluído', [
             'empresa_id' => $this->empresaId,
             'user_id' => $this->user->id,
+            'tenant_id' => $this->tenantId,
         ]);
     }
     

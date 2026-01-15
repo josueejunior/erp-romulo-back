@@ -194,7 +194,12 @@ class ResolveTenantContext
 
         tenancy()->initialize($tenant);
         
+        // 🔥 CORREÇÃO: Setar TenantContext para que Use Cases possam acessar
+        // O TenantContext é usado por Application Services para obter tenant_id
+        \App\Domain\Shared\ValueObjects\TenantContext::set($tenantId);
+        
         Log::debug('⬅ ResolveTenantContext: tenancy inicializado', ['tenant_id' => $tenantId]);
+        Log::debug('⬅ ResolveTenantContext: TenantContext setado', ['tenant_id' => $tenantId]);
 
         return $next($request);
     }
