@@ -114,37 +114,42 @@ class UserRepository implements UserRepositoryInterface
         return $this->toDomain($model->fresh(), $tenantId);
     }
 
-    public function criar(User $user, int $empresaId, string $role): User
+    /**
+     * Criar usuário comum
+     * Apenas persiste o User, sem atribuir roles ou vincular empresas
+     * Responsabilidades de negócio (roles, empresas) devem ser feitas no UseCase
+     */
+    public function criar(User $user): User
     {
-        \Log::info('UserRepository::criar iniciado', [
-            'email' => $user->email,
-            'empresa_id' => $empresaId,
-            'role' => $role,
-        ]);
-
-        // 🔥 CORREÇÃO: Normalizar email para lowercase antes de inserir
+        // Normalizar email para lowercase antes de inserir
         // Isso garante consistência e evita problemas de case sensitivity
         $userData = $this->toArray($user);
         $userData['email'] = strtolower($userData['email']);
         
         $model = UserModel::create($userData);
+        
+        return $this->toDomain($model->fresh(), $user->tenantId);
+    }
 
-        \Log::info('UserRepository::criar - Model criado', [
-            'user_id' => $model->id,
-            'email' => $model->email,
-        ]);
-
-        $model->assignRole($role);
-        $model->empresas()->attach($empresaId, ['perfil' => strtolower($role)]);
-
-        $userDomain = $this->toDomain($model->fresh(), $user->tenantId);
-
-        \Log::info('UserRepository::criar concluído', [
-            'user_id' => $userDomain->id,
-            'email' => $userDomain->email,
-        ]);
-
-        return $userDomain;
+    /**
+     * Vincular usuário a uma empresa com perfil específico
+     * Método de infraestrutura para persistir relacionamento many-to-many
+     * Se já existir vínculo, atualiza o perfil
+     */
+    public function vincularUsuarioEmpresa(int $userId, int $empresaId, string $perfil): void
+    {
+        $model = UserModel::findOrFail($userId);
+        
+        // Verificar se já existe vínculo
+        $existeVinculo = $model->empresas()->where('empresas.id', $empresaId)->exists();
+        
+        if ($existeVinculo) {
+            // Atualizar perfil existente
+            $model->empresas()->updateExistingPivot($empresaId, ['perfil' => strtolower($perfil)]);
+        } else {
+            // Criar novo vínculo
+            $model->empresas()->attach($empresaId, ['perfil' => strtolower($perfil)]);
+        }
     }
 
     public function buscarPorId(int $id): ?User

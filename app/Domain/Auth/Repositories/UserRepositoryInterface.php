@@ -24,8 +24,14 @@ interface UserRepositoryInterface
 
     /**
      * Criar usuário comum
+     * Apenas persiste o User, sem atribuir roles ou vincular empresas
      */
-    public function criar(User $user, int $empresaId, string $role): User;
+    public function criar(User $user): User;
+
+    /**
+     * Vincular usuário a uma empresa com perfil específico
+     */
+    public function vincularUsuarioEmpresa(int $userId, int $empresaId, string $perfil): void;
 
     /**
      * Buscar usuário por ID
