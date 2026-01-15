@@ -199,7 +199,6 @@ class UserLookupRepository implements UserLookupRepositoryInterface
             'per_page' => $paginator->perPage(),
             'current_page' => $paginator->currentPage(),
             'resultados_count' => count($lookups),
-            'email_encontrado' => $emailEncontrado,
         ]);
         
         return [
