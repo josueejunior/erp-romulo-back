@@ -49,14 +49,14 @@ class ProcessoItemResource extends JsonResource
             'observacoes' => $this->observacoes,
             'historico_valores' => $this->historico_valores,
             
-            // Valores financeiros
-            'valor_vencido' => (float) $this->valor_vencido,
-            'valor_empenhado' => (float) $this->valor_empenhado,
-            'valor_faturado' => (float) $this->valor_faturado,
-            'valor_pago' => (float) $this->valor_pago,
-            'saldo_aberto' => (float) $this->saldo_aberto,
-            'lucro_bruto' => (float) $this->lucro_bruto,
-            'lucro_liquido' => (float) $this->lucro_liquido,
+            // Valores financeiros (garantir que valores 0 são retornados, não null)
+            'valor_vencido' => $this->valor_vencido !== null ? (float) $this->valor_vencido : 0.0,
+            'valor_empenhado' => $this->valor_empenhado !== null ? (float) $this->valor_empenhado : 0.0,
+            'valor_faturado' => $this->valor_faturado !== null ? (float) $this->valor_faturado : 0.0,
+            'valor_pago' => $this->valor_pago !== null ? (float) $this->valor_pago : 0.0,
+            'saldo_aberto' => $this->saldo_aberto !== null ? (float) $this->saldo_aberto : 0.0,
+            'lucro_bruto' => $this->lucro_bruto !== null ? (float) $this->lucro_bruto : 0.0,
+            'lucro_liquido' => $this->lucro_liquido !== null ? (float) $this->lucro_liquido : 0.0,
             
             // Quantidades
             'quantidade_empenhada' => (float) $this->quantidade_empenhada,
