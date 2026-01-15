@@ -1141,6 +1141,37 @@
 	margin: 20px auto !important;
 }
 
+/* 🔥 CORREÇÃO: Estilos para evitar que textos saiam das áreas delimitadas */
+.pdf24_01 {
+	overflow: hidden !important;
+	text-overflow: ellipsis !important;
+	word-wrap: break-word !important;
+	max-width: 100% !important;
+}
+
+/* Limitar largura de textos longos */
+.pdf24_07 {
+	max-width: 45em !important;
+	overflow: hidden !important;
+	word-wrap: break-word !important;
+	white-space: normal !important;
+}
+
+/* Específico para nome da empresa e endereço */
+.pdf24_18, .pdf24_114 {
+	max-width: 40em !important;
+	word-wrap: break-word !important;
+	overflow: hidden !important;
+	display: inline-block !important;
+}
+
+/* Específico para órgão/UASG */
+.pdf24_15 {
+	max-width: 42em !important;
+	word-wrap: break-word !important;
+	overflow: hidden !important;
+}
+
 </STYLE> 
 </head>
 	<body>
@@ -1159,13 +1190,13 @@
 					@endif
 					<div class="pdf24_01 pdf24_07" style="left:22.88em;top:9.6954em;"><span class="pdf24_11 pdf24_09 pdf24_12" style="word-spacing:-0.0156em;">PROPOSTA COMERCIAL &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:22.24em;top:10.5754em;"><span class="pdf24_13 pdf24_09 pdf24_14" style="word-spacing:-0.0006em;">Dispensa Eletrônica nº. {{ $processo->numero_modalidade ?? 'N/A' }}/{{ date('Y') }} &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:18.46em;top:12.9454em;"><span class="pdf24_13 pdf24_09 pdf24_15" style="word-spacing:-0.0005em;">@php
+					<div class="pdf24_01 pdf24_07" style="left:18.46em;top:12.9454em;max-width:42em;overflow:hidden;word-wrap:break-word;"><span class="pdf24_13 pdf24_09 pdf24_15" style="word-spacing:-0.0005em;max-width:42em;display:inline-block;word-wrap:break-word;overflow:hidden;">@php
 						$uasg = is_array($processo->orgao->uasg ?? null) ? implode(', ', $processo->orgao->uasg) : (string)($processo->orgao->uasg ?? '');
 						$orgaoRazao = is_array($processo->orgao->razao_social ?? null) ? implode(', ', $processo->orgao->razao_social) : (string)($processo->orgao->razao_social ?? 'N/A');
 						$orgaoEstado = is_array($processo->orgao->estado ?? null) ? implode(', ', $processo->orgao->estado) : (string)($processo->orgao->estado ?? '');
 						echo $uasg . ($uasg && $orgaoRazao ? ' - ' : '') . $orgaoRazao . ($orgaoEstado ? ' - ' . $orgaoEstado : '');
 					@endphp &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:14.3197em;"><span class="pdf24_16 pdf24_09 pdf24_17" style="word-spacing:0.0048em;">A empresa </span><span class="pdf24_18 pdf24_09 pdf24_19" style="word-spacing:0.0138em;">{{ $nome_empresa }}{{ $nome_fantasia ? ' (' . $nome_fantasia . ')' : '' }} </span><span class="pdf24_16 pdf24_09 pdf24_20" style="word-spacing:0.0082em;">inscrita no CNPJ sob o n° </span><span class="pdf24_18 pdf24_09 pdf24_21">{{ $cnpj_empresa ?: 'N/A' }}</span><span class="pdf24_16 pdf24_09 pdf24_22" style="word-spacing:0.0102em;">, sediada na </span><span class="pdf24_18 pdf24_09 pdf24_23" style="word-spacing:0.0138em;">{{ $endereco_completo ?: 'N/A' }}</span><span class="pdf24_16 pdf24_09 pdf24_24" style="word-spacing:0.019em;">, abaixo &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:14.3197em;max-width:45em;overflow:hidden;word-wrap:break-word;"><span class="pdf24_16 pdf24_09 pdf24_17" style="word-spacing:0.0048em;">A empresa </span><span class="pdf24_18 pdf24_09 pdf24_19" style="word-spacing:0.0138em;max-width:35em;display:inline-block;word-wrap:break-word;overflow:hidden;">{{ $nome_empresa }}{{ $nome_fantasia && trim($nome_fantasia) !== trim($nome_empresa) ? ' (' . $nome_fantasia . ')' : '' }} </span><span class="pdf24_16 pdf24_09 pdf24_20" style="word-spacing:0.0082em;">inscrita no CNPJ sob o n° </span><span class="pdf24_18 pdf24_09 pdf24_21">{{ $cnpj_empresa ?: 'N/A' }}</span><span class="pdf24_16 pdf24_09 pdf24_22" style="word-spacing:0.0102em;">, sediada na </span><span class="pdf24_18 pdf24_09 pdf24_23" style="word-spacing:0.0138em;max-width:35em;display:inline-block;word-wrap:break-word;overflow:hidden;">{{ $endereco_completo ?: 'N/A' }}</span><span class="pdf24_16 pdf24_09 pdf24_24" style="word-spacing:0.019em;">, abaixo &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:15.1197em;"><span class="pdf24_16 pdf24_09 pdf24_25" style="word-spacing:0.0045em;">assinada por seu representante legal, interessada na participação da presente dispensa eletrônica, propõe a esse órgão o fornecimento do objeto &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:15.9097em;"><span class="pdf24_16 pdf24_09 pdf24_17" style="word-spacing:0.0056em;">deste ato convocatório, de acordo com a presente proposta comercial, nas seguintes condições. &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:38.7198em;top:17.2531em;"><span class="pdf24_26 pdf24_09 pdf24_27">VALOR &nbsp;</span></div>
@@ -1439,13 +1470,13 @@
 					@endif
 					<div class="pdf24_01 pdf24_07" style="left:22.88em;top:9.6954em;"><span class="pdf24_111 pdf24_09 pdf24_12" style="word-spacing:-0.0156em;">PROPOSTA COMERCIAL &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:22.24em;top:10.5754em;"><span class="pdf24_112 pdf24_09 pdf24_14" style="word-spacing:-0.0006em;">Dispensa Eletrônica nº. {{ $processo->numero_modalidade ?? 'N/A' }}/{{ date('Y') }} &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:18.46em;top:12.9454em;"><span class="pdf24_112 pdf24_09 pdf24_15" style="word-spacing:-0.0005em;">@php
+					<div class="pdf24_01 pdf24_07" style="left:18.46em;top:12.9454em;max-width:42em;overflow:hidden;word-wrap:break-word;"><span class="pdf24_112 pdf24_09 pdf24_15" style="word-spacing:-0.0005em;max-width:42em;display:inline-block;word-wrap:break-word;overflow:hidden;">@php
 						$uasg = is_array($processo->orgao->uasg ?? null) ? implode(', ', $processo->orgao->uasg) : (string)($processo->orgao->uasg ?? '');
 						$orgaoRazao = is_array($processo->orgao->razao_social ?? null) ? implode(', ', $processo->orgao->razao_social) : (string)($processo->orgao->razao_social ?? 'N/A');
 						$orgaoEstado = is_array($processo->orgao->estado ?? null) ? implode(', ', $processo->orgao->estado) : (string)($processo->orgao->estado ?? '');
 						echo $uasg . ($uasg && $orgaoRazao ? ' - ' : '') . $orgaoRazao . ($orgaoEstado ? ' - ' . $orgaoEstado : '');
 					@endphp &nbsp;</span></div>
-					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:14.3197em;"><span class="pdf24_113 pdf24_09 pdf24_17" style="word-spacing:0.0048em;">A empresa </span><span class="pdf24_114 pdf24_09 pdf24_19" style="word-spacing:0.0138em;">{{ $nome_empresa }}{{ $nome_fantasia ? ' (' . $nome_fantasia . ')' : '' }} </span><span class="pdf24_113 pdf24_09 pdf24_20" style="word-spacing:0.0082em;">inscrita no CNPJ sob o n° </span><span class="pdf24_114 pdf24_09 pdf24_21">{{ $cnpj_empresa ?: 'N/A' }}</span><span class="pdf24_113 pdf24_09 pdf24_22" style="word-spacing:0.0102em;">, sediada na </span><span class="pdf24_114 pdf24_09 pdf24_23" style="word-spacing:0.0138em;">{{ $endereco_completo ?: 'N/A' }}</span><span class="pdf24_113 pdf24_09 pdf24_24" style="word-spacing:0.019em;">, abaixo &nbsp;</span></div>
+					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:14.3197em;max-width:45em;overflow:hidden;word-wrap:break-word;"><span class="pdf24_113 pdf24_09 pdf24_17" style="word-spacing:0.0048em;">A empresa </span><span class="pdf24_114 pdf24_09 pdf24_19" style="word-spacing:0.0138em;max-width:35em;display:inline-block;word-wrap:break-word;overflow:hidden;">{{ $nome_empresa }}{{ $nome_fantasia && trim($nome_fantasia) !== trim($nome_empresa) ? ' (' . $nome_fantasia . ')' : '' }} </span><span class="pdf24_113 pdf24_09 pdf24_20" style="word-spacing:0.0082em;">inscrita no CNPJ sob o n° </span><span class="pdf24_114 pdf24_09 pdf24_21">{{ $cnpj_empresa ?: 'N/A' }}</span><span class="pdf24_113 pdf24_09 pdf24_22" style="word-spacing:0.0102em;">, sediada na </span><span class="pdf24_114 pdf24_09 pdf24_23" style="word-spacing:0.0138em;max-width:35em;display:inline-block;word-wrap:break-word;overflow:hidden;">{{ $endereco_completo ?: 'N/A' }}</span><span class="pdf24_113 pdf24_09 pdf24_24" style="word-spacing:0.019em;">, abaixo &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:15.1197em;"><span class="pdf24_113 pdf24_09 pdf24_25" style="word-spacing:0.0045em;">assinada por seu representante legal, interessada na participação da presente dispensa eletrônica, propõe a esse órgão o fornecimento do objeto &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:4.85em;top:15.9097em;"><span class="pdf24_113 pdf24_09 pdf24_17" style="word-spacing:0.0056em;">deste ato convocatório, de acordo com a presente proposta comercial, nas seguintes condições. &nbsp;</span></div>
 					<div class="pdf24_01 pdf24_07" style="left:38.7198em;top:17.2531em;"><span class="pdf24_115 pdf24_09 pdf24_27">VALOR &nbsp;</span></div>

@@ -113,8 +113,12 @@ class ExportacaoService
                         $telefoneEmpresa = '';
                     }
                     
-                    // Usar nome_fantasia se existir, senão usar razão social
-                    $nomeFantasia = $tenant->nome_fantasia ?? $nomeEmpresa;
+                    // 🔥 CORREÇÃO: Usar nome_fantasia apenas se for diferente da razão social
+                    // Evitar duplicação quando nome_fantasia é igual a razão_social
+                    $nomeFantasia = null;
+                    if (!empty($tenant->nome_fantasia) && trim($tenant->nome_fantasia) !== trim($nomeEmpresa)) {
+                        $nomeFantasia = $tenant->nome_fantasia;
+                    }
                     $bancoEmpresa = $tenant->banco ?? '';
                     $agenciaEmpresa = $tenant->agencia ?? '';
                     $contaEmpresa = $tenant->conta ?? '';
