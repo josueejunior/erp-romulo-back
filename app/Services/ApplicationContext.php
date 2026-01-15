@@ -132,12 +132,12 @@ class ApplicationContext implements ApplicationContextContract
             return;
         }
         
-        // 3. Resolver tenant_id através da empresa
+        // 3. Resolver tenant_id (prioridade: JWT/header > empresa)
         if (config('app.debug')) {
             Log::debug('ApplicationContext::bootstrap() - Resolvendo tenant_id');
         }
         $startTime = microtime(true);
-        $this->tenantId = $this->resolveTenantId();
+        $this->tenantId = $this->resolveTenantId($request);
         $elapsedTime = microtime(true) - $startTime;
         if (config('app.debug')) {
             Log::debug('ApplicationContext::bootstrap() - resolveTenantId() concluído', [
@@ -533,13 +533,39 @@ class ApplicationContext implements ApplicationContextContract
      * 🔥 PERFORMANCE: Usa mapeamento direto tenant_empresas.
      * Elimina loops de tenants e inicializações desnecessárias.
      */
-    private function resolveTenantId(): ?int
+    private function resolveTenantId(?Request $request = null): ?int
     {
+        // 🔥 CRÍTICO: Prioridade 1 - JWT/Header (fonte de verdade do login)
+        // O JWT contém o tenant_id correto escolhido no login
+        if ($request) {
+            // Prioridade 1.1: Header X-Tenant-ID
+            if ($request->header('X-Tenant-ID')) {
+                $tenantId = (int) $request->header('X-Tenant-ID');
+                Log::debug('ApplicationContext::resolveTenantId() - Tenant encontrado via header X-Tenant-ID', [
+                    'tenant_id' => $tenantId,
+                ]);
+                return $tenantId;
+            }
+            
+            // Prioridade 1.2: Payload JWT (já injetado por AuthenticateJWT)
+            if ($request->attributes->has('auth')) {
+                $payload = $request->attributes->get('auth');
+                if (isset($payload['tenant_id'])) {
+                    $tenantId = (int) $payload['tenant_id'];
+                    Log::debug('ApplicationContext::resolveTenantId() - Tenant encontrado via JWT payload', [
+                        'tenant_id' => $tenantId,
+                    ]);
+                    return $tenantId;
+                }
+            }
+        }
+        
+        // Prioridade 2: Resolver via empresa_id (fallback se JWT/header não disponível)
         if (!$this->empresaId) {
             return null;
         }
         
-        // Prioridade 1: Mapeamento direto (mais rápido - busca única no banco central)
+        // Prioridade 2.1: Mapeamento direto (mais rápido - busca única no banco central)
         try {
             $tenantId = \App\Models\TenantEmpresa::findTenantIdByEmpresaId($this->empresaId);
             

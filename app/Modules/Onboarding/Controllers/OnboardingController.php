@@ -63,15 +63,20 @@ class OnboardingController extends BaseApiController
 
         try {
             // ✅ CORREÇÃO: Obter tenant_id do header ou JWT, não do tenancy já inicializado
-            $tenantId = $request->header('X-Tenant-ID') 
+            $tenantIdRaw = $request->header('X-Tenant-ID') 
                 ?? ($request->attributes->has('auth') && isset($request->attributes->get('auth')['tenant_id']) 
                     ? $request->attributes->get('auth')['tenant_id'] 
                     : null)
                 ?? tenancy()->tenant?->id;
             
+            // 🔥 CRÍTICO: Converter para int (header retorna string)
+            $tenantId = $tenantIdRaw !== null ? (int) $tenantIdRaw : null;
+            
             Log::info('OnboardingController::status - INÍCIO', [
                 'user_id' => $user->id,
                 'tenant_id' => $tenantId,
+                'tenant_id_raw' => $tenantIdRaw,
+                'tenant_id_type' => gettype($tenantIdRaw),
                 'tenant_id_source' => $request->header('X-Tenant-ID') ? 'header' : (tenancy()->initialized ? 'tenancy' : 'null'),
                 'email' => $user->email,
             ]);
@@ -187,11 +192,14 @@ class OnboardingController extends BaseApiController
 
         try {
             // ✅ CORREÇÃO: Obter tenant_id do header ou JWT, não do tenancy já inicializado
-            $tenantId = $request->header('X-Tenant-ID') 
+            $tenantIdRaw = $request->header('X-Tenant-ID') 
                 ?? ($request->attributes->has('auth') && isset($request->attributes->get('auth')['tenant_id']) 
                     ? $request->attributes->get('auth')['tenant_id'] 
                     : null)
                 ?? tenancy()->tenant?->id;
+            
+            // 🔥 CRÍTICO: Converter para int (header retorna string)
+            $tenantId = $tenantIdRaw !== null ? (int) $tenantIdRaw : null;
             $userId = $user->id;
             $email = $user->email;
             
@@ -289,11 +297,14 @@ class OnboardingController extends BaseApiController
 
         try {
             // ✅ CORREÇÃO: Obter tenant_id do header ou JWT, não do tenancy já inicializado
-            $tenantId = $request->header('X-Tenant-ID') 
+            $tenantIdRaw = $request->header('X-Tenant-ID') 
                 ?? ($request->attributes->has('auth') && isset($request->attributes->get('auth')['tenant_id']) 
                     ? $request->attributes->get('auth')['tenant_id'] 
                     : null)
                 ?? tenancy()->tenant?->id;
+            
+            // 🔥 CRÍTICO: Converter para int (header retorna string)
+            $tenantId = $tenantIdRaw !== null ? (int) $tenantIdRaw : null;
             $userId = $user->id;
             $email = $user->email;
             
