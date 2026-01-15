@@ -507,6 +507,8 @@ Route::prefix('admin')->group(function () {
             Route::get('/tenants', [AdminBackupController::class, 'listarTenants']);
             Route::get('/listar', [AdminBackupController::class, 'listarBackups']);
             Route::post('/tenant/{tenantId}', [AdminBackupController::class, 'fazerBackup'])->where('tenantId', '[0-9]+');
+            // 🔥 NOVO: Backup por empresa_id (filtra dados do banco central)
+            Route::post('/empresa/{empresaId}', [AdminBackupController::class, 'fazerBackupEmpresa'])->where('empresaId', '[0-9]+');
             Route::get('/download/{filename}', [AdminBackupController::class, 'baixarBackup'])->where('filename', '[a-zA-Z0-9_.-]+');
             Route::delete('/{filename}', [AdminBackupController::class, 'deletarBackup'])->where('filename', '[a-zA-Z0-9_.-]+');
         });

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Responses\ApiResponse;
 use App\Application\Backup\UseCases\FazerBackupTenantUseCase;
+use App\Application\Backup\UseCases\FazerBackupEmpresaUseCase;
 use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
 use App\Domain\Exceptions\DomainException;
 use Illuminate\Http\JsonResponse;
@@ -28,6 +29,7 @@ class AdminBackupController extends Controller
 {
     public function __construct(
         private readonly FazerBackupTenantUseCase $fazerBackupTenantUseCase,
+        private readonly FazerBackupEmpresaUseCase $fazerBackupEmpresaUseCase,
         private readonly TenantRepositoryInterface $tenantRepository,
     ) {}
 
@@ -156,8 +158,9 @@ class AdminBackupController extends Controller
             $fullPath = "{$backupPath}/{$filename}";
 
             // Validar nome do arquivo (prevenir path traversal)
-            // Aceita nomes de banco com underscores (ex: tenant_2)
-            if (!preg_match('/^backup_tenant_\d+_.+_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.sql$/', $filename)) {
+            // Aceita backups de tenant: backup_tenant_{id}_{database}_{timestamp}.sql
+            // Aceita backups de empresa: backup_empresa_{id}_{razao_social}_{timestamp}.sql
+            if (!preg_match('/^backup_(tenant|empresa)_\d+_.+_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.sql$/', $filename)) {
                 return ApiResponse::error('Nome de arquivo inválido.', 400);
             }
 
@@ -183,6 +186,38 @@ class AdminBackupController extends Controller
     }
 
     /**
+     * 🔥 NOVO: Faz backup de uma empresa específica do banco central
+     * Filtra todos os dados por empresa_id e gera SQL apenas dessa empresa
+     */
+    public function fazerBackupEmpresa(Request $request, int $empresaId): JsonResponse
+    {
+        try {
+            $result = $this->fazerBackupEmpresaUseCase->executar($empresaId);
+
+            return ApiResponse::success(
+                'Backup da empresa criado com sucesso!',
+                $result,
+                201
+            );
+
+        } catch (DomainException $e) {
+            return ApiResponse::error(
+                $e->getMessage(),
+                $e->getCode() ?: 400
+            );
+
+        } catch (\Exception $e) {
+            Log::error('AdminBackupController::fazerBackupEmpresa - Erro', [
+                'empresa_id' => $empresaId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return ApiResponse::error('Erro ao criar backup da empresa.', 500);
+        }
+    }
+
+    /**
      * Deleta um arquivo de backup
      */
     public function deletarBackup(string $filename): JsonResponse
@@ -192,8 +227,9 @@ class AdminBackupController extends Controller
             $fullPath = "{$backupPath}/{$filename}";
 
             // Validar nome do arquivo (prevenir path traversal)
-            // Aceita nomes de banco com underscores (ex: tenant_2)
-            if (!preg_match('/^backup_tenant_\d+_.+_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.sql$/', $filename)) {
+            // Aceita backups de tenant: backup_tenant_{id}_{database}_{timestamp}.sql
+            // Aceita backups de empresa: backup_empresa_{id}_{razao_social}_{timestamp}.sql
+            if (!preg_match('/^backup_(tenant|empresa)_\d+_.+_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.sql$/', $filename)) {
                 return ApiResponse::error('Nome de arquivo inválido.', 400);
             }
 
