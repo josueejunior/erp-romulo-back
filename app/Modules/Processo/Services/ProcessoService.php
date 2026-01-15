@@ -138,19 +138,29 @@ class ProcessoService extends BaseService
             // IMPORTANTE: Carregar 'itens' primeiro para garantir que os itens sejam carregados
             // Depois carregar 'itens.orcamentos' com fornecedor usando closure para garantir filtro de empresa
             $defaultWith[] = 'itens'; // Garantir que itens sejam carregados
-            // Usar array associativo para eager loading com constraints
-            $defaultWith['itens.orcamentos'] = function ($query) use ($empresaId) {
-                // Remover Global Scope e aplicar filtro de empresa explicitamente
-                $query->withoutGlobalScope('empresa')
-                      ->where('orcamentos.empresa_id', $empresaId)
-                      ->whereNotNull('orcamentos.empresa_id')
-                      ->orderBy('orcamentos.criado_em', 'desc');
-            };
-            $defaultWith[] = 'itens.orcamentos.fornecedor';
+            
+            // Carregar orçamentos via eager loading com constraint
+            // O relacionamento orcamentos() no ProcessoItem já remove o Global Scope
+            // Mas precisamos garantir que o filtro de empresa seja aplicado durante o eager loading
+            $builder->with([
+                'itens' => function ($query) use ($empresaId) {
+                    $query->with([
+                        'orcamentos' => function ($orcamentosQuery) use ($empresaId) {
+                            // O relacionamento orcamentos() já remove o Global Scope
+                            // Mas precisamos garantir o filtro de empresa durante eager loading
+                            $orcamentosQuery->withoutGlobalScope('empresa')
+                                          ->where('orcamentos.empresa_id', $empresaId)
+                                          ->whereNotNull('orcamentos.empresa_id')
+                                          ->orderBy('orcamentos.criado_em', 'desc')
+                                          ->with('fornecedor');
+                        }
+                    ]);
+                }
+            ]);
+            
             \Log::debug('ProcessoService::list() - Carregando relacionamento de orçamentos', [
                 'tenant_id' => tenancy()->tenant?->id,
                 'empresa_id' => $empresaId,
-                'with' => $defaultWith,
             ]);
         } else {
             // Sempre carregar itens para ProcessoListResource funcionar
@@ -158,20 +168,28 @@ class ProcessoService extends BaseService
         }
         
         $with = array_merge($defaultWith, $params['with'] ?? []);
-        // Filtrar valores duplicados mantendo chaves associativas
-        $withFinal = [];
-        foreach ($with as $key => $value) {
-            if (is_numeric($key)) {
-                // Valor simples (string)
-                if (!in_array($value, $withFinal)) {
-                    $withFinal[] = $value;
-                }
-            } else {
-                // Chave associativa (closure para constraint)
-                $withFinal[$key] = $value;
-            }
+        // Se não carregamos orçamentos acima, aplicar os relacionamentos padrão
+        if (!isset($params['somente_com_orcamento']) || !($params['somente_com_orcamento'] === true || $params['somente_com_orcamento'] === 'true' || $params['somente_com_orcamento'] === '1')) {
+            $builder->with(array_unique($with));
         }
-        $builder->with($withFinal);
+        
+        // Log adicional: verificar se há orçamentos no banco antes da query
+        if (isset($params['somente_com_orcamento']) && ($params['somente_com_orcamento'] === true || $params['somente_com_orcamento'] === 'true' || $params['somente_com_orcamento'] === '1')) {
+            $totalOrcamentos = \DB::table('orcamentos')
+                ->where('empresa_id', $empresaId)
+                ->whereNotNull('empresa_id')
+                ->count();
+            $totalOrcamentoItens = \DB::table('orcamento_itens')
+                ->where('empresa_id', $empresaId)
+                ->whereNotNull('empresa_id')
+                ->count();
+            \Log::debug('ProcessoService::list() - Verificação de orçamentos no banco', [
+                'tenant_id' => tenancy()->tenant?->id,
+                'empresa_id' => $empresaId,
+                'total_orcamentos' => $totalOrcamentos,
+                'total_orcamento_itens' => $totalOrcamentoItens,
+            ]);
+        }
         
         \Log::debug('ProcessoService::list() - Relacionamentos carregados', [
             'tenant_id' => tenancy()->tenant?->id,
@@ -191,7 +209,51 @@ class ProcessoService extends BaseService
         $perPage = $params['per_page'] ?? 15;
         $page = $params['page'] ?? 1;
 
-        return $builder->paginate($perPage, ['*'], 'page', $page);
+        $paginator = $builder->paginate($perPage, ['*'], 'page', $page);
+        
+        // Se carregamos orçamentos, verificar se foram carregados corretamente e carregar manualmente se necessário
+        if (isset($params['somente_com_orcamento']) && ($params['somente_com_orcamento'] === true || $params['somente_com_orcamento'] === 'true' || $params['somente_com_orcamento'] === '1')) {
+            foreach ($paginator->items() as $processo) {
+                if ($processo->itens) {
+                    foreach ($processo->itens as $item) {
+                        // Se o relacionamento não foi carregado ou está vazio, tentar carregar manualmente
+                        if (!$item->relationLoaded('orcamentos') || ($item->orcamentos && $item->orcamentos->count() === 0)) {
+                            \Log::debug('ProcessoService::list() - Carregando orçamentos manualmente para item', [
+                                'tenant_id' => tenancy()->tenant?->id,
+                                'empresa_id' => $empresaId,
+                                'processo_id' => $processo->id,
+                                'item_id' => $item->id,
+                                'item_empresa_id' => $item->empresa_id,
+                            ]);
+                            
+                            // Carregar orçamentos diretamente usando o relacionamento
+                            $item->load([
+                                'orcamentos' => function ($query) use ($empresaId) {
+                                    $query->withoutGlobalScope('empresa')
+                                          ->where('orcamentos.empresa_id', $empresaId)
+                                          ->whereNotNull('orcamentos.empresa_id')
+                                          ->orderBy('orcamentos.criado_em', 'desc')
+                                          ->with('fornecedor');
+                                }
+                            ]);
+                        }
+                        
+                        \Log::debug('ProcessoService::list() - Verificando item após carregamento', [
+                            'tenant_id' => tenancy()->tenant?->id,
+                            'empresa_id' => $empresaId,
+                            'processo_id' => $processo->id,
+                            'item_id' => $item->id,
+                            'item_empresa_id' => $item->empresa_id,
+                            'relation_loaded_orcamentos' => $item->relationLoaded('orcamentos'),
+                            'total_orcamentos' => $item->relationLoaded('orcamentos') ? ($item->orcamentos ? $item->orcamentos->count() : 0) : 'N/A',
+                            'orcamento_ids' => $item->relationLoaded('orcamentos') && $item->orcamentos ? $item->orcamentos->pluck('id')->toArray() : [],
+                        ]);
+                    }
+                }
+            }
+        }
+        
+        return $paginator;
     }
 
     /**
