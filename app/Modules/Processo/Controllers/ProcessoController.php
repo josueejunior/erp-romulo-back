@@ -400,6 +400,14 @@ class ProcessoController extends BaseApiController
         try {
             $empresa = $this->getEmpresaAtivaOrFail();
             
+            \Log::debug('ProcessoController::list() - INÍCIO', [
+                'tenant_id' => tenancy()->tenant?->id,
+                'empresa_id' => $empresa->id,
+                'request_all' => $request->all(),
+                'somente_com_orcamento' => $request->input('somente_com_orcamento'),
+                'somente_com_orcamento_type' => gettype($request->input('somente_com_orcamento')),
+            ]);
+            
             // Criar DTO a partir do Request
             $dto = ListarProcessosDTO::fromRequest($request->all(), $empresa->id);
             
@@ -411,6 +419,18 @@ class ProcessoController extends BaseApiController
             
             // Se solicitou filtro de orçamento, carregar também os orçamentos dos itens
             $somenteComOrcamento = $request->input('somente_com_orcamento', false);
+            
+            \Log::debug('ProcessoController::list() - Verificando somente_com_orcamento', [
+                'tenant_id' => tenancy()->tenant?->id,
+                'empresa_id' => $empresa->id,
+                'somente_com_orcamento_raw' => $somenteComOrcamento,
+                'somente_com_orcamento_type' => gettype($somenteComOrcamento),
+                'check_true' => $somenteComOrcamento === true,
+                'check_string_true' => $somenteComOrcamento === 'true',
+                'check_string_1' => $somenteComOrcamento === '1',
+                'will_load_orcamentos' => ($somenteComOrcamento === true || $somenteComOrcamento === 'true' || $somenteComOrcamento === '1'),
+            ]);
+            
             if ($somenteComOrcamento === true || $somenteComOrcamento === 'true' || $somenteComOrcamento === '1') {
                 $with[] = 'itens.orcamentos.fornecedor';
                 \Log::debug('ProcessoController::list() - Carregando orçamentos', [
