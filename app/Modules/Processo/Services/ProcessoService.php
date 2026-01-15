@@ -213,41 +213,77 @@ class ProcessoService extends BaseService
         
         // Se carregamos orçamentos, verificar se foram carregados corretamente e carregar manualmente se necessário
         if (isset($params['somente_com_orcamento']) && ($params['somente_com_orcamento'] === true || $params['somente_com_orcamento'] === 'true' || $params['somente_com_orcamento'] === '1')) {
+            // Coletar todos os item_ids para fazer uma query única
+            $itemIds = [];
             foreach ($paginator->items() as $processo) {
                 if ($processo->itens) {
                     foreach ($processo->itens as $item) {
-                        // Se o relacionamento não foi carregado ou está vazio, tentar carregar manualmente
-                        if (!$item->relationLoaded('orcamentos') || ($item->orcamentos && $item->orcamentos->count() === 0)) {
-                            \Log::debug('ProcessoService::list() - Carregando orçamentos manualmente para item', [
-                                'tenant_id' => tenancy()->tenant?->id,
-                                'empresa_id' => $empresaId,
-                                'processo_id' => $processo->id,
-                                'item_id' => $item->id,
-                                'item_empresa_id' => $item->empresa_id,
-                            ]);
+                        $itemIds[] = $item->id;
+                    }
+                }
+            }
+            
+            if (!empty($itemIds)) {
+                // Buscar orçamentos diretamente via orcamento_itens
+                $orcamentosPorItem = \DB::table('orcamento_itens')
+                    ->join('orcamentos', 'orcamento_itens.orcamento_id', '=', 'orcamentos.id')
+                    ->whereIn('orcamento_itens.processo_item_id', $itemIds)
+                    ->where('orcamentos.empresa_id', $empresaId)
+                    ->whereNotNull('orcamentos.empresa_id')
+                    ->select(
+                        'orcamento_itens.processo_item_id',
+                        'orcamentos.id as orcamento_id',
+                        'orcamentos.*'
+                    )
+                    ->orderBy('orcamentos.criado_em', 'desc')
+                    ->get()
+                    ->groupBy('processo_item_id');
+                
+                \Log::debug('ProcessoService::list() - Orçamentos encontrados via query direta', [
+                    'tenant_id' => tenancy()->tenant?->id,
+                    'empresa_id' => $empresaId,
+                    'total_item_ids' => count($itemIds),
+                    'orcamentos_por_item' => $orcamentosPorItem->map(fn($group) => $group->count())->toArray(),
+                ]);
+                
+                // Carregar os orçamentos nos itens
+                foreach ($paginator->items() as $processo) {
+                    if ($processo->itens) {
+                        foreach ($processo->itens as $item) {
+                            $orcamentosIds = $orcamentosPorItem->get($item->id)?->pluck('orcamento_id')->unique()->toArray() ?? [];
                             
-                            // Carregar orçamentos diretamente usando o relacionamento
-                            $item->load([
-                                'orcamentos' => function ($query) use ($empresaId) {
-                                    $query->withoutGlobalScope('empresa')
-                                          ->where('orcamentos.empresa_id', $empresaId)
-                                          ->whereNotNull('orcamentos.empresa_id')
-                                          ->orderBy('orcamentos.criado_em', 'desc')
-                                          ->with('fornecedor');
-                                }
-                            ]);
+                            if (!empty($orcamentosIds)) {
+                                // Carregar os modelos de orçamento
+                                $orcamentosModels = \App\Modules\Orcamento\Models\Orcamento::withoutGlobalScope('empresa')
+                                    ->whereIn('id', $orcamentosIds)
+                                    ->where('empresa_id', $empresaId)
+                                    ->with('fornecedor')
+                                    ->orderBy('criado_em', 'desc')
+                                    ->get();
+                                
+                                // Definir o relacionamento manualmente
+                                $item->setRelation('orcamentos', $orcamentosModels);
+                                
+                                \Log::debug('ProcessoService::list() - Orçamentos carregados manualmente para item', [
+                                    'tenant_id' => tenancy()->tenant?->id,
+                                    'empresa_id' => $empresaId,
+                                    'processo_id' => $processo->id,
+                                    'item_id' => $item->id,
+                                    'total_orcamentos' => $orcamentosModels->count(),
+                                    'orcamento_ids' => $orcamentosModels->pluck('id')->toArray(),
+                                ]);
+                            } else {
+                                // Marcar como carregado mesmo que vazio
+                                $item->setRelation('orcamentos', collect([]));
+                                
+                                \Log::debug('ProcessoService::list() - Item sem orçamentos', [
+                                    'tenant_id' => tenancy()->tenant?->id,
+                                    'empresa_id' => $empresaId,
+                                    'processo_id' => $processo->id,
+                                    'item_id' => $item->id,
+                                ]);
+                            }
                         }
-                        
-                        \Log::debug('ProcessoService::list() - Verificando item após carregamento', [
-                            'tenant_id' => tenancy()->tenant?->id,
-                            'empresa_id' => $empresaId,
-                            'processo_id' => $processo->id,
-                            'item_id' => $item->id,
-                            'item_empresa_id' => $item->empresa_id,
-                            'relation_loaded_orcamentos' => $item->relationLoaded('orcamentos'),
-                            'total_orcamentos' => $item->relationLoaded('orcamentos') ? ($item->orcamentos ? $item->orcamentos->count() : 0) : 'N/A',
-                            'orcamento_ids' => $item->relationLoaded('orcamentos') && $item->orcamentos ? $item->orcamentos->pluck('id')->toArray() : [],
-                        ]);
                     }
                 }
             }
