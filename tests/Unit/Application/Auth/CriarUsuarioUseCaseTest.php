@@ -187,10 +187,13 @@ class CriarUsuarioUseCaseTest extends TestCase
             ->once()
             ->andReturn(false);
         
+        // Empresa principal (ID 1) será validada 2 vezes:
+        // 1. Validação inicial da empresa principal
+        // 2. Validação ao percorrer o array de empresas
         $this->empresaRepositoryMock
             ->shouldReceive('buscarPorId')
             ->with(1)
-            ->once()
+            ->twice()
             ->andReturn($empresa1);
         
         $this->empresaRepositoryMock
