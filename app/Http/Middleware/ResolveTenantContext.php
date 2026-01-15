@@ -296,6 +296,8 @@ class ResolveTenantContext
             // Se não encontrou na lookup, validar diretamente no banco do tenant
             // (pode ser caso de usuário criado antes da lookup ser populada)
             $tenant = \App\Models\Tenant::find($tenantId);
+            $validacaoDiretaPassou = false;
+            
             if ($tenant) {
                 Log::info('ResolveTenantContext: Tentando validação direta no banco do tenant', [
                     'user_id' => $user->id,
@@ -321,6 +323,7 @@ class ResolveTenantContext
                             'user_id' => $user->id,
                             'tenant_id' => $tenantId,
                         ]);
+                        $validacaoDiretaPassou = true;
                     } else {
                         Log::warning('ResolveTenantContext: ❌ Validação direta no tenant FALHOU', [
                             'user_id' => $user->id,
@@ -329,8 +332,6 @@ class ResolveTenantContext
                             'usuario_deletado' => $userNoTenant ? $userNoTenant->trashed() : null,
                         ]);
                     }
-                    
-                    return $isValid;
                 } finally {
                     tenancy()->end();
                 }
@@ -341,44 +342,72 @@ class ResolveTenantContext
                 ]);
             }
             
+            // Se a validação direta passou, permitir acesso
+            if ($validacaoDiretaPassou) {
+                return true;
+            }
+            
             // ✅ Se não encontrou nada, tentar buscar usuário em TODOS os tenants possíveis
-            if (empty($lookupsTodos)) {
-                Log::warning('ResolveTenantContext: ❌ Nenhum lookup encontrado - Buscando usuário em todos os tenants', [
-                    'user_id' => $user->id,
-                    'user_email' => $email,
-                ]);
-                
-                // Buscar em todos os tenants
-                $todosTenants = \App\Models\Tenant::all();
-                $tenantsComUsuario = [];
-                
-                foreach ($todosTenants as $t) {
-                    try {
-                        tenancy()->initialize($t);
-                        $userNoTenant = \App\Modules\Auth\Models\User::find($user->id);
-                        if ($userNoTenant && !$userNoTenant->trashed()) {
-                            $tenantsComUsuario[] = [
-                                'tenant_id' => $t->id,
-                                'tenant_razao_social' => $t->razao_social ?? null,
-                                'usuario_encontrado' => true,
-                            ];
-                        }
-                    } catch (\Exception $e) {
-                        // Ignorar erros ao inicializar tenant
-                    } finally {
-                        tenancy()->end();
+            Log::warning('ResolveTenantContext: Buscando usuário em TODOS os tenants para diagnóstico', [
+                'user_id' => $user->id,
+                'user_email' => $email,
+                'tenant_id_solicitado' => $tenantId,
+            ]);
+            
+            // Buscar em todos os tenants
+            $todosTenants = \App\Models\Tenant::all();
+            $tenantsComUsuario = [];
+            
+            foreach ($todosTenants as $t) {
+                try {
+                    tenancy()->initialize($t);
+                    $userNoTenant = \App\Modules\Auth\Models\User::find($user->id);
+                    if ($userNoTenant && !$userNoTenant->trashed()) {
+                        $tenantsComUsuario[] = [
+                            'tenant_id' => $t->id,
+                            'tenant_razao_social' => $t->razao_social ?? null,
+                            'usuario_encontrado' => true,
+                        ];
                     }
+                } catch (\Exception $e) {
+                    Log::debug('ResolveTenantContext: Erro ao verificar tenant', [
+                        'tenant_id' => $t->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                } finally {
+                    tenancy()->end();
                 }
-                
-                Log::error('ResolveTenantContext: ❌ VALIDAÇÃO FALHOU - Usuário encontrado em outros tenants', [
+            }
+            
+            if (empty($lookupsTodos) && empty($tenantsComUsuario)) {
+                Log::error('ResolveTenantContext: ❌ VALIDAÇÃO FALHOU - Usuário não encontrado em nenhum tenant', [
                     'user_id' => $user->id,
                     'user_email' => $email,
                     'tenant_id_solicitado' => $tenantId,
+                    'total_tenants_verificados' => count($todosTenants),
+                    'problema' => 'Usuário não existe em nenhum tenant. Possível inconsistência de dados.',
+                ]);
+            } else if (!empty($tenantsComUsuario)) {
+                // ✅ Usuário existe em outro(s) tenant(s), mas não no solicitado
+                $tenantCorreto = $tenantsComUsuario[0]['tenant_id'] ?? null;
+                
+                Log::error('ResolveTenantContext: ❌ VALIDAÇÃO FALHOU - Usuário encontrado em outro tenant', [
+                    'user_id' => $user->id,
+                    'user_email' => $email,
+                    'tenant_id_solicitado' => $tenantId,
+                    'tenant_id_correto' => $tenantCorreto,
                     'tenants_onde_usuario_existe' => $tenantsComUsuario,
                     'total_tenants_verificados' => count($todosTenants),
-                    'problema' => 'Usuário não existe no tenant solicitado, mas pode existir em outros tenants.',
-                    'solucao' => 'Verificar se users_lookup está sincronizada ou se o tenant_id no header está correto.',
+                    'problema' => 'Usuário está no tenant ' . $tenantCorreto . ' mas o frontend está solicitando tenant ' . $tenantId,
+                    'solucao' => 'Frontend deve usar tenant_id=' . $tenantCorreto . ' no header X-Tenant-ID',
                 ]);
+                
+                // ✅ Retornar resposta especial informando o tenant correto
+                return response()->json([
+                    'message' => 'Tenant incorreto. Use o tenant ' . $tenantCorreto . ' no header X-Tenant-ID.',
+                    'correct_tenant_id' => $tenantCorreto,
+                    'code' => 'WRONG_TENANT',
+                ], 403);
             } else {
                 // ✅ LOG FINAL: Resumo do que foi tentado
                 Log::error('ResolveTenantContext: ❌ VALIDAÇÃO FALHOU - Acesso negado', [

@@ -62,11 +62,17 @@ class OnboardingController extends BaseApiController
         }
 
         try {
-            $tenantId = tenancy()->tenant?->id ?? null;
+            // ✅ CORREÇÃO: Obter tenant_id do header ou JWT, não do tenancy já inicializado
+            $tenantId = $request->header('X-Tenant-ID') 
+                ?? ($request->attributes->has('auth') && isset($request->attributes->get('auth')['tenant_id']) 
+                    ? $request->attributes->get('auth')['tenant_id'] 
+                    : null)
+                ?? tenancy()->tenant?->id;
             
             Log::info('OnboardingController::status - INÍCIO', [
                 'user_id' => $user->id,
                 'tenant_id' => $tenantId,
+                'tenant_id_source' => $request->header('X-Tenant-ID') ? 'header' : (tenancy()->initialized ? 'tenancy' : 'null'),
                 'email' => $user->email,
             ]);
 
@@ -180,14 +186,19 @@ class OnboardingController extends BaseApiController
         $email = null;
 
         try {
-            // 🔥 CORREÇÃO: Garantir que temos dados de identificação
-            $tenantId = tenancy()->tenant?->id;
+            // ✅ CORREÇÃO: Obter tenant_id do header ou JWT, não do tenancy já inicializado
+            $tenantId = $request->header('X-Tenant-ID') 
+                ?? ($request->attributes->has('auth') && isset($request->attributes->get('auth')['tenant_id']) 
+                    ? $request->attributes->get('auth')['tenant_id'] 
+                    : null)
+                ?? tenancy()->tenant?->id;
             $userId = $user->id;
             $email = $user->email;
             
             Log::info('OnboardingController::marcarEtapa - Dados de identificação', [
                 'user_id' => $userId,
                 'tenant_id' => $tenantId,
+                'tenant_id_source' => $request->header('X-Tenant-ID') ? 'header' : (tenancy()->initialized ? 'tenancy' : 'null'),
                 'email' => $email,
                 'request_data' => $request->validated(),
             ]);
@@ -277,14 +288,19 @@ class OnboardingController extends BaseApiController
         $email = null;
 
         try {
-            // 🔥 CORREÇÃO: Garantir que temos dados de identificação
-            $tenantId = tenancy()->tenant?->id;
+            // ✅ CORREÇÃO: Obter tenant_id do header ou JWT, não do tenancy já inicializado
+            $tenantId = $request->header('X-Tenant-ID') 
+                ?? ($request->attributes->has('auth') && isset($request->attributes->get('auth')['tenant_id']) 
+                    ? $request->attributes->get('auth')['tenant_id'] 
+                    : null)
+                ?? tenancy()->tenant?->id;
             $userId = $user->id;
             $email = $user->email;
             
             Log::info('OnboardingController::concluir - Dados de identificação', [
                 'user_id' => $userId,
                 'tenant_id' => $tenantId,
+                'tenant_id_source' => $request->header('X-Tenant-ID') ? 'header' : (tenancy()->initialized ? 'tenancy' : 'null'),
                 'email' => $email,
                 'request_data' => $request->all(),
             ]);
