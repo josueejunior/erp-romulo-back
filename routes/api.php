@@ -117,7 +117,8 @@ Route::prefix('v1')->group(function () {
         'auth.context',                // CAMADA 4: Identidade
         \App\Http\Middleware\ResolveTenantContext::class,  // CAMADA 5: Tenancy (usando classe completa para debug)
         \App\Http\Middleware\BootstrapApplicationContext::class,  // CAMADA 6: Bootstrap empresa (usando classe completa para debug)
-        // 🔥 Rate limiting removido para desenvolvimento (causava muitos erros 429)
+        'throttle:120,1',              // ✅ 120 requisições por minuto
+        'throttle:1000,60',            // ✅ 1000 requisições por hora
     ])->group(function () {
         // Rotas que NÃO precisam de assinatura (exceções)
         Route::post('/auth/logout', [AuthController::class, 'logout']);
@@ -156,8 +157,8 @@ Route::prefix('v1')->group(function () {
         Route::post('/notifications/read-all', [\App\Modules\Notification\Controllers\NotificationController::class, 'markAllAsRead']);
         
         // Onboarding (usuários autenticados)
-        // 🔥 Rate limiting removido para permitir que usuários passem rápido pelo tutorial
-        Route::prefix('onboarding')->withoutMiddleware(['throttle'])->group(function () {
+        // ✅ Rate limiting flexível mas seguro para onboarding
+        Route::prefix('onboarding')->middleware(['throttle:60,1', 'throttle:300,60'])->group(function () {
             Route::get('/status', [\App\Modules\Onboarding\Controllers\OnboardingController::class, 'status']);
             Route::post('/marcar-etapa', [\App\Modules\Onboarding\Controllers\OnboardingController::class, 'marcarEtapa']);
             Route::post('/concluir', [\App\Modules\Onboarding\Controllers\OnboardingController::class, 'concluir']);
@@ -384,8 +385,10 @@ Route::prefix('v1')->group(function () {
     });
 
     // Webhooks (públicos, sem autenticação)
+    // ✅ Validação de assinatura via middleware
     Route::prefix('webhooks')->group(function () {
-        Route::post('/mercadopago', [ApiWebhookController::class, 'mercadopago']);
+        Route::post('/mercadopago', [ApiWebhookController::class, 'mercadopago'])
+            ->middleware(['throttle:100,1']); // Rate limiting para prevenir abuso
     });
 });
 
@@ -539,8 +542,8 @@ Route::prefix('v1')->group(function () {
     
     // Onboarding (rotas públicas - suportam autenticação opcional)
     // Se houver token, autentica o usuário. Caso contrário, funciona sem autenticação (usa user_id/session_id/email)
-    // 🔥 Rate limiting removido para permitir que usuários passem rápido pelo tutorial
-    Route::prefix('onboarding')->middleware(['auth.optional'])->withoutMiddleware(['throttle'])->group(function () {
+    // ✅ Rate limiting flexível mas seguro para onboarding público
+    Route::prefix('onboarding')->middleware(['auth.optional', 'throttle:60,1', 'throttle:300,60'])->group(function () {
         Route::post('/iniciar', [\App\Http\Controllers\Public\OnboardingController::class, 'iniciar']);
         Route::post('/marcar-etapa', [\App\Http\Controllers\Public\OnboardingController::class, 'marcarEtapa']);
         Route::post('/marcar-checklist', [\App\Http\Controllers\Public\OnboardingController::class, 'marcarChecklistItem']);

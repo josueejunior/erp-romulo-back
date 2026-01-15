@@ -140,33 +140,40 @@ class CadastroPublicoController extends Controller
             ], 422);
         }
         
+        // ✅ SEGURANÇA: Sempre retornar mesma resposta para prevenir enumeração de emails
+        // Aplicar delay artificial para prevenir timing attacks
+        $startTime = microtime(true);
+        $minDelay = 0.1; // 100ms delay mínimo
+        
         try {
             // Usar o mesmo service de validação
             $this->validarDuplicidadesService->validarEmail($email);
-            
-            return response()->json([
-                'available' => true,
-                'message' => 'Email disponível',
-                'success' => true,
-            ], 200);
         } catch (EmailEmpresaDesativadaException $e) {
-            return response()->json([
-                'available' => false,
-                'message' => $e->getMessage(),
-                'code' => 'EMAIL_EMPRESA_DESATIVADA',
-                'success' => false,
-            ], 200); // HTTP 200 para não quebrar UX
+            // Ignorar exceção - mesma resposta genérica
         } catch (EmailJaCadastradoException $e) {
-            return response()->json([
-                'available' => false,
-                'message' => $e->getMessage(),
-                'code' => 'EMAIL_EXISTS',
-                'redirect_to' => '/login',
-                'success' => false,
-            ], 200); // HTTP 200 para não quebrar UX
+            // Ignorar exceção - mesma resposta genérica
+        } catch (\Exception $e) {
+            // Logar outros erros mas não expor
+            Log::error('Erro ao verificar email', [
+                'email' => substr($email, 0, 3) . '***@***', // ✅ Não logar email completo
+                'error' => $e->getMessage(),
+            ]);
+        }
+        
+        // ✅ Aplicar delay mínimo para prevenir timing attacks
+        $elapsedTime = microtime(true) - $startTime;
+        if ($elapsedTime < $minDelay) {
+            usleep(($minDelay - $elapsedTime) * 1000000);
+        }
+        
+        // ✅ Sempre retornar mesma resposta genérica (independente de existir ou não)
+        return response()->json([
+            'message' => 'Se este email estiver cadastrado, você receberá instruções.',
+            'success' => true,
+        ], 200);
         } catch (\Exception $e) {
             Log::error('Erro ao verificar email', [
-                'email' => $email,
+                'email' => substr($email, 0, 3) . '***@***', // ✅ Não logar email completo
                 'error' => $e->getMessage(),
             ]);
             

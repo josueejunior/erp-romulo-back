@@ -23,10 +23,66 @@ class UploadController extends Controller
             ]);
 
             $file = $request->file('image');
+            
+            // ✅ SEGURANÇA: Validar tipo MIME real (não apenas extensão)
+            $allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+            $realMimeType = mime_content_type($file->getRealPath());
+            
+            if (!in_array($realMimeType, $allowedMimes)) {
+                Log::warning('Tentativa de upload com tipo MIME inválido', [
+                    'real_mime' => $realMimeType,
+                    'reported_mime' => $file->getMimeType(),
+                    'extension' => $file->getClientOriginalExtension(),
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Tipo de arquivo não permitido.',
+                ], 422);
+            }
+            
+            // ✅ SEGURANÇA: Validar assinatura de imagem (magic bytes)
+            $fileContent = file_get_contents($file->getRealPath());
+            $validSignatures = [
+                "\xFF\xD8\xFF", // JPEG
+                "\x89\x50\x4E\x47\x0D\x0A\x1A\x0A", // PNG
+                "\x47\x49\x46\x38", // GIF
+                "RIFF", // WEBP (verifica se contém RIFF)
+            ];
+            
+            $isValidSignature = false;
+            foreach ($validSignatures as $signature) {
+                if (strpos($fileContent, $signature) === 0 || 
+                    ($signature === "RIFF" && strpos($fileContent, "RIFF") === 0 && strpos($fileContent, "WEBP") !== false)) {
+                    $isValidSignature = true;
+                    break;
+                }
+            }
+            
+            if (!$isValidSignature) {
+                Log::warning('Tentativa de upload com assinatura de arquivo inválida', [
+                    'mime_type' => $realMimeType,
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Arquivo de imagem inválido ou corrompido.',
+                ], 422);
+            }
+            
+            // ✅ SEGURANÇA: Gerar nome único para evitar sobrescrita
             $filename = Str::uuid() . '.' . $file->getClientOriginalExtension();
             
+            // ✅ SEGURANÇA: Sanitizar nome do arquivo (remover caracteres especiais)
+            $filename = preg_replace('/[^a-zA-Z0-9._-]/', '_', $filename);
+            
+            // ✅ SEGURANÇA: Isolar por tenant (se aplicável)
+            $directory = 'uploads/images';
+            if (auth()->check() && function_exists('tenant')) {
+                $tenantId = tenant('id') ?? 'global';
+                $directory = "uploads/{$tenantId}/images";
+            }
+            
             // Salvar no storage público
-            $path = $file->storeAs('uploads/images', $filename, 'public');
+            $path = $file->storeAs($directory, $filename, 'public');
             
             // Retornar URL pública
             $url = Storage::url($path);
@@ -47,12 +103,12 @@ class UploadController extends Controller
         } catch (\Exception $e) {
             Log::error('Erro ao fazer upload de imagem', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : 'Trace desabilitado',
             ]);
             
             return response()->json([
                 'success' => false,
-                'message' => 'Erro ao fazer upload da imagem: ' . $e->getMessage(),
+                'message' => 'Erro ao fazer upload da imagem. Tente novamente.',
             ], 500);
         }
     }

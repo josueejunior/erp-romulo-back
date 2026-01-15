@@ -430,20 +430,34 @@ class MercadoPagoGateway implements PaymentProviderInterface
             return false;
         }
 
-        // Se não há assinatura, aceitar (modo desenvolvimento)
+        // ✅ SEGURANÇA: Em produção, sempre exigir assinatura
         if (empty($signature)) {
-            Log::warning('Webhook sem assinatura - aceito apenas em desenvolvimento', [
+            Log::warning('Webhook sem assinatura rejeitado', [
                 'payload_type' => $payload['type'] ?? null,
+                'environment' => config('app.env'),
             ]);
+            // Em produção, rejeitar webhooks sem assinatura
+            if (!config('app.debug', false)) {
+                return false;
+            }
+            // Em desenvolvimento, apenas logar aviso
             return config('app.debug', false);
         }
 
         // Obter chave secreta do webhook (configurar em .env)
         $webhookSecret = config('services.mercadopago.webhook_secret');
         
+        // ✅ SEGURANÇA: Em produção, sempre exigir webhook secret configurado
         if (empty($webhookSecret)) {
-            // Se não configurado, apenas validar estrutura
-            Log::warning('Webhook secret não configurado - validando apenas estrutura');
+            Log::error('Webhook secret não configurado - rejeitando webhook', [
+                'environment' => config('app.env'),
+            ]);
+            // Em produção, rejeitar se não estiver configurado
+            if (!config('app.debug', false)) {
+                return false;
+            }
+            // Em desenvolvimento, apenas validar estrutura
+            Log::warning('Webhook secret não configurado - validando apenas estrutura (modo desenvolvimento)');
             return true;
         }
 

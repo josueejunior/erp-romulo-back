@@ -85,14 +85,18 @@ class ApplicationContext implements ApplicationContextContract
         ]);
         
         // 1. Obter usuário autenticado
-        Log::debug('ApplicationContext::bootstrap() - Buscando usuário autenticado');
+        if (config('app.debug')) {
+            Log::debug('ApplicationContext::bootstrap() - Buscando usuário autenticado');
+        }
         $startTime = microtime(true);
         $this->user = auth('sanctum')->user();
         $elapsedTime = microtime(true) - $startTime;
-        Log::debug('ApplicationContext::bootstrap() - auth("sanctum")->user() concluído', [
-            'elapsed_time' => round($elapsedTime, 3) . 's',
-            'user_id' => $this->user?->id,
-        ]);
+        if (config('app.debug')) {
+            Log::debug('ApplicationContext::bootstrap() - auth("sanctum")->user() concluído', [
+                'elapsed_time' => round($elapsedTime, 3) . 's',
+                'user_id' => $this->user?->id,
+            ]);
+        }
         
         if (!$this->user) {
             Log::debug('ApplicationContext::bootstrap() - Sem usuário autenticado');
@@ -129,14 +133,18 @@ class ApplicationContext implements ApplicationContextContract
         }
         
         // 3. Resolver tenant_id através da empresa
-        Log::debug('ApplicationContext::bootstrap() - Resolvendo tenant_id');
+        if (config('app.debug')) {
+            Log::debug('ApplicationContext::bootstrap() - Resolvendo tenant_id');
+        }
         $startTime = microtime(true);
         $this->tenantId = $this->resolveTenantId();
         $elapsedTime = microtime(true) - $startTime;
-        Log::debug('ApplicationContext::bootstrap() - resolveTenantId() concluído', [
-            'elapsed_time' => round($elapsedTime, 3) . 's',
-            'tenant_id' => $this->tenantId,
-        ]);
+        if (config('app.debug')) {
+            Log::debug('ApplicationContext::bootstrap() - resolveTenantId() concluído', [
+                'elapsed_time' => round($elapsedTime, 3) . 's',
+                'tenant_id' => $this->tenantId,
+            ]);
+        }
         
         if (!$this->tenantId) {
             Log::warning('ApplicationContext::bootstrap() - Nenhum tenantId encontrado', [
@@ -148,13 +156,17 @@ class ApplicationContext implements ApplicationContextContract
         }
         
         // 4. Inicializar tenancy (com proteção)
-        Log::debug('ApplicationContext::bootstrap() - Inicializando tenancy');
+        if (config('app.debug')) {
+            Log::debug('ApplicationContext::bootstrap() - Inicializando tenancy');
+        }
         $startTime = microtime(true);
         $this->initializeTenancy();
         $elapsedTime = microtime(true) - $startTime;
-        Log::debug('ApplicationContext::bootstrap() - initializeTenancy() concluído', [
-            'elapsed_time' => round($elapsedTime, 3) . 's',
-        ]);
+        if (config('app.debug')) {
+            Log::debug('ApplicationContext::bootstrap() - initializeTenancy() concluído', [
+                'elapsed_time' => round($elapsedTime, 3) . 's',
+            ]);
+        }
         
         // 5. Carregar modelos
         $this->tenant = Tenant::find($this->tenantId);
