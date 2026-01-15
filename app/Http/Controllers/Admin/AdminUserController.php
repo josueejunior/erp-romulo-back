@@ -76,10 +76,26 @@ class AdminUserController extends Controller
                 'filtros' => $request->only(['search', 'status', 'page', 'per_page']),
             ]);
             
-            // ✅ DEBUG: Se tiver parâmetro ?nocache=true, limpar cache e forçar busca
-            if ($request->boolean('nocache')) {
+            // ✅ DEBUG: Se tiver parâmetro ?nocache=true ou cache retornar 0 usuários, limpar cache
+            $shouldClearCache = $request->boolean('nocache');
+            if ($hasCache && !$shouldClearCache) {
+                // Verificar se o cache tem dados válidos
+                $cachedResult = Cache::get($cacheKey);
+                if (empty($cachedResult['data'] ?? []) && ($cachedResult['total'] ?? 0) > 0) {
+                    // Cache está inconsistente (tem total mas sem dados) - limpar
+                    \Log::warning('AdminUserController::indexGlobal - Cache inconsistente detectado, limpando', [
+                        'cache_total' => $cachedResult['total'] ?? 0,
+                        'cache_data_count' => count($cachedResult['data'] ?? []),
+                    ]);
+                    $shouldClearCache = true;
+                }
+            }
+            
+            if ($shouldClearCache) {
                 Cache::forget($cacheKey);
-                \Log::info('AdminUserController::indexGlobal - Cache limpo por parâmetro nocache');
+                \Log::info('AdminUserController::indexGlobal - Cache limpo', [
+                    'reason' => $request->boolean('nocache') ? 'parâmetro nocache' : 'cache inconsistente',
+                ]);
             }
             
             // Cachear apenas os dados (array), não a JsonResponse
@@ -154,58 +170,14 @@ class AdminUserController extends Controller
                             'lookups_count' => count($lookupsDoTenant),
                         ]);
                         
-                        // 🔥 LOG: Verificar se o email específico está nos lookups deste tenant
-                        $emailProcurado = 'camargo.representacoesbr@gmail.com';
-                        $emailProcuradoLower = strtolower($emailProcurado);
-                        $lookupDoEmail = collect($lookupsDoTenant)->first(function($l) use ($emailProcuradoLower) {
-                            return strtolower($l->email) === $emailProcuradoLower;
-                        });
-                        
-                        if ($lookupDoEmail) {
-                            Log::info('AdminUserController::indexGlobal - Email encontrado nos lookups do tenant', [
-                                'tenant_id' => $tenantId,
-                                'user_id' => $lookupDoEmail->userId,
-                                'email' => $lookupDoEmail->email,
-                                'status' => $lookupDoEmail->status,
-                            ]);
-                        } else {
-                            Log::warning('AdminUserController::indexGlobal - Email NÃO encontrado nos lookups do tenant', [
-                                'tenant_id' => $tenantId,
-                                'email_procurado' => $emailProcurado,
-                                'lookups_emails' => array_map(fn($l) => $l->email, $lookupsDoTenant),
-                            ]);
-                        }
-                        
-                        $detalhes = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($userIds, $emailProcuradoLower) {
+                        $detalhes = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($userIds) {
                             // Buscar todos os usuários e filtrar pelos IDs necessários
                             $todosUsuarios = $this->userReadRepository->listarSemPaginacao([]);
                             
-                            // 🔥 LOG: Verificar se o email está nos usuários retornados
-                            $emailEncontrado = false;
-                            foreach ($todosUsuarios as $user) {
-                                if (strtolower($user['email'] ?? '') === $emailProcuradoLower) {
-                                    $emailEncontrado = true;
-                                    Log::info('AdminUserController::indexGlobal - Email encontrado nos usuários do tenant', [
-                                        'user_id' => $user['id'],
-                                        'email' => $user['email'],
-                                        'name' => $user['name'],
-                                        'deleted_at' => $user['deleted_at'] ?? null,
-                                    ]);
-                                    break;
-                                }
-                            }
-                            
-                            if (!$emailEncontrado) {
-                                Log::warning('AdminUserController::indexGlobal - Email NÃO encontrado nos usuários do tenant', [
-                                    'email_procurado' => $emailProcuradoLower,
-                                    'total_usuarios' => count($todosUsuarios),
-                                    'user_ids_procurados' => $userIds,
-                                ]);
-                            }
-                            
                             $filtrados = array_filter($todosUsuarios, fn($user) => in_array($user['id'], $userIds));
                             
-                            Log::info('AdminUserController::indexGlobal - Usuários filtrados', [
+                            Log::info('AdminUserController::indexGlobal - Usuários filtrados do tenant', [
+                                'tenant_id' => $tenantDomain->id ?? null,
                                 'total_antes_filtro' => count($todosUsuarios),
                                 'total_depois_filtro' => count($filtrados),
                                 'user_ids_procurados' => $userIds,
@@ -227,19 +199,7 @@ class AdminUserController extends Controller
                                 continue;
                             }
                             
-                            $email = $user['email'];
-                            
-                            // 🔥 LOG: Verificar se é o email específico
-                            $emailProcurado = 'camargo.representacoesbr@gmail.com';
-                            if (strtolower($email) === strtolower($emailProcurado)) {
-                                Log::info('AdminUserController::indexGlobal - Processando email específico', [
-                                    'user_id' => $user['id'],
-                                    'email' => $email,
-                                    'name' => $user['name'] ?? null,
-                                    'deleted_at' => $user['deleted_at'] ?? null,
-                                    'tenant_id' => $tenantId,
-                                ]);
-                            }
+                            $email = $user['email'] ?? '';
                             
                             // Enriquecer empresas com informações do tenant
                             $empresasComTenant = array_map(function ($empresa) use ($tenantDomain) {
@@ -291,9 +251,10 @@ class AdminUserController extends Controller
                         }
                     } catch (\Exception $e) {
                         $tenantsComErro++;
-                        Log::warning('AdminUserController::indexGlobal - Erro ao buscar detalhes do tenant', [
+                        Log::error('AdminUserController::indexGlobal - Erro ao buscar detalhes do tenant', [
                             'tenant_id' => $tenantId,
                             'error' => $e->getMessage(),
+                            'trace' => config('app.debug') ? $e->getTraceAsString() : 'Trace desabilitado',
                         ]);
                     }
                 }
