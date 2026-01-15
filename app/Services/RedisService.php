@@ -232,6 +232,32 @@ class RedisService
         try {
             $key = "rate_limit:{$identifier}";
             Redis::del($key);
+            
+            // 🔥 CORREÇÃO: Também limpar chaves do Laravel throttle padrão
+            $prefix = config('cache.prefix', 'laravel_cache:');
+            if (!empty($prefix) && !str_ends_with($prefix, ':')) {
+                $prefix .= ':';
+            }
+            
+            // Buscar e deletar todas as variações possíveis da chave
+            $patterns = [
+                "{$prefix}illuminate_rate_limit:{$identifier}",
+                "{$prefix}throttle:{$identifier}",
+                "throttle:{$identifier}",
+                "laravel_cache:throttle:{$identifier}",
+                "laravel_cache:illuminate_rate_limit:{$identifier}",
+            ];
+            
+            foreach ($patterns as $pattern) {
+                try {
+                    $keys = Redis::keys($pattern . '*');
+                    if (!empty($keys)) {
+                        Redis::del($keys);
+                    }
+                } catch (\Exception $e) {
+                    // Ignorar erros específicos
+                }
+            }
         } catch (\Exception $e) {
             Log::warning('Erro ao limpar rate limit: ' . $e->getMessage());
         }
