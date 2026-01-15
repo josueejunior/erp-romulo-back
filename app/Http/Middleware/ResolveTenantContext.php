@@ -73,25 +73,46 @@ class ResolveTenantContext
             $tokenTenantId = isset($payload['tenant_id']) ? (int) $payload['tenant_id'] : null;
         }
         
-        // 🔥 VALIDAÇÃO: Se header e token divergem, frontend está enviando cache antigo
+        // 🔥 VALIDAÇÃO RIGOROSA: Se header e token divergem, frontend está enviando cache antigo
+        // REGRA DE OURO: O JWT é a autoridade máxima. Se divergir, barrar imediatamente.
         if ($headerTenantId && $tokenTenantId && $headerTenantId !== $tokenTenantId) {
-            Log::error('ResolveTenantContext: ❌ Tenant Context Mismatch', [
+            Log::error('ResolveTenantContext: ❌ Tenant Context Mismatch - BLOQUEANDO REQUISIÇÃO', [
                 'user_id' => $user->id,
+                'user_email' => $user->email ?? 'N/A',
                 'header_tenant_id' => $headerTenantId,
                 'token_tenant_id' => $tokenTenantId,
                 'url' => $request->fullUrl(),
-                'problema' => 'Frontend está enviando tenant_id diferente do JWT (cache antigo)',
+                'problema' => 'Frontend está enviando tenant_id diferente do JWT (sessionStorage corrompido)',
+                'solucao' => 'Frontend deve usar tenant_id do JWT decodificado ou fazer novo login',
             ]);
             
             return response()->json([
                 'error' => 'Tenant Context Mismatch',
                 'message' => 'O tenant_id do header não corresponde ao token. Faça login novamente.',
                 'code' => 'TENANT_MISMATCH',
+                'correct_tenant_id' => $tokenTenantId, // Informar qual é o correto
             ], 403);
         }
         
-        // Prioridade: Token > Header (Token é fonte de verdade)
-        $tenantId = $tokenTenantId ?: $headerTenantId;
+        // 🔥 REGRA DE OURO: Prioridade ABSOLUTA ao Token JWT (fonte de verdade)
+        // Se o token tem tenant_id, usar APENAS ele. Ignorar header se divergir.
+        // Se o token não tem tenant_id mas o header tem, usar header (caso legado/admin).
+        if ($tokenTenantId) {
+            // Token tem tenant_id → usar APENAS ele (ignorar header se divergir)
+            $tenantId = $tokenTenantId;
+            
+            // Se header existe e diverge, logar warning (mas já foi bloqueado acima)
+            if ($headerTenantId && $headerTenantId !== $tokenTenantId) {
+                // Já foi bloqueado acima, mas logar para auditoria
+                Log::warning('ResolveTenantContext: Header divergente ignorado (usando JWT)', [
+                    'header_tenant_id' => $headerTenantId,
+                    'token_tenant_id' => $tokenTenantId,
+                ]);
+            }
+        } else {
+            // Token não tem tenant_id → usar header (fallback para admin/legado)
+            $tenantId = $headerTenantId;
+        }
         
         Log::info('ResolveTenantContext: Tenant ID resolvido', [
             'tenant_id' => $tenantId,

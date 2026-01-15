@@ -245,9 +245,26 @@ class LoginUseCase
             \Log::debug('LoginUseCase::executar - Gerando token JWT');
             $jwtService = app(\App\Services\JWTService::class);
             
+            // 🔥 PROTEÇÃO DE CONSISTÊNCIA: Garantir que o tenant_id no JWT seja EXATAMENTE
+            // o tenant onde o usuário foi encontrado e validado. Este é o tenant_id que será
+            // usado como "fonte de verdade" em todas as requisições subsequentes.
+            $tenantIdFinal = $tenantCorreto->id;
+            
+            // 🔥 VALIDAÇÃO FINAL: Verificar se o tenant_id fornecido no request (se houver)
+            // corresponde ao tenant onde o usuário foi encontrado. Se não corresponder,
+            // usar o tenant encontrado (fonte de verdade).
+            if ($dto->tenantId && $dto->tenantId !== $tenantIdFinal) {
+                \Log::warning('LoginUseCase::executar - ⚠️ Tenant ID fornecido não corresponde ao encontrado', [
+                    'tenant_id_fornecido' => $dto->tenantId,
+                    'tenant_id_encontrado' => $tenantIdFinal,
+                    'user_id' => $user->id,
+                    'acao' => 'Usando tenant_id encontrado (fonte de verdade)',
+                ]);
+            }
+            
             $tokenPayload = [
                 'user_id' => $user->id,
-                'tenant_id' => $tenantCorreto->id,
+                'tenant_id' => $tenantIdFinal, // 🔥 CRÍTICO: Usar tenant_id validado, não o fornecido
                 'empresa_id' => $empresaAtiva?->id,
                 'role' => null, // Pode ser adicionado se necessário
             ];
@@ -256,7 +273,11 @@ class LoginUseCase
 
             \Log::info('LoginUseCase::executar - Login realizado com sucesso', [
                 'user_id' => $user->id,
-                'tenant_id' => $tenantCorreto->id,
+                'tenant_id' => $tenantIdFinal,
+                'tenant_id_fornecido_no_request' => $dto->tenantId,
+                'tenant_id_no_jwt' => $tenantIdFinal,
+                'empresa_ativa_id' => $empresaAtiva?->id,
+                'consistencia' => 'Token JWT gerado com tenant_id validado e consistente',
             ]);
 
             // Buscar modelo completo do usuário para foto_perfil (se necessário)

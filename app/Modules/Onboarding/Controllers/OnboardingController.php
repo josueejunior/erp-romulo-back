@@ -81,6 +81,55 @@ class OnboardingController extends BaseApiController
                 'email' => $user->email,
             ]);
 
+            // 🔥 CORREÇÃO CRÍTICA: Validar relação usuário-tenant ANTES de verificar onboarding
+            // Mesmo que a rota seja isenta de validação rigorosa, precisamos garantir integridade
+            if ($tenantId) {
+                $lookupRepository = app(\App\Domain\UsersLookup\Repositories\UserLookupRepositoryInterface::class);
+                $lookups = $lookupRepository->buscarAtivosPorEmail($user->email);
+                
+                $usuarioVinculadoAoTenant = false;
+                foreach ($lookups as $lookup) {
+                    if ($lookup->tenantId === $tenantId && $lookup->userId === $user->id) {
+                        $usuarioVinculadoAoTenant = true;
+                        break;
+                    }
+                }
+                
+                // Se não encontrou na lookup, verificar diretamente no banco do tenant
+                if (!$usuarioVinculadoAoTenant) {
+                    $tenant = \App\Models\Tenant::find($tenantId);
+                    if ($tenant) {
+                        $tenantAnterior = tenancy()->tenant;
+                        try {
+                            tenancy()->initialize($tenant);
+                            $userNoTenant = \App\Modules\Auth\Models\User::find($user->id);
+                            $usuarioVinculadoAoTenant = $userNoTenant !== null && !$userNoTenant->trashed();
+                        } finally {
+                            if ($tenantAnterior) {
+                                tenancy()->initialize($tenantAnterior);
+                            } else {
+                                tenancy()->end();
+                            }
+                        }
+                    }
+                }
+                
+                if (!$usuarioVinculadoAoTenant) {
+                    Log::warning('OnboardingController::status - Usuário não vinculado ao tenant solicitado', [
+                        'user_id' => $user->id,
+                        'tenant_id' => $tenantId,
+                        'email' => $user->email,
+                        'lookups_encontrados' => array_map(fn($l) => ['tenant_id' => $l->tenantId, 'user_id' => $l->userId], $lookups),
+                    ]);
+                    
+                    return response()->json([
+                        'success' => false,
+                        'error' => 'INVALID_TENANT_RELATION',
+                        'message' => 'Usuário não está vinculado ao tenant solicitado. Verifique o header X-Tenant-ID.',
+                    ], 403);
+                }
+            }
+
             // Criar DTO usando dados do usuário autenticado
             $dto = BuscarProgressoDTO::fromRequest(
                 requestData: [],
