@@ -89,8 +89,20 @@ class ProcessoItemResource extends JsonResource
                         'processo_item_id' => $this->id,
                         'total_orcamentos' => $orcamentos ? $orcamentos->count() : 0,
                         'orcamento_ids' => $orcamentos ? $orcamentos->pluck('id')->toArray() : [],
+                        'relation_loaded' => $this->relationLoaded('orcamentos'),
                     ]);
                     return OrcamentoResource::collection($orcamentos);
+                },
+                function () {
+                    // Log quando o relacionamento NÃO está carregado
+                    \Log::warning('ProcessoItemResource::toArray - Relacionamento orcamentos NÃO carregado', [
+                        'tenant_id' => tenancy()->tenant?->id,
+                        'empresa_id' => $this->empresa_id ?? null,
+                        'processo_item_id' => $this->id,
+                        'relation_loaded' => $this->relationLoaded('orcamentos'),
+                        'relations_loaded' => $this->getRelations(),
+                    ]);
+                    return [];
                 }
             ),
             'orcamento_escolhido' => $this->when(

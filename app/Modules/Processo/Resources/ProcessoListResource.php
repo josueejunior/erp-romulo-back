@@ -72,7 +72,21 @@ class ProcessoListResource extends JsonResource
             // Incluir itens com orçamentos quando carregados
             'itens' => $this->when(
                 $this->relationLoaded('itens'),
-                fn() => ProcessoItemResource::collection($this->itens)
+                function () {
+                    \Log::debug('ProcessoListResource::toArray - Itens carregados', [
+                        'tenant_id' => tenancy()->tenant?->id,
+                        'processo_id' => $this->id,
+                        'total_itens' => $this->itens ? $this->itens->count() : 0,
+                        'itens_detalhes' => $this->itens ? $this->itens->map(function($item) {
+                            return [
+                                'item_id' => $item->id,
+                                'relation_loaded_orcamentos' => $item->relationLoaded('orcamentos'),
+                                'total_orcamentos' => $item->relationLoaded('orcamentos') ? ($item->orcamentos ? $item->orcamentos->count() : 0) : 'N/A',
+                            ];
+                        })->toArray() : [],
+                    ]);
+                    return ProcessoItemResource::collection($this->itens);
+                }
             ),
         ];
     }

@@ -133,19 +133,45 @@ class ProcessoService extends BaseService
         $defaultWith = ['orgao', 'setor'];
         
         // Se solicitou filtro de orçamento, carregar também os itens com orçamentos
+        $empresaId = $this->getEmpresaIdFromContext();
         if (isset($params['somente_com_orcamento']) && ($params['somente_com_orcamento'] === true || $params['somente_com_orcamento'] === 'true' || $params['somente_com_orcamento'] === '1')) {
-            // Usar o relacionamento 'orcamentos' (que é hasManyThrough via orcamentoItens)
-            // O ProcessoItemResource espera 'orcamentos', não 'orcamentoItens'
+            // IMPORTANTE: Carregar 'itens' primeiro para garantir que os itens sejam carregados
+            // Depois carregar 'itens.orcamentos' com fornecedor usando closure para garantir filtro de empresa
+            $defaultWith[] = 'itens'; // Garantir que itens sejam carregados
+            // Usar array associativo para eager loading com constraints
+            $defaultWith['itens.orcamentos'] = function ($query) use ($empresaId) {
+                // Remover Global Scope e aplicar filtro de empresa explicitamente
+                $query->withoutGlobalScope('empresa')
+                      ->where('orcamentos.empresa_id', $empresaId)
+                      ->whereNotNull('orcamentos.empresa_id')
+                      ->orderBy('orcamentos.criado_em', 'desc');
+            };
             $defaultWith[] = 'itens.orcamentos.fornecedor';
             \Log::debug('ProcessoService::list() - Carregando relacionamento de orçamentos', [
                 'tenant_id' => tenancy()->tenant?->id,
-                'empresa_id' => $this->getEmpresaIdFromContext(),
+                'empresa_id' => $empresaId,
                 'with' => $defaultWith,
             ]);
+        } else {
+            // Sempre carregar itens para ProcessoListResource funcionar
+            $defaultWith[] = 'itens';
         }
         
         $with = array_merge($defaultWith, $params['with'] ?? []);
-        $builder->with(array_unique($with));
+        // Filtrar valores duplicados mantendo chaves associativas
+        $withFinal = [];
+        foreach ($with as $key => $value) {
+            if (is_numeric($key)) {
+                // Valor simples (string)
+                if (!in_array($value, $withFinal)) {
+                    $withFinal[] = $value;
+                }
+            } else {
+                // Chave associativa (closure para constraint)
+                $withFinal[$key] = $value;
+            }
+        }
+        $builder->with($withFinal);
         
         \Log::debug('ProcessoService::list() - Relacionamentos carregados', [
             'tenant_id' => tenancy()->tenant?->id,
