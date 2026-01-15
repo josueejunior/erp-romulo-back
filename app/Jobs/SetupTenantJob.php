@@ -98,20 +98,40 @@ class SetupTenantJob implements ShouldQueue
             // Continuar mesmo se falhar (pode ser que o status já esteja correto)
         }
 
-        try {
-            // 3. Criar banco de dados do tenant
-            Log::info('SetupTenantJob - Criando banco de dados', [
-                'tenant_id' => $this->tenantId,
-            ]);
-            
-            $databaseService->criarBancoDados($tenantDomain);
+        // 🔥 ARQUITETURA SINGLE DATABASE:
+        // Criar banco e executar migrations apenas se TENANCY_CREATE_DATABASES=true
+        if (env('TENANCY_CREATE_DATABASES', false)) {
+            try {
+                // 3. Criar banco de dados do tenant
+                Log::info('SetupTenantJob - Criando banco de dados', [
+                    'tenant_id' => $this->tenantId,
+                ]);
+                
+                $databaseService->criarBancoDados($tenantDomain);
 
-            // 4. Executar migrations
-            Log::info('SetupTenantJob - Executando migrations', [
+                // 4. Executar migrations
+                Log::info('SetupTenantJob - Executando migrations', [
+                    'tenant_id' => $this->tenantId,
+                ]);
+                
+                $databaseService->executarMigrations($tenantDomain);
+            } catch (\Exception $e) {
+                Log::error('SetupTenantJob - Erro ao criar banco/migrations do tenant', [
+                    'tenant_id' => $this->tenantId,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+                throw $e;
+            }
+        } else {
+            Log::info('SetupTenantJob - Criação de banco desabilitada (Single Database Tenancy)', [
                 'tenant_id' => $this->tenantId,
+                'arquitetura' => 'Single Database - isolamento por empresa_id',
             ]);
-            
-            $databaseService->executarMigrations($tenantDomain);
+        }
+        
+        // Continuar com inicialização do contexto do tenant mesmo sem banco separado
+        try {
 
             // 5. Recarregar tenant model para garantir que está atualizado
             $tenantModel = $tenantRepository->buscarModeloPorId($this->tenantId);
@@ -119,7 +139,13 @@ class SetupTenantJob implements ShouldQueue
                 throw new \RuntimeException("Tenant model {$this->tenantId} não encontrado após criar banco.");
             }
 
-            // 6. Inicializar contexto do tenant
+            // 5/6. Recarregar tenant model para garantir que está atualizado
+            $tenantModel = $tenantRepository->buscarModeloPorId($this->tenantId);
+            if (!$tenantModel) {
+                throw new \RuntimeException("Tenant model {$this->tenantId} não encontrado.");
+            }
+
+            // 6/7. Inicializar contexto do tenant
             tenancy()->initialize($tenantModel);
 
             try {

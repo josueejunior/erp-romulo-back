@@ -37,31 +37,36 @@ class DatabaseSeeder extends Seeder
                 'status' => 'ativa',
             ]);
 
-            // Criar o banco de dados do tenant
-            try {
-                // Tentar usar o método direto primeiro
-                $tenant->database()->manager()->createDatabase($tenant);
-                $this->command->info('Banco de dados do tenant criado com sucesso');
-                
-                // Executar migrations
-                tenancy()->initialize($tenant);
-                \Artisan::call('migrate', [
-                    '--path' => 'database/migrations/tenant',
-                    '--force' => true
-                ]);
-                tenancy()->end();
-                $this->command->info('Migrations do tenant executadas com sucesso');
-            } catch (\Exception $e) {
-                // Se falhar, tentar usar os jobs
+            // 🔥 ARQUITETURA SINGLE DATABASE:
+            // Criar banco e executar migrations apenas se TENANCY_CREATE_DATABASES=true
+            if (env('TENANCY_CREATE_DATABASES', false)) {
                 try {
-                    $this->command->warn('Tentando método alternativo para criar banco...');
-                    CreateDatabase::dispatchSync($tenant);
-                    MigrateDatabase::dispatchSync($tenant);
-                    $this->command->info('Banco de dados do tenant criado com sucesso (método alternativo)');
-                } catch (\Exception $e2) {
-                    $this->command->error('Erro ao criar banco do tenant: ' . $e2->getMessage());
-                    $this->command->error('Erro original: ' . $e->getMessage());
+                    // Tentar usar o método direto primeiro
+                    $tenant->database()->manager()->createDatabase($tenant);
+                    $this->command->info('Banco de dados do tenant criado com sucesso');
+                    
+                    // Executar migrations
+                    tenancy()->initialize($tenant);
+                    \Artisan::call('migrate', [
+                        '--path' => 'database/migrations/tenant',
+                        '--force' => true
+                    ]);
+                    tenancy()->end();
+                    $this->command->info('Migrations do tenant executadas com sucesso');
+                } catch (\Exception $e) {
+                    // Se falhar, tentar usar os jobs
+                    try {
+                        $this->command->warn('Tentando método alternativo para criar banco...');
+                        CreateDatabase::dispatchSync($tenant);
+                        MigrateDatabase::dispatchSync($tenant);
+                        $this->command->info('Banco de dados do tenant criado com sucesso (método alternativo)');
+                    } catch (\Exception $e2) {
+                        $this->command->error('Erro ao criar banco do tenant: ' . $e2->getMessage());
+                        $this->command->error('Erro original: ' . $e->getMessage());
+                    }
                 }
+            } else {
+                $this->command->info('Criação de banco desabilitada (Single Database Tenancy - isolamento por empresa_id)');
             }
 
             $this->command->info('Tenant criado: ' . $tenant->razao_social);

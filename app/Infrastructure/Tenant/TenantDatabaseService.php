@@ -82,8 +82,24 @@ class TenantDatabaseService implements TenantDatabaseServiceInterface
         }
     }
 
+    /**
+     * Criar banco de dados do tenant
+     * 
+     * 🔥 ARQUITETURA SINGLE DATABASE:
+     * Este método só cria banco se TENANCY_CREATE_DATABASES=true
+     * Por padrão, usando Single Database Tenancy (isolamento por empresa_id no banco central)
+     */
     public function criarBancoDados(Tenant $tenant): void
     {
+        // Se não estiver configurado para criar bancos separados, pular
+        if (!env('TENANCY_CREATE_DATABASES', false)) {
+            Log::info('TenantDatabaseService::criarBancoDados - Criação de banco desabilitada (Single Database Tenancy)', [
+                'tenant_id' => $tenant->id,
+                'arquitetura' => 'Single Database - isolamento por empresa_id',
+            ]);
+            return;
+        }
+        
         try {
             // Buscar modelo Eloquent do tenant
             $tenantModel = TenantModel::findOrFail($tenant->id);
@@ -264,8 +280,24 @@ class TenantDatabaseService implements TenantDatabaseServiceInterface
         }
     }
 
+    /**
+     * Executar migrations do tenant
+     * 
+     * 🔥 ARQUITETURA SINGLE DATABASE:
+     * Este método só executa migrations se TENANCY_CREATE_DATABASES=true
+     * Por padrão, usando Single Database Tenancy (isolamento por empresa_id no banco central)
+     */
     public function executarMigrations(Tenant $tenant): void
     {
+        // Se não estiver configurado para criar bancos separados, pular
+        if (!env('TENANCY_CREATE_DATABASES', false)) {
+            Log::info('TenantDatabaseService::executarMigrations - Execução de migrations desabilitada (Single Database Tenancy)', [
+                'tenant_id' => $tenant->id,
+                'arquitetura' => 'Single Database - isolamento por empresa_id',
+            ]);
+            return;
+        }
+        
         $tenantModel = TenantModel::findOrFail($tenant->id);
         MigrateDatabase::dispatchSync($tenantModel);
     }
