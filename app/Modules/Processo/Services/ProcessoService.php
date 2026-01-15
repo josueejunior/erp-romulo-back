@@ -95,6 +95,14 @@ class ProcessoService extends BaseService
      */
     public function list(array $params = []): LengthAwarePaginator
     {
+        \Log::debug('ProcessoService::list() - INÍCIO', [
+            'tenant_id' => tenancy()->tenant?->id,
+            'empresa_id' => $this->getEmpresaIdFromContext(),
+            'params' => $params,
+            'somente_com_orcamento' => $params['somente_com_orcamento'] ?? null,
+            'somente_com_orcamento_type' => gettype($params['somente_com_orcamento'] ?? null),
+        ]);
+        
         $builder = $this->createQueryBuilder();
 
         // Filtros opcionais usando when()

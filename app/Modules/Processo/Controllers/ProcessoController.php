@@ -406,13 +406,96 @@ class ProcessoController extends BaseApiController
             // Executar Use Case (retorna entidades de domínio paginadas)
             $paginado = $this->listarProcessosUseCase->executar($dto);
             
+            // Determinar relacionamentos a carregar
+            $with = ['orgao', 'setor', 'itens', 'itens.formacoesPreco', 'documentos', 'documentos.documentoHabilitacao', 'empenhos'];
+            
+            // Se solicitou filtro de orçamento, carregar também os orçamentos dos itens
+            $somenteComOrcamento = $request->input('somente_com_orcamento', false);
+            if ($somenteComOrcamento === true || $somenteComOrcamento === 'true' || $somenteComOrcamento === '1') {
+                $with[] = 'itens.orcamentos.fornecedor';
+                \Log::debug('ProcessoController::list() - Carregando orçamentos', [
+                    'tenant_id' => tenancy()->tenant?->id,
+                    'empresa_id' => $empresa->id,
+                    'with' => $with,
+                ]);
+            }
+            
             // Buscar modelos Eloquent para serialização (apenas para relacionamentos)
-            $models = collect($paginado->items())->map(function ($processoDomain) {
+            $models = collect($paginado->items())->map(function ($processoDomain) use ($with) {
                 return $this->processoRepository->buscarModeloPorId(
                     $processoDomain->id,
-                    ['orgao', 'setor', 'itens', 'itens.formacoesPreco', 'documentos', 'documentos.documentoHabilitacao', 'empenhos']
+                    $with
                 );
             })->filter();
+            
+            // Se solicitou filtro de orçamento, garantir que os orçamentos foram carregados
+            if ($somenteComOrcamento === true || $somenteComOrcamento === 'true' || $somenteComOrcamento === '1') {
+                $empresaId = $empresa->id;
+                
+                // Coletar todos os item_ids
+                $itemIds = [];
+                foreach ($models as $processo) {
+                    if ($processo && $processo->itens) {
+                        foreach ($processo->itens as $item) {
+                            $itemIds[] = $item->id;
+                        }
+                    }
+                }
+                
+                if (!empty($itemIds)) {
+                    // Buscar orçamentos diretamente via orcamento_itens
+                    $orcamentosPorItem = \DB::table('orcamento_itens')
+                        ->join('orcamentos', 'orcamento_itens.orcamento_id', '=', 'orcamentos.id')
+                        ->whereIn('orcamento_itens.processo_item_id', $itemIds)
+                        ->where('orcamentos.empresa_id', $empresaId)
+                        ->whereNotNull('orcamentos.empresa_id')
+                        ->select(
+                            'orcamento_itens.processo_item_id',
+                            'orcamentos.id as orcamento_id'
+                        )
+                        ->get()
+                        ->groupBy('processo_item_id');
+                    
+                    \Log::debug('ProcessoController::list() - Orçamentos encontrados via query direta', [
+                        'tenant_id' => tenancy()->tenant?->id,
+                        'empresa_id' => $empresaId,
+                        'total_item_ids' => count($itemIds),
+                        'orcamentos_por_item' => $orcamentosPorItem->map(fn($group) => $group->count())->toArray(),
+                    ]);
+                    
+                    // Carregar os orçamentos nos itens
+                    foreach ($models as $processo) {
+                        if ($processo && $processo->itens) {
+                            foreach ($processo->itens as $item) {
+                                $orcamentosIds = $orcamentosPorItem->get($item->id)?->pluck('orcamento_id')->unique()->toArray() ?? [];
+                                
+                                if (!empty($orcamentosIds)) {
+                                    // Carregar os modelos de orçamento
+                                    $orcamentosModels = \App\Modules\Orcamento\Models\Orcamento::withoutGlobalScope('empresa')
+                                        ->whereIn('id', $orcamentosIds)
+                                        ->where('empresa_id', $empresaId)
+                                        ->with('fornecedor')
+                                        ->orderBy('criado_em', 'desc')
+                                        ->get();
+                                    
+                                    // Definir o relacionamento manualmente
+                                    $item->setRelation('orcamentos', $orcamentosModels);
+                                    
+                                    \Log::debug('ProcessoController::list() - Orçamentos carregados para item', [
+                                        'tenant_id' => tenancy()->tenant?->id,
+                                        'empresa_id' => $empresaId,
+                                        'item_id' => $item->id,
+                                        'total_orcamentos' => $orcamentosModels->count(),
+                                    ]);
+                                } else {
+                                    // Marcar como carregado mesmo que vazio
+                                    $item->setRelation('orcamentos', collect([]));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             
             // Usar Presenter para serialização (ou Resource para manter compatibilidade)
             return response()->json([
