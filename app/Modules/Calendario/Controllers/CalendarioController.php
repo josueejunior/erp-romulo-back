@@ -44,8 +44,29 @@ class CalendarioController extends BaseApiController
 
         // 1. Verificar acesso ao plano
         $tenant = $this->getTenant();
-        if (!$tenant || !$tenant->temAcessoCalendario()) {
-            \Log::warning('CalendarioController::disputas - Acesso negado pelo plano');
+        if (!$tenant) {
+            \Log::warning('CalendarioController::disputas - Tenant não encontrado');
+            return response()->json(CalendarioPresenter::erroAcessoPlano(), 403);
+        }
+        
+        // Log detalhado para debug
+        $plano = $tenant->planoAtual;
+        \Log::debug('CalendarioController::disputas - Verificando acesso', [
+            'tenant_id' => $tenant->id,
+            'plano_id' => $plano?->id,
+            'plano_nome' => $plano?->nome,
+            'limite_processos' => $plano?->limite_processos,
+            'limite_usuarios' => $plano?->limite_usuarios,
+            'recursos_disponiveis' => $plano?->recursos_disponiveis,
+            'tem_acesso_calendario' => $tenant->temAcessoCalendario(),
+        ]);
+        
+        if (!$tenant->temAcessoCalendario()) {
+            \Log::warning('CalendarioController::disputas - Acesso negado pelo plano', [
+                'tenant_id' => $tenant->id,
+                'plano_id' => $plano?->id,
+                'plano_nome' => $plano?->nome,
+            ]);
             return response()->json(CalendarioPresenter::erroAcessoPlano(), 403);
         }
 
@@ -104,8 +125,29 @@ class CalendarioController extends BaseApiController
 
         // 1. Verificar acesso ao plano
         $tenant = $this->getTenant();
-        if (!$tenant || !$tenant->temAcessoCalendario()) {
-            \Log::warning('CalendarioController::julgamento - Acesso negado pelo plano');
+        if (!$tenant) {
+            \Log::warning('CalendarioController::julgamento - Tenant não encontrado');
+            return response()->json(CalendarioPresenter::erroAcessoPlano(), 403);
+        }
+        
+        // Log detalhado para debug
+        $plano = $tenant->planoAtual;
+        \Log::debug('CalendarioController::julgamento - Verificando acesso', [
+            'tenant_id' => $tenant->id,
+            'plano_id' => $plano?->id,
+            'plano_nome' => $plano?->nome,
+            'limite_processos' => $plano?->limite_processos,
+            'limite_usuarios' => $plano?->limite_usuarios,
+            'recursos_disponiveis' => $plano?->recursos_disponiveis,
+            'tem_acesso_calendario' => $tenant->temAcessoCalendario(),
+        ]);
+        
+        if (!$tenant->temAcessoCalendario()) {
+            \Log::warning('CalendarioController::julgamento - Acesso negado pelo plano', [
+                'tenant_id' => $tenant->id,
+                'plano_id' => $plano?->id,
+                'plano_nome' => $plano?->nome,
+            ]);
             return response()->json(CalendarioPresenter::erroAcessoPlano(), 403);
         }
 

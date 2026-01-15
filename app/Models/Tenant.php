@@ -515,10 +515,66 @@ class Tenant extends BaseTenant implements TenantWithDatabase
 
     /**
      * Verifica se o plano tem acesso a calendários
+     * 
+     * 🔥 CORREÇÃO: Planos ilimitados têm acesso automático a todos os recursos
      */
     public function temAcessoCalendario(): bool
     {
-        return $this->temRecurso('calendarios');
+        if (!$this->temAssinaturaAtiva()) {
+            \Log::debug('Tenant::temAcessoCalendario() - Sem assinatura ativa', [
+                'tenant_id' => $this->id,
+            ]);
+            return false;
+        }
+
+        // Tentar carregar plano do relacionamento
+        $plano = $this->planoAtual;
+        
+        // Se não encontrou pelo relacionamento, tentar buscar pela assinatura
+        if (!$plano && $this->assinatura_atual_id) {
+            $assinatura = $this->assinaturaAtual;
+            if ($assinatura && $assinatura->plano_id) {
+                $plano = \App\Modules\Assinatura\Models\Plano::find($assinatura->plano_id);
+            }
+        }
+        
+        if (!$plano) {
+            \Log::warning('Tenant::temAcessoCalendario() - Plano não encontrado', [
+                'tenant_id' => $this->id,
+                'plano_atual_id' => $this->plano_atual_id,
+                'assinatura_atual_id' => $this->assinatura_atual_id,
+            ]);
+            return false;
+        }
+
+        // Planos ilimitados (sem limite de processos ou usuários) têm acesso total ao calendário
+        // Verificar se é plano ilimitado verificando os limites
+        $temLimiteProcessos = $plano->limite_processos !== null;
+        $temLimiteUsuarios = $plano->limite_usuarios !== null;
+        
+        // Se não tem limites, é plano ilimitado - permite acesso ao calendário
+        if (!$temLimiteProcessos && !$temLimiteUsuarios) {
+            \Log::debug('Tenant::temAcessoCalendario() - Plano ilimitado, acesso permitido', [
+                'tenant_id' => $this->id,
+                'plano_id' => $plano->id,
+                'plano_nome' => $plano->nome,
+            ]);
+            return true;
+        }
+
+        // Para outros planos, verificar se o recurso 'calendarios' está disponível
+        $recursosDisponiveis = $plano->recursos_disponiveis ?? [];
+        $temRecurso = in_array('calendarios', $recursosDisponiveis);
+        
+        \Log::debug('Tenant::temAcessoCalendario() - Verificação de recurso', [
+            'tenant_id' => $this->id,
+            'plano_id' => $plano->id,
+            'plano_nome' => $plano->nome,
+            'recursos_disponiveis' => $recursosDisponiveis,
+            'tem_recurso_calendarios' => $temRecurso,
+        ]);
+        
+        return $temRecurso;
     }
 
     /**
