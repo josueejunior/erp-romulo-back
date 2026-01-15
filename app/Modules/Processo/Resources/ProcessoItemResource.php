@@ -79,7 +79,20 @@ class ProcessoItemResource extends JsonResource
                     'cnpj' => $this->transportadora->cnpj,
                 ]
             ),
-            'orcamentos' => OrcamentoResource::collection($this->whenLoaded('orcamentos')),
+            'orcamentos' => $this->when(
+                $this->relationLoaded('orcamentos'),
+                function () {
+                    $orcamentos = $this->orcamentos;
+                    \Log::debug('ProcessoItemResource::toArray - Orçamentos carregados', [
+                        'tenant_id' => tenancy()->tenant?->id,
+                        'empresa_id' => $this->empresa_id ?? null,
+                        'processo_item_id' => $this->id,
+                        'total_orcamentos' => $orcamentos ? $orcamentos->count() : 0,
+                        'orcamento_ids' => $orcamentos ? $orcamentos->pluck('id')->toArray() : [],
+                    ]);
+                    return OrcamentoResource::collection($orcamentos);
+                }
+            ),
             'orcamento_escolhido' => $this->when(
                 $this->relationLoaded('orcamentos'),
                 fn() => new OrcamentoResource($this->orcamentoEscolhido)

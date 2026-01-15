@@ -137,10 +137,22 @@ class ProcessoService extends BaseService
             // Usar o relacionamento 'orcamentos' (que é hasManyThrough via orcamentoItens)
             // O ProcessoItemResource espera 'orcamentos', não 'orcamentoItens'
             $defaultWith[] = 'itens.orcamentos.fornecedor';
+            \Log::debug('ProcessoService::list() - Carregando relacionamento de orçamentos', [
+                'tenant_id' => tenancy()->tenant?->id,
+                'empresa_id' => $this->getEmpresaIdFromContext(),
+                'with' => $defaultWith,
+            ]);
         }
         
         $with = array_merge($defaultWith, $params['with'] ?? []);
         $builder->with(array_unique($with));
+        
+        \Log::debug('ProcessoService::list() - Relacionamentos carregados', [
+            'tenant_id' => tenancy()->tenant?->id,
+            'empresa_id' => $this->getEmpresaIdFromContext(),
+            'with_final' => array_unique($with),
+            'somente_com_orcamento' => $params['somente_com_orcamento'] ?? null,
+        ]);
 
         // Ordenação - usar constante do modelo para timestamps customizados
         $modelClass = static::$model;
