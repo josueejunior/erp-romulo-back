@@ -171,18 +171,6 @@ class CadastroPublicoController extends Controller
             'message' => 'Se este email estiver cadastrado, você receberá instruções.',
             'success' => true,
         ], 200);
-        } catch (\Exception $e) {
-            Log::error('Erro ao verificar email', [
-                'email' => substr($email, 0, 3) . '***@***', // ✅ Não logar email completo
-                'error' => $e->getMessage(),
-            ]);
-            
-            return response()->json([
-                'available' => false,
-                'message' => 'Erro ao verificar email. Tente novamente.',
-                'success' => false,
-            ], 500);
-        }
     }
 
     /**
