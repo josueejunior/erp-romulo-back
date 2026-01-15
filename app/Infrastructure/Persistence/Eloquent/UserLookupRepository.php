@@ -105,19 +105,22 @@ class UserLookupRepository implements UserLookupRepositoryInterface
         // 1. (email, tenant_id) - users_lookup_email_tenant_unique
         // 2. (cnpj, tenant_id) - users_lookup_cnpj_tenant_unique
         // 
-        // Como o erro ocorre na constraint (cnpj, tenant_id), vamos usar ela como chave de busca
-        // Se já existir um registro com mesmo CNPJ+tenant, atualizamos; caso contrário, criamos.
+        // ⚠️ CORREÇÃO CRÍTICA: Usar (email, tenant_id) como chave de busca, não (cnpj, tenant_id)
+        // Motivo: Um email é único por usuário, mas um CNPJ pode ser compartilhado por múltiplos
+        // usuários no mesmo tenant (ex: múltiplos funcionários da mesma empresa).
+        // Usar (cnpj, tenant_id) causaria sobrescrita de registros quando múltiplos usuários
+        // da mesma empresa são criados.
         //
         // ⚠️ IMPORTANTE: Isso garante que não haverá Unique Violation e a transação não será abortada
         // 
         // 🔥 CORREÇÃO: Buscar incluindo soft deleted para restaurar se necessário
         $model = UserLookupModel::withTrashed()->updateOrCreate(
             [
-                'cnpj' => $data['cnpj'],
+                'email' => $data['email'],
                 'tenant_id' => $data['tenant_id'],
             ],
             [
-                'email' => $data['email'],
+                'cnpj' => $data['cnpj'],
                 'user_id' => $data['user_id'],
                 'empresa_id' => $data['empresa_id'],
                 'status' => $data['status'] ?? 'ativo',
