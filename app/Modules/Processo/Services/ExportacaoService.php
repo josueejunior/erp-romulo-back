@@ -102,8 +102,17 @@ class ExportacaoService
                     $cidadeEmpresa = $tenant->cidade ?? '';
                     $estadoEmpresa = $tenant->estado ?? '';
                     $emailEmpresa = $tenant->email ?? '';
+                    
+                    // 🔥 CORREÇÃO: Garantir que telefone seja string
                     $telefones = $tenant->telefones ?? [];
-                    $telefoneEmpresa = is_array($telefones) && !empty($telefones) ? $telefones[0] : '';
+                    if (is_array($telefones) && !empty($telefones)) {
+                        $telefoneEmpresa = is_array($telefones[0]) || is_object($telefones[0])
+                            ? (string)($telefones[0]->numero ?? $telefones[0]['numero'] ?? $telefones[0] ?? '')
+                            : (string)$telefones[0];
+                    } else {
+                        $telefoneEmpresa = '';
+                    }
+                    
                     // Usar nome_fantasia se existir, senão usar razão social
                     $nomeFantasia = $tenant->nome_fantasia ?? $nomeEmpresa;
                     $bancoEmpresa = $tenant->banco ?? '';
@@ -211,11 +220,11 @@ class ExportacaoService
             ]);
         }
 
-        // Formatar endereço completo
+        // 🔥 CORREÇÃO: Formatar endereço completo garantindo que todos os valores sejam strings
         $enderecoCompleto = trim(implode(', ', array_filter([
-            $enderecoEmpresa,
-            $cidadeEmpresa,
-            $estadoEmpresa
+            is_array($enderecoEmpresa) ? implode(', ', $enderecoEmpresa) : (string)($enderecoEmpresa ?? ''),
+            is_array($cidadeEmpresa) ? implode(', ', $cidadeEmpresa) : (string)($cidadeEmpresa ?? ''),
+            is_array($estadoEmpresa) ? implode(', ', $estadoEmpresa) : (string)($estadoEmpresa ?? '')
         ])));
 
         // Formatar data atual
@@ -236,25 +245,26 @@ class ExportacaoService
             return !empty($item->valor_arrematado) && $item->valor_arrematado > 0;
         })->values();
 
+        // 🔥 CORREÇÃO: Garantir que todas as variáveis sejam strings para evitar erro no htmlspecialchars
         $dados = [
             'processo' => $processo,
             'validade_proposta' => $validadeProposta,
             'data_elaboracao' => Carbon::now()->format('d/m/Y H:i'),
             'data_formatada' => $dataFormatada,
             'itens' => $itensComValorArrematado,
-            'nome_empresa' => $nomeEmpresa,
-            'nome_fantasia' => $nomeFantasia,
-            'cnpj_empresa' => $cnpjEmpresa,
-            'endereco_completo' => $enderecoCompleto,
-            'cidade_empresa' => $cidadeEmpresa,
-            'estado_empresa' => $estadoEmpresa,
-            'email_empresa' => $emailEmpresa,
-            'telefone_empresa' => $telefoneEmpresa,
-            'banco_empresa' => $bancoEmpresa,
-            'agencia_empresa' => $agenciaEmpresa,
-            'conta_empresa' => $contaEmpresa,
-            'representante_legal' => $representanteLegal,
-            'cargo_representante' => $cargoRepresentante,
+            'nome_empresa' => is_array($nomeEmpresa) ? implode(', ', $nomeEmpresa) : (string)($nomeEmpresa ?? ''),
+            'nome_fantasia' => is_array($nomeFantasia) ? implode(', ', $nomeFantasia) : (string)($nomeFantasia ?? ''),
+            'cnpj_empresa' => is_array($cnpjEmpresa) ? implode(', ', $cnpjEmpresa) : (string)($cnpjEmpresa ?? ''),
+            'endereco_completo' => $enderecoCompleto ?: '',
+            'cidade_empresa' => is_array($cidadeEmpresa) ? implode(', ', $cidadeEmpresa) : (string)($cidadeEmpresa ?? ''),
+            'estado_empresa' => is_array($estadoEmpresa) ? implode(', ', $estadoEmpresa) : (string)($estadoEmpresa ?? ''),
+            'email_empresa' => is_array($emailEmpresa) ? implode(', ', $emailEmpresa) : (string)($emailEmpresa ?? ''),
+            'telefone_empresa' => $telefoneEmpresa ?: '',
+            'banco_empresa' => is_array($bancoEmpresa) ? implode(', ', $bancoEmpresa) : (string)($bancoEmpresa ?? ''),
+            'agencia_empresa' => is_array($agenciaEmpresa) ? implode(', ', $agenciaEmpresa) : (string)($agenciaEmpresa ?? ''),
+            'conta_empresa' => is_array($contaEmpresa) ? implode(', ', $contaEmpresa) : (string)($contaEmpresa ?? ''),
+            'representante_legal' => is_array($representanteLegal) ? implode(', ', $representanteLegal) : (string)($representanteLegal ?? ''),
+            'cargo_representante' => is_array($cargoRepresentante) ? implode(', ', $cargoRepresentante) : (string)($cargoRepresentante ?? ''),
             'tenant' => $tenant,
             'logo_url' => $logoUrl,
             'logo_base64' => $logoBase64,
