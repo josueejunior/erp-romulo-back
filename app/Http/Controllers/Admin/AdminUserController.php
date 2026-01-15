@@ -1007,23 +1007,39 @@ class AdminUserController extends Controller
     }
 
     /**
-     * Listar empresas disponíveis do tenant atual
-     * 🔥 DDD: Controller fino - delega para Domain Service
+     * Listar empresas disponíveis para o usuário dentro de um tenant
+     * 🔥 DDD: Usa EmpresaAdminService para buscar empresas do tenant
      * 
      * Retorna apenas as empresas do tenant especificado na rota.
-     * Remove duplicatas baseado no ID da empresa.
+     * Remove duplicatas baseado no CNPJ normalizado.
      */
     public function empresas(Request $request, Tenant $tenant)
     {
         try {
+            \Log::info('AdminUserController::empresas - Iniciando listagem de empresas', [
+                'tenant_id' => $tenant->id,
+                'tenant_razao_social' => $tenant->razao_social,
+                'request_params' => $request->all(),
+            ]);
+            
             $tenantDomain = $this->tenantRepository->buscarPorId($tenant->id);
             
             if (!$tenantDomain) {
+                \Log::warning('AdminUserController::empresas - Tenant não encontrado', [
+                    'tenant_id' => $tenant->id,
+                ]);
                 return ApiResponse::error('Tenant não encontrado.', 404);
             }
 
             // 🔥 DDD: Usar Domain Service para buscar empresas (isola tenancy)
             $empresasUnicas = $this->empresaAdminService->buscarEmpresasDoTenant($tenantDomain);
+            
+            \Log::info('AdminUserController::empresas - Empresas retornadas', [
+                'tenant_id' => $tenant->id,
+                'total_empresas' => count($empresasUnicas),
+                'empresas_ids' => array_column($empresasUnicas, 'id'),
+                'empresas_razao_social' => array_column($empresasUnicas, 'razao_social'),
+            ]);
             
             return ApiResponse::collection($empresasUnicas);
         } catch (\Exception $e) {
