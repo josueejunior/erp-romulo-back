@@ -58,12 +58,28 @@ class AdminBackupController extends Controller
                     $suffix = config('tenancy.database.suffix', '');
                     $databaseName = $prefix . $tenantDomain->id . $suffix;
                     
+                    // 🔥 NOVO: Buscar empresa_id associada ao tenant (primeira empresa do tenant)
+                    $empresaId = null;
+                    try {
+                        $tenantEmpresa = \App\Models\TenantEmpresa::where('tenant_id', $tenantDomain->id)->first();
+                        if ($tenantEmpresa) {
+                            $empresaId = $tenantEmpresa->empresa_id;
+                        }
+                    } catch (\Exception $e) {
+                        // Ignorar erro se tabela não existir ou não conseguir buscar
+                        \Log::debug('AdminBackupController - Erro ao buscar empresa_id', [
+                            'tenant_id' => $tenantDomain->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                    
                     return [
                         'id' => $tenantDomain->id,
                         'razao_social' => $tenantDomain->razaoSocial ?? 'N/A',
                         'cnpj' => $tenantDomain->cnpj ?? null,
                         'database' => $databaseName,
                         'status' => $tenantDomain->status ?? 'ativa',
+                        'empresa_id' => $empresaId, // 🔥 NOVO: empresa_id para backup por empresa
                         'created_at' => $tenant ? ($tenant->created_at ? $tenant->created_at->toIso8601String() : null) : null,
                     ];
                 })
