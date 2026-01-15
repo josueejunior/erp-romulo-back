@@ -99,8 +99,19 @@ class ResolveTenantContext
         }
 
         // 🔥 SEGURANÇA: Validar que o usuário pertence ao tenant (prevenir Tenant Hopping)
-        if (!$this->validarRelacaoUsuarioTenant($user, $tenantId)) {
-            // Log detalhado já feito no método validarRelacaoUsuarioTenant
+        $validacao = $this->validarRelacaoUsuarioTenant($user, $tenantId);
+        
+        if (!$validacao['valido']) {
+            // Se encontrou o tenant correto, retornar resposta especial
+            if (isset($validacao['tenant_correto'])) {
+                return response()->json([
+                    'message' => 'Tenant incorreto. Use o tenant ' . $validacao['tenant_correto'] . ' no header X-Tenant-ID.',
+                    'correct_tenant_id' => $validacao['tenant_correto'],
+                    'code' => 'WRONG_TENANT',
+                ], 403);
+            }
+            
+            // Caso contrário, retornar erro genérico
             return response()->json([
                 'message' => 'Acesso não autorizado a este tenant.',
             ], 403);
@@ -217,9 +228,9 @@ class ResolveTenantContext
      * 
      * @param \Illuminate\Contracts\Auth\Authenticatable $user
      * @param int $tenantId
-     * @return bool
+     * @return array ['valido' => bool, 'tenant_correto' => int|null]
      */
-    private function validarRelacaoUsuarioTenant($user, int $tenantId): bool
+    private function validarRelacaoUsuarioTenant($user, int $tenantId): array
     {
         // Admin não precisa de validação (tem acesso a todos os tenants)
         if ($user instanceof \App\Modules\Auth\Models\AdminUser) {
@@ -227,7 +238,7 @@ class ResolveTenantContext
                 'user_id' => $user->id,
                 'tenant_id' => $tenantId,
             ]);
-            return true;
+            return ['valido' => true];
         }
 
         // Buscar na users_lookup para validar relação
@@ -281,7 +292,7 @@ class ResolveTenantContext
                         'tenant_id' => $tenantId,
                         'lookup_id' => $lookup->id ?? null,
                     ]);
-                    return true;
+                    return ['valido' => true];
                 }
             }
             
@@ -332,6 +343,8 @@ class ResolveTenantContext
                             'usuario_deletado' => $userNoTenant ? $userNoTenant->trashed() : null,
                         ]);
                     }
+                    
+                    return ['valido' => $isValid];
                 } finally {
                     tenancy()->end();
                 }
@@ -344,7 +357,7 @@ class ResolveTenantContext
             
             // Se a validação direta passou, permitir acesso
             if ($validacaoDiretaPassou) {
-                return true;
+                return ['valido' => true];
             }
             
             // ✅ Se não encontrou nada, tentar buscar usuário em TODOS os tenants possíveis
@@ -402,12 +415,8 @@ class ResolveTenantContext
                     'solucao' => 'Frontend deve usar tenant_id=' . $tenantCorreto . ' no header X-Tenant-ID',
                 ]);
                 
-                // ✅ Retornar resposta especial informando o tenant correto
-                return response()->json([
-                    'message' => 'Tenant incorreto. Use o tenant ' . $tenantCorreto . ' no header X-Tenant-ID.',
-                    'correct_tenant_id' => $tenantCorreto,
-                    'code' => 'WRONG_TENANT',
-                ], 403);
+                // ✅ Retornar informação sobre o tenant correto
+                return ['valido' => false, 'tenant_correto' => $tenantCorreto];
             } else {
                 // ✅ LOG FINAL: Resumo do que foi tentado
                 Log::error('ResolveTenantContext: ❌ VALIDAÇÃO FALHOU - Acesso negado', [
@@ -421,7 +430,7 @@ class ResolveTenantContext
                 ]);
             }
             
-            return false;
+            return ['valido' => false];
             
         } catch (\Exception $e) {
             Log::error('ResolveTenantContext: ❌ EXCEÇÃO ao validar relação usuário-tenant', [
@@ -435,7 +444,7 @@ class ResolveTenantContext
             ]);
             
             // Em caso de erro, negar acesso por segurança
-            return false;
+            return ['valido' => false];
         }
     }
 }
