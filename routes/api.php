@@ -71,10 +71,8 @@ Route::prefix('v1')->group(function () {
         });
 
     // Rotas públicas (autenticação)
-    // Rate limiting: aumentado para permitir uso normal sem bloqueios desnecessários
-    // Login: 60/min, 200/hora (reduzido período de bloqueio para 15 minutos em vez de 60)
-    Route::post('/auth/login', [AuthController::class, 'login'])
-        ->middleware(['throttle:60,1', 'throttle:200,15']); // 60/min, 200/hora (bloqueio por 15min se exceder)
+    // 🔥 CORREÇÃO: Rate limiting removido do login para evitar bloqueios desnecessários
+    Route::post('/auth/login', [AuthController::class, 'login']);
     Route::post('/auth/register', [AuthController::class, 'register'])
         ->middleware(['throttle:10,1', 'throttle:20,60']); // 10/min, 20/hora
     Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])
@@ -395,9 +393,8 @@ Route::prefix('v1')->group(function () {
 // Rotas do Painel Admin Central (fora do tenant e fora do v1)
 // 🔥 IMPORTANTE: Rotas admin devem estar dentro do prefixo 'api' mas fora do 'v1'
 Route::prefix('admin')->group(function () {
-    // Autenticação admin - Rate limiting mais restritivo (3/min, 5/hora)
-    Route::post('/login', [AdminAuthController::class, 'login'])
-        ->middleware(['throttle:3,1', 'throttle:5,60']);
+    // 🔥 CORREÇÃO: Rate limiting removido do login admin para evitar bloqueios desnecessários
+    Route::post('/login', [AdminAuthController::class, 'login']);
     
     // 🔥 NOVA ARQUITETURA: Pipeline para admin
     // 
