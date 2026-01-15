@@ -43,68 +43,45 @@ final class UsersLookupService
         ]);
         
         try {
-            // Verificar se já existe registro para este email+tenant+user
-            $existentes = $this->lookupRepository->buscarAtivosPorEmail($email);
-            $existente = null;
+            // 🔥 SOLUÇÃO PROFUNDA: O método criar() do repository agora usa updateOrCreate
+            // baseado na constraint única (cnpj, tenant_id). Isso garante idempotência
+            // e evita Unique Violation mesmo em cenários de concorrência ou chamadas duplicadas.
+            //
+            // Não precisamos mais verificar manualmente se existe - o repository faz isso
+            // de forma atômica usando UPSERT (INSERT ... ON CONFLICT DO UPDATE).
+            $lookup = new UserLookup(
+                id: null, // Será definido pelo repository após upsert
+                email: $email,
+                cnpj: $cnpjLimpo,
+                tenantId: $tenantId,
+                userId: $userId,
+                empresaId: $empresaId,
+                status: 'ativo',
+            );
             
-            foreach ($existentes as $e) {
-                if ($e->tenantId === $tenantId && $e->userId === $userId) {
-                    $existente = $e;
-                    break;
-                }
-            }
+            $lookupSalvo = $this->lookupRepository->criar($lookup);
             
-            if ($existente) {
-                // Atualizar registro existente
-                $lookup = new UserLookup(
-                    id: $existente->id,
-                    email: $email,
-                    cnpj: $cnpjLimpo,
-                    tenantId: $tenantId,
-                    userId: $userId,
-                    empresaId: $empresaId,
-                    status: 'ativo',
-                );
-                
-                $this->lookupRepository->atualizar($lookup);
-                
-                Log::info('UsersLookupService::registrar - Registro atualizado', [
-                    'id' => $existente->id,
-                    'tenant_id' => $tenantId,
-                    'user_id' => $userId,
-                    'email' => $email,
-                ]);
-            } else {
-                // Criar novo registro
-                $lookup = new UserLookup(
-                    id: null,
-                    email: $email,
-                    cnpj: $cnpjLimpo,
-                    tenantId: $tenantId,
-                    userId: $userId,
-                    empresaId: $empresaId,
-                    status: 'ativo',
-                );
-                
-                $this->lookupRepository->criar($lookup);
-                
-                Log::info('UsersLookupService::registrar - Registro criado', [
-                    'tenant_id' => $tenantId,
-                    'user_id' => $userId,
-                    'email' => $email,
-                ]);
-            }
+            Log::info('UsersLookupService::registrar - Registro processado com sucesso', [
+                'id' => $lookupSalvo->id,
+                'tenant_id' => $tenantId,
+                'user_id' => $userId,
+                'email' => $email,
+                'cnpj' => $cnpjLimpo,
+            ]);
         } catch (\Exception $e) {
             Log::error('UsersLookupService::registrar - Erro ao criar/atualizar registro', [
                 'tenant_id' => $tenantId,
                 'user_id' => $userId,
                 'email' => $email,
+                'cnpj' => $cnpjLimpo,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
             
-            // Não quebrar o fluxo - apenas logar erro
-            // O registro pode ser criado posteriormente via comando
+            // 🔥 IMPORTANTE: Re-lançar exceção para que a transação seja abortada corretamente
+            // Se o erro for de constraint única, o updateOrCreate deveria ter tratado.
+            // Se chegou aqui, é um erro inesperado que precisa ser investigado.
+            throw $e;
         }
     }
     

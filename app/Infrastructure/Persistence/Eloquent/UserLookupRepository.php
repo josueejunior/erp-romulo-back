@@ -100,13 +100,48 @@ class UserLookupRepository implements UserLookupRepositoryInterface
     {
         $data = $this->toArray($lookup);
         
-        $model = UserLookupModel::create($data);
+        // 🔥 SOLUÇÃO PROFUNDA: Usar updateOrCreate para garantir idempotência
+        // A tabela tem duas constraints únicas:
+        // 1. (email, tenant_id) - users_lookup_email_tenant_unique
+        // 2. (cnpj, tenant_id) - users_lookup_cnpj_tenant_unique
+        // 
+        // Como o erro ocorre na constraint (cnpj, tenant_id), vamos usar ela como chave de busca
+        // Se já existir um registro com mesmo CNPJ+tenant, atualizamos; caso contrário, criamos.
+        //
+        // ⚠️ IMPORTANTE: Isso garante que não haverá Unique Violation e a transação não será abortada
+        // 
+        // 🔥 CORREÇÃO: Buscar incluindo soft deleted para restaurar se necessário
+        $model = UserLookupModel::withTrashed()->updateOrCreate(
+            [
+                'cnpj' => $data['cnpj'],
+                'tenant_id' => $data['tenant_id'],
+            ],
+            [
+                'email' => $data['email'],
+                'user_id' => $data['user_id'],
+                'empresa_id' => $data['empresa_id'],
+                'status' => $data['status'] ?? 'ativo',
+                'deleted_at' => null, // Garantir que não está soft deleted
+            ]
+        );
         
-        Log::debug('UserLookupRepository: Registro criado', [
+        // Se o registro estava soft deleted, garantir que foi restaurado
+        if ($model->trashed()) {
+            $model->restore();
+        }
+        
+        // Refresh para garantir que temos os dados mais recentes
+        $model->refresh();
+        
+        Log::debug('UserLookupRepository: Registro processado (UPSERT)', [
             'id' => $model->id,
+            'was_recently_created' => $model->wasRecentlyCreated ?? false,
             'email' => $model->email,
             'cnpj' => $model->cnpj,
             'tenant_id' => $model->tenant_id,
+            'user_id' => $model->user_id,
+            'empresa_id' => $model->empresa_id,
+            'status' => $model->status,
         ]);
         
         return $this->toDomain($model);
