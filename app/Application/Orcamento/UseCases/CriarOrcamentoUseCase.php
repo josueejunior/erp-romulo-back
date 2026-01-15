@@ -26,8 +26,23 @@ class CriarOrcamentoUseCase
 
     public function executar(CriarOrcamentoDTO $dto): Orcamento
     {
+        \Log::info('CriarOrcamentoUseCase::executar - Iniciando criação de orçamento', [
+            'processo_id' => $dto->processoId,
+            'processo_item_id' => $dto->processoItemId,
+            'fornecedor_id' => $dto->fornecedorId,
+            'transportadora_id' => $dto->transportadoraId,
+            'empresa_id_dto' => $dto->empresaId,
+            'custo_produto' => $dto->custoProduto,
+            'frete' => $dto->frete,
+        ]);
+        
         // Resolver empresa_id usando o trait (fallbacks robustos)
         $empresaId = $this->resolveEmpresaId($dto->empresaId);
+        
+        \Log::info('CriarOrcamentoUseCase::executar - Empresa ID resolvido', [
+            'empresa_id_resolvido' => $empresaId,
+            'empresa_id_dto' => $dto->empresaId,
+        ]);
         
         $orcamento = new Orcamento(
             id: null,
@@ -45,11 +60,29 @@ class CriarOrcamentoUseCase
             observacoes: $dto->observacoes,
         );
 
+        \Log::info('CriarOrcamentoUseCase::executar - Chamando repository->criar', [
+            'empresa_id' => $empresaId,
+            'processo_id' => $dto->processoId,
+            'processo_item_id' => $dto->processoItemId,
+        ]);
+        
         $orcamento = $this->orcamentoRepository->criar($orcamento);
+        
+        \Log::info('CriarOrcamentoUseCase::executar - Orçamento criado no repository', [
+            'orcamento_id' => $orcamento->id,
+            'empresa_id' => $orcamento->empresaId,
+            'processo_id' => $orcamento->processoId,
+            'processo_item_id' => $orcamento->processoItemId,
+        ]);
 
         // Se o orçamento foi criado com processo_item_id, criar também o OrcamentoItem
         // Isso é necessário para que o relacionamento hasManyThrough funcione corretamente
         if ($dto->processoItemId) {
+            \Log::info('CriarOrcamentoUseCase::executar - Criando OrcamentoItem', [
+                'orcamento_id' => $orcamento->id,
+                'processo_item_id' => $dto->processoItemId,
+            ]);
+            
             $orcamentoItem = new OrcamentoItem(
                 id: null,
                 empresaId: $empresaId,
@@ -64,8 +97,18 @@ class CriarOrcamentoUseCase
                 observacoes: $dto->observacoes,
             );
 
-            $this->orcamentoItemRepository->criar($orcamentoItem);
+            $orcamentoItem = $this->orcamentoItemRepository->criar($orcamentoItem);
+            
+            \Log::info('CriarOrcamentoUseCase::executar - OrcamentoItem criado', [
+                'orcamento_item_id' => $orcamentoItem->id,
+                'orcamento_id' => $orcamentoItem->orcamentoId,
+                'processo_item_id' => $orcamentoItem->processoItemId,
+            ]);
         }
+
+        \Log::info('CriarOrcamentoUseCase::executar - Concluído', [
+            'orcamento_id' => $orcamento->id,
+        ]);
 
         return $orcamento;
     }

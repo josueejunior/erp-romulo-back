@@ -169,17 +169,48 @@ class OrcamentoController extends BaseApiController
             $data['processo_item_id'] = $itemId;
             $data['empresa_id'] = $empresa->id;
             
+            \Log::info('OrcamentoController::storeWeb - Dados recebidos', [
+                'processo_id' => $processoId,
+                'item_id' => $itemId,
+                'empresa_id' => $empresa->id,
+                'data_validated' => $data,
+            ]);
+            
             // Usar Use Case DDD (validações de negócio dentro do Use Case)
             $dto = CriarOrcamentoDTO::fromArray($data);
             $orcamentoDomain = $this->criarOrcamentoUseCase->executar($dto);
             
+            \Log::info('OrcamentoController::storeWeb - Orçamento criado pelo UseCase', [
+                'orcamento_id' => $orcamentoDomain->id,
+                'empresa_id' => $orcamentoDomain->empresaId,
+                'processo_id' => $orcamentoDomain->processoId,
+            ]);
+            
             // Buscar modelo Eloquent para Resource usando repository
+            \Log::info('OrcamentoController::storeWeb - Buscando modelo Eloquent', [
+                'orcamento_id' => $orcamentoDomain->id,
+                'with' => ['fornecedor', 'transportadora', 'itens.processoItem', 'itens.formacaoPreco'],
+            ]);
+            
             $orcamento = $this->orcamentoRepository->buscarModeloPorId(
                 $orcamentoDomain->id,
                 ['fornecedor', 'transportadora', 'itens.processoItem', 'itens.formacaoPreco']
             );
             
+            \Log::info('OrcamentoController::storeWeb - Resultado da busca do modelo', [
+                'orcamento_id_procurado' => $orcamentoDomain->id,
+                'orcamento_encontrado' => $orcamento !== null,
+                'orcamento_id_encontrado' => $orcamento?->id,
+                'orcamento_empresa_id' => $orcamento?->empresa_id,
+            ]);
+            
             if (!$orcamento) {
+                \Log::error('OrcamentoController::storeWeb - Orçamento não encontrado após criação', [
+                    'orcamento_id' => $orcamentoDomain->id,
+                    'empresa_id' => $orcamentoDomain->empresaId,
+                    'tenant_id' => tenancy()->tenant?->id,
+                    'database' => \Illuminate\Support\Facades\DB::connection()->getDatabaseName(),
+                ]);
                 return response()->json(['message' => 'Orçamento não encontrado após criação.'], 404);
             }
             

@@ -64,8 +64,41 @@ class OrcamentoRepository implements OrcamentoRepositoryInterface
 
     public function criar(Orcamento $orcamento): Orcamento
     {
-        $model = OrcamentoModel::create($this->toArray($orcamento));
-        return $this->toDomain($model->fresh());
+        $data = $this->toArray($orcamento);
+        
+        \Log::info('OrcamentoRepository::criar - Dados para criação', [
+            'data' => $data,
+            'tenant_id' => tenancy()->tenant?->id,
+            'database' => \Illuminate\Support\Facades\DB::connection()->getDatabaseName(),
+        ]);
+        
+        $model = OrcamentoModel::create($data);
+        
+        \Log::info('OrcamentoRepository::criar - Model criado no banco', [
+            'orcamento_id' => $model->id,
+            'empresa_id' => $model->empresa_id,
+            'processo_id' => $model->processo_id,
+            'processo_item_id' => $model->processo_item_id,
+            'fornecedor_id' => $model->fornecedor_id,
+            'criado_em' => $model->criado_em?->toDateTimeString(),
+        ]);
+        
+        $freshModel = $model->fresh();
+        
+        \Log::info('OrcamentoRepository::criar - Model após fresh()', [
+            'orcamento_id' => $freshModel->id,
+            'empresa_id' => $freshModel->empresa_id,
+            'existe_no_banco' => $freshModel !== null,
+        ]);
+        
+        $domain = $this->toDomain($freshModel);
+        
+        \Log::info('OrcamentoRepository::criar - Entidade de domínio criada', [
+            'orcamento_id' => $domain->id,
+            'empresa_id' => $domain->empresaId,
+        ]);
+        
+        return $domain;
     }
 
     public function buscarPorId(int $id): ?Orcamento
@@ -114,7 +147,77 @@ class OrcamentoRepository implements OrcamentoRepositoryInterface
      */
     public function buscarModeloPorId(int $id, array $with = []): ?OrcamentoModel
     {
-        return $this->buscarModeloPorIdInternal($id, $with, false);
+        \Log::info('OrcamentoRepository::buscarModeloPorId - Iniciando busca', [
+            'orcamento_id' => $id,
+            'with' => $with,
+            'tenant_id' => tenancy()->tenant?->id,
+            'database' => \Illuminate\Support\Facades\DB::connection()->getDatabaseName(),
+        ]);
+        
+        // Primeiro tentar com Global Scope (segurança)
+        $model = $this->buscarModeloPorIdInternal($id, $with, false);
+        
+        \Log::info('OrcamentoRepository::buscarModeloPorId - Resultado com Global Scope', [
+            'orcamento_id' => $id,
+            'encontrado' => $model !== null,
+            'model_id' => $model?->id,
+            'model_empresa_id' => $model?->empresa_id,
+        ]);
+        
+        // Se não encontrou com Global Scope, tentar sem (pode ser problema de sincronização)
+        if (!$model) {
+            \Log::warning('OrcamentoRepository::buscarModeloPorId - Não encontrado com Global Scope, tentando sem', [
+                'orcamento_id' => $id,
+            ]);
+            
+            $modelWithoutScope = OrcamentoModel::withoutGlobalScope('empresa')
+                ->with($with)
+                ->find($id);
+            
+            \Log::info('OrcamentoRepository::buscarModeloPorId - Resultado sem Global Scope', [
+                'orcamento_id' => $id,
+                'encontrado' => $modelWithoutScope !== null,
+                'model_id' => $modelWithoutScope?->id,
+                'model_empresa_id' => $modelWithoutScope?->empresa_id,
+            ]);
+            
+            if ($modelWithoutScope) {
+                \Log::warning('OrcamentoRepository::buscarModeloPorId - Orçamento encontrado sem Global Scope! Possível problema de sincronização', [
+                    'orcamento_id' => $id,
+                    'empresa_id_orcamento' => $modelWithoutScope->empresa_id,
+                    'empresa_id_contexto' => static::getEmpresaIdFromContext(),
+                ]);
+            }
+            
+            return $modelWithoutScope;
+        }
+        
+        return $model;
+    }
+    
+    /**
+     * Obtém empresa_id do contexto (para debug)
+     */
+    private static function getEmpresaIdFromContext(): ?int
+    {
+        try {
+            if (app()->bound('current_empresa_id')) {
+                return (int) app('current_empresa_id');
+            }
+        } catch (\Exception $e) {}
+        
+        if (request() && request()->attributes->has('empresa_id')) {
+            return (int) request()->attributes->get('empresa_id');
+        }
+        
+        try {
+            $authIdentity = app(\App\Contracts\IAuthIdentity::class);
+            if ($authIdentity) {
+                return $authIdentity->getEmpresaId();
+            }
+        } catch (\Exception $e) {}
+        
+        return null;
     }
 
     /**
