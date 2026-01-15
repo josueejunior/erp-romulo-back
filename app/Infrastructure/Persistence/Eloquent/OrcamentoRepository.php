@@ -103,8 +103,59 @@ class OrcamentoRepository implements OrcamentoRepositoryInterface
 
     public function buscarPorId(int $id): ?Orcamento
     {
+        // Tentar buscar com Global Scope primeiro (comportamento padrão)
         $model = OrcamentoModel::find($id);
-        return $model ? $this->toDomain($model) : null;
+        
+        if ($model) {
+            \Log::debug('OrcamentoRepository::buscarPorId - Orçamento encontrado com Global Scope', [
+                'tenant_id' => tenancy()->tenant?->id,
+                'empresa_id' => static::getEmpresaIdFromContext(),
+                'orcamento_id' => $id,
+                'model_empresa_id' => $model->empresa_id,
+            ]);
+            return $this->toDomain($model);
+        }
+        
+        // Se não encontrou com Global Scope, tentar sem (pode ser problema de sincronização)
+        \Log::warning('OrcamentoRepository::buscarPorId - Não encontrado com Global Scope, tentando sem', [
+            'tenant_id' => tenancy()->tenant?->id,
+            'empresa_id' => $this->getEmpresaIdFromContext(),
+            'orcamento_id' => $id,
+        ]);
+        
+        $modelWithoutScope = OrcamentoModel::withoutGlobalScope('empresa')->find($id);
+        
+        if ($modelWithoutScope) {
+            $empresaIdContexto = static::getEmpresaIdFromContext();
+            
+            // Validar se o orçamento pertence à empresa do contexto
+            if ($empresaIdContexto && $modelWithoutScope->empresa_id !== $empresaIdContexto) {
+                \Log::warning('OrcamentoRepository::buscarPorId - Orçamento encontrado mas empresa_id não confere', [
+                    'tenant_id' => tenancy()->tenant?->id,
+                    'empresa_id_contexto' => $empresaIdContexto,
+                    'orcamento_id' => $id,
+                    'orcamento_empresa_id' => $modelWithoutScope->empresa_id,
+                ]);
+                return null; // Não pertence à empresa do contexto
+            }
+            
+            \Log::warning('OrcamentoRepository::buscarPorId - Orçamento encontrado sem Global Scope! Possível problema de sincronização', [
+                'tenant_id' => tenancy()->tenant?->id,
+                'empresa_id' => $empresaIdContexto,
+                'orcamento_id' => $id,
+                'model_empresa_id' => $modelWithoutScope->empresa_id,
+            ]);
+            
+            return $this->toDomain($modelWithoutScope);
+        }
+        
+        \Log::debug('OrcamentoRepository::buscarPorId - Orçamento não encontrado', [
+            'tenant_id' => tenancy()->tenant?->id,
+            'empresa_id' => $this->getEmpresaIdFromContext(),
+            'orcamento_id' => $id,
+        ]);
+        
+        return null;
     }
 
     public function buscarComFiltros(array $filtros = []): LengthAwarePaginator
