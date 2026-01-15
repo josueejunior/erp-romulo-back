@@ -246,9 +246,13 @@ class ProcessoItem extends BaseModel
      */
     public function atualizarValoresFinanceiros(): void
     {
-        // Valor vencido = valor negociado ou valor final da sessão (se vencido)
+        // 🔥 CORREÇÃO: Valor vencido = (valor unitário arrematado/negociado/final) * quantidade
+        // O valor_arrematado, valor_negociado e valor_final_sessao são valores POR UNIDADE
+        // Precisamos multiplicar pela quantidade para obter o valor TOTAL do item
         if ($this->isVencido()) {
-            $this->valor_vencido = $this->valor_negociado ?? $this->valor_final_sessao ?? 0;
+            $valorUnitario = $this->valor_arrematado ?? $this->valor_negociado ?? $this->valor_final_sessao ?? 0;
+            $quantidade = $this->quantidade ?? 1;
+            $this->valor_vencido = round($valorUnitario * $quantidade, 2);
         } else {
             $this->valor_vencido = 0;
         }
