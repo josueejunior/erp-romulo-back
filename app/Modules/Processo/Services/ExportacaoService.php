@@ -244,10 +244,10 @@ class ExportacaoService
             $dataFormatada = str_replace($en, $pt, $dataFormatada);
         }
 
-        // Filtrar apenas itens que têm valor_arrematado preenchido
-        $itensComValorArrematado = $processo->itens->filter(function ($item) {
-            return !empty($item->valor_arrematado) && $item->valor_arrematado > 0;
-        })->values();
+        // 🔥 CORREÇÃO: Incluir TODOS os itens do processo
+        // O template já possui lógica de fallback para valores (arrematado > negociado > final_sessão > preço_minimo > estimado)
+        // Não devemos filtrar apenas por valor_arrematado, pois alguns produtos podem ter outros valores
+        $itensComValorArrematado = $processo->itens->values();
 
         // 🔥 CORREÇÃO: Garantir que todas as variáveis sejam strings para evitar erro no htmlspecialchars
         $dados = [
