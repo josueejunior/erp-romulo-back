@@ -113,7 +113,6 @@ Route::prefix('v1')->group(function () {
     Route::middleware([
         'jwt.auth',                    // CAMADA 3: Autenticação JWT
         'auth.context',                // CAMADA 4: Identidade
-        \App\Http\Middleware\ResolveTenantContext::class,  // CAMADA 5: Tenancy (usando classe completa para debug)
         \App\Http\Middleware\BootstrapApplicationContext::class,  // CAMADA 6: Bootstrap empresa (usando classe completa para debug)
         'throttle:300,1',              // ✅ 300 requisições por minuto (aumentado para uso normal)
         'throttle:5000,60',            // ✅ 5000 requisições por hora (aumentado para uso intensivo)

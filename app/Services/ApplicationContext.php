@@ -132,58 +132,15 @@ class ApplicationContext implements ApplicationContextContract
             return;
         }
         
-        // 3. Resolver tenant_id (prioridade: JWT/header > empresa)
-        if (config('app.debug')) {
-            Log::debug('ApplicationContext::bootstrap() - Resolvendo tenant_id');
-        }
-        $startTime = microtime(true);
-        $this->tenantId = $this->resolveTenantId($request);
-        $elapsedTime = microtime(true) - $startTime;
-        if (config('app.debug')) {
-            Log::debug('ApplicationContext::bootstrap() - resolveTenantId() concluído', [
-                'elapsed_time' => round($elapsedTime, 3) . 's',
-                'tenant_id' => $this->tenantId,
-            ]);
-        }
-        
-        if (!$this->tenantId) {
-            Log::warning('ApplicationContext::bootstrap() - Nenhum tenantId encontrado', [
-                'user_id' => $this->user->id,
-                'empresa_id' => $this->empresaId,
-            ]);
-            $this->initialized = true;
-            return;
-        }
-        
-        // 4. Inicializar tenancy (com proteção)
-        if (config('app.debug')) {
-            Log::debug('ApplicationContext::bootstrap() - Inicializando tenancy');
-        }
-        $startTime = microtime(true);
-        $this->initializeTenancy();
-        $elapsedTime = microtime(true) - $startTime;
-        if (config('app.debug')) {
-            Log::debug('ApplicationContext::bootstrap() - initializeTenancy() concluído', [
-                'elapsed_time' => round($elapsedTime, 3) . 's',
-            ]);
-        }
-        
-        // 5. Carregar modelos
-        $this->tenant = Tenant::find($this->tenantId);
+        // 3. Carregar empresa
         $this->empresa = Empresa::find($this->empresaId);
         
-        // 6. Sincronizar com TenantContext (compatibilidade DDD)
-        if (class_exists(\App\Domain\Shared\ValueObjects\TenantContext::class)) {
-            \App\Domain\Shared\ValueObjects\TenantContext::set($this->tenantId, $this->empresaId);
-        }
-        
-        // 7. Disponibilizar no container (compatibilidade com código legado)
+        // 4. Disponibilizar no container (compatibilidade com código legado)
         app()->instance('current_empresa_id', $this->empresaId);
         $request->attributes->set('empresa_id', $this->empresaId);
         
-        // 8. Compartilhar contexto de logs
+        // 5. Compartilhar contexto de logs
         Log::shareContext([
-            'tenant_id' => $this->tenantId,
             'empresa_id' => $this->empresaId,
             'user_id' => $this->user->id,
         ]);
@@ -191,7 +148,6 @@ class ApplicationContext implements ApplicationContextContract
         $this->initialized = true;
         
         Log::debug('ApplicationContext::bootstrap() - Concluído', [
-            'tenant_id' => $this->tenantId,
             'empresa_id' => $this->empresaId,
             'user_id' => $this->user->id,
         ]);
@@ -475,209 +431,20 @@ class ApplicationContext implements ApplicationContextContract
     }
     
     /**
-     * Inicializar tenancy (com proteção para não inicializar 2x)
+     * Resolver tenant_id (DEPRECATED - mantido para compatibilidade)
      * 
-     * Regra: tenancy só pode ser iniciado 1 vez por request
-     * Se tentar de novo → ignora ou lança exceção
+     * @deprecated Tenants foram removidos. Retorna null sempre.
      */
-    private function initializeTenancy(): void
-    {
-        if ($this->tenancyInitialized) {
-            Log::debug('ApplicationContext::initializeTenancy() - Já inicializado, pulando');
-            return;
-        }
-        
-        if (!$this->tenantId) {
-            throw new \RuntimeException('Não é possível inicializar tenancy sem tenant_id');
-        }
-        
-        // Verificar se já está inicializado com outro tenant
-        if (tenancy()->initialized) {
-            $currentTenantId = tenancy()->tenant?->id;
-            
-            if ($currentTenantId === $this->tenantId) {
-                Log::debug('ApplicationContext::initializeTenancy() - Já inicializado com tenant correto', [
-                    'tenant_id' => $this->tenantId,
-                ]);
-                $this->tenancyInitialized = true;
-                return;
-            }
-            
-            // Tenant diferente, reinicializar
-            Log::info('ApplicationContext::initializeTenancy() - Reinicializando tenancy', [
-                'tenant_id_atual' => $currentTenantId,
-                'tenant_id_correto' => $this->tenantId,
-            ]);
-            
-            tenancy()->end();
-        }
-        
-        // Buscar e inicializar tenant
-        $tenant = Tenant::find($this->tenantId);
-        
-        if (!$tenant) {
-            throw new \RuntimeException("Tenant não encontrado: {$this->tenantId}");
-        }
-        
-        tenancy()->initialize($tenant);
-        $this->tenancyInitialized = true;
-        
-        Log::debug('ApplicationContext::initializeTenancy() - Tenancy inicializado', [
-            'tenant_id' => $this->tenantId,
-        ]);
-    }
-    
     /**
-     * Resolver tenant_id através da empresa ativa
+     * Resolver tenant_id (DEPRECATED - mantido para compatibilidade)
      * 
-     * 🔥 PERFORMANCE: Usa mapeamento direto tenant_empresas.
-     * Elimina loops de tenants e inicializações desnecessárias.
+     * @deprecated Tenants foram removidos. Retorna null sempre.
      */
     private function resolveTenantId(?Request $request = null): ?int
     {
-        // 🔥 CRÍTICO: Prioridade 1 - JWT/Header (fonte de verdade do login)
-        // O JWT contém o tenant_id correto escolhido no login
-        if ($request) {
-            // Prioridade 1.1: Header X-Tenant-ID
-            if ($request->header('X-Tenant-ID')) {
-                $tenantId = (int) $request->header('X-Tenant-ID');
-                Log::debug('ApplicationContext::resolveTenantId() - Tenant encontrado via header X-Tenant-ID', [
-                    'tenant_id' => $tenantId,
-                ]);
-                return $tenantId;
-            }
-            
-            // Prioridade 1.2: Payload JWT (já injetado por AuthenticateJWT)
-            if ($request->attributes->has('auth')) {
-                $payload = $request->attributes->get('auth');
-                if (isset($payload['tenant_id'])) {
-                    $tenantId = (int) $payload['tenant_id'];
-                    Log::debug('ApplicationContext::resolveTenantId() - Tenant encontrado via JWT payload', [
-                        'tenant_id' => $tenantId,
-                    ]);
-                    return $tenantId;
-                }
-            }
-        }
-        
-        // Prioridade 2: Resolver via empresa_id (fallback se JWT/header não disponível)
-        if (!$this->empresaId) {
-            return null;
-        }
-        
-        // Prioridade 2.1: Mapeamento direto (mais rápido - busca única no banco central)
-        try {
-            $tenantId = \App\Models\TenantEmpresa::findTenantIdByEmpresaId($this->empresaId);
-            
-            if ($tenantId) {
-                Log::debug('ApplicationContext::resolveTenantId() - Tenant encontrado via mapeamento direto', [
-                    'empresa_id' => $this->empresaId,
-                    'tenant_id' => $tenantId,
-                ]);
-                return $tenantId;
-            }
-        } catch (\Exception $e) {
-            Log::warning('ApplicationContext::resolveTenantId() - Erro ao buscar mapeamento direto', [
-                'empresa_id' => $this->empresaId,
-                'error' => $e->getMessage(),
-            ]);
-            // Continuar para fallback
-        }
-        
-        // Prioridade 2: Se já temos tenancy inicializado, verificar se a empresa está nele
-        if (tenancy()->initialized) {
-            $currentTenant = tenancy()->tenant;
-            try {
-                $empresa = Empresa::find($this->empresaId);
-                if ($empresa) {
-                    Log::debug('ApplicationContext::resolveTenantId() - Empresa encontrada no tenant atual', [
-                        'empresa_id' => $this->empresaId,
-                        'tenant_id' => $currentTenant->id,
-                    ]);
-                    
-                    // Criar mapeamento para próxima vez (cache)
-                    try {
-                        \App\Models\TenantEmpresa::createOrUpdateMapping($currentTenant->id, $this->empresaId);
-                    } catch (\Exception $e) {
-                        Log::warning('ApplicationContext::resolveTenantId() - Erro ao criar mapeamento', [
-                            'error' => $e->getMessage(),
-                        ]);
-                    }
-                    
-                    return $currentTenant->id;
-                }
-            } catch (\Exception $e) {
-                Log::debug('ApplicationContext::resolveTenantId() - Erro ao verificar tenant atual', [
-                    'error' => $e->getMessage(),
-                ]);
-            }
-        }
-        
-        // Prioridade 3: Fallback - Buscar tenant através da empresa (loop - apenas se mapeamento não existir)
-        // ⚠️ Este é o método antigo, lento. Deve ser usado apenas se mapeamento não existir.
-        Log::warning('ApplicationContext::resolveTenantId() - Mapeamento não encontrado, usando fallback (loop)', [
-            'empresa_id' => $this->empresaId,
-            'message' => 'Considere executar o comando para popular o mapeamento: php artisan tenant-empresas:popular',
-        ]);
-        
-        $allTenants = Tenant::all();
-        foreach ($allTenants as $tenant) {
-            // Pular o tenant atual se já verificamos
-            if (tenancy()->initialized && tenancy()->tenant && tenancy()->tenant->id === $tenant->id) {
-                continue;
-            }
-            
-            try {
-                // Inicializar contexto do tenant
-                tenancy()->initialize($tenant);
-                
-                try {
-                    // Tentar buscar empresa neste tenant
-                    $empresa = Empresa::find($this->empresaId);
-                    if ($empresa) {
-                        // Empresa encontrada - criar mapeamento para próxima vez
-                        try {
-                            \App\Models\TenantEmpresa::createOrUpdateMapping($tenant->id, $this->empresaId);
-                            Log::info('ApplicationContext::resolveTenantId() - Mapeamento criado automaticamente', [
-                                'tenant_id' => $tenant->id,
-                                'empresa_id' => $this->empresaId,
-                            ]);
-                        } catch (\Exception $e) {
-                            Log::warning('ApplicationContext::resolveTenantId() - Erro ao criar mapeamento', [
-                                'error' => $e->getMessage(),
-                            ]);
-                        }
-                        
-                        Log::debug('ApplicationContext::resolveTenantId() - Tenant encontrado via fallback', [
-                            'empresa_id' => $this->empresaId,
-                            'tenant_id' => $tenant->id,
-                        ]);
-                        return $tenant->id;
-                    }
-                } finally {
-                    // Sempre finalizar contexto se não for o tenant correto
-                    if (tenancy()->initialized && tenancy()->tenant && tenancy()->tenant->id !== $tenant->id) {
-                        tenancy()->end();
-                    }
-                }
-            } catch (\Exception $e) {
-                // Se houver erro ao acessar o tenant, continuar para o próximo
-                Log::debug('ApplicationContext::resolveTenantId() - Erro ao buscar empresa no tenant', [
-                    'tenant_id' => $tenant->id,
-                    'error' => $e->getMessage(),
-                ]);
-                if (tenancy()->initialized) {
-                    tenancy()->end();
-                }
-                continue;
-            }
-        }
-        
-        Log::warning('ApplicationContext::resolveTenantId() - Empresa não encontrada em nenhum tenant', [
-            'empresa_id' => $this->empresaId,
-        ]);
-        
+        // Tenants foram removidos - retornar null sempre
         return null;
+        
     }
     
     /**

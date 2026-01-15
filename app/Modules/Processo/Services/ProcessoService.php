@@ -96,7 +96,6 @@ class ProcessoService extends BaseService
     public function list(array $params = []): LengthAwarePaginator
     {
         \Log::debug('ProcessoService::list() - INÍCIO', [
-            'tenant_id' => tenancy()->tenant?->id,
             'empresa_id' => $this->getEmpresaIdFromContext(),
             'params' => $params,
             'somente_com_orcamento' => $params['somente_com_orcamento'] ?? null,
@@ -167,7 +166,6 @@ class ProcessoService extends BaseService
             ]);
             
             \Log::debug('ProcessoService::list() - Carregando relacionamento de orçamentos', [
-                'tenant_id' => tenancy()->tenant?->id,
                 'empresa_id' => $empresaId,
             ]);
         } else {
@@ -204,7 +202,6 @@ class ProcessoService extends BaseService
                 ->toArray();
             
             \Log::debug('ProcessoService::list() - Verificação de orçamentos no banco', [
-                'tenant_id' => tenancy()->tenant?->id,
                 'empresa_id' => $empresaId,
                 'total_orcamentos' => $totalOrcamentos,
                 'total_orcamento_itens' => $totalOrcamentoItens,
@@ -213,7 +210,6 @@ class ProcessoService extends BaseService
         }
         
         \Log::debug('ProcessoService::list() - Relacionamentos carregados', [
-            'tenant_id' => tenancy()->tenant?->id,
             'empresa_id' => $this->getEmpresaIdFromContext(),
             'with_final' => array_unique($with),
             'somente_com_orcamento' => $params['somente_com_orcamento'] ?? null,
@@ -261,7 +257,6 @@ class ProcessoService extends BaseService
                     ->groupBy('processo_item_id');
                 
                 \Log::debug('ProcessoService::list() - Orçamentos encontrados via query direta', [
-                    'tenant_id' => tenancy()->tenant?->id,
                     'empresa_id' => $empresaId,
                     'total_item_ids' => count($itemIds),
                     'orcamentos_por_item' => $orcamentosPorItem->map(fn($group) => $group->count())->toArray(),
@@ -286,7 +281,6 @@ class ProcessoService extends BaseService
                                 $item->setRelation('orcamentos', $orcamentosModels);
                                 
                                 \Log::debug('ProcessoService::list() - Orçamentos carregados manualmente para item', [
-                                    'tenant_id' => tenancy()->tenant?->id,
                                     'empresa_id' => $empresaId,
                                     'processo_id' => $processo->id,
                                     'item_id' => $item->id,
@@ -298,7 +292,6 @@ class ProcessoService extends BaseService
                                 $item->setRelation('orcamentos', collect([]));
                                 
                                 \Log::debug('ProcessoService::list() - Item sem orçamentos', [
-                                    'tenant_id' => tenancy()->tenant?->id,
                                     'empresa_id' => $empresaId,
                                     'processo_id' => $processo->id,
                                     'item_id' => $item->id,
@@ -356,56 +349,77 @@ class ProcessoService extends BaseService
      */
     public function store(array $data): Model
     {
-        // Verificar se o tenant pode criar processo (limites de plano)
-        $tenant = tenancy()->tenant;
+        // Verificar assinatura ativa da empresa
+        $empresaId = $this->getEmpresaId();
+        $assinaturaRepository = app(\App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface::class);
+        $assinatura = $assinaturaRepository->buscarAssinaturaAtualPorEmpresa($empresaId);
         
-        if (!$tenant) {
-            \Log::warning('ProcessoService::store() - Tenant não encontrado', [
-                'empresa_id' => $this->getEmpresaId(),
-            ]);
-            throw new DomainException('Tenant não encontrado. Verifique sua assinatura.');
-        }
-
-        // Verificar assinatura ativa primeiro
-        if (!$tenant->temAssinaturaAtiva()) {
-            \Log::warning('ProcessoService::store() - Assinatura não está ativa', [
-                'tenant_id' => $tenant->id,
-                'assinatura_atual_id' => $tenant->assinatura_atual_id,
+        if (!$assinatura) {
+            \Log::warning('ProcessoService::store() - Assinatura não encontrada', [
+                'empresa_id' => $empresaId,
             ]);
             throw new DomainException('Você não tem uma assinatura ativa. Ative sua assinatura para criar processos.');
         }
 
-        $plano = $tenant->planoAtual;
-        if (!$plano) {
+        // Buscar modelo da assinatura para acessar plano
+        $assinaturaModel = \App\Modules\Assinatura\Models\Assinatura::find($assinatura->id);
+        if (!$assinaturaModel || !$assinaturaModel->plano) {
             \Log::warning('ProcessoService::store() - Plano não encontrado', [
-                'tenant_id' => $tenant->id,
-                'plano_atual_id' => $tenant->plano_atual_id,
+                'empresa_id' => $empresaId,
+                'assinatura_id' => $assinatura->id,
             ]);
             throw new DomainException('Plano não encontrado. Verifique sua assinatura.');
         }
 
-        // Verificar se pode criar processo
-        if (!$tenant->podeCriarProcesso()) {
-            \Log::info('ProcessoService::store() - Bloqueado por limite do plano', [
-                'tenant_id' => $tenant->id,
-                'plano_id' => $plano->id,
-                'plano_nome' => $plano->nome,
-                'limite_processos' => $plano->limite_processos,
-                'restricao_diaria' => $plano->temRestricaoDiaria(),
+        $plano = $assinaturaModel->plano;
+
+        // Verificar se assinatura está ativa
+        if (!$assinaturaModel->isAtiva()) {
+            \Log::warning('ProcessoService::store() - Assinatura não está ativa', [
+                'empresa_id' => $empresaId,
+                'assinatura_id' => $assinatura->id,
+                'status' => $assinaturaModel->status,
             ]);
+            throw new DomainException('Você não tem uma assinatura ativa. Ative sua assinatura para criar processos.');
+        }
+
+        // Verificar limites do plano
+        // Verificar restrição diária
+        if ($plano->temRestricaoDiaria()) {
+            $hoje = now()->startOfDay();
+            $amanha = now()->copy()->addDay()->startOfDay();
+            $processosHoje = \App\Modules\Processo\Models\Processo::where('empresa_id', $empresaId)
+                ->whereBetween('criado_em', [$hoje, $amanha])
+                ->count();
             
-            // Verificar se é restrição diária ou limite mensal
-            if ($plano->temRestricaoDiaria()) {
+            if ($processosHoje > 0) {
+                \Log::info('ProcessoService::store() - Bloqueado por restrição diária', [
+                    'empresa_id' => $empresaId,
+                    'plano_id' => $plano->id,
+                    'processos_hoje' => $processosHoje,
+                ]);
                 throw new DomainException('Você já criou um processo hoje. Planos Essencial e Profissional permitem apenas 1 processo por dia.');
             }
+        }
+
+        // Verificar limite mensal (se não tem processos ilimitados)
+        if (!$plano->temProcessosIlimitados()) {
+            $inicioMes = now()->startOfMonth();
+            $fimMes = now()->copy()->endOfMonth();
+            $processosMes = \App\Modules\Processo\Models\Processo::where('empresa_id', $empresaId)
+                ->whereBetween('criado_em', [$inicioMes, $fimMes])
+                ->count();
             
-            // Verificar limite mensal
-            if (!$plano->temProcessosIlimitados()) {
-                $limite = $plano->limite_processos;
-                throw new DomainException("Você atingiu o limite de {$limite} processos do seu plano. Faça upgrade para continuar criando processos.");
+            if ($processosMes >= $plano->limite_processos) {
+                \Log::info('ProcessoService::store() - Bloqueado por limite mensal', [
+                    'empresa_id' => $empresaId,
+                    'plano_id' => $plano->id,
+                    'plano_nome' => $plano->nome,
+                    'limite_processos' => $plano->limite_processos,
+                    'processos_mes' => $processosMes,
+                ]);
+                throw new DomainException("Você atingiu o limite de {$plano->limite_processos} processos do seu plano. Faça upgrade para continuar criando processos.");
             }
-            
-            throw new DomainException('Você não pode criar processos no momento. Verifique sua assinatura.');
         }
 
         // Status padrão
