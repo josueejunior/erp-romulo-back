@@ -67,24 +67,26 @@ class AtualizarProcessoItemUseCase
         // Embora neste caso específico haja apenas uma operação de escrita,
         // usar transação garante consistência e facilita futuras extensões
         return DB::transaction(function () use ($dto, $itemExistente) {
-            // Criar nova instância com valores atualizados (imutabilidade)
+            // ✅ CORRIGIDO: Usar apenas campos que foram realmente enviados no request
+            // Se o campo foi enviado (mesmo que null/vazio), usar o valor do DTO
+            // Caso contrário, manter o valor existente
             $processoItemAtualizado = new ProcessoItem(
                 id: $dto->processoItemId,
                 processoId: $dto->processoId,
                 empresaId: $itemExistente->empresaId,
-                fornecedorId: $dto->fornecedorId ?? $itemExistente->fornecedorId,
-                transportadoraId: $dto->transportadoraId ?? $itemExistente->transportadoraId,
-                numeroItem: $dto->numeroItem ?? $itemExistente->numeroItem,
-                codigoInterno: $dto->codigoInterno ?? $itemExistente->codigoInterno,
-                quantidade: $dto->quantidade ?? $itemExistente->quantidade,
-                unidade: $dto->unidade ?? $itemExistente->unidade,
-                especificacaoTecnica: $dto->especificacaoTecnica ?? $itemExistente->especificacaoTecnica,
-                marcaModeloReferencia: $dto->marcaModeloReferencia ?? $itemExistente->marcaModeloReferencia,
-                observacoesEdital: $dto->observacoesEdital ?? $itemExistente->observacoesEdital,
-                exigeAtestado: $dto->exigeAtestado ?? $itemExistente->exigeAtestado,
-                quantidadeMinimaAtestado: $dto->quantidadeMinimaAtestado ?? $itemExistente->quantidadeMinimaAtestado,
-                quantidadeAtestadoCapTecnica: $dto->quantidadeAtestadoCapTecnica ?? $itemExistente->quantidadeAtestadoCapTecnica,
-                valorEstimado: $dto->valorEstimado ?? $itemExistente->valorEstimado,
+                fornecedorId: $dto->campoFoiEnviado('fornecedor_id') ? $dto->fornecedorId : $itemExistente->fornecedorId,
+                transportadoraId: $dto->campoFoiEnviado('transportadora_id') ? $dto->transportadoraId : $itemExistente->transportadoraId,
+                numeroItem: $dto->campoFoiEnviado('numero_item') ? $dto->numeroItem : $itemExistente->numeroItem,
+                codigoInterno: $dto->campoFoiEnviado('codigo_interno') ? $dto->codigoInterno : $itemExistente->codigoInterno,
+                quantidade: $dto->campoFoiEnviado('quantidade') ? $dto->quantidade : $itemExistente->quantidade,
+                unidade: $dto->campoFoiEnviado('unidade') ? $dto->unidade : $itemExistente->unidade,
+                especificacaoTecnica: $dto->campoFoiEnviado('especificacao_tecnica') ? $dto->especificacaoTecnica : $itemExistente->especificacaoTecnica,
+                marcaModeloReferencia: $dto->campoFoiEnviado('marca_modelo_referencia') ? $dto->marcaModeloReferencia : $itemExistente->marcaModeloReferencia,
+                observacoesEdital: $dto->campoFoiEnviado('observacoes_edital') ? $dto->observacoesEdital : $itemExistente->observacoesEdital,
+                exigeAtestado: $dto->campoFoiEnviado('exige_atestado') ? ($dto->exigeAtestado ?? false) : $itemExistente->exigeAtestado,
+                quantidadeMinimaAtestado: $dto->campoFoiEnviado('quantidade_minima_atestado') ? $dto->quantidadeMinimaAtestado : $itemExistente->quantidadeMinimaAtestado,
+                quantidadeAtestadoCapTecnica: $dto->campoFoiEnviado('quantidade_atestado_cap_tecnica') ? $dto->quantidadeAtestadoCapTecnica : $itemExistente->quantidadeAtestadoCapTecnica,
+                valorEstimado: $dto->campoFoiEnviado('valor_estimado') ? $dto->valorEstimado : $itemExistente->valorEstimado,
                 valorEstimadoTotal: $itemExistente->calcularValorEstimadoTotal(), // Recalcular baseado nos valores atualizados
                 fonteValor: $itemExistente->fonteValor,
                 valorMinimoVenda: $itemExistente->valorMinimoVenda,
@@ -99,7 +101,7 @@ class AtualizarProcessoItemUseCase
                 chancePercentual: $itemExistente->chancePercentual,
                 temChance: $itemExistente->temChance,
                 lembretes: $itemExistente->lembretes,
-                observacoes: $dto->observacoes ?? $itemExistente->observacoes,
+                observacoes: $dto->campoFoiEnviado('observacoes') ? $dto->observacoes : $itemExistente->observacoes,
                 valorVencido: $itemExistente->valorVencido,
                 valorEmpenhado: $itemExistente->valorEmpenhado,
                 valorFaturado: $itemExistente->valorFaturado,
