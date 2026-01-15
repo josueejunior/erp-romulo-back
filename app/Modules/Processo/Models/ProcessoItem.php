@@ -255,28 +255,56 @@ class ProcessoItem extends BaseModel
             // 2. valor_negociado (se houver)
             // 3. valor_final_sessao (se houver)
             // 4. valor_estimado (fallback se nenhum dos anteriores existir)
-            $valorUnitario = $this->valor_arrematado 
-                ?? $this->valor_negociado 
-                ?? $this->valor_final_sessao 
-                ?? ($this->valor_estimado ?? 0);
+            $valorUnitario = null;
+            $fonteValor = null;
+            
+            if ($this->valor_arrematado && $this->valor_arrematado > 0) {
+                $valorUnitario = $this->valor_arrematado;
+                $fonteValor = 'valor_arrematado';
+            } elseif ($this->valor_negociado && $this->valor_negociado > 0) {
+                $valorUnitario = $this->valor_negociado;
+                $fonteValor = 'valor_negociado';
+            } elseif ($this->valor_final_sessao && $this->valor_final_sessao > 0) {
+                $valorUnitario = $this->valor_final_sessao;
+                $fonteValor = 'valor_final_sessao';
+            } elseif ($this->valor_estimado && $this->valor_estimado > 0) {
+                $valorUnitario = $this->valor_estimado;
+                $fonteValor = 'valor_estimado';
+            } else {
+                $valorUnitario = 0;
+                $fonteValor = 'nenhum';
+            }
             
             $quantidade = $this->quantidade ?? 1;
             $this->valor_vencido = round($valorUnitario * $quantidade, 2);
             
             // Log para debug
-            \Log::debug('ProcessoItem::atualizarValoresFinanceiros - valor_vencido calculado', [
+            \Log::info('ProcessoItem::atualizarValoresFinanceiros - valor_vencido calculado', [
                 'item_id' => $this->id,
                 'numero_item' => $this->numero_item,
-                'valor_arrematado' => $this->valor_arrematado,
-                'valor_negociado' => $this->valor_negociado,
-                'valor_final_sessao' => $this->valor_final_sessao,
-                'valor_estimado' => $this->valor_estimado,
+                'empresa_id' => $this->empresa_id,
+                'processo_id' => $this->processo_id,
+                'status_item' => $this->status_item,
+                'is_vencido' => $this->isVencido(),
+                'valores_disponiveis' => [
+                    'valor_arrematado' => $this->valor_arrematado,
+                    'valor_negociado' => $this->valor_negociado,
+                    'valor_final_sessao' => $this->valor_final_sessao,
+                    'valor_estimado' => $this->valor_estimado,
+                ],
                 'valor_unitario_escolhido' => $valorUnitario,
+                'fonte_valor' => $fonteValor,
                 'quantidade' => $quantidade,
-                'valor_vencido' => $this->valor_vencido,
+                'valor_vencido_calculado' => $this->valor_vencido,
             ]);
         } else {
             $this->valor_vencido = 0;
+            \Log::debug('ProcessoItem::atualizarValoresFinanceiros - item não está vencido', [
+                'item_id' => $this->id,
+                'numero_item' => $this->numero_item,
+                'status_item' => $this->status_item,
+                'situacao_final' => $this->situacao_final,
+            ]);
         }
 
         // Valor empenhado = soma dos vínculos com empenhos
@@ -331,6 +359,21 @@ class ProcessoItem extends BaseModel
 
         // Saldo em aberto = valor vencido - valor pago
         $this->saldo_aberto = round($this->valor_vencido - $this->valor_pago, 2);
+        
+        // Log final com todos os valores calculados
+        \Log::info('ProcessoItem::atualizarValoresFinanceiros - Valores finais calculados', [
+            'item_id' => $this->id,
+            'numero_item' => $this->numero_item,
+            'valores_finais' => [
+                'valor_vencido' => $this->valor_vencido,
+                'valor_empenhado' => $this->valor_empenhado,
+                'valor_faturado' => $this->valor_faturado,
+                'valor_pago' => $this->valor_pago,
+                'saldo_aberto' => $this->saldo_aberto,
+                'lucro_bruto' => $this->lucro_bruto,
+                'lucro_liquido' => $this->lucro_liquido,
+            ],
+        ]);
 
         // Lucro bruto = receita - custos diretos
         $custoTotal = $this->getCustoTotal();
