@@ -80,10 +80,21 @@ class AdminUserController extends Controller
                     'page' => $request->input('page', 1),
                 ];
                 
+                \Log::info('AdminUserController::indexGlobal - Filtros aplicados', ['filtros' => $filtros]);
+                
                 $lookupResult = $this->lookupRepository->buscarComFiltros($filtros);
                 $lookups = $lookupResult['data'];
                 
+                \Log::info('AdminUserController::indexGlobal - Resultado da busca', [
+                    'total_lookups' => count($lookups),
+                    'total_geral' => $lookupResult['total'] ?? 0,
+                ]);
+                
                 if (empty($lookups)) {
+                    \Log::warning('AdminUserController::indexGlobal - Nenhum lookup encontrado', [
+                        'filtros' => $filtros,
+                        'total_geral' => $lookupResult['total'] ?? 0,
+                    ]);
                     return [
                         'data' => [],
                         'total' => 0,

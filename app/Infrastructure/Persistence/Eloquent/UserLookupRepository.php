@@ -160,6 +160,12 @@ class UserLookupRepository implements UserLookupRepositoryInterface
             'filtros' => $filtros,
         ]);
         
+        // ✅ DEBUG: Contar total de registros antes de aplicar filtros
+        $totalSemFiltros = UserLookupModel::whereNull('deleted_at')->count();
+        Log::info('UserLookupRepository::buscarComFiltros - Total de registros na tabela (sem filtros)', [
+            'total' => $totalSemFiltros,
+        ]);
+        
         $query = UserLookupModel::query()
             ->whereNull('deleted_at');
         
@@ -180,6 +186,16 @@ class UserLookupRepository implements UserLookupRepositoryInterface
             Log::debug('UserLookupRepository::buscarComFiltros - Aplicando filtro de status', [
                 'status' => $filtros['status'],
             ]);
+            
+            // ✅ DEBUG: Contar registros com o status antes de aplicar filtro
+            $totalComStatus = UserLookupModel::whereNull('deleted_at')
+                ->where('status', $filtros['status'])
+                ->count();
+            Log::info('UserLookupRepository::buscarComFiltros - Total de registros com status', [
+                'status' => $filtros['status'],
+                'total' => $totalComStatus,
+            ]);
+            
             $query->where('status', $filtros['status']);
         }
         
