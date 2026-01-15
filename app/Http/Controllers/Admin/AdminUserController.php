@@ -22,6 +22,8 @@ use App\Http\Requests\Admin\StoreUserAdminRequest;
 use App\Http\Requests\Admin\UpdateUserAdminRequest;
 use App\Http\Requests\Admin\BuscarPorEmailAdminRequest;
 use App\Models\Tenant;
+use App\Notifications\UsuarioCriadoNotification;
+use App\Modules\Auth\Models\User as UserModel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
@@ -608,6 +610,50 @@ class AdminUserController extends Controller
 
             // Executar Use Case
             $user = $this->criarUsuarioUseCase->executar($dto, $context);
+
+            // 🔥 NOVO: Enviar email com credenciais para o usuário criado
+            try {
+                // Buscar modelo do usuário para enviar notificação
+                $userModel = $this->adminTenancyRunner->runForTenant(
+                    $this->tenantRepository->buscarPorId($tenant->id),
+                    function () use ($user) {
+                        return UserModel::find($user->id);
+                    }
+                );
+
+                if ($userModel) {
+                    // Enviar notificação com credenciais
+                    // A senha vem do request (ainda não foi hasheada no UseCase, mas foi no repository)
+                    // Precisamos pegar a senha original do request
+                    $senhaOriginal = $request->input('password');
+                    
+                    $userModel->notify(new UsuarioCriadoNotification(
+                        nome: $user->nome,
+                        email: $user->email,
+                        senha: $senhaOriginal,
+                        role: $request->input('role'),
+                    ));
+
+                    Log::info('AdminUserController::store - Email de credenciais enviado', [
+                        'user_id' => $user->id,
+                        'email' => $user->email,
+                        'tenant_id' => $tenant->id,
+                    ]);
+                } else {
+                    Log::warning('AdminUserController::store - Usuário não encontrado para enviar email', [
+                        'user_id' => $user->id,
+                        'tenant_id' => $tenant->id,
+                    ]);
+                }
+            } catch (\Exception $e) {
+                // Não falhar a criação do usuário se o email falhar
+                Log::error('AdminUserController::store - Erro ao enviar email de credenciais', [
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+            }
 
             return ApiResponse::success(
                 'Usuário criado com sucesso!',
