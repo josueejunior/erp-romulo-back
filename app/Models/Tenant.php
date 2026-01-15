@@ -18,6 +18,14 @@ class Tenant extends BaseTenant implements TenantWithDatabase
     public $timestamps = true;
     
     /**
+     * 🔥 CORREÇÃO: Sempre usar conexão central para evitar que tenants sejam criados no banco errado
+     * O modelo Tenant DEVE estar sempre no banco central, nunca no banco do tenant
+     * Isso garante que mesmo quando o sistema está no contexto de um tenant,
+     * os registros de Tenant são sempre salvos no banco central
+     */
+    protected $connection;
+    
+    /**
      * Usar IDs numéricos auto-incrementados ao invés de strings/slugs
      */
     public $incrementing = true;
@@ -25,18 +33,40 @@ class Tenant extends BaseTenant implements TenantWithDatabase
     
     /**
      * Sobrescrever boot para garantir que não há geração automática de UUID
+     * e que sempre use a conexão central
      */
     protected static function boot()
     {
         parent::boot();
         
-        // Garantir que o ID não seja gerado automaticamente (deixar o banco fazer isso)
+        // Garantir que sempre use a conexão central e que o ID seja gerado corretamente
         static::creating(function ($tenant) {
+            // Forçar conexão central antes de criar
+            $tenant->setConnection(
+                config('tenancy.database.central_connection', config('database.default'))
+            );
+            
             // Se o ID já foi definido, manter; caso contrário, deixar o banco gerar
             if (isset($tenant->attributes['id']) && !is_numeric($tenant->attributes['id'])) {
                 unset($tenant->attributes['id']);
             }
         });
+        
+        // Garantir que queries também usem conexão central
+        static::retrieved(function ($tenant) {
+            $tenant->setConnection(
+                config('tenancy.database.central_connection', config('database.default'))
+            );
+        });
+    }
+    
+    /**
+     * Sobrescrever getConnectionName para sempre retornar conexão central
+     */
+    public function getConnectionName(): ?string
+    {
+        // Sempre usar conexão central, mesmo se outra conexão foi definida
+        return config('tenancy.database.central_connection', config('database.default'));
     }
     
     /**
