@@ -23,37 +23,13 @@ class TenancyServiceProvider extends ServiceProvider
         return [
             // Tenant events
             Events\CreatingTenant::class => [],
-            Events\TenantCreated::class => [
-                // 🔥 ARQUITETURA SINGLE DATABASE:
-                // Criar banco apenas se TENANCY_CREATE_DATABASES=true
-                // Por padrão, usando Single Database Tenancy (isolamento por empresa_id)
-                JobPipeline::make(array_filter([
-                    // Só criar banco se configurado explicitamente
-                    env('TENANCY_CREATE_DATABASES', false) ? Jobs\CreateDatabase::class : null,
-                    env('TENANCY_CREATE_DATABASES', false) ? Jobs\MigrateDatabase::class : null,
-                    // Jobs\SeedDatabase::class,
-
-                    // Your own jobs to prepare the tenant.
-                    // Provision API keys, create S3 buckets, anything you want!
-
-                ]))->send(function (Events\TenantCreated $event) {
-                    return $event->tenant;
-                })->shouldBeQueued(false), // `false` by default, but you probably want to make this `true` for production.
-            ],
+            Events\TenantCreated::class => $this->getTenantCreatedListeners(),
             Events\SavingTenant::class => [],
             Events\TenantSaved::class => [],
             Events\UpdatingTenant::class => [],
             Events\TenantUpdated::class => [],
             Events\DeletingTenant::class => [],
-            Events\TenantDeleted::class => [
-                // 🔥 ARQUITETURA SINGLE DATABASE:
-                // Deletar banco apenas se TENANCY_CREATE_DATABASES=true
-                JobPipeline::make(array_filter([
-                    env('TENANCY_CREATE_DATABASES', false) ? Jobs\DeleteDatabase::class : null,
-                ]))->send(function (Events\TenantDeleted $event) {
-                    return $event->tenant;
-                })->shouldBeQueued(false), // `false` by default, but you probably want to make this `true` for production.
-            ],
+            Events\TenantDeleted::class => $this->getTenantDeletedListeners(),
 
             // Domain events
             Events\CreatingDomain::class => [],
@@ -150,5 +126,58 @@ class TenancyServiceProvider extends ServiceProvider
         foreach (array_reverse($tenancyMiddleware) as $middleware) {
             $this->app[\Illuminate\Contracts\Http\Kernel::class]->prependToMiddlewarePriority($middleware);
         }
+    }
+
+    /**
+     * 🔥 ARQUITETURA SINGLE DATABASE:
+     * Retorna listeners para TenantCreated apenas se TENANCY_CREATE_DATABASES=true
+     * Por padrão, usando Single Database Tenancy (isolamento por empresa_id)
+     */
+    protected function getTenantCreatedListeners(): array
+    {
+        $shouldCreateDatabases = env('TENANCY_CREATE_DATABASES', false);
+
+        if (!$shouldCreateDatabases) {
+            // Single Database mode - não criar bancos separados
+            return [];
+        }
+
+        // Multi-Database mode - criar bancos separados
+        return [
+            JobPipeline::make([
+                Jobs\CreateDatabase::class,
+                Jobs\MigrateDatabase::class,
+                // Jobs\SeedDatabase::class,
+
+                // Your own jobs to prepare the tenant.
+                // Provision API keys, create S3 buckets, anything you want!
+
+            ])->send(function (Events\TenantCreated $event) {
+                return $event->tenant;
+            })->shouldBeQueued(false), // `false` by default, but you probably want to make this `true` for production.
+        ];
+    }
+
+    /**
+     * 🔥 ARQUITETURA SINGLE DATABASE:
+     * Retorna listeners para TenantDeleted apenas se TENANCY_CREATE_DATABASES=true
+     */
+    protected function getTenantDeletedListeners(): array
+    {
+        $shouldCreateDatabases = env('TENANCY_CREATE_DATABASES', false);
+
+        if (!$shouldCreateDatabases) {
+            // Single Database mode - não deletar bancos (pois não existem)
+            return [];
+        }
+
+        // Multi-Database mode - deletar bancos separados
+        return [
+            JobPipeline::make([
+                Jobs\DeleteDatabase::class,
+            ])->send(function (Events\TenantDeleted $event) {
+                return $event->tenant;
+            })->shouldBeQueued(false), // `false` by default, but you probably want to make this `true` for production.
+        ];
     }
 }
