@@ -70,6 +70,13 @@ class ExportacaoService
                 $query->where('orcamentos.empresa_id', $processo->empresa_id)
                       ->whereNotNull('orcamentos.empresa_id')
                       ->with(['fornecedor', 'formacaoPreco']);
+            },
+            'itens.orcamentoItens' => function ($query) use ($processo) {
+                // Carregar orçamento itens para acessar fornecedor_escolhido e marca_modelo
+                $query->whereHas('orcamento', function ($q) use ($processo) {
+                    $q->where('orcamentos.empresa_id', $processo->empresa_id)
+                      ->whereNotNull('orcamentos.empresa_id');
+                })->with(['formacaoPreco']);
             }
         ]);
 
