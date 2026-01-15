@@ -27,9 +27,16 @@ return [
      * Their responsibility is making Laravel features tenant-aware.
      *
      * To configure their behavior, see the config keys below.
+     * 
+     * 🔥 ARQUITETURA SINGLE DATABASE:
+     * - Removido DatabaseTenancyBootstrapper pois estamos usando Single Database Tenancy
+     * - Dados são isolados por empresa_id no banco central, não por banco separado
+     * - Para habilitar bancos separados, adicione DatabaseTenancyBootstrapper::class
+     *   e defina TENANCY_CREATE_DATABASES=true no .env
      */
     'bootstrappers' => [
-        Stancl\Tenancy\Bootstrappers\DatabaseTenancyBootstrapper::class,
+        // DatabaseTenancyBootstrapper removido - usando Single Database Tenancy
+        // Stancl\Tenancy\Bootstrappers\DatabaseTenancyBootstrapper::class,
         Stancl\Tenancy\Bootstrappers\CacheTenancyBootstrapper::class,
         Stancl\Tenancy\Bootstrappers\FilesystemTenancyBootstrapper::class,
         Stancl\Tenancy\Bootstrappers\QueueTenancyBootstrapper::class,

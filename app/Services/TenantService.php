@@ -59,8 +59,24 @@ class TenantService
     /**
      * Criar banco de dados do tenant
      */
+    /**
+     * Criar banco de dados do tenant
+     * 
+     * 🔥 ARQUITETURA SINGLE DATABASE:
+     * Este método só cria banco se TENANCY_CREATE_DATABASES=true
+     * Por padrão, usando Single Database Tenancy (isolamento por empresa_id no banco central)
+     */
     public function createTenantDatabase(Tenant $tenant): void
     {
+        // Se não estiver configurado para criar bancos separados, pular
+        if (!env('TENANCY_CREATE_DATABASES', false)) {
+            Log::info('TenantService::createTenantDatabase - Criação de banco desabilitada (Single Database Tenancy)', [
+                'tenant_id' => $tenant->id,
+                'arquitetura' => 'Single Database - isolamento por empresa_id',
+            ]);
+            return;
+        }
+
         try {
             // Recarregar o tenant do banco para garantir que está totalmente persistido
             // e acessível quando o CreateDatabase job tentar encontrá-lo

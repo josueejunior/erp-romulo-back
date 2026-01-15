@@ -24,15 +24,19 @@ class TenancyServiceProvider extends ServiceProvider
             // Tenant events
             Events\CreatingTenant::class => [],
             Events\TenantCreated::class => [
-                JobPipeline::make([
-                    Jobs\CreateDatabase::class,
-                    Jobs\MigrateDatabase::class,
+                // 🔥 ARQUITETURA SINGLE DATABASE:
+                // Criar banco apenas se TENANCY_CREATE_DATABASES=true
+                // Por padrão, usando Single Database Tenancy (isolamento por empresa_id)
+                JobPipeline::make(array_filter([
+                    // Só criar banco se configurado explicitamente
+                    env('TENANCY_CREATE_DATABASES', false) ? Jobs\CreateDatabase::class : null,
+                    env('TENANCY_CREATE_DATABASES', false) ? Jobs\MigrateDatabase::class : null,
                     // Jobs\SeedDatabase::class,
 
                     // Your own jobs to prepare the tenant.
                     // Provision API keys, create S3 buckets, anything you want!
 
-                ])->send(function (Events\TenantCreated $event) {
+                ]))->send(function (Events\TenantCreated $event) {
                     return $event->tenant;
                 })->shouldBeQueued(false), // `false` by default, but you probably want to make this `true` for production.
             ],
@@ -42,9 +46,11 @@ class TenancyServiceProvider extends ServiceProvider
             Events\TenantUpdated::class => [],
             Events\DeletingTenant::class => [],
             Events\TenantDeleted::class => [
-                JobPipeline::make([
-                    Jobs\DeleteDatabase::class,
-                ])->send(function (Events\TenantDeleted $event) {
+                // 🔥 ARQUITETURA SINGLE DATABASE:
+                // Deletar banco apenas se TENANCY_CREATE_DATABASES=true
+                JobPipeline::make(array_filter([
+                    env('TENANCY_CREATE_DATABASES', false) ? Jobs\DeleteDatabase::class : null,
+                ]))->send(function (Events\TenantDeleted $event) {
                     return $event->tenant;
                 })->shouldBeQueued(false), // `false` by default, but you probably want to make this `true` for production.
             ],
