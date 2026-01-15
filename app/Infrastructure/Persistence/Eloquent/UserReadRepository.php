@@ -149,20 +149,88 @@ class UserReadRepository implements UserReadRepositoryInterface
         $roles = $user->roles->pluck('name')->toArray();
         $totalEmpresas = count($empresas);
         
+        // ✅ CORREÇÃO: Garantir que empresa_ativa seja válida e esteja vinculada ao usuário
         $empresaAtiva = null;
         if ($user->empresa_ativa_id) {
+            // Tentar encontrar no relacionamento carregado primeiro
             $modelAtiva = $user->empresas->firstWhere('id', $user->empresa_ativa_id);
-            $empresaAtiva = $modelAtiva ? [
-                'id' => $modelAtiva->id,
-                'razao_social' => $modelAtiva->razao_social,
-            ] : null;
+            
+            if ($modelAtiva) {
+                // Empresa encontrada no relacionamento - usar ela
+                $empresaAtiva = [
+                    'id' => $modelAtiva->id,
+                    'razao_social' => $modelAtiva->razao_social,
+                ];
+            } else {
+                // Empresa não está no relacionamento - pode ser inconsistência
+                // Verificar se a empresa existe e está vinculada ao usuário
+                $empresaNoRelacionamento = $user->empresas()->where('empresas.id', $user->empresa_ativa_id)->first();
+                
+                if ($empresaNoRelacionamento) {
+                    // Empresa existe mas não estava no relacionamento carregado - recarregar
+                    Log::warning('UserReadRepository::mapUserToArray - Empresa ativa não estava no relacionamento carregado', [
+                        'user_id' => $user->id,
+                        'empresa_ativa_id' => $user->empresa_ativa_id,
+                        'empresas_ids_no_relacionamento' => $user->empresas->pluck('id')->toArray(),
+                    ]);
+                    
+                    $empresaAtiva = [
+                        'id' => $empresaNoRelacionamento->id,
+                        'razao_social' => $empresaNoRelacionamento->razao_social,
+                    ];
+                } else {
+                    // ✅ INCONSISTÊNCIA: empresa_ativa_id não está vinculada ao usuário
+                    // Limpar empresa_ativa_id e usar a primeira empresa válida
+                    Log::error('UserReadRepository::mapUserToArray - INCONSISTÊNCIA: empresa_ativa_id não está vinculada ao usuário', [
+                        'user_id' => $user->id,
+                        'empresa_ativa_id_invalida' => $user->empresa_ativa_id,
+                        'empresas_ids_validas' => $user->empresas->pluck('id')->toArray(),
+                    ]);
+                    
+                    // Usar primeira empresa válida se existir
+                    $primeiraEmpresa = $user->empresas->first();
+                    if ($primeiraEmpresa) {
+                        // Atualizar empresa_ativa_id para a primeira empresa válida
+                        $empresaAtivaIdAntiga = $user->empresa_ativa_id;
+                        $user->empresa_ativa_id = $primeiraEmpresa->id;
+                        $user->save();
+                        
+                        Log::info('UserReadRepository::mapUserToArray - empresa_ativa_id corrigida automaticamente', [
+                            'user_id' => $user->id,
+                            'empresa_ativa_id_antiga' => $empresaAtivaIdAntiga,
+                            'empresa_ativa_id_nova' => $primeiraEmpresa->id,
+                        ]);
+                        
+                        $empresaAtiva = [
+                            'id' => $primeiraEmpresa->id,
+                            'razao_social' => $primeiraEmpresa->razao_social,
+                        ];
+                    }
+                }
+            }
+        } else if (!empty($empresas)) {
+            // Se não tem empresa_ativa_id mas tem empresas, usar a primeira
+            $primeiraEmpresa = $user->empresas->first();
+            if ($primeiraEmpresa) {
+                // Atualizar empresa_ativa_id
+                $user->empresa_ativa_id = $primeiraEmpresa->id;
+                $user->save();
+                
+                $empresaAtiva = [
+                    'id' => $primeiraEmpresa->id,
+                    'razao_social' => $primeiraEmpresa->razao_social,
+                ];
+            }
         }
 
+        // ✅ Garantir que empresa_ativa_id está sincronizado após possíveis correções
+        $empresaAtivaIdFinal = $empresaAtiva ? $empresaAtiva['id'] : ($user->empresa_ativa_id ?? null);
+        
         return [
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
-            'empresa_ativa_id' => $user->empresa_ativa_id,
+            'empresa_ativa_id' => $empresaAtivaIdFinal,
             'empresa_ativa' => $empresaAtiva,
             'roles' => $roles,
             'roles_list' => $roles,
