@@ -194,30 +194,6 @@ class UserLookupRepository implements UserLookupRepositoryInterface
         $data = $paginator->items();
         $lookups = array_map(fn($model) => $this->toDomain($model), $data);
         
-        // 🔥 LOG: Verificar se o email específico está nos resultados
-        $emailEncontrado = false;
-        foreach ($lookups as $lookup) {
-            if (strtolower($lookup->email) === $emailProcuradoLower) {
-                $emailEncontrado = true;
-                Log::info('UserLookupRepository::buscarComFiltros - Email encontrado nos resultados', [
-                    'email' => $lookup->email,
-                    'tenant_id' => $lookup->tenantId,
-                    'user_id' => $lookup->userId,
-                    'status' => $lookup->status,
-                ]);
-                break;
-            }
-        }
-        
-        if (!$emailEncontrado && $existeNaQuery) {
-            Log::warning('UserLookupRepository::buscarComFiltros - Email existe na query mas não está nos resultados (pode ser paginação)', [
-                'email' => $emailProcurado,
-                'total' => $paginator->total(),
-                'per_page' => $paginator->perPage(),
-                'current_page' => $paginator->currentPage(),
-            ]);
-        }
-        
         Log::info('UserLookupRepository::buscarComFiltros - Busca concluída', [
             'total' => $paginator->total(),
             'per_page' => $paginator->perPage(),
