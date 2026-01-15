@@ -69,9 +69,12 @@ class AdminUserController extends Controller
             \Log::info('AdminUserController::indexGlobal - Listando usuários via users_lookup');
             
             // 1. Buscar na users_lookup (rápido, O(1))
+            // ⚠️ CORREÇÃO: Não filtrar por status por padrão se não for especificado
+            // Isso permite ver todos os usuários mesmo se a tabela não estiver sincronizada
+            $statusFilter = $request->input('status');
             $filtros = [
                 'search' => $request->input('search'),
-                'status' => $request->input('status', 'ativo'),
+                'status' => $statusFilter ?: 'all', // 'all' para não filtrar, ou 'ativo'/'inativo' se especificado
                 'per_page' => $request->input('per_page', 15),
                 'page' => $request->input('page', 1),
             ];
