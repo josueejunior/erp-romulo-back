@@ -144,7 +144,17 @@ class CriarUsuarioUseCase
                     );
                 }
 
-                // 5. Disparar Domain Event (desacoplado)
+                \Log::info('CriarUsuarioUseCase::executar concluído', [
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                ]);
+
+                return $user;
+            });
+
+            // 🔥 CORREÇÃO: Disparar Domain Event FORA da transação
+            // Isso evita que erros no listener abortem a transação e garantem que o usuário seja criado mesmo se houver problemas no envio de email
+            try {
                 $this->eventDispatcher->dispatch(
                     new UsuarioCriado(
                         userId: $user->id,
@@ -154,14 +164,13 @@ class CriarUsuarioUseCase
                         empresaId: $user->empresaAtivaId,
                     )
                 );
-
-                \Log::info('CriarUsuarioUseCase::executar concluído', [
+            } catch (\Exception $e) {
+                // Não quebrar o fluxo se houver erro no evento
+                \Log::error('CriarUsuarioUseCase - Erro ao disparar evento UsuarioCriado', [
                     'user_id' => $user->id,
-                    'email' => $user->email,
+                    'error' => $e->getMessage(),
                 ]);
-
-                return $user;
-            });
+            }
         } catch (\Exception $e) {
             \Log::error('CriarUsuarioUseCase::executar falhou', [
                 'error' => $e->getMessage(),

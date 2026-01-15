@@ -49,10 +49,11 @@ class UsuarioCriadoListener
                     tenancy()->initialize($tenant);
                     
                     try {
+                        // 🔥 CORREÇÃO: Usar criado_em em vez de created_at (timestamps customizados)
                         $assinatura = Assinatura::where('tenant_id', $tenant->id)
                             ->where('status', 'ativa')
                             ->with('plano')
-                            ->orderBy('created_at', 'desc')
+                            ->orderBy('criado_em', 'desc')
                             ->first();
                     } finally {
                         if (tenancy()->initialized) {
