@@ -57,6 +57,17 @@ class EmpresaRepository implements EmpresaRepositoryInterface
             'database' => \Illuminate\Support\Facades\DB::connection()->getDatabaseName(),
         ]);
         
+        $statusFinal = $dto->status ?? 'ativa';
+        
+        \Log::info('EmpresaRepository::criarNoTenant - Criando empresa', [
+            'tenant_id' => $tenantId,
+            'razao_social' => $dto->razaoSocial,
+            'cnpj' => $dto->cnpj,
+            'status_recebido' => $dto->status,
+            'status_final' => $statusFinal,
+            'database' => \Illuminate\Support\Facades\DB::connection()->getDatabaseName(),
+        ]);
+        
         $model = EmpresaModel::create([
             'razao_social' => $dto->razaoSocial,
             'cnpj' => $dto->cnpj,
@@ -74,13 +85,19 @@ class EmpresaRepository implements EmpresaRepositoryInterface
             // 'banco_pix' => $dto->pix, // Coluna não existe na tabela empresas
             'representante_legal' => $dto->representanteLegalNome,
             'logo' => $dto->logo,
-            'status' => $dto->status ?? 'ativa',
+            'status' => $statusFinal,
         ]);
         
-        \Log::debug('Empresa criada no tenant', [
+        // 🔥 DEBUG: Log detalhado após criação
+        \Log::info('EmpresaRepository::criarNoTenant - Empresa criada no banco', [
             'tenant_id' => $tenantId,
             'empresa_id' => $model->id,
             'razao_social' => $model->razao_social,
+            'cnpj' => $model->cnpj,
+            'status' => $model->status,
+            'status_verificado' => $model->status === 'ativa' ? '✅ ATIVA' : '❌ INATIVA',
+            'database' => \Illuminate\Support\Facades\DB::connection()->getDatabaseName(),
+            'criado_em' => $model->criado_em?->toDateTimeString(),
         ]);
         
         // 🔥 PERFORMANCE: Criar mapeamento direto empresa → tenant
@@ -110,9 +127,40 @@ class EmpresaRepository implements EmpresaRepositoryInterface
 
     public function listar(): array
     {
-        return EmpresaModel::all()->map(function ($model) {
+        // 🔥 DEBUG: Log detalhado das empresas encontradas no banco
+        $empresasModel = EmpresaModel::all();
+        
+        $empresasDetalhes = $empresasModel->map(function ($model) {
+            return [
+                'id' => $model->id,
+                'razao_social' => $model->razao_social,
+                'cnpj' => $model->cnpj,
+                'status' => $model->status,
+                'tenant_id' => $model->tenant_id ?? null,
+                'criado_em' => $model->criado_em?->toDateTimeString(),
+                'atualizado_em' => $model->atualizado_em?->toDateTimeString(),
+                'deleted_at' => $model->deleted_at?->toDateTimeString(),
+            ];
+        })->toArray();
+        
+        \Log::info('EmpresaRepository::listar - Empresas encontradas no banco', [
+            'total_empresas' => $empresasModel->count(),
+            'tenant_id' => tenancy()->tenant?->id,
+            'database' => \Illuminate\Support\Facades\DB::connection()->getDatabaseName(),
+            'empresas_detalhes' => $empresasDetalhes,
+        ]);
+        
+        $result = $empresasModel->map(function ($model) {
             return $this->toDomain($model);
         })->toArray();
+        
+        \Log::info('EmpresaRepository::listar - Empresas após conversão para domínio', [
+            'total_empresas' => count($result),
+            'empresas_ids' => array_column($result, 'id'),
+            'empresas_razao_social' => array_column($result, 'razaoSocial'),
+        ]);
+        
+        return $result;
     }
 
     /**

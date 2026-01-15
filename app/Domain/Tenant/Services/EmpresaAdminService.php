@@ -42,10 +42,28 @@ class EmpresaAdminService
             // 🔥 DDD: Usar Repository Interface ao invés de Eloquent diretamente
             $empresasDomain = $this->empresaRepository->listar();
             
+            Log::info('EmpresaAdminService::buscarEmpresasDoTenant - Empresas retornadas do repository', [
+                'tenant_id' => $tenantId,
+                'total_empresas' => count($empresasDomain),
+                'empresas_ids' => array_column($empresasDomain, 'id'),
+                'empresas_status' => array_map(fn($e) => ['id' => $e->id, 'status' => $e->status], $empresasDomain),
+            ]);
+            
             // Filtrar apenas empresas ativas (regra de negócio)
             $empresasAtivas = array_filter($empresasDomain, function (EmpresaDomain $empresa) {
                 return $empresa->status === 'ativa';
             });
+            
+            Log::info('EmpresaAdminService::buscarEmpresasDoTenant - Empresas após filtro de status', [
+                'tenant_id' => $tenantId,
+                'total_antes_filtro' => count($empresasDomain),
+                'total_apos_filtro' => count($empresasAtivas),
+                'empresas_ativas_ids' => array_column($empresasAtivas, 'id'),
+                'empresas_inativas_ids' => array_column(
+                    array_filter($empresasDomain, fn($e) => $e->status !== 'ativa'),
+                    'id'
+                ),
+            ]);
             
             // Ordenar por razão social (regra de apresentação)
             usort($empresasAtivas, function (EmpresaDomain $a, EmpresaDomain $b) {
