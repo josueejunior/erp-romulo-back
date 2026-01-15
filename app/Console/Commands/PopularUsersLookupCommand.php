@@ -159,23 +159,13 @@ class PopularUsersLookupCommand extends Command
                             );
                             
                             try {
-                                // Verificar se já existe
-                                $existente = $this->lookupRepository->buscarPorEmail($user->email);
-                                
-                                if ($existente && $existente->tenantId === $tenant->id) {
-                                    // Já existe para este tenant
-                                    if ($force) {
-                                        $this->lookupRepository->atualizar($lookup);
-                                        $registros++;
-                                    }
-                                } else {
-                                    // Criar novo
-                                    $this->lookupRepository->criar($lookup);
-                                    $registros++;
-                                }
+                                // 🔥 SIMPLIFICAÇÃO: O método criar() já usa updateOrCreate com (email, tenant_id)
+                                // como chave, então não precisamos verificar manualmente. Ele vai criar ou atualizar
+                                // automaticamente de forma idempotente.
+                                $this->lookupRepository->criar($lookup);
+                                $registros++;
                             } catch (\Exception $e) {
-                                // Pode dar erro de unique constraint, continuar
-                                Log::debug('PopularUsersLookupCommand: Erro ao criar lookup (pode ser duplicado)', [
+                                Log::debug('PopularUsersLookupCommand: Erro ao criar lookup', [
                                     'tenant_id' => $tenant->id,
                                     'user_id' => $user->id,
                                     'email' => $user->email,
@@ -203,40 +193,13 @@ class PopularUsersLookupCommand extends Command
                             );
                             
                             try {
-                                // Verificar se já existe (buscar por email e tenant)
-                                $existentes = $this->lookupRepository->buscarAtivosPorEmail($user->email);
-                                $existente = null;
-                                
-                                foreach ($existentes as $e) {
-                                    if ($e->tenantId === $tenant->id && $e->userId === $user->id) {
-                                        $existente = $e;
-                                        break;
-                                    }
-                                }
-                                
-                                if ($existente) {
-                                    // Já existe, atualizar se force
-                                    if ($force) {
-                                        $lookup = new UserLookup(
-                                            id: $existente->id,
-                                            email: $user->email,
-                                            cnpj: $cnpjLimpo,
-                                            tenantId: $tenant->id,
-                                            userId: $user->id,
-                                            empresaId: $empresa->id,
-                                            status: 'ativo',
-                                        );
-                                        $this->lookupRepository->atualizar($lookup);
-                                        $registros++;
-                                    }
-                                } else {
-                                    // Criar novo
-                                    $this->lookupRepository->criar($lookup);
-                                    $registros++;
-                                }
+                                // 🔥 SIMPLIFICAÇÃO: O método criar() já usa updateOrCreate com (email, tenant_id)
+                                // como chave, então não precisamos verificar manualmente. Ele vai criar ou atualizar
+                                // automaticamente de forma idempotente.
+                                $this->lookupRepository->criar($lookup);
+                                $registros++;
                             } catch (\Exception $e) {
-                                // Pode dar erro de unique constraint, continuar
-                                Log::debug('PopularUsersLookupCommand: Erro ao criar lookup (pode ser duplicado)', [
+                                Log::debug('PopularUsersLookupCommand: Erro ao criar lookup', [
                                     'tenant_id' => $tenant->id,
                                     'user_id' => $user->id,
                                     'empresa_id' => $empresa->id,

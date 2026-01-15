@@ -100,37 +100,68 @@ class UserLookupRepository implements UserLookupRepositoryInterface
     {
         $data = $this->toArray($lookup);
         
-        // 🔥 SOLUÇÃO PROFUNDA: Usar updateOrCreate para garantir idempotência
-        // A tabela tem duas constraints únicas:
+        // 🔥 SOLUÇÃO PROFUNDA: A tabela tem duas constraints únicas:
         // 1. (email, tenant_id) - users_lookup_email_tenant_unique
         // 2. (cnpj, tenant_id) - users_lookup_cnpj_tenant_unique
         // 
-        // ⚠️ CORREÇÃO CRÍTICA: Usar (email, tenant_id) como chave de busca, não (cnpj, tenant_id)
-        // Motivo: Um email é único por usuário, mas um CNPJ pode ser compartilhado por múltiplos
-        // usuários no mesmo tenant (ex: múltiplos funcionários da mesma empresa).
-        // Usar (cnpj, tenant_id) causaria sobrescrita de registros quando múltiplos usuários
-        // da mesma empresa são criados.
+        // ⚠️ PROBLEMA: Se tentarmos criar um registro com (email, tenant_id) novo mas (cnpj, tenant_id) existente,
+        // o updateOrCreate não encontra por email, tenta INSERT, e viola a constraint de CNPJ.
         //
-        // ⚠️ IMPORTANTE: Isso garante que não haverá Unique Violation e a transação não será abortada
-        // 
-        // 🔥 CORREÇÃO: Buscar incluindo soft deleted para restaurar se necessário
-        $model = UserLookupModel::withTrashed()->updateOrCreate(
-            [
-                'email' => $data['email'],
-                'tenant_id' => $data['tenant_id'],
-            ],
-            [
+        // 🔥 SOLUÇÃO: Verificar primeiro por (email, tenant_id), depois por (cnpj, tenant_id) se necessário
+        // Se encontrar por CNPJ, atualizar esse registro (pode ser que o email mudou ou é um novo usuário da mesma empresa)
+        
+        // Tentar primeiro por (email, tenant_id) - chave primária para identificar um usuário
+        $model = UserLookupModel::withTrashed()
+            ->where('email', $data['email'])
+            ->where('tenant_id', $data['tenant_id'])
+            ->first();
+        
+        if ($model) {
+            // Registro existe por email, atualizar
+            $model->update([
                 'cnpj' => $data['cnpj'],
                 'user_id' => $data['user_id'],
                 'empresa_id' => $data['empresa_id'],
                 'status' => $data['status'] ?? 'ativo',
-                'deleted_at' => null, // Garantir que não está soft deleted
-            ]
-        );
-        
-        // Se o registro estava soft deleted, garantir que foi restaurado
-        if ($model->trashed()) {
-            $model->restore();
+                'deleted_at' => null,
+            ]);
+            
+            if ($model->trashed()) {
+                $model->restore();
+            }
+        } else {
+            // Não encontrou por email, verificar se existe por (cnpj, tenant_id)
+            $modelPorCnpj = UserLookupModel::withTrashed()
+                ->where('cnpj', $data['cnpj'])
+                ->where('tenant_id', $data['tenant_id'])
+                ->first();
+            
+            if ($modelPorCnpj) {
+                // Existe por CNPJ, atualizar (pode ser novo usuário da mesma empresa ou email mudou)
+                $modelPorCnpj->update([
+                    'email' => $data['email'],
+                    'user_id' => $data['user_id'],
+                    'empresa_id' => $data['empresa_id'],
+                    'status' => $data['status'] ?? 'ativo',
+                    'deleted_at' => null,
+                ]);
+                
+                if ($modelPorCnpj->trashed()) {
+                    $modelPorCnpj->restore();
+                }
+                
+                $model = $modelPorCnpj;
+            } else {
+                // Não existe nem por email nem por CNPJ, criar novo
+                $model = UserLookupModel::create([
+                    'email' => $data['email'],
+                    'cnpj' => $data['cnpj'],
+                    'tenant_id' => $data['tenant_id'],
+                    'user_id' => $data['user_id'],
+                    'empresa_id' => $data['empresa_id'],
+                    'status' => $data['status'] ?? 'ativo',
+                ]);
+            }
         }
         
         // Refresh para garantir que temos os dados mais recentes
