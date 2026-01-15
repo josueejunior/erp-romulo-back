@@ -68,6 +68,20 @@ class AdminUserController extends Controller
             // 🔥 PERFORMANCE: Cache de 2 minutos para reduzir carga
             $cacheKey = 'admin_usuarios_global_' . md5(json_encode($request->only(['search', 'status', 'page', 'per_page'])));
             
+            // ✅ DEBUG: Verificar se há cache
+            $hasCache = Cache::has($cacheKey);
+            \Log::info('AdminUserController::indexGlobal - Verificando cache', [
+                'cache_key' => $cacheKey,
+                'has_cache' => $hasCache,
+                'filtros' => $request->only(['search', 'status', 'page', 'per_page']),
+            ]);
+            
+            // ✅ DEBUG: Se tiver parâmetro ?nocache=true, limpar cache e forçar busca
+            if ($request->boolean('nocache')) {
+                Cache::forget($cacheKey);
+                \Log::info('AdminUserController::indexGlobal - Cache limpo por parâmetro nocache');
+            }
+            
             // Cachear apenas os dados (array), não a JsonResponse
             $result = Cache::remember($cacheKey, 120, function () use ($request) {
                 \Log::info('AdminUserController::indexGlobal - Listando usuários via users_lookup (cache miss)');
@@ -307,6 +321,14 @@ class AdminUserController extends Controller
                     'last_page' => $lookupResult['last_page'],
                 ];
             });
+            
+            // ✅ DEBUG: Log do resultado do cache
+            \Log::info('AdminUserController::indexGlobal - Resultado do cache', [
+                'total_usuarios' => count($result['data'] ?? []),
+                'total' => $result['total'] ?? 0,
+                'per_page' => $result['per_page'] ?? 15,
+                'current_page' => $result['current_page'] ?? 1,
+            ]);
             
             // Retornar com paginação
             return ApiResponse::collection($result['data'], [
