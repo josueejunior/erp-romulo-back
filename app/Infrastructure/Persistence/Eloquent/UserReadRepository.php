@@ -115,40 +115,11 @@ class UserReadRepository implements UserReadRepositoryInterface
                 'database' => $databaseName,
             ]);
 
-            // 🔥 LOG: Verificar se o email específico está nos resultados
-            $emailEncontrado = false;
-            $userEncontrado = null;
-            foreach ($users as $user) {
-                if (strtolower($user->email) === $emailProcuradoLower) {
-                    $emailEncontrado = true;
-                    $userEncontrado = $user;
-                    Log::info('UserReadRepository::listarSemPaginacao - Email encontrado nos resultados', [
-                        'user_id' => $user->id,
-                        'email' => $user->email,
-                        'name' => $user->name,
-                        'deleted_at' => $user->deleted_at,
-                        'is_trashed' => $user->trashed(),
-                        'empresa_ativa_id' => $user->empresa_ativa_id,
-                        'tenant_id' => $tenantId,
-                    ]);
-                    break;
-                }
-            }
-            
-            if ($existeNaQuery && !$emailEncontrado) {
-                Log::warning('UserReadRepository::listarSemPaginacao - Email existe na query mas não está nos resultados', [
-                    'email' => $emailProcurado,
-                    'tenant_id' => $tenantId,
-                    'database' => $databaseName,
-                ]);
-            }
-
             // Transforma os itens usando o método map que já criamos
             $result = $users->map(fn($user) => $this->mapUserToArray($user))->toArray();
             
             Log::info('UserReadRepository::listarSemPaginacao - Concluído', [
                 'total_resultados' => count($result),
-                'email_encontrado' => $emailEncontrado,
                 'tenant_id' => $tenantId,
             ]);
             
