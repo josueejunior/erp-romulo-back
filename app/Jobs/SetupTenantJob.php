@@ -132,20 +132,13 @@ class SetupTenantJob implements ShouldQueue
         
         // Continuar com inicialização do contexto do tenant mesmo sem banco separado
         try {
-
             // 5. Recarregar tenant model para garantir que está atualizado
-            $tenantModel = $tenantRepository->buscarModeloPorId($this->tenantId);
-            if (!$tenantModel) {
-                throw new \RuntimeException("Tenant model {$this->tenantId} não encontrado após criar banco.");
-            }
-
-            // 5/6. Recarregar tenant model para garantir que está atualizado
             $tenantModel = $tenantRepository->buscarModeloPorId($this->tenantId);
             if (!$tenantModel) {
                 throw new \RuntimeException("Tenant model {$this->tenantId} não encontrado.");
             }
 
-            // 6/7. Inicializar contexto do tenant
+            // 6. Inicializar contexto do tenant (necessário mesmo em Single Database mode para cache/filesystem)
             tenancy()->initialize($tenantModel);
 
             try {
