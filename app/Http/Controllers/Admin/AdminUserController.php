@@ -144,13 +144,27 @@ class AdminUserController extends Controller
                         
                         $filtrados = array_filter($todosUsuarios, fn($user) => in_array($user['id'], $userIds));
                         
-                        Log::info('AdminUserController::indexGlobal - Usuários filtrados do tenant', [
-                            'tenant_id' => $tenantDomain->id ?? null,
-                            'total_antes_filtro' => count($todosUsuarios),
-                            'total_depois_filtro' => count($filtrados),
-                            'user_ids_procurados' => $userIds,
-                            'user_ids_encontrados' => array_map(fn($u) => $u['id'], $filtrados),
-                        ]);
+                    // 🔥 DEBUG: Log detalhado dos usuários filtrados
+                    $usuariosFiltradosDetalhes = array_map(function ($user) {
+                        return [
+                            'id' => $user['id'] ?? null,
+                            'name' => $user['name'] ?? null,
+                            'email' => $user['email'] ?? null,
+                            'empresa_ativa_id' => $user['empresa_ativa_id'] ?? null,
+                            'total_empresas' => $user['total_empresas'] ?? 0,
+                            'empresas_ids' => array_column($user['empresas'] ?? [], 'id'),
+                            'roles' => $user['roles'] ?? [],
+                        ];
+                    }, $filtrados);
+                    
+                    Log::info('AdminUserController::indexGlobal - Usuários filtrados do tenant', [
+                        'tenant_id' => $tenantDomain->id ?? null,
+                        'total_antes_filtro' => count($todosUsuarios),
+                        'total_depois_filtro' => count($filtrados),
+                        'user_ids_procurados' => $userIds,
+                        'user_ids_encontrados' => array_map(fn($u) => $u['id'], $filtrados),
+                        'usuarios_detalhes' => $usuariosFiltradosDetalhes,
+                    ]);
                         
                         return $filtrados;
                     });
@@ -235,11 +249,27 @@ class AdminUserController extends Controller
                 return strcmp($a['name'] ?? '', $b['name'] ?? '');
             });
             
+            // 🔥 DEBUG: Log detalhado dos usuários consolidados
+            $usuariosConsolidadosDetalhes = array_map(function ($user) {
+                return [
+                    'id' => $user['id'] ?? null,
+                    'name' => $user['name'] ?? null,
+                    'email' => $user['email'] ?? null,
+                    'empresa_ativa_id' => $user['empresa_ativa_id'] ?? null,
+                    'total_empresas' => $user['total_empresas'] ?? 0,
+                    'empresas_ids' => array_column($user['empresas'] ?? [], 'id'),
+                    'tenants_ids' => array_column($user['tenants'] ?? [], 'tenant_id'),
+                    'roles' => $user['roles'] ?? [],
+                    'deleted_at' => $user['deleted_at'] ?? null,
+                ];
+            }, array_values($allUsers));
+            
             \Log::info('AdminUserController::indexGlobal - Usuários consolidados via users_lookup', [
                 'total_users' => count($allUsers),
                 'tenants_processados' => $tenantsProcessados,
                 'tenants_com_erro' => $tenantsComErro,
                 'lookups_encontrados' => count($lookups),
+                'usuarios_detalhes' => $usuariosConsolidadosDetalhes,
             ]);
             
             $result = [
@@ -250,12 +280,23 @@ class AdminUserController extends Controller
                 'last_page' => $lookupResult['last_page'],
             ];
             
-            // ✅ DEBUG: Log do resultado
+            // 🔥 DEBUG: Log detalhado do resultado final
+            $resultadoFinalDetalhes = array_map(function ($user) {
+                return [
+                    'id' => $user['id'] ?? null,
+                    'name' => $user['name'] ?? null,
+                    'email' => $user['email'] ?? null,
+                    'empresa_ativa_id' => $user['empresa_ativa_id'] ?? null,
+                    'total_empresas' => $user['total_empresas'] ?? 0,
+                ];
+            }, $result['data'] ?? []);
+            
             \Log::info('AdminUserController::indexGlobal - Resultado da listagem', [
                 'total_usuarios' => count($result['data'] ?? []),
                 'total' => $result['total'] ?? 0,
                 'per_page' => $result['per_page'] ?? 15,
                 'current_page' => $result['current_page'] ?? 1,
+                'usuarios_resultado_final' => $resultadoFinalDetalhes,
             ]);
             
             // Retornar com paginação
