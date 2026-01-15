@@ -128,7 +128,11 @@ class UserRepository implements UserRepositoryInterface
         
         $model = UserModel::create($userData);
         
-        return $this->toDomain($model->fresh(), $user->tenantId);
+        // 🔥 CORREÇÃO: Garantir que o modelo está acessível dentro da transação
+        // Usar refresh() para garantir que está sincronizado com o banco
+        $model->refresh();
+        
+        return $this->toDomain($model, $user->tenantId);
     }
 
     /**
@@ -177,28 +181,19 @@ class UserRepository implements UserRepositoryInterface
         return $this->toDomain($model, $tenantId);
     }
 
+    /**
+     * Verificar se email existe
+     * 
+     * 🔥 SIMPLIFICADO: Global Scope cuida do isolamento de tenant automaticamente
+     * Não precisa validar tenant_id manualmente - o banco trabalha para você
+     */
     public function emailExiste(string $email, ?int $excluirUserId = null): bool
     {
-        // Log detalhado para debug
-        $tenantId = tenancy()->tenant?->id ?? null;
-        $tenantInitialized = tenancy()->initialized ?? false;
-        $currentDatabase = tenancy()->initialized ? \DB::connection()->getDatabaseName() : 'central';
-        
-        \Log::debug('UserRepository::emailExiste - Verificando email', [
-            'email' => $email,
-            'excluir_user_id' => $excluirUserId,
-            'tenant_id' => $tenantId,
-            'tenancy_initialized' => $tenantInitialized,
-            'current_database' => $currentDatabase,
-        ]);
-
-        // 🔥 CORREÇÃO: Usar LOWER() para comparação case-insensitive (PostgreSQL é case-sensitive)
-        // Isso garante que emails como "Email@Example.com" e "email@example.com" sejam tratados como iguais
+        // Normalizar email para lowercase
         $emailLower = strtolower($email);
         
-        // 🔥 CORREÇÃO CRÍTICA: A constraint unique do PostgreSQL NÃO respeita soft deletes
-        // Se existe um usuário deletado com esse email, a constraint bloqueia a inserção
-        // Precisamos verificar INCLUINDO usuários deletados para detectar esse caso
+        // Global Scope aplica filtro de tenant automaticamente
+        // Não precisa adicionar where('tenant_id', ...) manualmente
         $query = UserModel::withTrashed()
             ->whereRaw('LOWER(email) = ?', [$emailLower]);
         
@@ -206,50 +201,23 @@ class UserRepository implements UserRepositoryInterface
             $query->where('id', '!=', $excluirUserId);
         }
 
-        // Verificar se existe algum usuário (ativo ou deletado)
         $userFound = $query->first();
         
-        if ($userFound) {
-            // Se o usuário está deletado (soft delete), permitir criação (email disponível)
-            if ($userFound->trashed()) {
-                \Log::warning('UserRepository::emailExiste - Email encontrado mas usuário está deletado (soft delete). Constraint unique do PostgreSQL ainda bloqueia criação!', [
-                    'email' => $email,
-                    'email_lower' => $emailLower,
-                    'user_id' => $userFound->id,
-                    'user_email' => $userFound->email,
-                    'is_trashed' => true,
-                    'tenant_id' => $tenantId,
-                    'deleted_at' => $userFound->getAttribute($userFound->getDeletedAtColumn()),
-                ]);
-                // ⚠️ PROBLEMA: Retornar false aqui permite que o UseCase tente criar,
-                // mas a constraint unique do banco vai bloquear
-                // SOLUÇÃO IDEAL: Usar unique index parcial (WHERE deleted_at IS NULL) no banco
-                // SOLUÇÃO TEMPORÁRIA: Retornar true para evitar erro de constraint
-                // Mas isso impede criar usuário com email de usuário deletado
-                return true; // ⚠️ Impede criação se houver usuário deletado
-            }
-            
-            // Usuário ativo encontrado
-            \Log::warning('UserRepository::emailExiste - Email encontrado (usuário ativo)', [
-                'email' => $email,
-                'email_lower' => $emailLower,
-                'user_id' => $userFound->id ?? null,
-                'user_email' => $userFound->email ?? null,
-                'user_name' => $userFound->name ?? null,
-                'tenant_id' => $tenantId,
-                'excluir_user_id' => $excluirUserId,
-                'current_database' => $currentDatabase,
-            ]);
-            return true;
-        } else {
-            \Log::debug('UserRepository::emailExiste - Email não encontrado', [
-                'email' => $email,
-                'email_lower' => $emailLower,
-                'tenant_id' => $tenantId,
-                'current_database' => $currentDatabase,
-            ]);
+        if (!$userFound) {
             return false;
         }
+
+        // Se usuário está deletado (soft delete), ainda bloqueia por constraint unique
+        // Retornar true para evitar erro de constraint no banco
+        if ($userFound->trashed()) {
+            \Log::warning('UserRepository::emailExiste - Email encontrado mas usuário deletado', [
+                'email' => $email,
+                'user_id' => $userFound->id,
+            ]);
+            return true; // Bloqueia criação (constraint unique do PostgreSQL)
+        }
+        
+        return true; // Email existe e usuário está ativo
     }
 
     public function buscarComFiltros(array $filtros = []): LengthAwarePaginator
