@@ -22,6 +22,7 @@ use App\Observers\EmpenhoObserver;
 use App\Observers\NotaFiscalObserver;
 use App\Observers\AuditObserver;
 use App\Observers\ProcessoItemVinculoObserver;
+use App\Observers\UserLookupObserver;
 use App\Modules\Processo\Models\ProcessoItemVinculo;
 use Laravel\Sanctum\Sanctum;
 use App\Modules\Auth\Models\PersonalAccessToken;
@@ -259,6 +260,9 @@ class AppServiceProvider extends ServiceProvider
         Orcamento::observe(AuditObserver::class);
         AutorizacaoFornecimento::observe(AuditObserver::class);
         ProcessoItemVinculo::observe([ProcessoItemVinculoObserver::class, AuditObserver::class]);
+        
+        // 🔥 ARQUITETURA: Observer para manter users_lookup sincronizado
+        \App\Modules\Auth\Models\User::observe(UserLookupObserver::class);
         
         // Agendar atualização automática de status dos processos
         // Executa a cada hora para verificar processos que passaram da sessão pública

@@ -62,14 +62,44 @@ class ResolveTenantContext
             return $next($request);
         }
 
-        // Resolver tenant_id de múltiplas fontes
-        $tenantId = $this->resolveTenantId($request);
+        // 🔥 ARQUITETURA RIGOROSA: Hierarquia da Verdade
+        // REGRA DE OURO: O Token JWT é a autoridade máxima
+        $headerTenantId = $request->header('X-Tenant-ID') ? (int) $request->header('X-Tenant-ID') : null;
+        $tokenTenantId = null;
+        
+        // Extrair tenant_id do JWT (já injetado por AuthenticateJWT)
+        if ($request->attributes->has('auth')) {
+            $payload = $request->attributes->get('auth');
+            $tokenTenantId = isset($payload['tenant_id']) ? (int) $payload['tenant_id'] : null;
+        }
+        
+        // 🔥 VALIDAÇÃO: Se header e token divergem, frontend está enviando cache antigo
+        if ($headerTenantId && $tokenTenantId && $headerTenantId !== $tokenTenantId) {
+            Log::error('ResolveTenantContext: ❌ Tenant Context Mismatch', [
+                'user_id' => $user->id,
+                'header_tenant_id' => $headerTenantId,
+                'token_tenant_id' => $tokenTenantId,
+                'url' => $request->fullUrl(),
+                'problema' => 'Frontend está enviando tenant_id diferente do JWT (cache antigo)',
+            ]);
+            
+            return response()->json([
+                'error' => 'Tenant Context Mismatch',
+                'message' => 'O tenant_id do header não corresponde ao token. Faça login novamente.',
+                'code' => 'TENANT_MISMATCH',
+            ], 403);
+        }
+        
+        // Prioridade: Token > Header (Token é fonte de verdade)
+        $tenantId = $tokenTenantId ?: $headerTenantId;
         
         Log::info('ResolveTenantContext: Tenant ID resolvido', [
             'tenant_id' => $tenantId,
             'user_id' => $user->id,
             'user_email' => $user->email ?? 'N/A',
-            'source' => $this->getTenantIdSource($request),
+            'source' => $tokenTenantId ? 'jwt_token' : ($headerTenantId ? 'header' : 'none'),
+            'header_tenant_id' => $headerTenantId,
+            'token_tenant_id' => $tokenTenantId,
         ]);
         
         if (!$tenantId) {
@@ -105,6 +135,7 @@ class ResolveTenantContext
             // Se encontrou o tenant correto, retornar resposta especial
             if (isset($validacao['tenant_correto'])) {
                 return response()->json([
+                    'error' => 'Invalid Tenant Relation',
                     'message' => 'Tenant incorreto. Use o tenant ' . $validacao['tenant_correto'] . ' no header X-Tenant-ID.',
                     'correct_tenant_id' => $validacao['tenant_correto'],
                     'code' => 'WRONG_TENANT',
@@ -113,7 +144,9 @@ class ResolveTenantContext
             
             // Caso contrário, retornar erro genérico
             return response()->json([
+                'error' => 'Invalid Tenant Relation',
                 'message' => 'Acesso não autorizado a este tenant.',
+                'code' => 'INVALID_TENANT_RELATION',
             ], 403);
         }
 

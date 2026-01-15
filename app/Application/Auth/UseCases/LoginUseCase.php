@@ -167,8 +167,9 @@ class LoginUseCase
                 }
             }
 
-            // 🔥 CRÍTICO: Buscar tenant correto garantindo que o usuário existe nele
-            // Prioridade: Tenant onde usuário E empresa existem > Tenant onde usuário existe
+            // 🔥 ARQUITETURA RIGOROSA: Validar consistência usuário-empresa-tenant
+            // REGRA: Se empresa e usuário estão em tenants diferentes, o tenant da empresa manda
+            // (se usuário tiver permissão na empresa)
             $tenantCorreto = $tenant; // Fallback: usar tenant onde usuário foi encontrado
             
             if ($empresaAtiva) {
@@ -176,31 +177,52 @@ class LoginUseCase
                 $tenantDaEmpresa = $this->buscarTenantPorEmpresa($empresaAtiva->id);
                 
                 if ($tenantDaEmpresa && $tenantDaEmpresa->id !== $tenant->id) {
-                    // Empresa está em outro tenant - verificar se usuário também existe lá
-                    \Log::info('LoginUseCase - Empresa ativa está em outro tenant, verificando se usuário existe lá', [
+                    // ⚠️ INCONSISTÊNCIA DETECTADA: Empresa está em tenant diferente
+                    \Log::warning('LoginUseCase - ⚠️ INCONSISTÊNCIA: Empresa ativa está em tenant diferente', [
                         'empresa_id' => $empresaAtiva->id,
                         'tenant_id_usuario' => $tenant->id,
                         'tenant_id_empresa' => $tenantDaEmpresa->id,
                     ]);
                     
-                    $usuarioExisteNoTenantEmpresa = $this->verificarUsuarioExisteNoTenant($user->id, $tenantDaEmpresa->id);
+                    // Verificar se usuário tem permissão na empresa (através da tabela pivot)
+                    $usuarioTemPermissaoNaEmpresa = $this->verificarPermissaoUsuarioEmpresa($user->id, $empresaAtiva->id, $tenantDaEmpresa->id);
                     
-                    if ($usuarioExisteNoTenantEmpresa) {
-                        // Usuário existe no tenant da empresa - usar esse tenant
+                    if ($usuarioTemPermissaoNaEmpresa) {
+                        // ✅ DECISÃO: Usuário tem permissão → Tenant da Empresa manda
                         $tenantCorreto = $tenantDaEmpresa;
-                        \Log::info('LoginUseCase - ✅ Usuário existe no tenant da empresa, usando tenant da empresa', [
-                            'tenant_id' => $tenantCorreto->id,
-                            'empresa_id' => $empresaAtiva->id,
-                        ]);
+                        
+                        // Verificar se usuário existe no tenant da empresa
+                        $usuarioExisteNoTenantEmpresa = $this->verificarUsuarioExisteNoTenant($user->id, $tenantDaEmpresa->id);
+                        
+                        if (!$usuarioExisteNoTenantEmpresa) {
+                            // Usuário não existe no tenant da empresa, mas tem permissão
+                            // Isso indica inconsistência de dados - logar para auditoria
+                            \Log::warning('LoginUseCase - ⚠️ Usuário tem permissão na empresa mas não existe no tenant da empresa', [
+                                'user_id' => $user->id,
+                                'empresa_id' => $empresaAtiva->id,
+                                'tenant_id_empresa' => $tenantDaEmpresa->id,
+                                'acao' => 'Usando tenant da empresa mesmo sem usuário existir lá (pode causar problemas)',
+                            ]);
+                        } else {
+                            \Log::info('LoginUseCase - ✅ Usuário tem permissão e existe no tenant da empresa', [
+                                'tenant_id' => $tenantCorreto->id,
+                                'empresa_id' => $empresaAtiva->id,
+                            ]);
+                        }
                     } else {
-                        // Usuário NÃO existe no tenant da empresa - usar tenant onde usuário foi encontrado
-                        $tenantCorreto = $tenant;
-                        \Log::warning('LoginUseCase - ⚠️ Usuário NÃO existe no tenant da empresa, usando tenant onde usuário foi encontrado', [
+                        // ❌ Usuário NÃO tem permissão na empresa → FALHAR LOGIN
+                        \Log::error('LoginUseCase - ❌ Usuário sem acesso à empresa ativa configurada', [
+                            'user_id' => $user->id,
+                            'empresa_id' => $empresaAtiva->id,
                             'tenant_id_usuario' => $tenant->id,
                             'tenant_id_empresa' => $tenantDaEmpresa->id,
-                            'empresa_id' => $empresaAtiva->id,
-                            'problema' => 'Empresa ativa está em tenant diferente de onde usuário existe. Isso pode causar problemas de acesso.',
                         ]);
+                        
+                        throw new DomainException(
+                            'Usuário sem acesso à empresa ativa configurada. ' .
+                            'A empresa está em outro tenant e você não tem permissão para acessá-la. ' .
+                            'Entre em contato com o administrador.'
+                        );
                     }
                 } else if (!$tenantDaEmpresa) {
                     // Empresa não encontrada em nenhum tenant - usar tenant do usuário
@@ -210,9 +232,9 @@ class LoginUseCase
                         'tenant_id_fallback' => $tenant->id,
                     ]);
                 } else {
-                    // Empresa e usuário estão no mesmo tenant - perfeito!
+                    // ✅ IDEAL: Empresa e usuário estão no mesmo tenant
                     $tenantCorreto = $tenant;
-                    \Log::debug('LoginUseCase - Empresa e usuário estão no mesmo tenant', [
+                    \Log::debug('LoginUseCase - ✅ Empresa e usuário estão no mesmo tenant', [
                         'tenant_id' => $tenant->id,
                         'empresa_id' => $empresaAtiva->id,
                     ]);
@@ -394,6 +416,45 @@ class LoginUseCase
         } catch (\Exception $e) {
             \Log::warning('LoginUseCase::verificarUsuarioExisteNoTenant - Erro ao verificar', [
                 'user_id' => $userId,
+                'tenant_id' => $tenantId,
+                'error' => $e->getMessage(),
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Verificar se o usuário tem permissão para acessar uma empresa específica
+     * Verifica através da tabela pivot empresa_user no tenant da empresa
+     * 
+     * @param int $userId
+     * @param int $empresaId
+     * @param int $tenantId
+     * @return bool
+     */
+    private function verificarPermissaoUsuarioEmpresa(int $userId, int $empresaId, int $tenantId): bool
+    {
+        try {
+            $tenantDomain = $this->tenantRepository->buscarPorId($tenantId);
+            if (!$tenantDomain) {
+                return false;
+            }
+            
+            $temPermissao = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($userId, $empresaId) {
+                // Verificar se existe registro na tabela pivot empresa_user
+                $pivotExiste = \Illuminate\Support\Facades\DB::table('empresa_user')
+                    ->where('user_id', $userId)
+                    ->where('empresa_id', $empresaId)
+                    ->exists();
+                
+                return $pivotExiste;
+            });
+            
+            return $temPermissao ?? false;
+        } catch (\Exception $e) {
+            \Log::warning('LoginUseCase::verificarPermissaoUsuarioEmpresa - Erro ao verificar', [
+                'user_id' => $userId,
+                'empresa_id' => $empresaId,
                 'tenant_id' => $tenantId,
                 'error' => $e->getMessage(),
             ]);
