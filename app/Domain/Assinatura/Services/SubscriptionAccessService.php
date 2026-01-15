@@ -120,5 +120,71 @@ final class SubscriptionAccessService
         return true;
     }
 
+    /**
+     * Verifica se o calendário pode ser acessado
+     * 
+     * ✅ DDD: Regra de negócio sobre acesso ao calendário
+     * 
+     * Calendário está disponível para:
+     * - Planos ilimitados (sem limite de processos E sem limite de usuários)
+     * - Planos que têm o recurso 'calendarios' explicitamente
+     * 
+     * @param int|null $empresaId ID da empresa
+     * @param Assinatura|null $assinatura Assinatura atual (opcional, para evitar busca extra)
+     * @return bool
+     */
+    public function podeAcessarCalendario(?int $empresaId, ?Assinatura $assinatura = null): bool
+    {
+        // Se não tem empresa, não pode acessar
+        if (!$empresaId) {
+            return false;
+        }
+
+        // Buscar assinatura se não foi fornecida
+        if (!$assinatura) {
+            $assinatura = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($empresaId);
+        }
+
+        // Se não tem assinatura ativa, não pode acessar
+        if (!$assinatura || !$assinatura->isAtiva()) {
+            return false;
+        }
+
+        // Buscar plano (entidade)
+        $planoEntity = $this->planoRepository->buscarPorId($assinatura->planoId);
+        if (!$planoEntity) {
+            return false;
+        }
+
+        // Planos ilimitados (sem limite de processos E sem limite de usuários) têm acesso
+        $temLimiteProcessos = $planoEntity->limiteProcessos !== null;
+        $temLimiteUsuarios = $planoEntity->limiteUsuarios !== null;
+        
+        if (!$temLimiteProcessos && !$temLimiteUsuarios) {
+            Log::debug('SubscriptionAccessService::podeAcessarCalendario - Plano ilimitado, acesso permitido', [
+                'empresa_id' => $empresaId,
+                'plano_id' => $planoEntity->id,
+                'plano_nome' => $planoEntity->nome,
+            ]);
+            return true;
+        }
+
+        // Verificar se o plano tem o recurso 'calendarios'
+        $recursosDisponiveis = $planoEntity->recursosDisponiveis ?? [];
+        $temRecursoCalendarios = in_array('calendarios', $recursosDisponiveis);
+        
+        Log::debug('SubscriptionAccessService::podeAcessarCalendario - Verificação de recurso', [
+            'empresa_id' => $empresaId,
+            'plano_id' => $planoEntity->id,
+            'plano_nome' => $planoEntity->nome,
+            'tem_limite_processos' => $temLimiteProcessos,
+            'tem_limite_usuarios' => $temLimiteUsuarios,
+            'recursos_disponiveis' => $recursosDisponiveis,
+            'tem_recurso_calendarios' => $temRecursoCalendarios,
+        ]);
+        
+        return $temRecursoCalendarios;
+    }
+
 }
 

@@ -10,6 +10,7 @@ use App\Application\Calendario\UseCases\BuscarCalendarioDisputasUseCase;
 use App\Application\Calendario\UseCases\BuscarCalendarioJulgamentoUseCase;
 use App\Application\Calendario\UseCases\BuscarAvisosUrgentesUseCase;
 use App\Application\Calendario\Presenters\CalendarioPresenter;
+use App\Domain\Assinatura\Services\SubscriptionAccessService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
@@ -29,6 +30,7 @@ class CalendarioController extends BaseApiController
         private BuscarCalendarioDisputasUseCase $buscarCalendarioDisputasUseCase,
         private BuscarCalendarioJulgamentoUseCase $buscarCalendarioJulgamentoUseCase,
         private BuscarAvisosUrgentesUseCase $buscarAvisosUrgentesUseCase,
+        private SubscriptionAccessService $subscriptionAccessService,
     ) {}
 
     /**
@@ -42,37 +44,19 @@ class CalendarioController extends BaseApiController
             'request_params' => $request->all(),
         ]);
 
-        // 1. Verificar acesso ao plano
-        $tenant = $this->getTenant();
-        if (!$tenant) {
-            \Log::warning('CalendarioController::disputas - Tenant não encontrado');
-            return response()->json(CalendarioPresenter::erroAcessoPlano(), 403);
-        }
-        
-        // Log detalhado para debug
-        $plano = $tenant->planoAtual;
-        \Log::debug('CalendarioController::disputas - Verificando acesso', [
-            'tenant_id' => $tenant->id,
-            'plano_id' => $plano?->id,
-            'plano_nome' => $plano?->nome,
-            'limite_processos' => $plano?->limite_processos,
-            'limite_usuarios' => $plano?->limite_usuarios,
-            'recursos_disponiveis' => $plano?->recursos_disponiveis,
-            'tem_acesso_calendario' => $tenant->temAcessoCalendario(),
-        ]);
-        
-        if (!$tenant->temAcessoCalendario()) {
-            \Log::warning('CalendarioController::disputas - Acesso negado pelo plano', [
-                'tenant_id' => $tenant->id,
-                'plano_id' => $plano?->id,
-                'plano_nome' => $plano?->nome,
-            ]);
-            return response()->json(CalendarioPresenter::erroAcessoPlano(), 403);
-        }
-
         try {
-            // 2. Obter contexto
+            // 1. Obter empresa e verificar acesso ao calendário
             $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // ✅ DDD: Usar Domain Service para validar acesso ao calendário (mesmo padrão do DashboardController)
+            if (!$this->subscriptionAccessService->podeAcessarCalendario($empresa->id)) {
+                \Log::warning('CalendarioController::disputas - Acesso negado pelo plano', [
+                    'empresa_id' => $empresa->id,
+                ]);
+                return response()->json(CalendarioPresenter::erroAcessoPlano(), 403);
+            }
+
+            // 2. Obter contexto
             $tenantId = $this->getTenantId();
             \Log::debug('CalendarioController::disputas - Contexto obtido', [
                 'empresa_id' => $empresa->id,
@@ -123,37 +107,19 @@ class CalendarioController extends BaseApiController
             'request_params' => $request->all(),
         ]);
 
-        // 1. Verificar acesso ao plano
-        $tenant = $this->getTenant();
-        if (!$tenant) {
-            \Log::warning('CalendarioController::julgamento - Tenant não encontrado');
-            return response()->json(CalendarioPresenter::erroAcessoPlano(), 403);
-        }
-        
-        // Log detalhado para debug
-        $plano = $tenant->planoAtual;
-        \Log::debug('CalendarioController::julgamento - Verificando acesso', [
-            'tenant_id' => $tenant->id,
-            'plano_id' => $plano?->id,
-            'plano_nome' => $plano?->nome,
-            'limite_processos' => $plano?->limite_processos,
-            'limite_usuarios' => $plano?->limite_usuarios,
-            'recursos_disponiveis' => $plano?->recursos_disponiveis,
-            'tem_acesso_calendario' => $tenant->temAcessoCalendario(),
-        ]);
-        
-        if (!$tenant->temAcessoCalendario()) {
-            \Log::warning('CalendarioController::julgamento - Acesso negado pelo plano', [
-                'tenant_id' => $tenant->id,
-                'plano_id' => $plano?->id,
-                'plano_nome' => $plano?->nome,
-            ]);
-            return response()->json(CalendarioPresenter::erroAcessoPlano(), 403);
-        }
-
         try {
-            // 2. Obter contexto
+            // 1. Obter empresa e verificar acesso ao calendário
             $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // ✅ DDD: Usar Domain Service para validar acesso ao calendário (mesmo padrão do DashboardController)
+            if (!$this->subscriptionAccessService->podeAcessarCalendario($empresa->id)) {
+                \Log::warning('CalendarioController::julgamento - Acesso negado pelo plano', [
+                    'empresa_id' => $empresa->id,
+                ]);
+                return response()->json(CalendarioPresenter::erroAcessoPlano(), 403);
+            }
+            
+            // 2. Obter contexto
             \Log::debug('CalendarioController::julgamento - Empresa obtida', [
                 'empresa_id' => $empresa->id,
             ]);
@@ -198,15 +164,16 @@ class CalendarioController extends BaseApiController
      */
     public function avisosUrgentes(): JsonResponse
     {
-        // 1. Verificar acesso ao plano
-        $tenant = $this->getTenant();
-        if (!$tenant || !$tenant->temAcessoCalendario()) {
-            return response()->json(CalendarioPresenter::erroAcessoPlano(), 403);
-        }
-
         try {
-            // 2. Obter contexto
+            // 1. Obter empresa e verificar acesso ao calendário
             $empresa = $this->getEmpresaAtivaOrFail();
+            
+            // ✅ DDD: Usar Domain Service para validar acesso ao calendário
+            if (!$this->subscriptionAccessService->podeAcessarCalendario($empresa->id)) {
+                return response()->json(CalendarioPresenter::erroAcessoPlano(), 403);
+            }
+            
+            // 2. Executar Use Case
             
             // 3. Executar Use Case
             $avisos = $this->buscarAvisosUrgentesUseCase->executar($empresa->id);
