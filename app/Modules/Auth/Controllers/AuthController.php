@@ -187,21 +187,27 @@ class AuthController extends Controller
                 'tenants' => $e->tenants,
                 'success' => false,
             ], 300); // HTTP 300 Multiple Choices
-        } catch (DomainException $e) {
-            // 🔥 MELHORIA: Prevenir enumeração e padronizar resposta de erro
-            // Sempre retornar mensagem genérica para não revelar se o email existe
-            $message = 'Credenciais inválidas. Verifique seu e-mail e senha.';
-            
-            // Log detalhado apenas em modo debug
-            if (config('app.debug')) {
-                \Log::warning('AuthController::login - Credenciais inválidas', [
-                    'original_message' => $e->getMessage(),
-                    'email' => $request->input('email'),
-                ]);
-            }
+        } catch (\App\Domain\Exceptions\CredenciaisInvalidasException $e) {
+            // 🔥 SEGURANÇA: Sempre retornar mensagem genérica para evitar enumeração
+            // A exceção já contém a mensagem genérica
+            \Log::debug('AuthController::login - Credenciais inválidas', [
+                'email' => $request->input('email'),
+            ]);
             
             return response()->json([
-                'message' => $message,
+                'message' => $e->getMessage(),
+                'success' => false,
+                'error' => $e->getErrorCode() ?? 'INVALID_CREDENTIALS',
+            ], 401);
+        } catch (DomainException $e) {
+            // Fallback para outras DomainExceptions
+            \Log::warning('AuthController::login - DomainException não tratada', [
+                'message' => $e->getMessage(),
+                'email' => $request->input('email'),
+            ]);
+            
+            return response()->json([
+                'message' => 'Credenciais inválidas. Verifique seu e-mail e senha.',
                 'success' => false,
                 'error' => 'INVALID_CREDENTIALS',
             ], 401);

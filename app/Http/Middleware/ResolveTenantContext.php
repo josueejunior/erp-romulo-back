@@ -137,7 +137,50 @@ class ResolveTenantContext
             ], 400);
         }
 
-        // Inicializar tenancy
+        // 🔥 VALIDAÇÃO CRÍTICA: Validar ANTES de inicializar tenancy
+        // Isso previne que o sistema tente buscar usuário em tenant errado e cause erro 500
+        // REGRA: Se o usuário não pertence ao tenant solicitado, barrar IMEDIATAMENTE
+        $validacao = $this->validarRelacaoUsuarioTenant($user, $tenantId);
+        
+        if (!$validacao['valido']) {
+            // 🔥 INTERROMPER LOOP: Retornar erro claro que o frontend pode tratar
+            // Se encontrou o tenant correto, informar explicitamente
+            if (isset($validacao['tenant_correto'])) {
+                Log::error('ResolveTenantContext: ❌ TENANT_MISMATCH - Usuário não pertence ao tenant solicitado', [
+                    'user_id' => $user->id,
+                    'user_email' => $user->email ?? 'N/A',
+                    'tenant_id_solicitado' => $tenantId,
+                    'tenant_id_correto' => $validacao['tenant_correto'],
+                    'url' => $request->fullUrl(),
+                    'problema' => 'Frontend está tentando acessar tenant incorreto (possível estado corrompido no storage)',
+                    'solucao' => 'Frontend deve limpar storage e usar tenant_id correto ou fazer novo login',
+                ]);
+                
+                return response()->json([
+                    'error' => 'Tenant Mismatch',
+                    'message' => 'O tenant solicitado não corresponde ao seu usuário. Faça login novamente.',
+                    'code' => 'TENANT_MISMATCH',
+                    'correct_tenant_id' => $validacao['tenant_correto'],
+                    'requested_tenant_id' => $tenantId,
+                ], 401); // 401 para forçar reautenticação
+            }
+            
+            // Caso contrário, retornar erro genérico
+            Log::error('ResolveTenantContext: ❌ INVALID_TENANT_RELATION - Acesso negado', [
+                'user_id' => $user->id,
+                'user_email' => $user->email ?? 'N/A',
+                'tenant_id_solicitado' => $tenantId,
+                'url' => $request->fullUrl(),
+            ]);
+            
+            return response()->json([
+                'error' => 'Invalid Tenant Relation',
+                'message' => 'Acesso não autorizado a este tenant. Faça login novamente.',
+                'code' => 'INVALID_TENANT_RELATION',
+            ], 401); // 401 para forçar reautenticação
+        }
+
+        // ✅ Validação passou - agora podemos inicializar tenancy com segurança
         $tenant = \App\Models\Tenant::find($tenantId);
         if (!$tenant) {
             Log::warning('ResolveTenantContext: Tenant não encontrado', [
@@ -147,28 +190,6 @@ class ResolveTenantContext
             return response()->json([
                 'message' => 'Tenant não encontrado.',
             ], 404);
-        }
-
-        // 🔥 SEGURANÇA: Validar que o usuário pertence ao tenant (prevenir Tenant Hopping)
-        $validacao = $this->validarRelacaoUsuarioTenant($user, $tenantId);
-        
-        if (!$validacao['valido']) {
-            // Se encontrou o tenant correto, retornar resposta especial
-            if (isset($validacao['tenant_correto'])) {
-                return response()->json([
-                    'error' => 'Invalid Tenant Relation',
-                    'message' => 'Tenant incorreto. Use o tenant ' . $validacao['tenant_correto'] . ' no header X-Tenant-ID.',
-                    'correct_tenant_id' => $validacao['tenant_correto'],
-                    'code' => 'WRONG_TENANT',
-                ], 403);
-            }
-            
-            // Caso contrário, retornar erro genérico
-            return response()->json([
-                'error' => 'Invalid Tenant Relation',
-                'message' => 'Acesso não autorizado a este tenant.',
-                'code' => 'INVALID_TENANT_RELATION',
-            ], 403);
         }
 
         tenancy()->initialize($tenant);
