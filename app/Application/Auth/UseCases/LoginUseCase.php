@@ -167,24 +167,54 @@ class LoginUseCase
                 }
             }
 
-            // 🔥 CRÍTICO: Buscar tenant correto baseado na empresa ativa
-            // A empresa ativa pode estar em outro tenant que não o onde o usuário foi encontrado
+            // 🔥 CRÍTICO: Buscar tenant correto garantindo que o usuário existe nele
+            // Prioridade: Tenant onde usuário E empresa existem > Tenant onde usuário existe
             $tenantCorreto = $tenant; // Fallback: usar tenant onde usuário foi encontrado
+            
             if ($empresaAtiva) {
                 \Log::debug('LoginUseCase::executar - Buscando tenant correto por empresa', ['empresa_id' => $empresaAtiva->id]);
-                $tenantCorreto = $this->buscarTenantPorEmpresa($empresaAtiva->id);
-                if (!$tenantCorreto) {
-                    // Se não encontrou, usar o tenant onde o usuário foi encontrado
+                $tenantDaEmpresa = $this->buscarTenantPorEmpresa($empresaAtiva->id);
+                
+                if ($tenantDaEmpresa && $tenantDaEmpresa->id !== $tenant->id) {
+                    // Empresa está em outro tenant - verificar se usuário também existe lá
+                    \Log::info('LoginUseCase - Empresa ativa está em outro tenant, verificando se usuário existe lá', [
+                        'empresa_id' => $empresaAtiva->id,
+                        'tenant_id_usuario' => $tenant->id,
+                        'tenant_id_empresa' => $tenantDaEmpresa->id,
+                    ]);
+                    
+                    $usuarioExisteNoTenantEmpresa = $this->verificarUsuarioExisteNoTenant($user->id, $tenantDaEmpresa->id);
+                    
+                    if ($usuarioExisteNoTenantEmpresa) {
+                        // Usuário existe no tenant da empresa - usar esse tenant
+                        $tenantCorreto = $tenantDaEmpresa;
+                        \Log::info('LoginUseCase - ✅ Usuário existe no tenant da empresa, usando tenant da empresa', [
+                            'tenant_id' => $tenantCorreto->id,
+                            'empresa_id' => $empresaAtiva->id,
+                        ]);
+                    } else {
+                        // Usuário NÃO existe no tenant da empresa - usar tenant onde usuário foi encontrado
+                        $tenantCorreto = $tenant;
+                        \Log::warning('LoginUseCase - ⚠️ Usuário NÃO existe no tenant da empresa, usando tenant onde usuário foi encontrado', [
+                            'tenant_id_usuario' => $tenant->id,
+                            'tenant_id_empresa' => $tenantDaEmpresa->id,
+                            'empresa_id' => $empresaAtiva->id,
+                            'problema' => 'Empresa ativa está em tenant diferente de onde usuário existe. Isso pode causar problemas de acesso.',
+                        ]);
+                    }
+                } else if (!$tenantDaEmpresa) {
+                    // Empresa não encontrada em nenhum tenant - usar tenant do usuário
                     $tenantCorreto = $tenant;
                     \Log::warning('LoginUseCase - Empresa ativa não encontrada em nenhum tenant, usando tenant do usuário', [
                         'empresa_id' => $empresaAtiva->id,
                         'tenant_id_fallback' => $tenant->id,
                     ]);
-                } else if ($tenantCorreto->id !== $tenant->id) {
-                    \Log::info('LoginUseCase - Tenant correto encontrado baseado na empresa ativa', [
+                } else {
+                    // Empresa e usuário estão no mesmo tenant - perfeito!
+                    $tenantCorreto = $tenant;
+                    \Log::debug('LoginUseCase - Empresa e usuário estão no mesmo tenant', [
+                        'tenant_id' => $tenant->id,
                         'empresa_id' => $empresaAtiva->id,
-                        'tenant_id_usuario' => $tenant->id,
-                        'tenant_id_empresa' => $tenantCorreto->id,
                     ]);
                 }
             }
@@ -338,6 +368,37 @@ class LoginUseCase
         }
         
         return null; // Empresa não encontrada em nenhum tenant
+    }
+
+    /**
+     * Verificar se o usuário existe em um tenant específico
+     * 
+     * @param int $userId
+     * @param int $tenantId
+     * @return bool
+     */
+    private function verificarUsuarioExisteNoTenant(int $userId, int $tenantId): bool
+    {
+        try {
+            $tenantDomain = $this->tenantRepository->buscarPorId($tenantId);
+            if (!$tenantDomain) {
+                return false;
+            }
+            
+            $usuarioExiste = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($userId) {
+                $user = \App\Modules\Auth\Models\User::find($userId);
+                return $user !== null && !$user->trashed();
+            });
+            
+            return $usuarioExiste ?? false;
+        } catch (\Exception $e) {
+            \Log::warning('LoginUseCase::verificarUsuarioExisteNoTenant - Erro ao verificar', [
+                'user_id' => $userId,
+                'tenant_id' => $tenantId,
+                'error' => $e->getMessage(),
+            ]);
+            return false;
+        }
     }
 }
 
