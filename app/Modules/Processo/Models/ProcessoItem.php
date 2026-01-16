@@ -57,6 +57,14 @@ class ProcessoItem extends BaseModel
         'saldo_aberto',
         'lucro_bruto',
         'lucro_liquido',
+        'data_proxima_entrega',
+        'observacao_proxima_entrega',
+    ];
+
+    protected $appends = [
+        'quantidade_vinculada',
+        'quantidade_disponivel',
+        'percentual_vinculado',
     ];
 
     protected function casts(): array
@@ -79,6 +87,7 @@ class ProcessoItem extends BaseModel
             'saldo_aberto' => 'decimal:2',
             'lucro_bruto' => 'decimal:2',
             'lucro_liquido' => 'decimal:2',
+            'data_proxima_entrega' => 'date',
         ];
     }
 
@@ -179,6 +188,42 @@ class ProcessoItem extends BaseModel
     public function vinculosEmpenho(): HasMany
     {
         return $this->hasMany(ProcessoItemVinculo::class)->whereNotNull('empenho_id');
+    }
+
+    /**
+     * Accessor: Quantidade total vinculada (contratos + empenhos + AFs)
+     */
+    public function getQuantidadeVinculadaAttribute(): float
+    {
+        return (float) $this->vinculos()->sum('quantidade');
+    }
+
+    /**
+     * Accessor: Quantidade disponível para vincular
+     */
+    public function getQuantidadeDisponivelAttribute(): float
+    {
+        $total = (float) ($this->quantidade ?? 0);
+        $vinculada = $this->quantidade_vinculada;
+        return max(0, $total - $vinculada);
+    }
+
+    /**
+     * Accessor: Valor total vinculado
+     */
+    public function getValorVinculadoAttribute(): float
+    {
+        return (float) $this->vinculos()->sum('valor_total');
+    }
+
+    /**
+     * Accessor: Percentual vinculado (0-100)
+     */
+    public function getPercentualVinculadoAttribute(): float
+    {
+        $total = (float) ($this->quantidade ?? 0);
+        if ($total <= 0) return 0;
+        return round(($this->quantidade_vinculada / $total) * 100, 1);
     }
 
     /**

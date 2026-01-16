@@ -73,6 +73,7 @@ class Processo extends BaseModel
         'identificador',
         'nome_empresa',
         'validade_proposta_calculada',
+        'resumo_entregas',
     ];
 
     public function empresa(): BelongsTo
@@ -148,6 +149,70 @@ class Processo extends BaseModel
     public function podeEditar(): bool
     {
         return !$this->isEmExecucao();
+    }
+
+    /**
+     * Verifica se há entregas pendentes (itens com quantidade não totalmente vinculada)
+     */
+    public function temEntregasPendentes(): bool
+    {
+        // Carrega itens com situação "vencido" (ganhos) que ainda têm quantidade disponível
+        return $this->itens()
+            ->where('situacao_final', 'vencido')
+            ->get()
+            ->some(function ($item) {
+                return $item->quantidade_disponivel > 0;
+            });
+    }
+
+    /**
+     * Verifica se o processo pode ser finalizado
+     * Um processo só pode ser finalizado se todos os itens vencidos estão 100% vinculados
+     */
+    public function podeSerFinalizado(): bool
+    {
+        // Se tem entregas pendentes, não pode finalizar
+        if ($this->temEntregasPendentes()) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Retorna o motivo pelo qual o processo não pode ser finalizado
+     */
+    public function getMotivoNaoPodeFinalizar(): ?string
+    {
+        if ($this->temEntregasPendentes()) {
+            $itensPendentes = $this->itens()
+                ->where('situacao_final', 'vencido')
+                ->get()
+                ->filter(fn($item) => $item->quantidade_disponivel > 0);
+            
+            $count = $itensPendentes->count();
+            return "{$count} " . ($count === 1 ? 'item possui' : 'itens possuem') . ' entregas parciais pendentes';
+        }
+        return null;
+    }
+
+    /**
+     * Accessor: Resumo de entregas (para API)
+     */
+    public function getResumoEntregasAttribute(): array
+    {
+        $itensVencidos = $this->itens()->where('situacao_final', 'vencido')->get();
+        
+        $totalItens = $itensVencidos->count();
+        $itensCompletos = $itensVencidos->filter(fn($i) => $i->quantidade_disponivel <= 0)->count();
+        $itensPendentes = $totalItens - $itensCompletos;
+        
+        return [
+            'total_itens' => $totalItens,
+            'itens_completos' => $itensCompletos,
+            'itens_pendentes' => $itensPendentes,
+            'pode_finalizar' => $itensPendentes === 0,
+            'percentual_completo' => $totalItens > 0 ? round(($itensCompletos / $totalItens) * 100, 1) : 0,
+        ];
     }
 
     /**
