@@ -31,9 +31,20 @@ class AtualizarUsuarioUseCase
      */
     public function executar(AtualizarUsuarioDTO $dto, TenantContext $context): User
     {
+        \Log::info('AtualizarUsuarioUseCase::executar - Iniciando atualização', [
+            'user_id' => $dto->userId,
+            'tenant_id' => $context->tenantId,
+            'database_name' => \DB::connection()->getDatabaseName(),
+        ]);
+        
         // Buscar usuário existente
         $userExistente = $this->userRepository->buscarPorId($dto->userId);
         if (!$userExistente) {
+            \Log::warning('AtualizarUsuarioUseCase::executar - Usuário não encontrado', [
+                'user_id' => $dto->userId,
+                'tenant_id' => $context->tenantId,
+                'database_name' => \DB::connection()->getDatabaseName(),
+            ]);
             throw new DomainException('Usuário não encontrado.');
         }
 

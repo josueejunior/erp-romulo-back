@@ -724,6 +724,14 @@ class AdminUserController extends Controller
     public function update(UpdateUserAdminRequest $request, Tenant $tenant, int $userId)
     {
         try {
+            Log::info('AdminUserController::update - Iniciando atualização', [
+                'user_id' => $userId,
+                'tenant_id' => $tenant->id,
+                'tenant_razao_social' => $tenant->razao_social,
+                'tenancy_initialized' => tenancy()->initialized,
+                'database_name' => \DB::connection()->getDatabaseName(),
+            ]);
+            
             // Criar TenantContext explícito
             $context = TenantContext::create($tenant->id);
 
@@ -733,20 +741,43 @@ class AdminUserController extends Controller
             // Executar Use Case
             $user = $this->atualizarUsuarioUseCase->executar($dto, $context);
 
+            Log::info('AdminUserController::update - Usuário atualizado com sucesso', [
+                'user_id' => $user->id,
+                'tenant_id' => $tenant->id,
+            ]);
+
             return ApiResponse::success(
                 'Usuário atualizado com sucesso!',
                 UserPresenter::fromDomain($user)
             );
         } catch (DomainException $e) {
+            Log::warning('AdminUserController::update - DomainException capturada', [
+                'user_id' => $userId,
+                'tenant_id' => $tenant->id,
+                'error' => $e->getMessage(),
+                'database_name' => \DB::connection()->getDatabaseName(),
+            ]);
+            
             $field = $this->userErrorService->determinarCampoErro($e->getMessage());
+            
+            // Se for "Usuário não encontrado", retornar 404 em vez de 422
+            $statusCode = str_contains($e->getMessage(), 'não encontrado') ? 404 : 422;
+            
             return ApiResponse::error(
                 $e->getMessage(),
-                422,
+                $statusCode,
                 null,
                 [$field => [$e->getMessage()]]
             );
         } catch (\Exception $e) {
-            Log::error('Erro ao atualizar usuário', ['error' => $e->getMessage()]);
+            Log::error('AdminUserController::update - Erro inesperado', [
+                'user_id' => $userId,
+                'tenant_id' => $tenant->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'database_name' => \DB::connection()->getDatabaseName(),
+                'tenancy_initialized' => tenancy()->initialized,
+            ]);
             return ApiResponse::error('Erro ao atualizar usuário.', 500);
         }
     }

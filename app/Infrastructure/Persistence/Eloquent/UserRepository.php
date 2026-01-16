@@ -190,9 +190,35 @@ class UserRepository implements UserRepositoryInterface
      */
     public function buscarPorId(int $id): ?User
     {
+        // Log detalhado para diagnóstico
+        \Log::info('UserRepository::buscarPorId - Iniciando busca', [
+            'user_id' => $id,
+            'database_name' => \DB::connection()->getDatabaseName(),
+            'database_connection' => \DB::connection()->getName(),
+            'tenancy_initialized' => tenancy()->initialized,
+            'tenancy_tenant_id' => tenancy()->tenant?->id,
+        ]);
+
         // Global Scope aplica filtro de tenant automaticamente
         $model = UserModel::withTrashed()->find($id);
+        
+        \Log::info('UserRepository::buscarPorId - Resultado da query', [
+            'user_id' => $id,
+            'model_encontrado' => $model !== null,
+            'model_id' => $model?->id,
+            'model_email' => $model?->email,
+            'model_name' => $model?->name,
+        ]);
+        
         if (!$model) {
+            // Tentar buscar sem Global Scope para diagnóstico
+            $modelWithoutScope = UserModel::withTrashed()->withoutGlobalScope('tenant_filter')->find($id);
+            \Log::warning('UserRepository::buscarPorId - Usuário não encontrado com Global Scope, tentando sem', [
+                'user_id' => $id,
+                'model_sem_scope' => $modelWithoutScope !== null,
+                'model_sem_scope_id' => $modelWithoutScope?->id,
+                'model_sem_scope_email' => $modelWithoutScope?->email,
+            ]);
             return null;
         }
 
