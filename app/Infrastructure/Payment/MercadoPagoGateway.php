@@ -139,18 +139,25 @@ class MercadoPagoGateway implements PaymentProviderInterface
                 $paymentData['token'] = (string) $request->cardToken;
             }
 
-            // CPF do pagador (obrigatório para cartão, recomendado para PIX)
+            // CPF ou CNPJ do pagador (obrigatório para cartão, recomendado para PIX)
             if ($request->payerCpf) {
-                $cpfLimpo = preg_replace('/\D/', '', $request->payerCpf);
-                if (strlen($cpfLimpo) === 11) {
+                $documentoLimpo = preg_replace('/\D/', '', $request->payerCpf);
+                if (strlen($documentoLimpo) === 11) {
+                    // CPF (11 dígitos)
                     $paymentData['payer']['identification'] = [
                         'type' => 'CPF',
-                        'number' => $cpfLimpo,
+                        'number' => $documentoLimpo,
+                    ];
+                } elseif (strlen($documentoLimpo) === 14) {
+                    // CNPJ (14 dígitos)
+                    $paymentData['payer']['identification'] = [
+                        'type' => 'CNPJ',
+                        'number' => $documentoLimpo,
                     ];
                 }
             } else {
                 if ($isCartao) {
-                    Log::warning('CPF do pagador não fornecido para pagamento com cartão', [
+                    Log::warning('CPF/CNPJ do pagador não fornecido para pagamento com cartão', [
                         'payer_email' => $request->payerEmail,
                     ]);
                 }

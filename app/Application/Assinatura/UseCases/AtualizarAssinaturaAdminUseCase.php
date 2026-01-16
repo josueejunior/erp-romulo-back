@@ -84,6 +84,23 @@ class AtualizarAssinaturaAdminUseCase
             if (!in_array($dados['status'], $statusValidos)) {
                 throw new DomainException("Status inválido. Valores permitidos: " . implode(', ', $statusValidos));
             }
+            
+            // 🔥 VALIDAÇÃO: Não permitir mudar status de assinatura de teste grátis sem finalizar pagamento
+            // Se a assinatura é de teste grátis (valor_pago = 0 ou método_pagamento = 'gratuito')
+            // e está tentando mudar para 'ativa' ou outro status, verificar se há pagamento finalizado
+            $isTesteGratis = ($assinaturaModel->valor_pago == 0 || $assinaturaModel->metodo_pagamento === 'gratuito');
+            $isMudandoParaAtiva = ($dados['status'] === 'ativa' && $assinaturaModel->status !== 'ativa');
+            
+            if ($isTesteGratis && $isMudandoParaAtiva) {
+                // Verificar se há transação_id (pagamento finalizado)
+                if (!$assinaturaModel->transacao_id) {
+                    throw new DomainException(
+                        "Não é possível ativar uma assinatura de teste grátis sem finalizar o pagamento. " .
+                        "O cliente deve completar o checkout e finalizar o pagamento antes de ativar a assinatura."
+                    );
+                }
+            }
+            
             $assinaturaModel->status = $dados['status'];
         }
 

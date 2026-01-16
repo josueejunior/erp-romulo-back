@@ -289,13 +289,24 @@ class PaymentController extends BaseApiController
             // Para planos pagos, criar PaymentRequest e processar via gateway
             $paymentMethod = $validated['payment_method'] ?? 'credit_card';
             
+            // Buscar dados da empresa para criar referência do pedido
+            $empresaFinder = new \App\Domain\Tenant\Services\EmpresaFinder();
+            $empresaData = $empresaFinder->findPrincipalByTenantId($tenant->id);
+            $nomeEmpresa = $empresaData['razao_social'] ?? $tenant->razao_social ?? 'Empresa';
+            $cnpjEmpresa = $empresaData['cnpj'] ?? $tenant->cnpj ?? '';
+            
+            // Criar referência do pedido: Nome da empresa_plano_cnpj
+            $externalReference = $nomeEmpresa . '_' . $plano->nome . '_' . ($cnpjEmpresa ?: 'sem_cnpj');
+            // Limitar tamanho (Mercado Pago aceita até 256 caracteres)
+            $externalReference = substr($externalReference, 0, 256);
+            
             $paymentRequestData = [
                 'amount' => $valor,
                 'description' => "Plano {$plano->nome} - {$validated['periodo']} - Sistema Rômulo",
                 'payer_email' => $validated['payer_email'],
                 'payer_cpf' => $validated['payer_cpf'] ?? null,
                 'payment_method_id' => $paymentMethod === 'pix' ? 'pix' : null, // Para PIX, enviar explicitamente
-                'external_reference' => "tenant_{$tenant->id}_plano_{$plano->id}",
+                'external_reference' => $externalReference,
                 'metadata' => [
                     'tenant_id' => $tenant->id,
                     'plano_id' => $plano->id,

@@ -351,12 +351,14 @@ class ProcessarAssinaturaPlanoUseCase
 
             // IMPORTANTE: NÃO atualizar tenant quando está pendente
             // O tenant só deve ser atualizado quando o pagamento for aprovado (via webhook)
-            // Criar assinatura com status pendente
+            // Criar assinatura com status pendente (não suspensa, para evitar confusão)
+            // Se o usuário voltar do checkout sem finalizar, a assinatura ficará pendente
+            // e será cancelada automaticamente após um tempo ou quando o webhook confirmar rejeição
             $assinatura = Assinatura::create([
                 'tenant_id' => $tenant->id,
                 'empresa_id' => $empresa?->id, // 🔥 NOVO: Assinatura pertence à empresa
                 'plano_id' => $plano->id,
-                'status' => 'suspensa', // Será ativada quando o webhook confirmar
+                'status' => 'pendente', // Mudado de 'suspensa' para 'pendente' - mais claro que está aguardando pagamento
                 'data_inicio' => $dataInicio,
                 'data_fim' => $dataFim,
                 'valor_pago' => $paymentResult->amount->toReais(),

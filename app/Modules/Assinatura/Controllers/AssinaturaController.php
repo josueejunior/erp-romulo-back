@@ -418,6 +418,17 @@ class AssinaturaController extends BaseApiController
                 ? $plano->preco_anual 
                 : $plano->preco_mensal * $meses;
 
+            // Buscar dados da empresa para criar referência do pedido
+            $empresaFinder = new \App\Domain\Tenant\Services\EmpresaFinder();
+            $empresaData = $empresaFinder->findPrincipalByTenantId($tenant->id);
+            $nomeEmpresa = $empresaData['razao_social'] ?? $tenant->razao_social ?? 'Empresa';
+            $cnpjEmpresa = $empresaData['cnpj'] ?? $tenant->cnpj ?? '';
+            
+            // Criar referência do pedido: Nome da empresa_plano_cnpj
+            $externalReference = $nomeEmpresa . '_' . $plano->nome . '_' . ($cnpjEmpresa ?: 'sem_cnpj');
+            // Limitar tamanho (Mercado Pago aceita até 256 caracteres)
+            $externalReference = substr($externalReference, 0, 256);
+            
             // Criar PaymentRequest
             $paymentRequest = \App\Domain\Payment\ValueObjects\PaymentRequest::fromArray([
                 'amount' => $valor,
@@ -427,7 +438,7 @@ class AssinaturaController extends BaseApiController
                 'card_token' => $validated['card_token'],
                 'installments' => $validated['installments'] ?? 1,
                 'payment_method_id' => 'credit_card',
-                'external_reference' => "renewal_tenant_{$tenant->id}_assinatura_{$assinaturaModel->id}",
+                'external_reference' => $externalReference,
                 'metadata' => [
                     'tenant_id' => $tenant->id,
                     'assinatura_id' => $assinaturaModel->id,
