@@ -323,6 +323,40 @@ class ProcessarAssinaturaPlanoUseCase
         string $periodo
     ): Assinatura {
         return DB::transaction(function () use ($tenant, $plano, $paymentResult, $diasValidade, $periodo) {
+            // 🔥 CRÍTICO: Verificar se já existe uma assinatura trial ativa
+            // Se o cliente tem teste grátis e vai ao checkout mas não finaliza,
+            // NÃO devemos criar uma nova assinatura pendente que substitua o trial
+            $assinaturaTrialExistente = Assinatura::where('tenant_id', $tenant->id)
+                ->where('status', 'trial')
+                ->where('data_fim', '>=', Carbon::now())
+                ->orderBy('data_fim', 'desc')
+                ->first();
+            
+            if ($assinaturaTrialExistente) {
+                Log::info('ProcessarAssinaturaPlanoUseCase - Assinatura trial existente encontrada, vinculando pagamento pendente', [
+                    'tenant_id' => $tenant->id,
+                    'trial_id' => $assinaturaTrialExistente->id,
+                    'trial_status' => $assinaturaTrialExistente->status,
+                    'trial_data_fim' => $assinaturaTrialExistente->data_fim,
+                    'external_id' => $paymentResult->externalId,
+                    'motivo' => 'Cliente tem teste grátis ativo - vinculando pagamento pendente à trial existente',
+                ]);
+                
+                // 🔥 CRÍTICO: Atualizar a assinatura trial com o transacao_id do pagamento pendente
+                // Isso permite que o webhook encontre a assinatura trial quando o pagamento for aprovado
+                // e atualize ela para ativa, preservando o teste grátis
+                $assinaturaTrialExistente->update([
+                    'transacao_id' => $paymentResult->externalId,
+                    'observacoes' => ($assinaturaTrialExistente->observacoes ?? '') . 
+                        "\n\nPagamento pendente vinculado em " . now()->format('d/m/Y H:i:s') . 
+                        " - Quando aprovado, a assinatura será atualizada para ativa.",
+                ]);
+                
+                // Retornar a assinatura trial existente (agora com transacao_id vinculado)
+                // Quando o pagamento for aprovado (via webhook), a trial será atualizada para ativa
+                return $assinaturaTrialExistente;
+            }
+            
             $dataInicio = Carbon::now();
             $dataFim = $dataInicio->copy()->addDays($diasValidade);
 

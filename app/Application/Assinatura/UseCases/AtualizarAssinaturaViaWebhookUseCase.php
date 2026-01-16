@@ -42,12 +42,19 @@ class AtualizarAssinaturaViaWebhookUseCase
         DB::transaction(function () use ($assinatura, $paymentResult, $transacaoId) {
             if ($paymentResult->isApproved() && $assinatura->status !== 'ativa') {
                 // CRÍTICO: Cancelar outras assinaturas ativas do mesmo tenant antes de ativar a nova
+                // Mas NÃO cancelar se a assinatura atual é trial - apenas atualizar para ativa
                 $assinaturasAntigas = \App\Modules\Assinatura\Models\Assinatura::where('tenant_id', $assinatura->tenant_id)
-                    ->where('status', 'ativa')
+                    ->whereIn('status', ['ativa', 'trial']) // Incluir trials também
                     ->where('id', '!=', $assinatura->id)
                     ->get();
                 
                 foreach ($assinaturasAntigas as $assinaturaAntiga) {
+                    // Se a assinatura antiga é trial e a nova é a mesma assinatura (apenas atualizando status),
+                    // não cancelar - apenas atualizar
+                    if ($assinaturaAntiga->id === $assinatura->id) {
+                        continue;
+                    }
+                    
                     $assinaturaAntiga->update([
                         'status' => 'cancelada',
                         'data_cancelamento' => now(),
@@ -58,6 +65,7 @@ class AtualizarAssinaturaViaWebhookUseCase
                     Log::info('Assinatura antiga cancelada via webhook por upgrade', [
                         'assinatura_antiga_id' => $assinaturaAntiga->id,
                         'plano_antigo_id' => $assinaturaAntiga->plano_id,
+                        'status_anterior' => $assinaturaAntiga->status,
                         'tenant_id' => $assinatura->tenant_id,
                     ]);
                 }
