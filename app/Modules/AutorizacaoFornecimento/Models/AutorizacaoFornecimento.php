@@ -75,7 +75,11 @@ class AutorizacaoFornecimento extends BaseModel
 
     public function atualizarSaldo(): void
     {
-        $totalEmpenhos = $this->empenhos()->sum('valor');
+        // 🔥 CORREÇÃO: Somar apenas o valor_total dos vínculos de itens desta AF que possuem empenho.
+        $totalEmpenhos = \App\Modules\Processo\Models\ProcessoItemVinculo::where('autorizacao_fornecimento_id', $this->id)
+            ->whereNotNull('empenho_id')
+            ->sum('valor_total') ?? 0;
+
         $this->valor_empenhado = $totalEmpenhos;
         $this->saldo = $this->valor - $totalEmpenhos;
         
@@ -86,12 +90,9 @@ class AutorizacaoFornecimento extends BaseModel
         } elseif ($totalEmpenhos < $this->valor) {
             $this->situacao = 'atendendo';
             $this->situacao_detalhada = 'parcialmente_atendida';
-        } elseif ($this->saldo <= 0) {
+        } else {
             $this->situacao = 'concluida';
             $this->situacao_detalhada = 'concluida';
-        } else {
-            $this->situacao = 'atendendo';
-            $this->situacao_detalhada = 'atendendo_empenho';
         }
         
         // Atualizar vigência

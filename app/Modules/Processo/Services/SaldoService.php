@@ -76,7 +76,9 @@ class SaldoService
     public function calcularSaldoVinculado(Processo $processo): array
     {
         $contratos = $processo->contratos()->sum('valor_total') ?? 0;
-        $afs = $processo->autorizacoesFornecimento()->sum('valor') ?? 0;
+        // 🔥 CORREÇÃO: Evitar double-counting. AFs vinculadas a contratos não devem ser somadas novamente
+        // ao total vinculado do processo, pois o valor já está contemplado no contrato.
+        $afs = $processo->autorizacoesFornecimento()->whereNull('contrato_id')->sum('valor') ?? 0;
         $totalVinculado = $contratos + $afs;
 
         return [
@@ -303,8 +305,12 @@ class SaldoService
     protected function repararVinculosEmpenhosAntigos(Processo $processo): void
     {
         // Buscar empenhos do processo que NÃO estão em nenhum vínculo
+        // Pegar apenas IDs de vínculos que pertencem a itens deste processo
+        $itensIds = $processo->itens->pluck('id')->toArray();
+        if (empty($itensIds)) return;
+
         $empenhosIdsVinculados = \App\Modules\Processo\Models\ProcessoItemVinculo::query()
-            ->whereIn('processo_item_id', $processo->itens->pluck('id'))
+            ->whereIn('processo_item_id', $itensIds)
             ->whereNotNull('empenho_id')
             ->pluck('empenho_id')
             ->toArray();
@@ -317,54 +323,63 @@ class SaldoService
             return;
         }
 
-        // Buscar itens aptos a receber vínculo (aceitos/habilitados)
+        // Buscar itens aptos a receber vínculo
         $itensAptos = $processo->itens()
             ->whereIn('status_item', ['aceito', 'aceito_habilitado'])
             ->get();
             
         if ($itensAptos->isEmpty()) {
-            return;
+            // Tentar qualquer item se não houver habilitados (fallback extremo)
+            $itensAptos = $processo->itens;
         }
+        
+        if ($itensAptos->isEmpty()) return;
 
         // Estratégia de Reparo:
-        // 1. Se houver apenas 1 item apto, vincula tudo a ele (cenário mais comum em processos antigos/simples)
-        // 2. Se houver múltiplos itens, NÃO tentamos adivinhar para evitar dados errados (necessita intervenção manual)
-        //    EXCETO: Se o usuário pediu explicitamente para "recalcular", podemos assumir que vínculos faltantes são o problema.
+        // 1. Se houver apenas 1 item, vincula tudo a ele.
+        // 2. Se houver múltiplos itens, vinculamos apenas se o valor do empenho 
+        //    coincidir com o valor total de algum item (tentativa de match).
+        // 3. Caso contrário, não vinculamos automaticamente para evitar inflar o primeiro item.
         
-        $itemAlvo = null;
-        
-        if ($itensAptos->count() === 1) {
-            $itemAlvo = $itensAptos->first();
-        } else {
-            // Se houver múltiplos itens, verificar se é um caso crítico onde vale a pena vincular ao primeiro
-            // Para "ajustar o código" conforme pedido, vamos tentar ser proativos:
-            // Se os empenhos órfãos existirem, eles PRECISAM estar em algum lugar para a conta fechar.
-            // Vamos logar o aviso e vincular ao primeiro item para não perder o valor financeiro no total
-            \Log::warning("SaldoService::repararVinculosEmpenhosAntigos - Múltiplos itens encontrados para empenhos órfãos. Vinculando ao primeiro item como fallback.", [
-                'processo_id' => $processo->id,
-                'empenhos_orfaos_count' => $empenhosOrfaos->count()
-            ]);
-            $itemAlvo = $itensAptos->first();
-        }
+        foreach ($empenhosOrfaos as $empenho) {
+            $itemAlvo = null;
+            
+            if ($itensAptos->count() === 1) {
+                $itemAlvo = $itensAptos->first();
+            } else {
+                // Tentativa de match por valor
+                foreach ($itensAptos as $item) {
+                    $valorItem = round(($item->valor_negociado ?: $item->valor_arrematado ?: $item->valor_estimado) * $item->quantidade, 2);
+                    if (abs($valorItem - (float)$empenho->valor) < 0.01) {
+                        $itemAlvo = $item;
+                        break;
+                    }
+                }
+            }
 
-        if ($itemAlvo) {
-            foreach ($empenhosOrfaos as $empenho) {
-                // Criar vínculo
+            if ($itemAlvo) {
                 \App\Modules\Processo\Models\ProcessoItemVinculo::create([
-                    'empresa_id' => $processo->empresa_id, // Manter o escopo da empresa
+                    'empresa_id' => $processo->empresa_id,
                     'processo_item_id' => $itemAlvo->id,
                     'empenho_id' => $empenho->id,
-                    'quantidade' => 1, // Quantidade simbólica
-                    'valor_unitario' => $empenho->valor,
-                    'valor_total' => $empenho->valor,
+                    'contrato_id' => $empenho->contrato_id, // 🔥 Garantir vínculo com o contrato
+                    'autorizacao_fornecimento_id' => $empenho->autorizacao_fornecimento_id, // 🔥 Garantir vínculo com a AF
+                    'quantidade' => (float) $itemAlvo->quantidade,
+                    'valor_unitario' => (float) ($empenho->valor / ($itemAlvo->quantidade ?: 1)),
+                    'valor_total' => (float) $empenho->valor,
                     'observacoes' => 'Vínculo gerado automaticamente via Recálculo (Correção de Legado)',
                 ]);
                 
-                \Log::info("SaldoService::repararVinculosEmpenhosAntigos - Vínculo criado", [
+                \Log::info("SaldoService::repararVinculosEmpenhosAntigos - Vínculo recuperado", [
                     'processo_id' => $processo->id,
                     'empenho_id' => $empenho->id,
-                    'item_id' => $itemAlvo->id,
-                    'valor' => $empenho->valor
+                    'item_id' => $itemAlvo->id
+                ]);
+            } else {
+                \Log::warning("SaldoService::repararVinculosEmpenhosAntigos - Não foi possível determinar o item para o empenho órfão. Requer vínculo manual.", [
+                    'processo_id' => $processo->id,
+                    'empenho_id' => $empenho->id,
+                    'empenho_valor' => $empenho->valor
                 ]);
             }
         }

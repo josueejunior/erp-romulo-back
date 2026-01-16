@@ -45,11 +45,11 @@ class ContratoIndicadoresQuery
 
         return [
             'contratos_ativos' => $contratosAtivos,
-            'contratos_a_vencer' => $contratosAVencer,
             'saldo_total_contratado' => (float) ($saldos->total_contratado ?? 0),
             'saldo_ja_faturado' => (float) ($saldos->total_faturado ?? 0),
             'saldo_restante' => (float) ($saldos->total_restante ?? 0),
-            'margem_media' => 0, // Será calculado separadamente (requer notas fiscais)
+            'contratos_a_vencer' => $contratosAVencer,
+            'margem_media' => 0, 
         ];
     }
 

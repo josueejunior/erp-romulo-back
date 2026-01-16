@@ -188,6 +188,19 @@ class ProcessoItemVinculoService
         }
 
         return DB::transaction(function () use ($item, $validated, $empresaId) {
+            // Se houver empenho mas não houver contrato/AF, tentar herdar do empenho
+            if (!empty($validated['empenho_id'])) {
+                $empenhoModel = \App\Modules\Empenho\Models\Empenho::find($validated['empenho_id']);
+                if ($empenhoModel) {
+                    if (empty($validated['contrato_id'])) {
+                        $validated['contrato_id'] = $empenhoModel->contrato_id;
+                    }
+                    if (empty($validated['autorizacao_fornecimento_id'])) {
+                        $validated['autorizacao_fornecimento_id'] = $empenhoModel->autorizacao_fornecimento_id;
+                    }
+                }
+            }
+
             $vinculo = ProcessoItemVinculo::create([
                 'empresa_id' => $empresaId,
                 'processo_item_id' => $item->id,
