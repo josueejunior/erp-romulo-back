@@ -333,25 +333,26 @@ class ProcessoItem extends BaseModel
         }
         $this->valor_faturado = round($valorFaturado, 2);
 
-        // Valor pago = soma das NF-e de saída com situação "paga"
+        // Valor pago = soma das NF-e de entrada (você está pagando pelos produtos)
+        // NF de entrada = você está recebendo produtos e pagando por eles
         $valorPago = 0;
         foreach ($vinculos as $vinculo) {
             if ($vinculo->contrato_id && $vinculo->contrato) {
+                // NF de entrada = você está pagando
                 $valorPago += $vinculo->contrato->notasFiscais()
-                    ->where('tipo', 'saida')
-                    ->where('situacao', 'paga')
+                    ->where('tipo', 'entrada')
                     ->sum('valor');
             }
             if ($vinculo->autorizacao_fornecimento_id && $vinculo->autorizacaoFornecimento) {
+                // NF de entrada = você está pagando
                 $valorPago += $vinculo->autorizacaoFornecimento->notasFiscais()
-                    ->where('tipo', 'saida')
-                    ->where('situacao', 'paga')
+                    ->where('tipo', 'entrada')
                     ->sum('valor');
             }
             if ($vinculo->empenho_id && $vinculo->empenho) {
+                // NF de entrada = você está pagando
                 $valorPago += $vinculo->empenho->notasFiscais()
-                    ->where('tipo', 'saida')
-                    ->where('situacao', 'paga')
+                    ->where('tipo', 'entrada')
                     ->sum('valor');
             }
         }
