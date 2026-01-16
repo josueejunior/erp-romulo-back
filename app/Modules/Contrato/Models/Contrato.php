@@ -83,13 +83,13 @@ class Contrato extends BaseModel
 
     public function atualizarSaldo(): void
     {
-        // 🔥 CORREÇÃO: Somamos apenas o valor_total dos vínculos de itens deste contrato que possuem empenho.
-        $totalEmpenhos = $this->vinculosItem()
-            ->whereNotNull('empenho_id')
-            ->sum('valor_total') ?? 0;
+        // 🔥 CORREÇÃO: Somamos o valor_total de TODOS os vínculos de itens deste contrato.
+        // Isso permite que itens sejam vinculados diretamente ao contrato (sem empenho)
+        // ou através de empenhos - ambos contam para o saldo.
+        $totalVinculado = $this->vinculosItem()->sum('valor_total') ?? 0;
 
-        $this->valor_empenhado = $totalEmpenhos;
-        $this->saldo = $this->valor_total - $totalEmpenhos;
+        $this->valor_empenhado = $totalVinculado;
+        $this->saldo = $this->valor_total - $totalVinculado;
         
         // Atualizar vigência baseado nas datas
         $hoje = now();
