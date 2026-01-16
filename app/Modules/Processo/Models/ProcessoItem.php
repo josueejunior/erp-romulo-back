@@ -333,6 +333,13 @@ class ProcessoItem extends BaseModel
         }
         $this->valor_faturado = round($valorFaturado, 2);
 
+        // 🔥 CORREÇÃO PARA PROCESSOS LEGADOS:
+        // Se o valor faturado (via NFs) for menor que o valor empenhado, e o processo já estiver pago (data_recebimento_pagamento),
+        // assumimos o valor empenhado como o faturado real para evitar saldos errados.
+        if ($this->processo->data_recebimento_pagamento && $this->valor_faturado < $this->valor_empenhado) {
+            $this->valor_faturado = $this->valor_empenhado;
+        }
+
         // Valor pago (recebido) = soma das NF-e de SAÍDA COM SITUAÇÃO "PAGA" (quanto você RECEBEU do órgão)
         // NF de saída = você está emitindo nota fiscal para o órgão (receita)
         // NF de saída PAGA = o órgão pagou você (recebimento)
@@ -362,6 +369,13 @@ class ProcessoItem extends BaseModel
             }
         }
         $this->valor_pago = round($valorPago, 2);
+
+        // 🔥 CORREÇÃO: "Confirmação de Pagamento Direta"
+        // Se o processo como um todo tiver uma data de recebimento de pagamento confirmada,
+        // consideramos o item como totalmente pago (valor_pago = valor_faturado)
+        if ($this->processo->data_recebimento_pagamento && $this->valor_pago < $this->valor_faturado) {
+            $this->valor_pago = $this->valor_faturado;
+        }
 
         // Saldo em aberto = valor faturado - valor pago (quanto falta RECEBER do órgão)
         // Se valor_faturado = 1000 e valor_pago = 600, então saldo_aberto = 400 (falta receber 400)
