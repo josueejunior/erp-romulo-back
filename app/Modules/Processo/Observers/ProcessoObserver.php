@@ -3,15 +3,29 @@
 namespace App\Modules\Processo\Observers;
 
 use App\Modules\Processo\Models\Processo;
+use App\Modules\Processo\Services\ProcessoStatusService;
 use App\Services\RedisService;
+use Illuminate\Support\Facades\Log;
 
 class ProcessoObserver
 {
+    protected ProcessoStatusService $statusService;
+
+    public function __construct(ProcessoStatusService $statusService)
+    {
+        $this->statusService = $statusService;
+    }
+
     /**
      * Handle the Processo "created" event.
      */
     public function created(Processo $processo): void
     {
+        // Se o processo foi criado com data_hora_sessao_publica no passado, ajustar status
+        if ($processo->data_hora_sessao_publica) {
+            $this->verificarEAtualizarStatusPorData($processo, true);
+        }
+        
         $this->clearCache($processo);
     }
 
@@ -25,17 +39,16 @@ class ProcessoObserver
             $this->recalcularValoresFinanceirosItens($processo);
         }
         
-        // 🔥 NOVO: Atualizar status automaticamente quando data_hora_sessao_publica muda
-        // Se a data da sessão pública foi alterada e o processo está em participação,
-        // verificar se deve mudar para julgamento_habilitacao
-        if ($processo->wasChanged('data_hora_sessao_publica') && $processo->status === 'participacao') {
+        // 🔥 MELHORIA: Atualizar status automaticamente quando data_hora_sessao_publica muda
+        // Usa ProcessoStatusService para validações adequadas
+        if ($processo->wasChanged('data_hora_sessao_publica')) {
             $this->verificarEAtualizarStatusPorData($processo);
         }
         
-        // 🔥 NOVO: Se a data da sessão pública mudou e o processo está em julgamento_habilitacao,
-        // mas a nova data é no futuro, voltar para participacao (se fizer sentido)
-        if ($processo->wasChanged('data_hora_sessao_publica') && $processo->status === 'julgamento_habilitacao') {
-            $this->verificarEAtualizarStatusPorData($processo);
+        // 🔥 NOVO: Verificar se há sugestão de mudança de status baseado em regras de negócio
+        // Verificar se itens foram alterados (através de relacionamento)
+        if ($processo->wasChanged('status') || $processo->relationLoaded('itens')) {
+            $this->verificarSugestaoStatus($processo);
         }
         
         $this->clearCache($processo);
@@ -43,8 +56,11 @@ class ProcessoObserver
     
     /**
      * Verifica e atualiza status do processo baseado na data da sessão pública
+     * 
+     * @param Processo $processo
+     * @param bool $isCreated Se true, está sendo criado (não usar saveQuietly)
      */
-    protected function verificarEAtualizarStatusPorData(Processo $processo): void
+    protected function verificarEAtualizarStatusPorData(Processo $processo, bool $isCreated = false): void
     {
         try {
             if (!$processo->data_hora_sessao_publica) {
@@ -53,36 +69,93 @@ class ProcessoObserver
             
             $dataHoraSessao = \Carbon\Carbon::parse($processo->data_hora_sessao_publica);
             $agora = \Carbon\Carbon::now();
+            $statusAnterior = $processo->getOriginal('status') ?? $processo->status;
             
             // Se a sessão já passou e o processo está em participação, mudar para julgamento_habilitacao
             if ($processo->status === 'participacao' && $agora->isAfter($dataHoraSessao)) {
-                $processo->status = 'julgamento_habilitacao';
-                $processo->saveQuietly(); // Usar saveQuietly para evitar loop infinito
+                // Validar transição usando ProcessoStatusService
+                $validacao = $this->statusService->podeAlterarStatus($processo, 'julgamento_habilitacao');
                 
-                \Log::info('ProcessoObserver - Status atualizado automaticamente por data', [
-                    'processo_id' => $processo->id,
-                    'status_anterior' => 'participacao',
-                    'status_novo' => 'julgamento_habilitacao',
-                    'data_sessao' => $processo->data_hora_sessao_publica,
-                    'motivo' => 'Data da sessão pública já passou',
-                ]);
+                if ($validacao['pode']) {
+                    $processo->status = 'julgamento_habilitacao';
+                    
+                    if ($isCreated) {
+                        $processo->save();
+                    } else {
+                        $processo->saveQuietly(); // Usar saveQuietly para evitar loop infinito
+                    }
+                    
+                    Log::info('ProcessoObserver - Status atualizado automaticamente por data', [
+                        'processo_id' => $processo->id,
+                        'status_anterior' => $statusAnterior,
+                        'status_novo' => 'julgamento_habilitacao',
+                        'data_sessao' => $processo->data_hora_sessao_publica,
+                        'motivo' => 'Data da sessão pública já passou',
+                        'is_created' => $isCreated,
+                    ]);
+                } else {
+                    Log::warning('ProcessoObserver - Não foi possível atualizar status automaticamente', [
+                        'processo_id' => $processo->id,
+                        'status_atual' => $processo->status,
+                        'status_desejado' => 'julgamento_habilitacao',
+                        'motivo' => $validacao['motivo'] ?? 'Validação falhou',
+                    ]);
+                }
             }
             // 🔥 CORREÇÃO: Se a sessão é no futuro e o processo está em julgamento_habilitacao,
             // voltar para participacao para permitir criar orçamento/disputa
             elseif ($processo->status === 'julgamento_habilitacao' && $agora->isBefore($dataHoraSessao)) {
+                // Validar transição usando ProcessoStatusService
+                // Nota: Retrocesso de julgamento_habilitacao para participacao não está nas transições padrão
+                // Mas é permitido quando a data é alterada para o futuro (caso especial)
                 $processo->status = 'participacao';
-                $processo->saveQuietly(); // Usar saveQuietly para evitar loop infinito
                 
-                \Log::info('ProcessoObserver - Status revertido para participação (data alterada para o futuro)', [
+                if ($isCreated) {
+                    $processo->save();
+                } else {
+                    $processo->saveQuietly(); // Usar saveQuietly para evitar loop infinito
+                }
+                
+                Log::info('ProcessoObserver - Status revertido para participação (data alterada para o futuro)', [
                     'processo_id' => $processo->id,
-                    'status_anterior' => 'julgamento_habilitacao',
+                    'status_anterior' => $statusAnterior,
                     'status_novo' => 'participacao',
                     'data_sessao' => $processo->data_hora_sessao_publica,
                     'motivo' => 'Data da sessão pública foi alterada para o futuro - permitindo criar orçamento/disputa',
+                    'is_created' => $isCreated,
                 ]);
             }
         } catch (\Exception $e) {
-            \Log::warning("Erro ao verificar status do processo por data: " . $e->getMessage(), [
+            Log::warning("Erro ao verificar status do processo por data: " . $e->getMessage(), [
+                'processo_id' => $processo->id,
+                'trace' => $e->getTraceAsString(),
+            ]);
+        }
+    }
+    
+    /**
+     * Verifica se há sugestão de mudança de status baseado em regras de negócio
+     * 
+     * @param Processo $processo
+     */
+    protected function verificarSugestaoStatus(Processo $processo): void
+    {
+        try {
+            $sugestao = $this->statusService->sugerirProximoStatus($processo);
+            
+            if ($sugestao && $sugestao !== $processo->status) {
+                // Log da sugestão (não altera automaticamente, apenas sugere)
+                Log::debug('ProcessoObserver - Sugestão de mudança de status', [
+                    'processo_id' => $processo->id,
+                    'status_atual' => $processo->status,
+                    'status_sugerido' => $sugestao,
+                ]);
+                
+                // Em casos específicos, pode aplicar automaticamente
+                // Por exemplo, se está em participação e a data passou, já foi tratado em verificarEAtualizarStatusPorData
+            }
+        } catch (\Exception $e) {
+            Log::warning("Erro ao verificar sugestão de status: " . $e->getMessage(), [
                 'processo_id' => $processo->id,
             ]);
         }
