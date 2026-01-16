@@ -34,10 +34,14 @@ class AtualizarEmpenhoUseCase
             throw new DomainException('Empenho não pertence à empresa ativa.');
         }
 
-        // Regra de negócio: empenho concluído não pode ser alterado
-        if ($empenhoExistente->concluido) {
-            throw new DomainException('Empenho concluído não pode ser alterado.');
-        }
+        // Nota: Removida restrição de edição de empenhos concluídos
+        // Permite edição mesmo quando concluído para casos como:
+        // - Vincular itens do processo ao empenho após a conclusão
+        // - Corrigir informações que foram preenchidas incorretamente
+        // - Ajustar valores e datas quando necessário
+        // 
+        // Se houver necessidade futura de restringir certos campos quando concluído,
+        // isso pode ser feito aqui de forma mais granular
 
         // Se processo foi alterado, validar novo processo
         $processoId = $dto->processoId ?? $empenhoExistente->processoId;
