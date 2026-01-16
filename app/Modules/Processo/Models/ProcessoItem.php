@@ -346,6 +346,17 @@ class ProcessoItem extends BaseModel
 
         // Usar saveQuietly para evitar loops infinitos quando chamado de observers
         $this->saveQuietly();
+        
+        // 🔥 Atualizar saldos dos documentos vinculados (Contrato/AF)
+        // Isso garante que se o faturamento do item mudou, o saldo do contrato/AF tbm atualize.
+        foreach ($vinculos as $v) {
+            if ($v->contrato) {
+                $v->contrato->atualizarSaldo();
+            }
+            if ($v->autorizacaoFornecimento) {
+                $v->autorizacaoFornecimento->atualizarSaldo();
+            }
+        }
     }
 
     /**
