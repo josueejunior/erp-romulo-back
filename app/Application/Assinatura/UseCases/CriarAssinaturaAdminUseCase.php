@@ -188,9 +188,6 @@ class CriarAssinaturaAdminUseCase
         // Nota: O evento AssinaturaCriada já é disparado pelo CriarAssinaturaUseCase
         // Não é necessário disparar novamente aqui para evitar duplicação
 
-        // 🔥 PERFORMANCE: Invalidar cache de listagem de assinaturas
-        \App\Application\Assinatura\UseCases\ListarAssinaturasAdminUseCase::invalidarCache();
-
         return $assinatura;
     }
 }
