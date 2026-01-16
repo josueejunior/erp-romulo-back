@@ -65,6 +65,7 @@ class ProcessoResource extends JsonResource
             'data_recebimento_pagamento' => $this->data_recebimento_pagamento?->format('Y-m-d'),
             'data_arquivamento' => $this->data_arquivamento?->format('Y-m-d H:i:s'),
             'observacoes' => $this->observacoes,
+            'motivo_perda' => $this->motivo_perda,
             'criado_em' => $this->criado_em?->format('Y-m-d H:i:s'),
             'atualizado_em' => $this->atualizado_em?->format('Y-m-d H:i:s'),
             'excluido_em' => $this->excluido_em?->format('Y-m-d H:i:s'),

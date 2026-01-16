@@ -268,15 +268,18 @@ class ProcessoController extends BaseApiController
      * Marca processo como perdido
      * 
      * ✅ DDD: Usa Use Case e valida empresa
+     * 
+     * @param Request $request (aceita motivo_perda no body)
      */
     public function marcarPerdido(Request $request): JsonResponse
     {
         try {
             $empresa = $this->getEmpresaAtivaOrFail();
             $processoId = (int) $request->route()->parameter('processo');
+            $motivoPerda = $request->input('motivo_perda');
             
             // Executar Use Case (retorna modelo Eloquent - ainda necessário para ProcessoStatusService)
-            $processoModel = $this->marcarProcessoPerdidoUseCase->executar($processoId, $empresa->id);
+            $processoModel = $this->marcarProcessoPerdidoUseCase->executar($processoId, $empresa->id, $motivoPerda);
 
             return response()->json([
                 'message' => 'Processo marcado como perdido',

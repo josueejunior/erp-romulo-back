@@ -22,8 +22,12 @@ class MarcarProcessoPerdidoUseCase
 
     /**
      * Executar o caso de uso
+     * 
+     * @param int $processoId
+     * @param int $empresaId
+     * @param string|null $motivoPerda Anotações sobre o motivo da perda
      */
-    public function executar(int $processoId, int $empresaId): \App\Modules\Processo\Models\Processo
+    public function executar(int $processoId, int $empresaId, ?string $motivoPerda = null): \App\Modules\Processo\Models\Processo
     {
         // Buscar processo (domain entity)
         $processoDomain = $this->processoRepository->buscarPorId($processoId);
@@ -49,6 +53,12 @@ class MarcarProcessoPerdidoUseCase
         
         if (!$result['pode']) {
             throw new DomainException($result['motivo']);
+        }
+
+        // Salvar motivo da perda se fornecido
+        if ($motivoPerda !== null) {
+            $processoModel->motivo_perda = $motivoPerda;
+            $processoModel->save();
         }
 
         return $processoModel->fresh(['orgao', 'setor']);

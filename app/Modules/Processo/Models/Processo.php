@@ -52,6 +52,7 @@ class Processo extends BaseModel
         'status_participacao',
         'data_recebimento_pagamento',
         'observacoes',
+        'motivo_perda',
         'data_arquivamento',
     ];
 
