@@ -51,6 +51,62 @@ class NotaFiscalObserver
         
         if ($notaFiscal->empenho_id && $notaFiscal->empenho) {
             $notaFiscal->empenho->atualizarSaldo();
+            
+            // Atualizar valores financeiros dos itens do processo vinculados ao empenho
+            $this->atualizarItensProcessoVinculados($notaFiscal);
+        }
+    }
+    
+    /**
+     * Atualiza valores financeiros dos itens do processo vinculados ao empenho
+     * NF de saída atualiza valor_faturado, NF de entrada atualiza valor_pago
+     */
+    protected function atualizarItensProcessoVinculados(NotaFiscal $notaFiscal): void
+    {
+        if (!$notaFiscal->empenho_id) {
+            return;
+        }
+        
+        try {
+            // Buscar processo_id através do empenho se não estiver na NF
+            $processoId = $notaFiscal->processo_id;
+            if (!$processoId && $notaFiscal->empenho) {
+                $processoId = $notaFiscal->empenho->processo_id;
+            }
+            
+            if (!$processoId) {
+                return;
+            }
+            
+            // Buscar vínculos entre itens do processo e o empenho
+            $vinculos = \App\Modules\Processo\Models\ProcessoItemVinculo::where('empenho_id', $notaFiscal->empenho_id)
+                ->where('processo_id', $processoId)
+                ->with('processoItem')
+                ->get();
+            
+            // Atualizar valores financeiros de cada item vinculado
+            foreach ($vinculos as $vinculo) {
+                if ($vinculo->processoItem) {
+                    // Usar withoutEvents para evitar loops infinitos
+                    \App\Modules\Processo\Models\ProcessoItem::withoutEvents(function () use ($vinculo) {
+                        $vinculo->processoItem->atualizarValoresFinanceiros();
+                    });
+                }
+            }
+            
+            \Log::debug('NotaFiscalObserver - Valores financeiros dos itens atualizados', [
+                'nota_fiscal_id' => $notaFiscal->id,
+                'tipo' => $notaFiscal->tipo,
+                'empenho_id' => $notaFiscal->empenho_id,
+                'processo_id' => $processoId,
+                'vinculos_atualizados' => $vinculos->count(),
+            ]);
+        } catch (\Exception $e) {
+            \Log::warning("Erro ao atualizar valores financeiros dos itens do processo vinculados ao empenho: " . $e->getMessage(), [
+                'nota_fiscal_id' => $notaFiscal->id,
+                'empenho_id' => $notaFiscal->empenho_id,
+                'processo_id' => $notaFiscal->processo_id,
+            ]);
         }
     }
 }

@@ -287,12 +287,15 @@ class EmpenhoController extends BaseApiController
             // Buscar modelo Eloquent apenas para serialização (Infrastructure)
             $empenhoModel = $this->empenhoRepository->buscarModeloPorId(
                 $empenhoDomain->id,
-                ['processo', 'contrato', 'autorizacaoFornecimento']
+                ['processo', 'contrato', 'autorizacaoFornecimento', 'notasFiscais']
             );
             
             if (!$empenhoModel) {
                 return response()->json(['message' => 'Empenho não encontrado'], 404);
             }
+            
+            // Carregar notas fiscais relacionadas
+            $empenhoModel->load('notasFiscais');
             
             return response()->json(['data' => $empenhoModel->toArray()]);
         } catch (\App\Domain\Exceptions\DomainException $e) {
