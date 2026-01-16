@@ -607,20 +607,60 @@ class ProcessoController extends BaseApiController
      */
     public function store(ProcessoCreateRequest $request): JsonResponse
     {
+        $empresaId = null;
+        $tenantId = tenancy()->tenant?->id;
+        
         try {
             $empresa = $this->getEmpresaAtivaOrFail();
+            $empresaId = $empresa->id;
+            
+            \Log::info('ProcessoController::store() - INÍCIO', [
+                'empresa_id' => $empresaId,
+                'tenant_id' => $tenantId,
+                'user_id' => auth()->id(),
+                'request_keys' => array_keys($request->all()),
+                'has_itens' => !empty($request->input('itens')),
+                'itens_count' => is_array($request->input('itens')) ? count($request->input('itens')) : 0,
+            ]);
             
             // O Request já está validado via FormRequest
             // Criar DTO a partir dos dados validados
-            $dto = CriarProcessoDTO::fromArray(array_merge($request->validated(), ['empresa_id' => $empresa->id]));
+            $validatedData = $request->validated();
+            
+            \Log::debug('ProcessoController::store() - Dados validados', [
+                'empresa_id' => $empresaId,
+                'tenant_id' => $tenantId,
+                'orgao_id' => $validatedData['orgao_id'] ?? null,
+                'modalidade' => $validatedData['modalidade'] ?? null,
+                'numero_modalidade' => $validatedData['numero_modalidade'] ?? null,
+                'itens_count' => is_array($validatedData['itens'] ?? null) ? count($validatedData['itens']) : 0,
+            ]);
+            
+            $dto = CriarProcessoDTO::fromArray(array_merge($validatedData, ['empresa_id' => $empresa->id]));
+            
+            \Log::debug('ProcessoController::store() - DTO criado, executando Use Case', [
+                'empresa_id' => $empresaId,
+                'tenant_id' => $tenantId,
+            ]);
             
             // Executar Use Case (retorna entidade de domínio)
             $processoDomain = $this->criarProcessoUseCase->executar($dto);
+            
+            \Log::info('ProcessoController::store() - Processo criado com sucesso', [
+                'empresa_id' => $empresaId,
+                'tenant_id' => $tenantId,
+                'processo_id' => $processoDomain->id,
+            ]);
             
             // Buscar modelo Eloquent para serialização
             $processoModel = $this->processoRepository->buscarModeloPorId($processoDomain->id, ['orgao', 'setor']);
 
             if (!$processoModel) {
+                \Log::error('ProcessoController::store() - Processo criado mas não encontrado no repositório', [
+                    'empresa_id' => $empresaId,
+                    'tenant_id' => $tenantId,
+                    'processo_domain_id' => $processoDomain->id,
+                ]);
                 return response()->json(['message' => 'Erro ao buscar processo criado'], 500);
             }
 
@@ -628,15 +668,41 @@ class ProcessoController extends BaseApiController
                 'message' => 'Processo criado com sucesso',
                 'data' => new ProcessoResource($processoModel)
             ], 201);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            // Erro de validação (422)
+            \Log::warning('ProcessoController::store() - Erro de validação', [
+                'empresa_id' => $empresaId,
+                'tenant_id' => $tenantId,
+                'errors' => $e->errors(),
+                'message' => $e->getMessage(),
+            ]);
+            
+            return response()->json([
+                'message' => 'Erro de validação',
+                'errors' => $e->errors()
+            ], 422);
         } catch (\DomainException $e) {
             // Erro de negócio (limites de plano, etc) - retornar 400
+            \Log::warning('ProcessoController::store() - Erro de domínio', [
+                'empresa_id' => $empresaId,
+                'tenant_id' => $tenantId,
+                'message' => $e->getMessage(),
+                'code' => $e->getCode(),
+            ]);
+            
             return response()->json([
                 'message' => $e->getMessage()
             ], 400);
         } catch (\Exception $e) {
-            \Log::error('Erro ao criar processo', [
+            \Log::error('ProcessoController::store() - Erro ao criar processo', [
+                'empresa_id' => $empresaId,
+                'tenant_id' => $tenantId,
+                'user_id' => auth()->id(),
                 'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
                 'trace' => $e->getTraceAsString(),
+                'request_data_keys' => array_keys($request->all()),
             ]);
             
             return response()->json([
