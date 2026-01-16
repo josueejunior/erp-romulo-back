@@ -10,6 +10,7 @@ class ProcessoItemVinculo extends BaseModel
     protected $table = 'processo_item_vinculos';
 
     protected $fillable = [
+        'empresa_id',
         'processo_item_id',
         'contrato_id',
         'autorizacao_fornecimento_id',
