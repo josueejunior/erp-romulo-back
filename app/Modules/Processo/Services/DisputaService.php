@@ -58,6 +58,8 @@ class DisputaService
     {
         // Validar processo pode ser editado
         $this->validarProcessoPodeEditar($processo);
+        // 🔥 NOVO: Validar status do processo permite disputa
+        $this->validarProcessoPermiteDisputa($processo);
 
         // Garantir que o processo pertence a uma empresa (isolamento)
         if (!$processo->empresa_id) {

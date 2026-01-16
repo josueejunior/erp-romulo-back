@@ -79,12 +79,24 @@ class OrcamentoService
     }
 
     /**
+     * Validar processo permite criar orçamento
+     */
+    public function validarProcessoPermiteOrcamento(Processo $processo): void
+    {
+        // Pode criar orçamento se processo estiver em participação ou julgamento_habilitacao
+        if (!in_array($processo->status, ['participacao', 'julgamento_habilitacao'])) {
+            throw new \Exception("Não é possível criar orçamento para processo com status '{$processo->status}'. Apenas processos em 'participação' ou 'julgamento e habilitação' permitem criação de orçamento.");
+        }
+    }
+
+    /**
      * Criar orçamento vinculado a item
      */
     public function store(Processo $processo, ProcessoItem $item, array $data, int $empresaId): Orcamento
     {
         $this->validarProcessoEmpresa($processo, $empresaId);
         $this->validarItemPertenceProcesso($item, $processo);
+        $this->validarProcessoPermiteOrcamento($processo); // 🔥 NOVO: Validar status do processo
 
         $validator = $this->validateStoreData($data);
         if ($validator->fails()) {
@@ -218,6 +230,7 @@ class OrcamentoService
     public function storeByProcesso(Processo $processo, array $data, int $empresaId): Orcamento
     {
         $this->validarProcessoEmpresa($processo, $empresaId);
+        $this->validarProcessoPermiteOrcamento($processo); // 🔥 NOVO: Validar status do processo
 
         $validator = $this->validateStoreByProcessoData($data);
         if ($validator->fails()) {
