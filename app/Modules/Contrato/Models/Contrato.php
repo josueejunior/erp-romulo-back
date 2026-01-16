@@ -73,6 +73,14 @@ class Contrato extends BaseModel
         return $this->hasMany(NotaFiscal::class);
     }
 
+    /**
+     * Vínculos de itens especificamente ligados a este contrato
+     */
+    public function vinculosItem(): HasMany
+    {
+        return $this->hasMany(\App\Modules\Processo\Models\ProcessoItemVinculo::class, 'contrato_id');
+    }
+
     public function atualizarSaldo(): void
     {
         $totalEmpenhos = $this->empenhos()->sum('valor');

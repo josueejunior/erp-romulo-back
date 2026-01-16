@@ -303,7 +303,7 @@ class ContratoController extends BaseApiController
             // Buscar modelo Eloquent para incluir relacionamentos
             $contratoModel = $this->contratoRepository->buscarModeloPorId(
                 $contratoDomain->id,
-                ['processo', 'empenhos']
+                ['processo', 'empenhos', 'vinculosItem', 'vinculosItem.processoItem']
             );
             
             if (!$contratoModel) {

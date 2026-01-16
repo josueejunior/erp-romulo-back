@@ -162,7 +162,9 @@ class ContratoQuery
                 'processo.orgao:id,uasg,razao_social',
                 'processo.setor:id,nome',
                 'empenhos:id,contrato_id,numero,valor',
-                'autorizacoesFornecimento:id,contrato_id,numero'
+                'autorizacoesFornecimento:id,contrato_id,numero',
+                'vinculosItem',
+                'vinculosItem.processoItem'
             ]);
     }
 }

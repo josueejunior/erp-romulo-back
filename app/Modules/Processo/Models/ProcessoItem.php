@@ -246,167 +246,105 @@ class ProcessoItem extends BaseModel
      */
     public function atualizarValoresFinanceiros(): void
     {
-        // 🔥 CORREÇÃO: Valor vencido = (valor unitário arrematado/negociado/final) * quantidade
-        // O valor_arrematado, valor_negociado e valor_final_sessao são valores POR UNIDADE
-        // Precisamos multiplicar pela quantidade para obter o valor TOTAL do item
+        // 1. Calcular Valor Vencido (potencial total do item)
+        // ✅ Corrigido para usar a melhor fonte de valor unitário disponível e multiplicar pela quantidade
         if ($this->isVencido()) {
-            // Tentar obter valor unitário na ordem de preferência:
-            // 1. valor_arrematado (se houver)
-            // 2. valor_negociado (se houver)
-            // 3. valor_final_sessao (se houver)
-            // 4. valor_estimado (fallback se nenhum dos anteriores existir)
-            $valorUnitario = null;
-            $fonteValor = null;
+            $valorUnitario = $this->valor_arrematado > 0 ? $this->valor_arrematado : 
+                           ($this->valor_negociado > 0 ? $this->valor_negociado : 
+                           ($this->valor_final_sessao > 0 ? $this->valor_final_sessao : ($this->valor_estimado ?? 0)));
             
-            if ($this->valor_arrematado && $this->valor_arrematado > 0) {
-                $valorUnitario = $this->valor_arrematado;
-                $fonteValor = 'valor_arrematado';
-            } elseif ($this->valor_negociado && $this->valor_negociado > 0) {
-                $valorUnitario = $this->valor_negociado;
-                $fonteValor = 'valor_negociado';
-            } elseif ($this->valor_final_sessao && $this->valor_final_sessao > 0) {
-                $valorUnitario = $this->valor_final_sessao;
-                $fonteValor = 'valor_final_sessao';
-            } elseif ($this->valor_estimado && $this->valor_estimado > 0) {
-                $valorUnitario = $this->valor_estimado;
-                $fonteValor = 'valor_estimado';
-            } else {
-                $valorUnitario = 0;
-                $fonteValor = 'nenhum';
-            }
-            
-            $quantidade = $this->quantidade ?? 1;
-            $this->valor_vencido = round($valorUnitario * $quantidade, 2);
-            
-            // Log para debug
-            \Log::info('ProcessoItem::atualizarValoresFinanceiros - valor_vencido calculado', [
-                'item_id' => $this->id,
-                'numero_item' => $this->numero_item,
-                'empresa_id' => $this->empresa_id,
-                'processo_id' => $this->processo_id,
-                'status_item' => $this->status_item,
-                'is_vencido' => $this->isVencido(),
-                'valores_disponiveis' => [
-                    'valor_arrematado' => $this->valor_arrematado,
-                    'valor_negociado' => $this->valor_negociado,
-                    'valor_final_sessao' => $this->valor_final_sessao,
-                    'valor_estimado' => $this->valor_estimado,
-                ],
-                'valor_unitario_escolhido' => $valorUnitario,
-                'fonte_valor' => $fonteValor,
-                'quantidade' => $quantidade,
-                'valor_vencido_calculado' => $this->valor_vencido,
-            ]);
+            $this->valor_vencido = round($valorUnitario * ($this->quantidade ?? 1), 2);
         } else {
             $this->valor_vencido = 0;
-            \Log::debug('ProcessoItem::atualizarValoresFinanceiros - item não está vencido', [
-                'item_id' => $this->id,
-                'numero_item' => $this->numero_item,
-                'status_item' => $this->status_item,
-                'situacao_final' => $this->situacao_final,
-            ]);
         }
 
-        // Valor empenhado = soma dos vínculos com empenhos
+        // 2. Valor Empenhado (soma dos vínculos diretos com empenhos)
         $this->valor_empenhado = $this->vinculosEmpenho()->sum('valor_total');
 
-        // Valor faturado = soma das NF-e de saída vinculadas através dos vínculos
+        // 3. 🔥 CORREÇÃO: Valor faturado e pago com rateio proporcional para evitar multiplicação indesejada.
+        // Anteriormente, o valor total de todas as notas do empenho/contrato era somado em cada item,
+        // gerando valores multiplicados se houvesse mais de um item no mesmo documento.
         $valorFaturado = 0;
-        // Buscar notas fiscais de saída através dos vínculos (Contrato/AF/Empenho)
+        $valorPago = 0;
+        
+        // Coleta todos os vínculos com os objetos principais já carregados
         $vinculos = $this->vinculos()->with(['contrato', 'autorizacaoFornecimento', 'empenho'])->get();
+        $notasProcessadas = []; // Evitar duplicidade se a mesma nota estiver vinculada a múltiplos níveis (ex: Empenho e AF)
+        
         foreach ($vinculos as $vinculo) {
-            if ($vinculo->contrato_id && $vinculo->contrato) {
-                $valorFaturado += $vinculo->contrato->notasFiscais()
-                    ->where('tipo', 'saida')
-                    ->sum('valor');
-            }
-            if ($vinculo->autorizacao_fornecimento_id && $vinculo->autorizacaoFornecimento) {
-                $valorFaturado += $vinculo->autorizacaoFornecimento->notasFiscais()
-                    ->where('tipo', 'saida')
-                    ->sum('valor');
-            }
+            // Determinar o objeto pai predominante para este vínculo (Prioridade: Empenho > AF > Contrato)
+            $pai = null;
+            $valorPai = 0;
+            
             if ($vinculo->empenho_id && $vinculo->empenho) {
-                $valorFaturado += $vinculo->empenho->notasFiscais()
-                    ->where('tipo', 'saida')
-                    ->sum('valor');
+                $pai = $vinculo->empenho;
+                $valorPai = (float) $pai->valor;
+            } elseif ($vinculo->autorizacao_fornecimento_id && $vinculo->autorizacaoFornecimento) {
+                $pai = $vinculo->autorizacaoFornecimento;
+                $valorPai = (float) $pai->valor;
+            } elseif ($vinculo->contrato_id && $vinculo->contrato) {
+                $pai = $vinculo->contrato;
+                $valorPai = (float) $pai->valor_total;
+            }
+            
+            if (!$pai || $valorPai <= 0) continue;
+            
+            // Share (fração proporcional) do item neste objeto pai
+            $shareItem = (float) $vinculo->valor_total / $valorPai;
+            
+            // Buscar todas as notas de saída vinculadas a este objeto pai
+            $notasPai = $pai->notasFiscais()->where('tipo', 'saida')->get();
+            
+            foreach ($notasPai as $nf) {
+                if (in_array($nf->id, $notasProcessadas)) continue;
+                
+                $valorNota = (float) $nf->valor;
+                $valorApropriado = 0;
+                
+                // Regra de Apropriação:
+                // 1. Se a nota especifica o item_id, ela é integralmente deste item (se coincidir)
+                if ($nf->processo_item_id) {
+                    $valorApropriado = ($nf->processo_item_id == $this->id) ? $valorNota : 0;
+                } 
+                // 2. Caso contrário, fazemos o rateio proporcional baseado no valor proporcional do item no vínculo
+                else {
+                    $valorApropriado = $valorNota * $shareItem;
+                }
+                
+                $valorFaturado += $valorApropriado;
+                if ($nf->situacao === 'paga') {
+                    $valorPago += $valorApropriado;
+                }
+                
+                $notasProcessadas[] = $nf->id;
             }
         }
+        
         $this->valor_faturado = round($valorFaturado, 2);
 
         // 🔥 CORREÇÃO PARA PROCESSOS LEGADOS:
-        // Se o valor faturado (via NFs) for menor que o valor empenhado, e o processo já estiver pago (data_recebimento_pagamento),
-        // assumimos o valor empenhado como o faturado real para evitar saldos errados.
-        if ($this->processo->data_recebimento_pagamento && $this->valor_faturado < $this->valor_empenhado) {
-            $this->valor_faturado = $this->valor_empenhado;
+        // Se o processo como um todo tiver uma data de recebimento de pagamento confirmada,
+        // garantimos que os valores faturados e pagos reflitam essa conclusão se houver empenhos.
+        if ($this->processo && $this->processo->data_recebimento_pagamento) {
+            if ($this->valor_faturado < $this->valor_empenhado) {
+                $this->valor_faturado = $this->valor_empenhado;
+            }
+            if ($valorPago < $this->valor_faturado) {
+                $valorPago = $this->valor_faturado;
+            }
         }
 
-        // Valor pago (recebido) = soma das NF-e de SAÍDA COM SITUAÇÃO "PAGA" (quanto você RECEBEU do órgão)
-        // NF de saída = você está emitindo nota fiscal para o órgão (receita)
-        // NF de saída PAGA = o órgão pagou você (recebimento)
-        // IMPORTANTE: Só contar NFs de saída que estão pagas (situacao = 'paga')
-        $valorPago = 0;
-        foreach ($vinculos as $vinculo) {
-            if ($vinculo->contrato_id && $vinculo->contrato) {
-                // NF de saída PAGA = você está recebendo pagamento do órgão
-                $valorPago += $vinculo->contrato->notasFiscais()
-                    ->where('tipo', 'saida')
-                    ->where('situacao', 'paga') // Apenas NFs pagas (recebidas)
-                    ->sum('valor');
-            }
-            if ($vinculo->autorizacao_fornecimento_id && $vinculo->autorizacaoFornecimento) {
-                // NF de saída PAGA = você está recebendo pagamento do órgão
-                $valorPago += $vinculo->autorizacaoFornecimento->notasFiscais()
-                    ->where('tipo', 'saida')
-                    ->where('situacao', 'paga') // Apenas NFs pagas (recebidas)
-                    ->sum('valor');
-            }
-            if ($vinculo->empenho_id && $vinculo->empenho) {
-                // NF de saída PAGA = você está recebendo pagamento do órgão
-                $valorPago += $vinculo->empenho->notasFiscais()
-                    ->where('tipo', 'saida')
-                    ->where('situacao', 'paga') // Apenas NFs pagas (recebidas)
-                    ->sum('valor');
-            }
-        }
         $this->valor_pago = round($valorPago, 2);
 
-        // 🔥 CORREÇÃO: "Confirmação de Pagamento Direta"
-        // Se o processo como um todo tiver uma data de recebimento de pagamento confirmada,
-        // consideramos o item como totalmente pago (valor_pago = valor_faturado)
-        if ($this->processo->data_recebimento_pagamento && $this->valor_pago < $this->valor_faturado) {
-            $this->valor_pago = $this->valor_faturado;
-        }
-
-        // Saldo em aberto = valor faturado - valor pago (quanto falta RECEBER do órgão)
-        // Se valor_faturado = 1000 e valor_pago = 600, então saldo_aberto = 400 (falta receber 400)
+        // 4. Saldo em aberto = valor faturado - valor pago (quanto falta RECEBER do órgão)
         $this->saldo_aberto = round($this->valor_faturado - $this->valor_pago, 2);
         
-        // Log final com todos os valores calculados
-        \Log::info('ProcessoItem::atualizarValoresFinanceiros - Valores finais calculados', [
-            'item_id' => $this->id,
-            'numero_item' => $this->numero_item,
-            'valores_finais' => [
-                'valor_vencido' => $this->valor_vencido,
-                'valor_empenhado' => $this->valor_empenhado,
-                'valor_faturado' => $this->valor_faturado,
-                'valor_pago' => $this->valor_pago,
-                'saldo_aberto' => $this->saldo_aberto,
-                'lucro_bruto' => $this->lucro_bruto,
-                'lucro_liquido' => $this->lucro_liquido,
-            ],
-        ]);
-
-        // Lucro bruto = receita - custos diretos
+        // 5. Lucro bruto = receita (faturado) - custos diretos
         $custoTotal = $this->getCustoTotal();
         $this->lucro_bruto = round($this->valor_faturado - $custoTotal, 2);
-
-        // Lucro líquido = lucro bruto - custos indiretos
-        // Nota: Custos indiretos são alocados por período, não por item individual
-        // Se houver necessidade de alocar custos indiretos por item, implementar aqui
         $this->lucro_liquido = $this->lucro_bruto;
 
         // Usar saveQuietly para evitar loops infinitos quando chamado de observers
-        // O método pode ser chamado de ProcessoItemVinculoObserver, que já está dentro de um observer
         $this->saveQuietly();
     }
 
