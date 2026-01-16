@@ -25,7 +25,64 @@ class ProcessoObserver
             $this->recalcularValoresFinanceirosItens($processo);
         }
         
+        // 🔥 NOVO: Atualizar status automaticamente quando data_hora_sessao_publica muda
+        // Se a data da sessão pública foi alterada e o processo está em participação,
+        // verificar se deve mudar para julgamento_habilitacao
+        if ($processo->wasChanged('data_hora_sessao_publica') && $processo->status === 'participacao') {
+            $this->verificarEAtualizarStatusPorData($processo);
+        }
+        
+        // 🔥 NOVO: Se a data da sessão pública mudou e o processo está em julgamento_habilitacao,
+        // mas a nova data é no futuro, voltar para participacao (se fizer sentido)
+        if ($processo->wasChanged('data_hora_sessao_publica') && $processo->status === 'julgamento_habilitacao') {
+            $this->verificarEAtualizarStatusPorData($processo);
+        }
+        
         $this->clearCache($processo);
+    }
+    
+    /**
+     * Verifica e atualiza status do processo baseado na data da sessão pública
+     */
+    protected function verificarEAtualizarStatusPorData(Processo $processo): void
+    {
+        try {
+            if (!$processo->data_hora_sessao_publica) {
+                return;
+            }
+            
+            $dataHoraSessao = \Carbon\Carbon::parse($processo->data_hora_sessao_publica);
+            $agora = \Carbon\Carbon::now();
+            
+            // Se a sessão já passou e o processo está em participação, mudar para julgamento_habilitacao
+            if ($processo->status === 'participacao' && $agora->isAfter($dataHoraSessao)) {
+                $processo->status = 'julgamento_habilitacao';
+                $processo->saveQuietly(); // Usar saveQuietly para evitar loop infinito
+                
+                \Log::info('ProcessoObserver - Status atualizado automaticamente por data', [
+                    'processo_id' => $processo->id,
+                    'status_anterior' => 'participacao',
+                    'status_novo' => 'julgamento_habilitacao',
+                    'data_sessao' => $processo->data_hora_sessao_publica,
+                    'motivo' => 'Data da sessão pública já passou',
+                ]);
+            }
+            // Se a sessão é no futuro e o processo está em julgamento_habilitacao (mas foi alterado manualmente),
+            // voltar para participacao (opcional - pode ser removido se não fizer sentido)
+            elseif ($processo->status === 'julgamento_habilitacao' && $agora->isBefore($dataHoraSessao)) {
+                // Não voltar automaticamente - deixar o usuário decidir
+                // Mas logar para debug
+                \Log::debug('ProcessoObserver - Processo em julgamento mas sessão é no futuro', [
+                    'processo_id' => $processo->id,
+                    'status_atual' => $processo->status,
+                    'data_sessao' => $processo->data_hora_sessao_publica,
+                ]);
+            }
+        } catch (\Exception $e) {
+            \Log::warning("Erro ao verificar status do processo por data: " . $e->getMessage(), [
+                'processo_id' => $processo->id,
+            ]);
+        }
     }
     
     /**
