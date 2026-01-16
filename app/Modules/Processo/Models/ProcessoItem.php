@@ -333,37 +333,39 @@ class ProcessoItem extends BaseModel
         }
         $this->valor_faturado = round($valorFaturado, 2);
 
-        // Valor pago = soma das NF-e de entrada COM SITUAÇÃO "PAGA" (você está pagando pelos produtos)
-        // NF de entrada = você está recebendo produtos e pagando por eles
-        // IMPORTANTE: Só contar NFs de entrada que estão pagas (situacao = 'paga')
+        // Valor pago (recebido) = soma das NF-e de SAÍDA COM SITUAÇÃO "PAGA" (quanto você RECEBEU do órgão)
+        // NF de saída = você está emitindo nota fiscal para o órgão (receita)
+        // NF de saída PAGA = o órgão pagou você (recebimento)
+        // IMPORTANTE: Só contar NFs de saída que estão pagas (situacao = 'paga')
         $valorPago = 0;
         foreach ($vinculos as $vinculo) {
             if ($vinculo->contrato_id && $vinculo->contrato) {
-                // NF de entrada PAGA = você está pagando
+                // NF de saída PAGA = você está recebendo pagamento do órgão
                 $valorPago += $vinculo->contrato->notasFiscais()
-                    ->where('tipo', 'entrada')
-                    ->where('situacao', 'paga') // 🔥 CORREÇÃO: Apenas NFs pagas
+                    ->where('tipo', 'saida')
+                    ->where('situacao', 'paga') // Apenas NFs pagas (recebidas)
                     ->sum('valor');
             }
             if ($vinculo->autorizacao_fornecimento_id && $vinculo->autorizacaoFornecimento) {
-                // NF de entrada PAGA = você está pagando
+                // NF de saída PAGA = você está recebendo pagamento do órgão
                 $valorPago += $vinculo->autorizacaoFornecimento->notasFiscais()
-                    ->where('tipo', 'entrada')
-                    ->where('situacao', 'paga') // 🔥 CORREÇÃO: Apenas NFs pagas
+                    ->where('tipo', 'saida')
+                    ->where('situacao', 'paga') // Apenas NFs pagas (recebidas)
                     ->sum('valor');
             }
             if ($vinculo->empenho_id && $vinculo->empenho) {
-                // NF de entrada PAGA = você está pagando
+                // NF de saída PAGA = você está recebendo pagamento do órgão
                 $valorPago += $vinculo->empenho->notasFiscais()
-                    ->where('tipo', 'entrada')
-                    ->where('situacao', 'paga') // 🔥 CORREÇÃO: Apenas NFs pagas
+                    ->where('tipo', 'saida')
+                    ->where('situacao', 'paga') // Apenas NFs pagas (recebidas)
                     ->sum('valor');
             }
         }
         $this->valor_pago = round($valorPago, 2);
 
-        // Saldo em aberto = valor vencido - valor pago
-        $this->saldo_aberto = round($this->valor_vencido - $this->valor_pago, 2);
+        // Saldo em aberto = valor faturado - valor pago (quanto falta RECEBER do órgão)
+        // Se valor_faturado = 1000 e valor_pago = 600, então saldo_aberto = 400 (falta receber 400)
+        $this->saldo_aberto = round($this->valor_faturado - $this->valor_pago, 2);
         
         // Log final com todos os valores calculados
         \Log::info('ProcessoItem::atualizarValoresFinanceiros - Valores finais calculados', [
