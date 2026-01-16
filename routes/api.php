@@ -57,10 +57,8 @@ Route::prefix('health')->group(function () {
 
 Route::prefix('v1')->group(function () {
     // Rotas públicas (central) - Gerenciamento de Tenants/Empresas
-    // Rate limiting mais permissivo para criação de tenants (10/min, 20/hora)
     Route::module('tenants', TenantController::class, 'tenant')
-        ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy'])
-        ->middleware(['throttle:10,1', 'throttle:20,60']);
+        ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
 
     // Rotas públicas - Planos (podem ser visualizados sem autenticação)
     // IMPORTANTE: Estas rotas devem ser públicas para a tela de cadastro funcionar
@@ -72,36 +70,27 @@ Route::prefix('v1')->group(function () {
         });
 
     // Rotas públicas (autenticação)
-    // 🔥 CORREÇÃO: Rate limiting removido do login para evitar bloqueios desnecessários
     Route::post('/auth/login', [AuthController::class, 'login']);
-    Route::post('/auth/register', [AuthController::class, 'register'])
-        ->middleware(['throttle:10,1', 'throttle:20,60']); // 10/min, 20/hora
-    Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])
-        ->middleware(['throttle:5,1', 'throttle:10,60']); // 5/min, 10/hora (prevenir spam)
-    Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])
-        ->middleware(['throttle:5,1', 'throttle:10,60']); // 5/min, 10/hora
+    Route::post('/auth/register', [AuthController::class, 'register']);
+    Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword']);
+    Route::post('/auth/reset-password', [AuthController::class, 'resetPassword']);
     
     // Upload público (para cadastro público)
-    Route::post('/upload/image', [\App\Http\Controllers\UploadController::class, 'uploadImage'])
-        ->middleware(['throttle:10,1']); // 10 uploads por minuto
+    Route::post('/upload/image', [\App\Http\Controllers\UploadController::class, 'uploadImage']);
     
     // Cadastro público (cria tenant + assinatura + usuário)
-    // Rate limiting aumentado para desenvolvimento/testes
     Route::post('/cadastro-publico', [\App\Http\Controllers\Public\CadastroPublicoController::class, 'store'])
-        ->middleware(['throttle:10,1', 'throttle:50,60', 'sanitize.inputs']); // 10/min, 50/hora (aumentado para testes) + sanitização
+        ->middleware(['sanitize.inputs']);
     
     // Consulta pública de CNPJ (para cadastro público)
-    // Rate limiting aumentado para desenvolvimento/testes
-    Route::get('/cadastro-publico/consultar-cnpj/{cnpj}', [\App\Http\Controllers\Public\CadastroPublicoController::class, 'consultarCnpj'])
-        ->middleware(['throttle:30,1', 'throttle:100,60']); // 30/min, 100/hora (aumentado para testes)
+    Route::get('/cadastro-publico/consultar-cnpj/{cnpj}', [\App\Http\Controllers\Public\CadastroPublicoController::class, 'consultarCnpj']);
     
     // Verificação de email em tempo real (para validação onBlur)
-    Route::get('/cadastro-publico/verificar-email/{email}', [\App\Http\Controllers\Public\CadastroPublicoController::class, 'verificarEmail'])
-        ->middleware(['throttle:20,1', 'throttle:100,60']); // 20/min, 100/hora
+    Route::get('/cadastro-publico/verificar-email/{email}', [\App\Http\Controllers\Public\CadastroPublicoController::class, 'verificarEmail']);
 
     // Cadastro público de afiliados (sem autenticação)
     Route::post('/afiliados/cadastro-publico', [\App\Http\Controllers\Public\CadastroAfiliadoController::class, 'store'])
-        ->middleware(['throttle:5,1', 'throttle:10,60', 'sanitize.inputs']); // 5/min, 10/hora + sanitização
+        ->middleware(['sanitize.inputs']);
 
     // 🔥 NOVA ARQUITETURA: Pipeline previsível e testável
     // 
@@ -116,8 +105,6 @@ Route::prefix('v1')->group(function () {
         'auth.context',                // CAMADA 4: Identidade
         'tenant.context',              // CAMADA 5: Resolve e inicializa tenant (ANTES do BootstrapApplicationContext)
         \App\Http\Middleware\BootstrapApplicationContext::class,  // CAMADA 6: Bootstrap empresa (usa tenant inicializado)
-        'throttle:300,1',              // ✅ 300 requisições por minuto (aumentado para uso normal)
-        'throttle:5000,60',            // ✅ 5000 requisições por hora (aumentado para uso intensivo)
     ])->group(function () {
         // Rotas que NÃO precisam de assinatura (exceções)
         Route::post('/auth/logout', [AuthController::class, 'logout']);
@@ -156,8 +143,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/notifications/read-all', [\App\Modules\Notification\Controllers\NotificationController::class, 'markAllAsRead']);
         
         // Onboarding (usuários autenticados)
-        // ✅ Rate limiting flexível mas seguro para onboarding
-        Route::prefix('onboarding')->middleware(['throttle:60,1', 'throttle:300,60'])->group(function () {
+        Route::prefix('onboarding')->group(function () {
             Route::get('/status', [\App\Modules\Onboarding\Controllers\OnboardingController::class, 'status']);
             Route::post('/marcar-etapa', [\App\Modules\Onboarding\Controllers\OnboardingController::class, 'marcarEtapa']);
             Route::post('/concluir', [\App\Modules\Onboarding\Controllers\OnboardingController::class, 'concluir']);
@@ -387,17 +373,14 @@ Route::prefix('v1')->group(function () {
     });
 
     // Webhooks (públicos, sem autenticação)
-    // ✅ Validação de assinatura via middleware
     Route::prefix('webhooks')->group(function () {
-        Route::post('/mercadopago', [ApiWebhookController::class, 'mercadopago'])
-            ->middleware(['throttle:100,1']); // Rate limiting para prevenir abuso
+        Route::post('/mercadopago', [ApiWebhookController::class, 'mercadopago']);
     });
 });
 
 // Rotas do Painel Admin Central (fora do tenant e fora do v1)
 // 🔥 IMPORTANTE: Rotas admin devem estar dentro do prefixo 'api' mas fora do 'v1'
 Route::prefix('admin')->group(function () {
-    // 🔥 CORREÇÃO: Rate limiting removido do login admin para evitar bloqueios desnecessários
     Route::post('/login', [AdminAuthController::class, 'login']);
     
     // 🔥 NOVA ARQUITETURA: Pipeline para admin
@@ -530,23 +513,18 @@ Route::prefix('admin')->group(function () {
 // 🆕 Rotas públicas para afiliados e onboarding
 Route::prefix('v1')->group(function () {
     // Validar cupom de afiliado
-    Route::post('/cupom/validar', [\App\Modules\Afiliado\Controllers\AfiliadoController::class, 'validarCupom'])
-        ->middleware(['throttle:20,1']); // 20 validações por minuto
+    Route::post('/cupom/validar', [\App\Modules\Afiliado\Controllers\AfiliadoController::class, 'validarCupom']);
     
     // Rastreamento de referência de afiliado
     Route::prefix('afiliado-referencia')->group(function () {
-        Route::post('/rastrear', [\App\Http\Controllers\Public\AfiliadoReferenciaController::class, 'rastrear'])
-            ->middleware(['throttle:30,1']);
-        Route::post('/verificar-cnpj', [\App\Http\Controllers\Public\AfiliadoReferenciaController::class, 'verificarCnpjJaUsouCupom'])
-            ->middleware(['throttle:20,1']);
-        Route::get('/buscar-ativa', [\App\Http\Controllers\Public\AfiliadoReferenciaController::class, 'buscarReferenciaAtiva'])
-            ->middleware(['throttle:30,1']);
+        Route::post('/rastrear', [\App\Http\Controllers\Public\AfiliadoReferenciaController::class, 'rastrear']);
+        Route::post('/verificar-cnpj', [\App\Http\Controllers\Public\AfiliadoReferenciaController::class, 'verificarCnpjJaUsouCupom']);
+        Route::get('/buscar-ativa', [\App\Http\Controllers\Public\AfiliadoReferenciaController::class, 'buscarReferenciaAtiva']);
     });
     
     // Onboarding (rotas públicas - suportam autenticação opcional)
     // Se houver token, autentica o usuário. Caso contrário, funciona sem autenticação (usa user_id/session_id/email)
-    // ✅ Rate limiting flexível mas seguro para onboarding público
-    Route::prefix('onboarding')->middleware(['auth.optional', 'throttle:60,1', 'throttle:300,60'])->group(function () {
+    Route::prefix('onboarding')->middleware(['auth.optional'])->group(function () {
         Route::post('/iniciar', [\App\Http\Controllers\Public\OnboardingController::class, 'iniciar']);
         Route::post('/marcar-etapa', [\App\Http\Controllers\Public\OnboardingController::class, 'marcarEtapa']);
         Route::post('/marcar-checklist', [\App\Http\Controllers\Public\OnboardingController::class, 'marcarChecklistItem']);
