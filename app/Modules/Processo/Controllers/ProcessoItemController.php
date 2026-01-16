@@ -142,41 +142,123 @@ class ProcessoItemController extends BaseApiController
      */
     public function store(ProcessoItemCreateRequest $request)
     {
+        $empresaId = null;
+        $tenantId = tenancy()->tenant?->id;
+        $processoId = null;
+        
         try {
             $route = $request->route();
             $processoId = (int) $route->parameter('processo');
             
             if (!$processoId) {
+                \Log::warning('ProcessoItemController::store() - Processo não fornecido', [
+                    'tenant_id' => $tenantId,
+                    'user_id' => auth()->id(),
+                ]);
                 return response()->json(['message' => 'Processo não fornecido'], 400);
             }
 
             $empresa = $this->getEmpresaAtivaOrFail();
+            $empresaId = $empresa->id;
+            
+            \Log::info('ProcessoItemController::store() - INÍCIO', [
+                'empresa_id' => $empresaId,
+                'tenant_id' => $tenantId,
+                'user_id' => auth()->id(),
+                'processo_id' => $processoId,
+                'request_keys' => array_keys($request->all()),
+                'validated_keys' => array_keys($request->validated()),
+            ]);
             
             // O Request já está validado via FormRequest
             // Criar DTO a partir dos dados validados
-            $dto = CriarProcessoItemDTO::fromArray($request->validated(), $processoId, $empresa->id);
+            $validatedData = $request->validated();
+            
+            \Log::debug('ProcessoItemController::store() - Dados validados', [
+                'empresa_id' => $empresaId,
+                'tenant_id' => $tenantId,
+                'processo_id' => $processoId,
+                'numero_item' => $validatedData['numero_item'] ?? null,
+                'quantidade' => $validatedData['quantidade'] ?? null,
+                'unidade' => $validatedData['unidade'] ?? null,
+                'has_especificacao' => !empty($validatedData['especificacao_tecnica'] ?? null),
+            ]);
+            
+            $dto = CriarProcessoItemDTO::fromArray($validatedData, $processoId, $empresa->id);
+            
+            \Log::debug('ProcessoItemController::store() - DTO criado, executando Use Case', [
+                'empresa_id' => $empresaId,
+                'tenant_id' => $tenantId,
+                'processo_id' => $processoId,
+            ]);
             
             // Executar Use Case (retorna entidade de domínio)
             $itemDomain = $this->criarProcessoItemUseCase->executar($dto);
+            
+            \Log::info('ProcessoItemController::store() - Item criado com sucesso', [
+                'empresa_id' => $empresaId,
+                'tenant_id' => $tenantId,
+                'processo_id' => $processoId,
+                'item_id' => $itemDomain->id,
+            ]);
             
             // Buscar modelo Eloquent para serialização
             $itemModel = $this->processoItemRepository->buscarModeloPorId($itemDomain->id, ['fornecedor', 'transportadora']);
 
             if (!$itemModel) {
+                \Log::error('ProcessoItemController::store() - Item criado mas não encontrado no repositório', [
+                    'empresa_id' => $empresaId,
+                    'tenant_id' => $tenantId,
+                    'processo_id' => $processoId,
+                    'item_domain_id' => $itemDomain->id,
+                ]);
                 return response()->json(['message' => 'Erro ao buscar item criado'], 500);
             }
 
+            \Log::debug('ProcessoItemController::store() - Item serializado com sucesso', [
+                'empresa_id' => $empresaId,
+                'tenant_id' => $tenantId,
+                'processo_id' => $processoId,
+                'item_id' => $itemModel->id,
+            ]);
+
             return response()->json(['data' => $itemModel], 201);
         } catch (NotFoundException $e) {
+            \Log::warning('ProcessoItemController::store() - Processo não encontrado', [
+                'empresa_id' => $empresaId,
+                'tenant_id' => $tenantId,
+                'processo_id' => $processoId,
+                'message' => $e->getMessage(),
+            ]);
             return response()->json(['message' => $e->getMessage()], 404);
         } catch (ProcessoEmExecucaoException $e) {
+            \Log::warning('ProcessoItemController::store() - Processo em execução', [
+                'empresa_id' => $empresaId,
+                'tenant_id' => $tenantId,
+                'processo_id' => $processoId,
+                'message' => $e->getMessage(),
+            ]);
             return response()->json(['message' => $e->getMessage()], 403);
         } catch (\DomainException $e) {
+            \Log::warning('ProcessoItemController::store() - Erro de domínio', [
+                'empresa_id' => $empresaId,
+                'tenant_id' => $tenantId,
+                'processo_id' => $processoId,
+                'message' => $e->getMessage(),
+                'code' => $e->getCode(),
+            ]);
             return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
-            \Log::error('Erro ao criar item de processo', [
+            \Log::error('ProcessoItemController::store() - Erro ao criar item de processo', [
+                'empresa_id' => $empresaId,
+                'tenant_id' => $tenantId,
+                'processo_id' => $processoId,
+                'user_id' => auth()->id(),
                 'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
                 'trace' => $e->getTraceAsString(),
+                'request_data_keys' => array_keys($request->all()),
             ]);
             return response()->json(['message' => $e->getMessage()], 500);
         }
