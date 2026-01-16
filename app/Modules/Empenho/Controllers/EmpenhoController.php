@@ -294,8 +294,12 @@ class EmpenhoController extends BaseApiController
                 return response()->json(['message' => 'Empenho não encontrado'], 404);
             }
             
-            // Carregar notas fiscais relacionadas
-            $empenhoModel->load('notasFiscais');
+            // Carregar notas fiscais relacionadas com seus relacionamentos (fornecedor, processo, etc)
+            $empenhoModel->load([
+                'notasFiscais' => function ($query) {
+                    $query->with(['fornecedor', 'processo', 'empenho']);
+                }
+            ]);
             
             return response()->json(['data' => $empenhoModel->toArray()]);
         } catch (\App\Domain\Exceptions\DomainException $e) {
