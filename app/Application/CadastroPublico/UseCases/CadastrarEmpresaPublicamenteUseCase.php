@@ -941,6 +941,15 @@ final class CadastrarEmpresaPublicamenteUseCase
             throw new DomainException('CPF é obrigatório para pagamento via PIX.');
         }
 
+        // Buscar dados da empresa para criar referência do pedido
+        $nomeEmpresa = $empresa->razao_social ?? $tenant->razao_social ?? 'Empresa';
+        $cnpjEmpresa = $empresa->cnpj ?? $tenant->cnpj ?? '';
+        
+        // Criar referência do pedido: Nome da empresa_plano_cnpj
+        $externalReference = $nomeEmpresa . '_' . $plano->nome . '_' . ($cnpjEmpresa ?: 'sem_cnpj');
+        // Limitar tamanho (Mercado Pago aceita até 256 caracteres)
+        $externalReference = substr($externalReference, 0, 256);
+        
         // Criar PaymentRequest
         $paymentRequestData = [
             'amount' => $valorFinal,
@@ -948,7 +957,7 @@ final class CadastrarEmpresaPublicamenteUseCase
             'payer_email' => $dto->pagamento->payerEmail,
             'payer_cpf' => $payerCpf,
             'payment_method_id' => $dto->pagamento->isPix() ? 'pix' : null,
-            'external_reference' => "tenant_{$tenant->id}_plano_{$plano->id}_cadastro",
+            'external_reference' => $externalReference,
             'metadata' => [
                 'tenant_id' => $tenant->id,
                 'plano_id' => $plano->id,

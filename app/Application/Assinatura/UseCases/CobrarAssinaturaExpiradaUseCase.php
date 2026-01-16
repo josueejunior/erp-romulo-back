@@ -132,6 +132,17 @@ class CobrarAssinaturaExpiradaUseCase
             throw new \App\Domain\Exceptions\NotFoundException('Tenant não encontrado.');
         }
 
+        // Buscar dados da empresa para criar referência do pedido
+        $empresaFinder = new \App\Domain\Tenant\Services\EmpresaFinder();
+        $empresaData = $empresaFinder->findPrincipalByTenantId($tenant->id);
+        $nomeEmpresa = $empresaData['razao_social'] ?? $tenant->razao_social ?? 'Empresa';
+        $cnpjEmpresa = $empresaData['cnpj'] ?? $tenant->cnpj ?? '';
+        
+        // Criar referência do pedido: Nome da empresa_plano_cnpj
+        $externalReference = $nomeEmpresa . '_' . $plano->nome . '_' . ($cnpjEmpresa ?: 'sem_cnpj');
+        // Limitar tamanho (Mercado Pago aceita até 256 caracteres)
+        $externalReference = substr($externalReference, 0, 256);
+
         // 3. Criar PaymentRequest usando card_id salvo (one-click buy)
         $paymentRequest = PaymentRequest::fromArray([
             'amount' => $valor,
@@ -141,7 +152,7 @@ class CobrarAssinaturaExpiradaUseCase
             'card_token' => null, // Não usar token, usar card_id
             'installments' => 1,
             'payment_method_id' => 'credit_card',
-            'external_reference' => "auto_renewal_tenant_{$tenantId}_assinatura_{$assinaturaId}_{$mesReferencia}_{$anoReferencia}",
+            'external_reference' => $externalReference,
             'metadata' => [
                 'tenant_id' => $tenantId,
                 'assinatura_id' => $assinaturaId,

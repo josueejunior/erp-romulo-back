@@ -595,7 +595,21 @@ class AssinaturaController extends BaseApiController
             if ($valorCobrar > 0 && isset($validated['payment_data'])) {
                 $paymentData = $validated['payment_data'];
                 
-                // Criar PaymentRequest
+                // Buscar plano da nova assinatura
+                $novaAssinaturaModel = $this->assinaturaRepository->buscarModeloPorId($novaAssinatura->id);
+                $novoPlano = $novaAssinaturaModel->plano;
+                
+                // Buscar dados da empresa para criar referência do pedido
+                $empresaFinder = new \App\Domain\Tenant\Services\EmpresaFinder();
+                $empresaData = $empresaFinder->findPrincipalByTenantId($tenant->id);
+                $nomeEmpresa = $empresaData['razao_social'] ?? $tenant->razao_social ?? 'Empresa';
+                $cnpjEmpresa = $empresaData['cnpj'] ?? $tenant->cnpj ?? '';
+                
+                // Criar referência do pedido: Nome da empresa_plano_cnpj
+                $externalReference = $nomeEmpresa . '_' . $novoPlano->nome . '_' . ($cnpjEmpresa ?: 'sem_cnpj');
+                // Limitar tamanho (Mercado Pago aceita até 256 caracteres)
+                $externalReference = substr($externalReference, 0, 256);
+                
                 $paymentRequest = \App\Domain\Payment\ValueObjects\PaymentRequest::fromArray([
                     'amount' => $valorCobrar,
                     'description' => "Troca de plano - Crédito aplicado: R$ {$credito}",
@@ -604,7 +618,7 @@ class AssinaturaController extends BaseApiController
                     'card_token' => $paymentData['card_token'],
                     'installments' => $paymentData['installments'] ?? 1,
                     'payment_method_id' => 'credit_card',
-                    'external_reference' => "plan_change_tenant_{$tenant->id}_assinatura_{$novaAssinatura->id}",
+                    'external_reference' => $externalReference,
                     'metadata' => [
                         'tenant_id' => $tenant->id,
                         'assinatura_id' => $novaAssinatura->id,
