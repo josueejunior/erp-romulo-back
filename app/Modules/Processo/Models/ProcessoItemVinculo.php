@@ -3,6 +3,9 @@
 namespace App\Modules\Processo\Models;
 
 use App\Models\BaseModel;
+use App\Modules\Contrato\Models\Contrato;
+use App\Modules\AutorizacaoFornecimento\Models\AutorizacaoFornecimento;
+use App\Modules\Empenho\Models\Empenho;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ProcessoItemVinculo extends BaseModel
