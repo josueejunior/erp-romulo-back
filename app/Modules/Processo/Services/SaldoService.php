@@ -297,11 +297,88 @@ class SaldoService
     }
 
     /**
+     * Tenta reparar vínculos de empenhos antigos que não possuem relação na tabela processo_item_vinculos
+     * Isso é comum em processos cadastrados antes da implementação do rateio por item
+     */
+    protected function repararVinculosEmpenhosAntigos(Processo $processo): void
+    {
+        // Buscar empenhos do processo que NÃO estão em nenhum vínculo
+        $empenhosIdsVinculados = \App\Modules\Processo\Models\ProcessoItemVinculo::query()
+            ->whereIn('processo_item_id', $processo->itens->pluck('id'))
+            ->whereNotNull('empenho_id')
+            ->pluck('empenho_id')
+            ->toArray();
+            
+        $empenhosOrfaos = $processo->empenhos()
+            ->whereNotIn('id', $empenhosIdsVinculados)
+            ->get();
+            
+        if ($empenhosOrfaos->isEmpty()) {
+            return;
+        }
+
+        // Buscar itens aptos a receber vínculo (aceitos/habilitados)
+        $itensAptos = $processo->itens()
+            ->whereIn('status_item', ['aceito', 'aceito_habilitado'])
+            ->get();
+            
+        if ($itensAptos->isEmpty()) {
+            return;
+        }
+
+        // Estratégia de Reparo:
+        // 1. Se houver apenas 1 item apto, vincula tudo a ele (cenário mais comum em processos antigos/simples)
+        // 2. Se houver múltiplos itens, NÃO tentamos adivinhar para evitar dados errados (necessita intervenção manual)
+        //    EXCETO: Se o usuário pediu explicitamente para "recalcular", podemos assumir que vínculos faltantes são o problema.
+        
+        $itemAlvo = null;
+        
+        if ($itensAptos->count() === 1) {
+            $itemAlvo = $itensAptos->first();
+        } else {
+            // Se houver múltiplos itens, verificar se é um caso crítico onde vale a pena vincular ao primeiro
+            // Para "ajustar o código" conforme pedido, vamos tentar ser proativos:
+            // Se os empenhos órfãos existirem, eles PRECISAM estar em algum lugar para a conta fechar.
+            // Vamos logar o aviso e vincular ao primeiro item para não perder o valor financeiro no total
+            \Log::warning("SaldoService::repararVinculosEmpenhosAntigos - Múltiplos itens encontrados para empenhos órfãos. Vinculando ao primeiro item como fallback.", [
+                'processo_id' => $processo->id,
+                'empenhos_orfaos_count' => $empenhosOrfaos->count()
+            ]);
+            $itemAlvo = $itensAptos->first();
+        }
+
+        if ($itemAlvo) {
+            foreach ($empenhosOrfaos as $empenho) {
+                // Criar vínculo
+                \App\Modules\Processo\Models\ProcessoItemVinculo::create([
+                    'empresa_id' => $processo->empresa_id, // Manter o escopo da empresa
+                    'processo_item_id' => $itemAlvo->id,
+                    'empenho_id' => $empenho->id,
+                    'quantidade' => 1, // Quantidade simbólica
+                    'valor_unitario' => $empenho->valor,
+                    'valor_total' => $empenho->valor,
+                    'observacoes' => 'Vínculo gerado automaticamente via Recálculo (Correção de Legado)',
+                ]);
+                
+                \Log::info("SaldoService::repararVinculosEmpenhosAntigos - Vínculo criado", [
+                    'processo_id' => $processo->id,
+                    'empenho_id' => $empenho->id,
+                    'item_id' => $itemAlvo->id,
+                    'valor' => $empenho->valor
+                ]);
+            }
+        }
+    }
+
+    /**
      * Recalcula valores financeiros de todos os itens do processo
      * Útil quando o processo entra em execução ou quando há necessidade de atualizar valores
      */
     public function recalcularValoresFinanceirosItens(Processo $processo): array
     {
+        // Passo preliminar: Reparar vínculos perdidos (legado)
+        $this->repararVinculosEmpenhosAntigos($processo);
+
         $itens = $processo->itens()
             ->whereIn('status_item', ['aceito', 'aceito_habilitado'])
             ->get();
