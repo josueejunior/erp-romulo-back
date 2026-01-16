@@ -16,6 +16,7 @@ use App\Modules\NotaFiscal\Controllers\NotaFiscalController as ApiNotaFiscalCont
 use App\Modules\Orgao\Controllers\OrgaoController as ApiOrgaoController;
 use App\Modules\Orgao\Controllers\SetorController as ApiSetorController;
 use App\Modules\Fornecedor\Controllers\FornecedorController as ApiFornecedorController;
+use App\Modules\Produto\Controllers\ProdutoController as ApiProdutoController;
 use App\Modules\Custo\Controllers\CustoIndiretoController as ApiCustoIndiretoController;
 use App\Modules\Documento\Controllers\DocumentoHabilitacaoController as ApiDocumentoHabilitacaoController;
 use App\Modules\Dashboard\Controllers\DashboardController as ApiDashboardController;
@@ -335,6 +336,9 @@ Route::prefix('v1')->group(function () {
             
             // Consulta de CNPJ na Receita Federal
             Route::get('/fornecedores/consultar-cnpj/{cnpj}', [ApiFornecedorController::class, 'consultarCnpj']);
+            
+            Route::module('produtos', ApiProdutoController::class, 'produto')
+                ->methods(['list' => 'index', 'get' => 'show', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
             
             Route::module('custos-indiretos', ApiCustoIndiretoController::class, 'id')
                 ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy'])
