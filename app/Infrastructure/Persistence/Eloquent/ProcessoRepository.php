@@ -189,8 +189,55 @@ class ProcessoRepository implements ProcessoRepositoryInterface
             $query->where(function($q) use ($search) {
                 $q->where('numero_modalidade', 'ilike', "%{$search}%")
                   ->orWhere('objeto_resumido', 'ilike', "%{$search}%")
-                  ->orWhere('numero_processo_administrativo', 'ilike', "%{$search}%");
+                  ->orWhere('numero_processo_administrativo', 'ilike', "%{$search}%")
+                  ->orWhereHas('orgao', function($qOrgao) use ($search) {
+                      $qOrgao->where('razao_social', 'ilike', "%{$search}%")
+                             ->orWhere('uasg', 'ilike', "%{$search}%");
+                  });
             });
+        }
+
+        if (isset($filtros['orgao_id']) && !empty($filtros['orgao_id'])) {
+            $query->where('orgao_id', $filtros['orgao_id']);
+        }
+
+        if (isset($filtros['modalidade']) && !empty($filtros['modalidade'])) {
+            $query->where('modalidade', $filtros['modalidade']);
+        }
+
+        if (isset($filtros['somente_alerta']) && $filtros['somente_alerta']) {
+            $query->where(function ($q) {
+                $hoje = \Carbon\Carbon::now();
+                
+                // 1. Sessão pública no passado ainda em participação
+                $q->where(function ($q1) use ($hoje) {
+                    $q1->where('status', 'participacao')
+                       ->whereNotNull('data_hora_sessao_publica')
+                       ->where('data_hora_sessao_publica', '<', $hoje);
+                });
+
+                // 2. Empenhos atrasados
+                $q->orWhereHas('empenhos', function ($q2) {
+                    $q2->where('situacao', 'atrasado');
+                });
+
+                // 3. Documentos vencidos
+                $q->orWhereHas('documentos', function ($q3) use ($hoje) {
+                    $q3->whereHas('documentoHabilitacao', function ($q4) use ($hoje) {
+                        $q4->whereNotNull('data_validade')
+                           ->where('data_validade', '<', $hoje->toDateString())
+                           ->where('ativo', true);
+                    });
+                });
+            });
+        }
+
+        if (isset($filtros['somente_standby']) && $filtros['somente_standby']) {
+            $query->where('status', 'execucao')
+                ->whereHas('itens', function ($q) {
+                    $q->where('situacao_final', 'vencido')
+                      ->whereRaw('quantidade > (SELECT COALESCE(SUM(v.quantidade), 0) FROM processo_item_vinculos v WHERE v.processo_item_id = processo_itens.id)');
+                });
         }
 
         $perPage = $filtros['per_page'] ?? 15;
@@ -238,6 +285,65 @@ class ProcessoRepository implements ProcessoRepositoryInterface
                 ->groupBy('status')
                 ->pluck('total', 'status')
                 ->toArray(),
+        ];
+    }
+
+    /**
+     * Obter totais financeiros (valor vencido e lucro estimado)
+     */
+    public function obterTotaisFinanceiros(array $filtros = []): array
+    {
+        // 1. Iniciar query com isolamento de empresa
+        $query = $this->aplicarFiltroEmpresa(ProcessoModel::class, $filtros);
+
+        // 2. Join com itens
+        $query->join('processo_itens', 'processos.id', '=', 'processo_itens.processo_id');
+
+        // 3. Aplicar Filtro de Status
+        if (isset($filtros['status']) && !empty($filtros['status'])) {
+            if (is_array($filtros['status'])) {
+                $query->whereIn('processos.status', $filtros['status']);
+            } else {
+                $query->where('processos.status', $filtros['status']);
+            }
+        } else {
+            // Se não especificado, focar em processos "ativos" na execução
+            $query->whereIn('processos.status', ['execucao', 'vencido', 'pagamento', 'encerramento']);
+        }
+
+        // 4. Filtro de Busca (Search)
+        if (isset($filtros['search']) && !empty($filtros['search'])) {
+            $search = $filtros['search'];
+            $query->where(function($q) use ($search) {
+                $q->where('processos.numero_modalidade', 'ilike', "%{$search}%")
+                  ->orWhere('processos.objeto_resumido', 'ilike', "%{$search}%");
+            });
+        }
+
+        // 5. Garantir que não pegamos processos excluídos
+        $query->whereNull('processos.excluido_em');
+
+        // 6. Calcular totais
+        // valor_total_vencido: Total arrematado (Potencial total)
+        // valor_total_vinculado: O que já está em Contratos/AFs/Empenhos
+        // valor_total_standby: O que ainda falta vehicular (vencido - vinculado)
+        $result = $query->selectRaw('
+            SUM(processo_itens.valor_vencido) as potencial_total,
+            SUM(processo_itens.lucro_bruto) as lucro_total_bruto,
+            SUM(COALESCE((
+                SELECT SUM(v.valor_total) 
+                FROM processo_item_vinculos v 
+                WHERE v.processo_item_id = processo_itens.id
+            ), 0)) as valor_ja_vinculado
+        ')->first();
+
+        $vinculado = (float) ($result->valor_ja_vinculado ?? 0);
+        $potencial = (float) ($result->potencial_total ?? 0);
+
+        return [
+            'valor_total_execucao' => $vinculado, // O que está em execução real (Contratos/AFs)
+            'valor_total_standby' => $potencial - $vinculado, // O que resta para o futuro
+            'lucro_estimado' => (float) ($result->lucro_total_bruto ?? 0),
         ];
     }
 

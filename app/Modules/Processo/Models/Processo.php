@@ -206,12 +206,21 @@ class Processo extends BaseModel
         $itensCompletos = $itensVencidos->filter(fn($i) => $i->quantidade_disponivel <= 0)->count();
         $itensPendentes = $totalItens - $itensCompletos;
         
+        // Totais financeiros (Baseados em valor_vencido de cada item)
+        $valorTotal = $itensVencidos->sum('valor_vencido');
+        $valorVinculado = $itensVencidos->sum('valor_vinculado'); // Já existe accessor no Item
+        $valorPendente = max(0, $valorTotal - $valorVinculado);
+        
         return [
             'total_itens' => $totalItens,
             'itens_completos' => $itensCompletos,
             'itens_pendentes' => $itensPendentes,
+            'total_valor' => (float) $valorTotal,
+            'valor_vinculado' => (float) $valorVinculado,
+            'valor_pendente' => (float) $valorPendente,
             'pode_finalizar' => $itensPendentes === 0,
             'percentual_completo' => $totalItens > 0 ? round(($itensCompletos / $totalItens) * 100, 1) : 0,
+            'percentual_valor' => $valorTotal > 0 ? round(($valorVinculado / $valorTotal) * 100, 1) : 0,
         ];
     }
 

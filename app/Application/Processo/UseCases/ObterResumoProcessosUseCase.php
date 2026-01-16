@@ -68,6 +68,24 @@ class ObterResumoProcessosUseCase
         // Adicionar alias 'julgamento' para compatibilidade
         $resumo['julgamento'] = $resumo['julgamento_habilitacao'] ?? 0;
 
+        // Contagem especial: Standby
+        $resumo['em_standby'] = $this->processoRepository->buscarComFiltros(array_merge($filtrosMapeados, [
+            'somente_standby' => true,
+            'per_page' => 1
+        ]))->total();
+
+        // Contagem especial: Alertas
+        $resumo['com_alerta'] = $this->processoRepository->buscarComFiltros(array_merge($filtrosMapeados, [
+            'somente_alerta' => true,
+            'per_page' => 1
+        ]))->total();
+
+        // Valores financeiros reais
+        $financeiro = $this->processoRepository->obterTotaisFinanceiros($filtrosMapeados);
+        $resumo['valor_total_execucao'] = $financeiro['valor_total_execucao'];
+        $resumo['valor_total_standby'] = $financeiro['valor_total_standby'];
+        $resumo['lucro_estimado'] = $financeiro['lucro_estimado'];
+
         return $resumo;
     }
 

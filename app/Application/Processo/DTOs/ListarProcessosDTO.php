@@ -14,6 +14,8 @@ class ListarProcessosDTO
         public readonly ?int $orgaoId = null,
         public readonly ?string $search = null,
         public readonly ?bool $somenteComOrcamento = null,
+        public readonly ?bool $somenteAlerta = null,
+        public readonly ?bool $somenteStandby = null,
         public readonly int $perPage = 15,
         public readonly int $page = 1,
     ) {
@@ -35,6 +37,12 @@ class ListarProcessosDTO
             search: $requestData['search'] ?? null,
             somenteComOrcamento: isset($requestData['somente_com_orcamento']) 
                 ? ($requestData['somente_com_orcamento'] === 'true' || $requestData['somente_com_orcamento'] === '1' || $requestData['somente_com_orcamento'] === true)
+                : null,
+            somenteAlerta: isset($requestData['somente_alerta']) 
+                ? ($requestData['somente_alerta'] === 'true' || $requestData['somente_alerta'] === '1' || $requestData['somente_alerta'] === true)
+                : null,
+            somenteStandby: isset($requestData['somente_standby']) 
+                ? ($requestData['somente_standby'] === 'true' || $requestData['somente_standby'] === '1' || $requestData['somente_standby'] === true)
                 : null,
             perPage: isset($requestData['per_page']) ? (int) $requestData['per_page'] : 15,
             page: isset($requestData['page']) ? (int) $requestData['page'] : 1,
@@ -70,6 +78,14 @@ class ListarProcessosDTO
 
         if ($this->somenteComOrcamento !== null) {
             $filtros['somente_com_orcamento'] = $this->somenteComOrcamento;
+        }
+
+        if ($this->somenteAlerta !== null) {
+            $filtros['somente_alerta'] = $this->somenteAlerta;
+        }
+
+        if ($this->somenteStandby !== null) {
+            $filtros['somente_standby'] = $this->somenteStandby;
         }
 
         return $filtros;

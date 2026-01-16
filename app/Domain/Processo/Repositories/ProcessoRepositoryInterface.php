@@ -42,6 +42,11 @@ interface ProcessoRepositoryInterface
     public function obterResumo(array $filtros = []): array;
 
     /**
+     * Obter totais financeiros (valor vencido e lucro estimado)
+     */
+    public function obterTotaisFinanceiros(array $filtros = []): array;
+
+    /**
      * Buscar modelo Eloquent por ID (compatibilidade)
      * @param int $id
      * @param array $with Relacionamentos para eager loading

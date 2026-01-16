@@ -66,6 +66,7 @@ class ProcessoListResource extends JsonResource
             'alertas' => $alertas,
             'tem_alerta' => !empty($alertas),
             'valores' => $valores,
+            'resumo_entregas' => $this->resumo_entregas,
             'resultado' => $resultado,
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at?->format('Y-m-d H:i:s'),
@@ -380,18 +381,10 @@ class ProcessoListResource extends JsonResource
                 $valorMinimo = $precosMinimos->min();
             }
             
-            // 🔥 CORREÇÃO: Valor vencido (se já venceu) - multiplicar por quantidade
-            // O valor_negociado, valor_final_sessao e valor_estimado são valores POR UNIDADE
-            // Precisamos multiplicar pela quantidade para obter o valor TOTAL do item
+            // Valor vencido (soma do valor_vencido calculado nos itens)
             $valorVencido = null;
-            if (in_array($this->status, ['execucao', 'vencido'])) {
-                $itensVencidos = $itens->whereIn('status_item', ['aceito', 'aceito_habilitado']);
-                
-                $valorVencido = $itensVencidos->sum(function ($item) {
-                    $valorUnitario = $item->valor_arrematado ?? $item->valor_negociado ?? $item->valor_final_sessao ?? $item->valor_estimado ?? 0;
-                    $quantidade = $item->quantidade ?? 1;
-                    return $valorUnitario * $quantidade;
-                });
+            if (in_array($this->status, ['execucao', 'vencido', 'pagamento', 'encerramento'])) {
+                $valorVencido = $itens->whereIn('status_item', ['aceito', 'aceito_habilitado'])->sum('valor_vencido');
             }
             
             return [
