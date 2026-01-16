@@ -67,15 +67,18 @@ class ProcessoObserver
                     'motivo' => 'Data da sessão pública já passou',
                 ]);
             }
-            // Se a sessão é no futuro e o processo está em julgamento_habilitacao (mas foi alterado manualmente),
-            // voltar para participacao (opcional - pode ser removido se não fizer sentido)
+            // 🔥 CORREÇÃO: Se a sessão é no futuro e o processo está em julgamento_habilitacao,
+            // voltar para participacao para permitir criar orçamento/disputa
             elseif ($processo->status === 'julgamento_habilitacao' && $agora->isBefore($dataHoraSessao)) {
-                // Não voltar automaticamente - deixar o usuário decidir
-                // Mas logar para debug
-                \Log::debug('ProcessoObserver - Processo em julgamento mas sessão é no futuro', [
+                $processo->status = 'participacao';
+                $processo->saveQuietly(); // Usar saveQuietly para evitar loop infinito
+                
+                \Log::info('ProcessoObserver - Status revertido para participação (data alterada para o futuro)', [
                     'processo_id' => $processo->id,
-                    'status_atual' => $processo->status,
+                    'status_anterior' => 'julgamento_habilitacao',
+                    'status_novo' => 'participacao',
                     'data_sessao' => $processo->data_hora_sessao_publica,
+                    'motivo' => 'Data da sessão pública foi alterada para o futuro - permitindo criar orçamento/disputa',
                 ]);
             }
         } catch (\Exception $e) {
