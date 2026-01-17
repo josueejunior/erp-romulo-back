@@ -39,12 +39,20 @@ class TrocarPlanoAssinaturaUseCase
     public function simular(int $tenantId, int $novoPlanoId, string $periodo = 'mensal'): array
     {
         // Buscar assinatura atual
-        // 🔥 DDD/LEGADO: Usamos withoutGlobalScope para encontrar assinaturas que podem estar sem empresa_id
-        // e permitimos status 'trial' também, conforme regras de negócio
-        $assinaturaAtual = Assinatura::withoutGlobalScope('empresa')
+        // 🔥 DDD/LEGADO: Usamos withoutGlobalScopes() para garantir que encontramos a assinatura mesmo se houver filtros de empresa ou tenancy
+        // e permitimos qualquer status que não esteja encerrado (cancelado/expirado)
+        $assinaturaAtual = Assinatura::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
-            ->whereIn('status', ['ativa', 'trial'])
+            ->whereNotIn('status', ['cancelada', 'expirada'])
+            ->orderByDesc('id') // Pegar a mais recente se houver mais de uma
             ->first();
+
+        Log::debug('TrocarPlanoAssinaturaUseCase::simular - Buscando assinatura', [
+            'tenant_id' => $tenantId,
+            'encontrada' => $assinaturaAtual ? $assinaturaAtual->id : 'não',
+            'status' => $assinaturaAtual ? $assinaturaAtual->status : null,
+            'empresa_id' => $assinaturaAtual ? $assinaturaAtual->empresa_id : null,
+        ]);
 
         if (!$assinaturaAtual) {
             throw new DomainException('Nenhuma assinatura ativa encontrada para simular troca de plano');
@@ -71,12 +79,18 @@ class TrocarPlanoAssinaturaUseCase
     {
         return DB::transaction(function () use ($tenantId, $novoPlanoId, $periodo) {
             // Buscar assinatura atual
-            // 🔥 DDD/LEGADO: Usamos withoutGlobalScope para encontrar assinaturas que podem estar sem empresa_id
-            // e permitimos status 'trial' também
-            $assinaturaAtual = Assinatura::withoutGlobalScope('empresa')
+            // 🔥 DDD/LEGADO: Usamos withoutGlobalScopes() para garantir que encontramos a assinatura
+            $assinaturaAtual = Assinatura::withoutGlobalScopes()
                 ->where('tenant_id', $tenantId)
-                ->whereIn('status', ['ativa', 'trial'])
+                ->whereNotIn('status', ['cancelada', 'expirada'])
+                ->orderByDesc('id')
                 ->first();
+
+            Log::info('TrocarPlanoAssinaturaUseCase::executar - Iniciando troca', [
+                'tenant_id' => $tenantId,
+                'assinatura_atual_id' => $assinaturaAtual ? $assinaturaAtual->id : null,
+                'novo_plano_id' => $novoPlanoId,
+            ]);
 
             if (!$assinaturaAtual) {
                 throw new DomainException('Nenhuma assinatura ativa encontrada para trocar de plano');
