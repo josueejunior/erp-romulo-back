@@ -39,8 +39,11 @@ class TrocarPlanoAssinaturaUseCase
     public function simular(int $tenantId, int $novoPlanoId, string $periodo = 'mensal'): array
     {
         // Buscar assinatura atual
-        $assinaturaAtual = Assinatura::where('tenant_id', $tenantId)
-            ->where('status', 'ativa')
+        // 🔥 DDD/LEGADO: Usamos withoutGlobalScope para encontrar assinaturas que podem estar sem empresa_id
+        // e permitimos status 'trial' também, conforme regras de negócio
+        $assinaturaAtual = Assinatura::withoutGlobalScope('empresa')
+            ->where('tenant_id', $tenantId)
+            ->whereIn('status', ['ativa', 'trial'])
             ->first();
 
         if (!$assinaturaAtual) {
@@ -68,8 +71,11 @@ class TrocarPlanoAssinaturaUseCase
     {
         return DB::transaction(function () use ($tenantId, $novoPlanoId, $periodo) {
             // Buscar assinatura atual
-            $assinaturaAtual = Assinatura::where('tenant_id', $tenantId)
-                ->where('status', 'ativa')
+            // 🔥 DDD/LEGADO: Usamos withoutGlobalScope para encontrar assinaturas que podem estar sem empresa_id
+            // e permitimos status 'trial' também
+            $assinaturaAtual = Assinatura::withoutGlobalScope('empresa')
+                ->where('tenant_id', $tenantId)
+                ->whereIn('status', ['ativa', 'trial'])
                 ->first();
 
             if (!$assinaturaAtual) {
@@ -105,8 +111,15 @@ class TrocarPlanoAssinaturaUseCase
                 ? $dataInicio->copy()->addYear()
                 : $dataInicio->copy()->addMonth();
 
+            // 🔥 NOVO: Tentar obter empresa_id do contexto ou da assinatura anterior
+            $empresaId = $assinaturaAtual->empresa_id;
+            if (!$empresaId) {
+                $empresaId = request()->attributes->get('empresa_id') ?? app('current_empresa_id') ?? null;
+            }
+
             $novaAssinatura = Assinatura::create([
                 'tenant_id' => $tenantId,
+                'empresa_id' => $empresaId, // 🔥 GARANTIA: Novo registro terá empresa_id
                 'plano_id' => $novoPlanoId,
                 'status' => $valorCobrar > 0 ? 'suspensa' : 'ativa',
                 'data_inicio' => $dataInicio,
