@@ -135,6 +135,7 @@ Route::prefix('v1')->group(function () {
 
         Route::prefix('payments')->group(function () {
             Route::post('/processar-assinatura', [ApiPaymentController::class, 'processarAssinatura']);
+            Route::get('/{externalId}/status', [ApiPaymentController::class, 'checkStatus']);
         });
         
         // Notificações (não precisa de assinatura ativa)

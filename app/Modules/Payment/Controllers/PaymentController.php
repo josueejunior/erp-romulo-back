@@ -4,6 +4,7 @@ namespace App\Modules\Payment\Controllers;
 
 use App\Http\Controllers\Api\BaseApiController;
 use App\Application\Payment\UseCases\ProcessarAssinaturaPlanoUseCase;
+use App\Application\Payment\UseCases\CheckPaymentStatusUseCase;
 use App\Application\Assinatura\UseCases\CriarAssinaturaUseCase;
 use App\Application\Assinatura\DTOs\CriarAssinaturaDTO;
 use App\Domain\Payment\ValueObjects\PaymentRequest;
@@ -27,6 +28,7 @@ class PaymentController extends BaseApiController
 {
     public function __construct(
         private ProcessarAssinaturaPlanoUseCase $processarAssinaturaUseCase,
+        private CheckPaymentStatusUseCase $checkPaymentStatusUseCase,
         private PlanoRepositoryInterface $planoRepository,
         private CriarAssinaturaUseCase $criarAssinaturaUseCase,
         private ValidarCupomAfiliadoUseCase $validarCupomAfiliadoUseCase,
@@ -448,6 +450,35 @@ class PaymentController extends BaseApiController
             return response()->json([
                 'message' => 'Erro ao processar assinatura: ' . $e->getMessage(),
             ], 500);
+        }
+    }
+
+    /**
+     * Consulta o status de um pagamento
+     * 
+     * GET /api/payments/{externalId}/status
+     */
+    public function checkStatus(string $externalId)
+    {
+        try {
+            $result = $this->checkPaymentStatusUseCase->executar($externalId);
+
+            return response()->json([
+                'status' => $result->status,
+                'external_id' => $result->externalId,
+                'amount' => $result->amount->toReais(),
+                'approved' => $result->isApproved(),
+                'message' => $result->errorMessage,
+            ]);
+        } catch (\App\Domain\Exceptions\NotFoundException $e) {
+            return response()->json(['message' => 'Pagamento não encontrado'], 404);
+        } catch (\Exception $e) {
+            Log::error('Erro ao consultar status do pagamento', [
+                'external_id' => $externalId,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json(['message' => 'Erro ao consultar status'], 500);
         }
     }
 }
