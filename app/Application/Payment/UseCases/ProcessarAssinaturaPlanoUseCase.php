@@ -392,7 +392,7 @@ class ProcessarAssinaturaPlanoUseCase
                 'tenant_id' => $tenant->id,
                 'empresa_id' => $empresa?->id, // 🔥 NOVO: Assinatura pertence à empresa
                 'plano_id' => $plano->id,
-                'status' => 'pendente', // Mudado de 'suspensa' para 'pendente' - mais claro que está aguardando pagamento
+                'status' => 'suspensa', // Alterado de 'pendente' para 'suspensa' para evitar violação de constraint no DB
                 'data_inicio' => $dataInicio,
                 'data_fim' => $dataFim,
                 'valor_pago' => $paymentResult->amount->toReais(),
