@@ -411,12 +411,31 @@ class AssinaturaController extends BaseApiController
             // Request já está validado via Form Request
             $validated = $request->validated();
 
-            // Calcular valor
+            // Dados base
             $meses = $validated['meses'];
             $plano = $assinaturaModel->plano;
-            $valor = $meses === 12 && $plano->preco_anual 
-                ? $plano->preco_anual 
-                : $plano->preco_mensal * $meses;
+
+            // Calcular valor base (com desconto promocional de 50% sincronizado com o frontend)
+            $descontoPromocional = 0.5; // 50% OFF
+            
+            // Mapeamento de preços promocionais fixos (conforme definido no frontend em Planos.jsx)
+            $precosMensaisPromocionais = [
+                'Essencial' => 138.57,
+                'Profissional' => 171.43,
+                'Master' => 228.57,
+                'Ilimitado' => 427.14,
+            ];
+
+            if ($meses === 12) {
+                // Se for 12 meses (anual), usa preco_anual do DB ou mensal * 10
+                $precoBaseAnual = $plano->preco_anual ?: ($plano->preco_mensal * 10);
+                $valor = $precoBaseAnual * $descontoPromocional;
+            } else {
+                // Se estiver no mapeamento fixo, usa o valor fixo * meses. 
+                // Senão aplica 50% no valor mensal do banco * meses.
+                $precoBaseMensal = $precosMensaisPromocionais[$plano->nome] ?? ($plano->preco_mensal * $descontoPromocional);
+                $valor = $precoBaseMensal * $meses;
+            }
 
             // Buscar dados da empresa para criar referência do pedido
             $empresaFinder = new \App\Domain\Tenant\Services\EmpresaFinder();

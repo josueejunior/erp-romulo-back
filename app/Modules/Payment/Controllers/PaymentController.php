@@ -64,10 +64,27 @@ class PaymentController extends BaseApiController
                 return response()->json(['message' => 'Plano não está ativo'], 400);
             }
 
-            // Calcular valor
-            $valor = $validated['periodo'] === 'anual' 
-                ? $plano->preco_anual 
-                : $plano->preco_mensal;
+            // Calcular valor base (com desconto promocional de 50% sincronizado com o frontend)
+            $descontoPromocional = 0.5; // 50% OFF
+            
+            // Mapeamento de preços promocionais fixos (conforme definido no frontend em Planos.jsx)
+            $precosMensaisPromocionais = [
+                'Essencial' => 138.57,
+                'Profissional' => 171.43,
+                'Master' => 228.57,
+                'Ilimitado' => 427.14,
+            ];
+
+            if ($validated['periodo'] === 'anual') {
+                // Se o plano tiver preco_anual no DB, usa ele como base. 
+                // Senão usa mensal * 10 (regra de 2 meses grátis no anual)
+                $precoBaseAnual = $plano->preco_anual ?: ($plano->preco_mensal * 10);
+                $valor = $precoBaseAnual * $descontoPromocional;
+            } else {
+                // Se estiver no mapeamento fixo, usa o valor fixo. 
+                // Senão aplica 50% no valor mensal do banco.
+                $valor = $precosMensaisPromocionais[$plano->nome] ?? ($plano->preco_mensal * $descontoPromocional);
+            }
 
             // Aplicar cupom se fornecido
             $cupomAplicado = null;

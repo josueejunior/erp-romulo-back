@@ -169,7 +169,21 @@ class TrocarPlanoAssinaturaUseCase
     private function calcularValores(Assinatura $assinaturaAtual, $novoPlano, string $periodo): array
     {
         $planoAtual = $assinaturaAtual->plano;
-        $valorNovoPlano = $periodo === 'anual' ? $novoPlano->preco_anual : $novoPlano->preco_mensal;
+        // Calcular valor do novo plano com desconto promocional de 50% (sincronizado com frontend)
+        $descontoPromocional = 0.5;
+        $precosMensaisPromocionais = [
+            'Essencial' => 138.57,
+            'Profissional' => 171.43,
+            'Master' => 228.57,
+            'Ilimitado' => 427.14,
+        ];
+
+        if ($periodo === 'anual') {
+            $precoBaseAnual = $novoPlano->preco_anual ?: ($novoPlano->preco_mensal * 10);
+            $valorNovoPlano = $precoBaseAnual * $descontoPromocional;
+        } else {
+            $valorNovoPlano = $precosMensaisPromocionais[$novoPlano->nome] ?? ($novoPlano->preco_mensal * $descontoPromocional);
+        }
         
         // 🔥 CRÍTICO: Se valor_pago não existe ou é 0, usar valor do plano atual
         $valorPlanoAtual = $assinaturaAtual->valor_pago;
