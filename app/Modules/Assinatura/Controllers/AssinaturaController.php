@@ -490,6 +490,7 @@ class AssinaturaController extends BaseApiController
                     $responseData['pix_qr_code'] = $dadosResposta['pix_qr_code'] ?? null;
                     $responseData['pix_ticket_url'] = $dadosResposta['pix_ticket_url'] ?? null;
                     $responseData['payment_id'] = $paymentLog->external_id ?? null;
+                    $responseData['amount'] = (float) $paymentLog->valor;
                 }
             }
 
@@ -729,6 +730,7 @@ class AssinaturaController extends BaseApiController
                     $responseData['pix_qr_code'] = $dadosResposta['pix_qr_code'] ?? null;
                     $responseData['pix_ticket_url'] = $dadosResposta['pix_ticket_url'] ?? null;
                     $responseData['payment_id'] = $paymentLog->external_id ?? null;
+                    $responseData['amount'] = (float) $paymentLog->valor;
                 }
             }
 
