@@ -123,6 +123,7 @@ Route::prefix('v1')->group(function () {
         Route::prefix('assinaturas')->group(function () {
             Route::get('/atual', [ApiAssinaturaController::class, 'atual']);
             Route::get('/status', [ApiAssinaturaController::class, 'status']);
+            Route::get('/historico-pagamentos', [ApiAssinaturaController::class, 'historicoPagamentos']);
             Route::get('/', [ApiAssinaturaController::class, 'index']);
             Route::post('/', [ApiAssinaturaController::class, 'store']);
             Route::post('/trocar-plano', [ApiAssinaturaController::class, 'trocarPlano']);

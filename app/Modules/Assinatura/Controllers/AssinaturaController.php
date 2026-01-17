@@ -797,5 +797,81 @@ class AssinaturaController extends BaseApiController
             return $this->handleException($e, 'Erro ao simular troca de plano');
         }
     }
+
+    /**
+     * Histórico de pagamentos da assinatura
+     * Retorna todas as transações de pagamento do usuário/empresa
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function historicoPagamentos(Request $request): JsonResponse
+    {
+        try {
+            $user = $request->user();
+            
+            if (!$user) {
+                return response()->json([
+                    'message' => 'Usuário não autenticado',
+                ], 401);
+            }
+
+            // Buscar empresa ativa do usuário
+            $empresaId = $user->empresa_ativa_id ?? $request->header('X-Empresa-ID');
+            
+            if (!$empresaId) {
+                return response()->json([
+                    'message' => 'Empresa não identificada',
+                    'data' => []
+                ]);
+            }
+
+            // Buscar tenant da empresa
+            $empresa = \App\Models\Empresa::find($empresaId);
+            
+            if (!$empresa) {
+                return response()->json([
+                    'message' => 'Empresa não encontrada',
+                    'data' => []
+                ]);
+            }
+
+            $tenantId = $empresa->tenant_id;
+
+            // Buscar todas as assinaturas (histórico de pagamentos) do tenant
+            $assinaturas = $this->assinaturaRepository->listarPorTenant($tenantId);
+
+            // Transformar em formato de histórico de pagamentos
+            $historico = collect($assinaturas)->map(function ($assinatura) {
+                return [
+                    'id' => $assinatura->id,
+                    'data' => $assinatura->data_inicio,
+                    'data_fim' => $assinatura->data_fim,
+                    'valor' => (float) $assinatura->valor_pago,
+                    'metodo' => $assinatura->metodo_pagamento,
+                    'status' => $assinatura->status,
+                    'transacao_id' => $assinatura->transacao_id,
+                    'descricao' => $assinatura->plano 
+                        ? "Plano {$assinatura->plano->nome}" 
+                        : "Assinatura #{$assinatura->id}",
+                    'plano' => $assinatura->plano ? [
+                        'id' => $assinatura->plano->id,
+                        'nome' => $assinatura->plano->nome,
+                    ] : null,
+                ];
+            })->sortByDesc('data')->values()->toArray();
+
+            return response()->json([
+                'success' => true,
+                'data' => $historico,
+                'meta' => [
+                    'total' => count($historico),
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao buscar histórico de pagamentos');
+        }
+    }
 }
 
