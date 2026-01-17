@@ -34,6 +34,29 @@ class TrocarPlanoAssinaturaUseCase
     ) {}
 
     /**
+     * Calcular valores da troca de plano sem executar
+     */
+    public function simular(int $tenantId, int $novoPlanoId, string $periodo = 'mensal'): array
+    {
+        // Buscar assinatura atual
+        $assinaturaAtual = Assinatura::where('tenant_id', $tenantId)
+            ->where('status', 'ativa')
+            ->first();
+
+        if (!$assinaturaAtual) {
+            throw new DomainException('Nenhuma assinatura ativa encontrada para simular troca de plano');
+        }
+
+        // Buscar novo plano
+        $novoPlano = $this->planoRepository->buscarModeloPorId($novoPlanoId);
+        if (!$novoPlano || !$novoPlano->isAtivo()) {
+            throw new DomainException('Plano não encontrado ou inativo');
+        }
+
+        return $this->calcularValores($assinaturaAtual, $novoPlano, $periodo);
+    }
+
+    /**
      * Executar troca de plano
      * 
      * @param int $tenantId
@@ -64,50 +87,10 @@ class TrocarPlanoAssinaturaUseCase
                 throw new DomainException('Você já está neste plano');
             }
 
-            $planoAtual = $assinaturaAtual->plano;
-            $valorNovoPlano = $periodo === 'anual' ? $novoPlano->preco_anual : $novoPlano->preco_mensal;
-            
-            // 🔥 CRÍTICO: Se valor_pago não existe ou é 0, usar valor do plano atual
-            $valorPlanoAtual = $assinaturaAtual->valor_pago;
-            if (!$valorPlanoAtual || $valorPlanoAtual == 0) {
-                $valorPlanoAtual = $planoAtual->preco_mensal ?? 0;
-                Log::info('TrocarPlanoAssinaturaUseCase - Usando valor do plano atual (valor_pago estava vazio)', [
-                    'plano_atual_id' => $planoAtual->id,
-                    'valor_plano_atual' => $valorPlanoAtual,
-                ]);
-            }
-
-            // Calcular dias restantes da assinatura atual
-            $diasRestantes = now()->diffInDays($assinaturaAtual->data_fim, false);
-            if ($diasRestantes <= 0) {
-                $diasRestantes = 0;
-            }
-
-            // Calcular total de dias do período atual
-            $diasTotais = $assinaturaAtual->data_inicio->diffInDays($assinaturaAtual->data_fim);
-            if ($diasTotais <= 0) {
-                $diasTotais = 30; // fallback
-            }
-
-            // Calcular crédito proporcional (pro-rata)
-            $creditoProporcional = ($valorPlanoAtual / $diasTotais) * $diasRestantes;
-            $creditoProporcional = round($creditoProporcional, 2);
-
-            // Calcular valor a cobrar
-            $valorCobrar = max(0, $valorNovoPlano - $creditoProporcional);
-            $valorCobrar = round($valorCobrar, 2);
-
-            Log::info('Calculando troca de plano', [
-                'tenant_id' => $tenantId,
-                'plano_atual' => $planoAtual->nome,
-                'novo_plano' => $novoPlano->nome,
-                'dias_restantes' => $diasRestantes,
-                'dias_totais' => $diasTotais,
-                'valor_plano_atual' => $valorPlanoAtual,
-                'valor_novo_plano' => $valorNovoPlano,
-                'credito_proporcional' => $creditoProporcional,
-                'valor_cobrar' => $valorCobrar,
-            ]);
+            $valores = $this->calcularValores($assinaturaAtual, $novoPlano, $periodo);
+            $creditoProporcional = $valores['credito'];
+            $valorCobrar = $valores['valor_cobrar'];
+            $valorNovoPlano = $valores['novo_valor'];
 
             // Cancelar assinatura atual
             $assinaturaAtual->update([
@@ -151,5 +134,61 @@ class TrocarPlanoAssinaturaUseCase
                 'status' => $valorCobrar > 0 ? 'aguardando_pagamento' : 'ativado',
             ];
         });
+    }
+
+    /**
+     * Calcula os valores de crédito e cobrança
+     */
+    private function calcularValores(Assinatura $assinaturaAtual, $novoPlano, string $periodo): array
+    {
+        $planoAtual = $assinaturaAtual->plano;
+        $valorNovoPlano = $periodo === 'anual' ? $novoPlano->preco_anual : $novoPlano->preco_mensal;
+        
+        // 🔥 CRÍTICO: Se valor_pago não existe ou é 0, usar valor do plano atual
+        $valorPlanoAtual = $assinaturaAtual->valor_pago;
+        if (!$valorPlanoAtual || $valorPlanoAtual == 0) {
+            $valorPlanoAtual = $planoAtual->preco_mensal ?? 0;
+            Log::info('TrocarPlanoAssinaturaUseCase - Usando valor do plano atual (valor_pago estava vazio)', [
+                'plano_atual_id' => $planoAtual->id,
+                'valor_plano_atual' => $valorPlanoAtual,
+            ]);
+        }
+
+        // Calcular dias restantes da assinatura atual
+        $diasRestantes = now()->diffInDays($assinaturaAtual->data_fim, false);
+        if ($diasRestantes <= 0) {
+            $diasRestantes = 0;
+        }
+
+        // Calcular total de dias do período atual
+        $diasTotais = $assinaturaAtual->data_inicio->diffInDays($assinaturaAtual->data_fim);
+        if ($diasTotais <= 0) {
+            $diasTotais = 30; // fallback
+        }
+
+        // Calcular crédito proporcional (pro-rata)
+        $creditoProporcional = ($valorPlanoAtual / $diasTotais) * $diasRestantes;
+        $creditoProporcional = round($creditoProporcional, 2);
+
+        // Calcular valor a cobrar
+        $valorCobrar = max(0, $valorNovoPlano - $creditoProporcional);
+        $valorCobrar = round($valorCobrar, 2);
+
+        Log::info('Calculando troca de plano', [
+            'plano_atual' => $planoAtual->nome,
+            'novo_plano' => $novoPlano->nome,
+            'dias_restantes' => $diasRestantes,
+            'dias_totais' => $diasTotais,
+            'valor_plano_atual' => $valorPlanoAtual,
+            'valor_novo_plano' => $valorNovoPlano,
+            'credito_proporcional' => $creditoProporcional,
+            'valor_cobrar' => $valorCobrar,
+        ]);
+
+        return [
+            'credito' => $creditoProporcional,
+            'valor_cobrar' => $valorCobrar,
+            'novo_valor' => $valorNovoPlano,
+        ];
     }
 }

@@ -126,6 +126,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/', [ApiAssinaturaController::class, 'index']);
             Route::post('/', [ApiAssinaturaController::class, 'store']);
             Route::post('/trocar-plano', [ApiAssinaturaController::class, 'trocarPlano']);
+            Route::post('/simular-troca-plano', [ApiAssinaturaController::class, 'simularTrocaPlano']);
             Route::post('/{assinatura}/renovar', [ApiAssinaturaController::class, 'renovar']);
             Route::post('/{assinatura}/cancelar', [ApiAssinaturaController::class, 'cancelar']);
         });

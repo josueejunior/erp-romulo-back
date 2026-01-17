@@ -692,5 +692,28 @@ class AssinaturaController extends BaseApiController
             return $this->handleException($e, 'Erro ao trocar plano');
         }
     }
+    /**
+     * Simula troca de plano para mostrar valores de pro-rata ao usuário
+     */
+    public function simularTrocaPlano(Request $request): JsonResponse
+    {
+        try {
+            $tenant = $this->getTenantOrFail();
+            $planoId = $request->input('plano_id');
+            $periodo = $request->input('periodo', 'mensal');
+
+            if (!$planoId) {
+                return response()->json(['message' => 'Plano não informado'], 400);
+            }
+
+            $resultado = $this->trocarPlanoAssinaturaUseCase->simular($tenant->id, (int)$planoId, $periodo);
+
+            return response()->json([
+                'data' => $resultado
+            ]);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao simular troca de plano');
+        }
+    }
 }
 
