@@ -115,12 +115,12 @@ class BuscarAssinaturaAdminUseCase
                 'preco_anual' => $planoModel->preco_anual,
                 'ativo' => $planoModel->ativo,
             ] : null,
-            'plano_nome' => $planoDomain?->nome ?? 'N/A', // Mantido para compatibilidade
+            'plano_nome' => $planoDomain?->nome ?? null, // Mantido para compatibilidade
             'status' => $assinaturaDomain->status,
             'valor_pago' => $assinaturaDomain->valorPago ?? 0,
             'data_inicio' => $assinaturaDomain->dataInicio?->format('Y-m-d'),
             'data_fim' => $assinaturaDomain->dataFim?->format('Y-m-d'),
-            'metodo_pagamento' => $assinaturaDomain->metodoPagamento ?? 'N/A',
+            'metodo_pagamento' => $assinaturaDomain->metodoPagamento ?? null,
             'transacao_id' => $assinaturaDomain->transacaoId,
             'dias_restantes' => $diasRestantes,
             'dias_grace_period' => $assinaturaDomain->diasGracePeriod ?? 7,
