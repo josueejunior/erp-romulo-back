@@ -16,6 +16,7 @@ use App\Modules\Assinatura\Models\Assinatura;
 use App\Modules\Afiliado\Models\Afiliado;
 use App\Application\Afiliado\UseCases\ValidarCupomAfiliadoUseCase;
 use App\Application\Afiliado\UseCases\RastrearReferenciaAfiliadoUseCase;
+use App\Application\Assinatura\UseCases\AtualizarAssinaturaViaWebhookUseCase;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -33,6 +34,7 @@ class PaymentController extends BaseApiController
         private CriarAssinaturaUseCase $criarAssinaturaUseCase,
         private ValidarCupomAfiliadoUseCase $validarCupomAfiliadoUseCase,
         private RastrearReferenciaAfiliadoUseCase $rastrearReferenciaAfiliadoUseCase,
+        private AtualizarAssinaturaViaWebhookUseCase $atualizarAssinaturaUseCase,
     ) {}
 
     /**
@@ -463,6 +465,20 @@ class PaymentController extends BaseApiController
         try {
             $result = $this->checkPaymentStatusUseCase->executar($externalId);
 
+            // Se aprovado, aproveitar para atualizar a assinatura imediatamente
+            // Isso evita depender apenas do webhook se o usuário estiver aguardando na tela
+            if ($result->isApproved()) {
+                try {
+                    $this->atualizarAssinaturaUseCase->executar($externalId, $result);
+                } catch (\Exception $e) {
+                    Log::warning('Erro ao atualizar assinatura após consulta de status aprovada', [
+                        'external_id' => $externalId,
+                        'error' => $e->getMessage()
+                    ]);
+                    // Não falhar a requisição de status por causa disso
+                }
+            }
+
             return response()->json([
                 'status' => $result->status,
                 'external_id' => $result->externalId,
@@ -482,5 +498,3 @@ class PaymentController extends BaseApiController
         }
     }
 }
-
-

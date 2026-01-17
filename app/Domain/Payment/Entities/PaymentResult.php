@@ -81,6 +81,9 @@ readonly class PaymentResult
             metadata: $data['metadata'] ?? null,
             createdAt: isset($data['date_created']) ? new \DateTime($data['date_created']) : null,
             approvedAt: isset($data['date_approved']) ? new \DateTime($data['date_approved']) : null,
+            pixQrCode: $data['pix_qr_code'] ?? null,
+            pixQrCodeBase64: $data['pix_qr_code_base64'] ?? null,
+            pixTicketUrl: $data['pix_ticket_url'] ?? null,
         );
     }
 }
