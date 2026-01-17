@@ -19,7 +19,7 @@ class AtualizarAssinaturaAdminRequest extends FormRequest
             'data_inicio' => 'sometimes|date',
             'data_fim' => 'sometimes|date|after_or_equal:data_inicio',
             'valor_pago' => 'sometimes|numeric|min:0',
-            'metodo_pagamento' => 'sometimes|string|in:gratuito,credit_card,pix',
+            'metodo_pagamento' => 'sometimes|nullable|string|in:gratuito,credit_card,pix,boleto',
             'dias_grace_period' => 'sometimes|integer|min:0',
         ];
     }
@@ -32,7 +32,7 @@ class AtualizarAssinaturaAdminRequest extends FormRequest
             'data_fim.after_or_equal' => 'A data de término deve ser posterior ou igual à data de início.',
             'valor_pago.numeric' => 'O valor pago deve ser um número.',
             'valor_pago.min' => 'O valor pago não pode ser negativo.',
-            'metodo_pagamento.in' => 'O método de pagamento deve ser: gratuito, credit_card ou pix.',
+            'metodo_pagamento.in' => 'O método de pagamento deve ser: gratuito, credit_card, pix ou boleto.',
             'dias_grace_period.integer' => 'O período de graça deve ser um número inteiro.',
             'dias_grace_period.min' => 'O período de graça não pode ser negativo.',
         ];
