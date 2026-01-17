@@ -125,7 +125,7 @@ class TrocarPlanoAssinaturaUseCase
             $novaAssinatura = Assinatura::create([
                 'tenant_id' => $tenantId,
                 'plano_id' => $novoPlanoId,
-                'status' => $valorCobrar > 0 ? 'pendente' : 'ativa',
+                'status' => $valorCobrar > 0 ? 'suspensa' : 'ativa',
                 'data_inicio' => $dataInicio,
                 'data_fim' => $dataFim,
                 'valor_pago' => $valorNovoPlano,

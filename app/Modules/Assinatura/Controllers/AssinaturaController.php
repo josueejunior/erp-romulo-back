@@ -642,9 +642,8 @@ class AssinaturaController extends BaseApiController
                         'transacao_id' => $paymentResult->externalId,
                     ]);
                 } elseif ($paymentResult->isPending()) {
-                    // Se pendente (ex: PIX), manter como pendente
                     $novaAssinatura->update([
-                        'status' => 'pendente',
+                        'status' => 'suspensa',
                         'transacao_id' => $paymentResult->externalId,
                         'observacoes' => ($novaAssinatura->observacoes ?? '') . "\nPagamento pendente - aguardando confirmação.",
                     ]);
