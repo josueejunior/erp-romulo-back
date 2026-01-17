@@ -577,6 +577,7 @@ class ApplicationContext implements ApplicationContextContract
             $estaNoGracePeriod = $diasRestantes < 0 && abs($diasRestantes) <= $diasGracePeriod;
             $estaAtiva = $diasRestantes >= 0 || $estaNoGracePeriod;
             
+            // 🔥 BLOQUEIO ADMINISTRATIVO: 'suspensa' bloqueia completamente o acesso
             if ($assinatura->status === 'suspensa') {
                 $this->assinaturaCache = [
                     'pode_acessar' => false,
@@ -586,11 +587,27 @@ class ApplicationContext implements ApplicationContextContract
                 return $this->assinaturaCache;
             }
             
-            if ($estaAtiva) {
-                $warning = $estaNoGracePeriod ? [
-                    'warning' => true,
-                    'dias_expirado' => $diasExpirado,
-                ] : null;
+            // 🔥 PERMITIR ACESSO: Status 'ativa', 'trial', 'pendente' (aguardando pagamento) ou 'aguardando_pagamento'
+            // se estiver dentro do período de vigência ou grace period
+            $statusPermitidos = ['ativa', 'trial', 'pendente', 'aguardando_pagamento'];
+            if (in_array($assinatura->status, $statusPermitidos) && $estaAtiva) {
+                $warning = null;
+                
+                // Se está no grace period, adicionar warning
+                if ($estaNoGracePeriod) {
+                    $warning = [
+                        'warning' => true,
+                        'dias_expirado' => $diasExpirado,
+                    ];
+                }
+                
+                // Se está pendente, adicionar aviso de pagamento pendente
+                if (in_array($assinatura->status, ['pendente', 'aguardando_pagamento'])) {
+                    $warning = array_merge($warning ?? [], [
+                        'pagamento_pendente' => true,
+                        'metodo_pagamento' => $assinatura->metodoPagamento,
+                    ]);
+                }
                 
                 $this->assinaturaCache = [
                     'pode_acessar' => true,

@@ -714,7 +714,7 @@ class AssinaturaController extends BaseApiController
                     ]);
                 } elseif ($paymentResult->isPending()) {
                     $novaAssinatura->update([
-                        'status' => 'suspensa', // 'suspensa' ou 'pendente' dependendo de como o sistema trata
+                        'status' => 'aguardando_pagamento', // 🔥 CORRIGIDO: 'aguardando_pagamento' para pagamentos aguardando confirmação
                         'metodo_pagamento' => $paymentResult->paymentMethod,
                         'transacao_id' => $paymentResult->externalId,
                         'observacoes' => ($novaAssinatura->observacoes ?? '') . "\nPagamento pendente (" . $paymentMethod . ") - aguardando confirmação. ID: " . $paymentResult->externalId,

@@ -135,7 +135,7 @@ class TrocarPlanoAssinaturaUseCase
                 'tenant_id' => $tenantId,
                 'empresa_id' => $empresaId, // 🔥 GARANTIA: Novo registro terá empresa_id
                 'plano_id' => $novoPlanoId,
-                'status' => $valorCobrar > 0 ? 'suspensa' : 'ativa',
+                'status' => $valorCobrar > 0 ? 'aguardando_pagamento' : 'ativa', // 🔥 CORRIGIDO: 'aguardando_pagamento' ao invés de 'suspensa'
                 'data_inicio' => $dataInicio,
                 'data_fim' => $dataFim,
                 'valor_pago' => $valorNovoPlano,
