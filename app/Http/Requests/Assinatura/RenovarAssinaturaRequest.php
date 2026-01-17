@@ -15,7 +15,8 @@ class RenovarAssinaturaRequest extends FormRequest
     {
         return [
             'meses' => 'required|integer|in:1,12',
-            'card_token' => 'required|string',
+            'payment_method_id' => 'required|string|in:credit_card,pix',
+            'card_token' => 'required_if:payment_method_id,credit_card|string',
             'payer_email' => 'required|email',
             'payer_cpf' => 'nullable|string',
             'installments' => 'nullable|integer|min:1|max:12',

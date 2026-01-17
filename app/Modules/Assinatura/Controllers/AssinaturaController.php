@@ -429,15 +429,16 @@ class AssinaturaController extends BaseApiController
             // Limitar tamanho (Mercado Pago aceita até 256 caracteres)
             $externalReference = substr($externalReference, 0, 256);
             
+            // Determinar método de pagamento
+            $paymentMethod = $validated['payment_method_id'] ?? 'credit_card';
+            
             // Criar PaymentRequest
-            $paymentRequest = \App\Domain\Payment\ValueObjects\PaymentRequest::fromArray([
+            $paymentRequestData = [
                 'amount' => $valor,
                 'description' => "Renovação de assinatura - Plano {$plano->nome} - {$meses} " . ($meses === 1 ? 'mês' : 'meses'),
                 'payer_email' => $validated['payer_email'],
                 'payer_cpf' => $validated['payer_cpf'] ?? null,
-                'card_token' => $validated['card_token'],
-                'installments' => $validated['installments'] ?? 1,
-                'payment_method_id' => 'credit_card',
+                'payment_method_id' => $paymentMethod === 'pix' ? 'pix' : null,
                 'external_reference' => $externalReference,
                 'metadata' => [
                     'tenant_id' => $tenant->id,
@@ -445,7 +446,15 @@ class AssinaturaController extends BaseApiController
                     'plano_id' => $plano->id,
                     'meses' => $meses,
                 ],
-            ]);
+            ];
+
+            if ($paymentMethod === 'credit_card') {
+                $paymentRequestData['card_token'] = $validated['card_token'];
+                $paymentRequestData['installments'] = $validated['installments'] ?? 1;
+                unset($paymentRequestData['payment_method_id']);
+            }
+
+            $paymentRequest = \App\Domain\Payment\ValueObjects\PaymentRequest::fromArray($paymentRequestData);
 
             // Processar renovação usando Use Case injetado
             $assinaturaRenovada = $this->renovarAssinaturaUseCase->executar(
@@ -454,26 +463,40 @@ class AssinaturaController extends BaseApiController
                 $meses
             );
 
+            // Buscar log de pagamento para PIX
+            $paymentLog = \App\Models\PaymentLog::where('external_id', $assinaturaRenovada->transacao_id)->first();
+            
             // Buscar entidade renovada e transformar em DTO
             $assinaturaRenovadaDomain = $this->assinaturaRepository->buscarPorId($assinaturaRenovada->id);
+            $responseData = [];
+
             if ($assinaturaRenovadaDomain) {
                 $responseDTO = $this->assinaturaResource->toResponse($assinaturaRenovadaDomain);
-                
-                return response()->json([
-                    'message' => 'Assinatura renovada com sucesso',
-                    'data' => $responseDTO->toArray(),
-                ], 200);
-            }
-
-            // Fallback: retornar dados do modelo se não conseguir buscar entidade
-            return response()->json([
-                'message' => 'Assinatura renovada com sucesso',
-                'data' => [
+                $responseData = $responseDTO->toArray();
+            } else {
+                $responseData = [
                     'id' => $assinaturaRenovada->id,
                     'status' => $assinaturaRenovada->status,
                     'data_fim' => $assinaturaRenovada->data_fim->format('Y-m-d'),
                     'dias_restantes' => $assinaturaRenovada->diasRestantes(),
-                ],
+                ];
+            }
+
+            // Se for PIX e estiver pendente, incluir dados do QR Code
+            if ($paymentMethod === 'pix' && $assinaturaRenovada->status !== 'ativa' && $paymentLog) {
+                $dadosResposta = $paymentLog->dados_resposta ?? [];
+                if (isset($dadosResposta['pix_qr_code_base64']) || isset($dadosResposta['pix_qr_code'])) {
+                    $responseData['pix_qr_code_base64'] = $dadosResposta['pix_qr_code_base64'] ?? null;
+                    $responseData['pix_qr_code'] = $dadosResposta['pix_qr_code'] ?? null;
+                    $responseData['pix_ticket_url'] = $dadosResposta['pix_ticket_url'] ?? null;
+                    $responseData['payment_id'] = $paymentLog->external_id ?? null;
+                }
+            }
+
+            return response()->json([
+                'message' => 'Assinatura renovada com sucesso',
+                'data' => $responseData,
+                'pending' => $assinaturaRenovada->status !== 'ativa',
             ], 200);
 
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -610,14 +633,15 @@ class AssinaturaController extends BaseApiController
                 // Limitar tamanho (Mercado Pago aceita até 256 caracteres)
                 $externalReference = substr($externalReference, 0, 256);
                 
-                $paymentRequest = \App\Domain\Payment\ValueObjects\PaymentRequest::fromArray([
+                // Determinar método de pagamento
+                $paymentMethod = $paymentData['payment_method_id'] ?? 'credit_card';
+
+                $paymentRequestData = [
                     'amount' => $valorCobrar,
                     'description' => "Troca de plano - Crédito aplicado: R$ {$credito}",
                     'payer_email' => $paymentData['payer_email'],
                     'payer_cpf' => $paymentData['payer_cpf'] ?? null,
-                    'card_token' => $paymentData['card_token'],
-                    'installments' => $paymentData['installments'] ?? 1,
-                    'payment_method_id' => 'credit_card',
+                    'payment_method_id' => $paymentMethod === 'pix' ? 'pix' : null,
                     'external_reference' => $externalReference,
                     'metadata' => [
                         'tenant_id' => $tenant->id,
@@ -626,13 +650,40 @@ class AssinaturaController extends BaseApiController
                         'credito_aplicado' => $credito,
                         'tipo' => 'troca_plano',
                     ],
-                ]);
+                ];
+
+                if ($paymentMethod === 'credit_card') {
+                    $paymentRequestData['card_token'] = $paymentData['card_token'] ?? null;
+                    $paymentRequestData['installments'] = $paymentData['installments'] ?? 1;
+                    unset($paymentRequestData['payment_method_id']);
+                }
+
+                $paymentRequest = \App\Domain\Payment\ValueObjects\PaymentRequest::fromArray($paymentRequestData);
 
                 // Gerar chave de idempotência
                 $idempotencyKey = 'plan_change_' . $tenant->id . '_' . $novaAssinatura->id . '_' . time();
 
                 // Processar pagamento
                 $paymentResult = $this->paymentProvider->processPayment($paymentRequest, $idempotencyKey);
+
+                // Salvar log de pagamento (opcional, mas bom ter para PIX)
+                $paymentLog = \App\Models\PaymentLog::create([
+                    'tenant_id' => $tenant->id,
+                    'plano_id' => $novoPlanoId,
+                    'valor' => $valorCobrar,
+                    'status' => $paymentResult->status,
+                    'external_id' => $paymentResult->externalId,
+                    'metodo_pagamento' => $paymentResult->paymentMethod,
+                    'dados_resposta' => array_merge([
+                        'status' => $paymentResult->status,
+                        'payment_method' => $paymentResult->paymentMethod,
+                        'error_message' => $paymentResult->errorMessage,
+                    ], array_filter([
+                        'pix_qr_code' => $paymentResult->pixQrCode,
+                        'pix_qr_code_base64' => $paymentResult->pixQrCodeBase64,
+                        'pix_ticket_url' => $paymentResult->pixTicketUrl,
+                    ])),
+                ]);
 
                 // Se aprovado, ativar assinatura
                 if ($paymentResult->isApproved()) {
@@ -643,9 +694,10 @@ class AssinaturaController extends BaseApiController
                     ]);
                 } elseif ($paymentResult->isPending()) {
                     $novaAssinatura->update([
-                        'status' => 'suspensa',
+                        'status' => 'suspensa', // 'suspensa' ou 'pendente' dependendo de como o sistema trata
+                        'metodo_pagamento' => $paymentResult->paymentMethod,
                         'transacao_id' => $paymentResult->externalId,
-                        'observacoes' => ($novaAssinatura->observacoes ?? '') . "\nPagamento pendente - aguardando confirmação.",
+                        'observacoes' => ($novaAssinatura->observacoes ?? '') . "\nPagamento pendente (" . $paymentMethod . ") - aguardando confirmação. ID: " . $paymentResult->externalId,
                     ]);
                 } else {
                     // Se rejeitado, lançar exceção
@@ -657,26 +709,35 @@ class AssinaturaController extends BaseApiController
 
             // Buscar entidade atualizada e transformar em DTO
             $assinaturaDomain = $this->assinaturaRepository->buscarPorId($novaAssinatura->id);
+            $responseData = [];
+
             if ($assinaturaDomain) {
                 $responseDTO = $this->assinaturaResource->toResponse($assinaturaDomain);
-                
-                return response()->json([
-                    'message' => 'Plano alterado com sucesso',
-                    'data' => $responseDTO->toArray(),
-                    'credito_aplicado' => $credito,
-                    'valor_cobrado' => $valorCobrar,
-                ], 200);
-            }
-
-            // Fallback
-            return response()->json([
-                'message' => 'Plano alterado com sucesso',
-                'data' => [
+                $responseData = $responseDTO->toArray();
+            } else {
+                $responseData = [
                     'id' => $novaAssinatura->id,
                     'status' => $novaAssinatura->status,
-                ],
+                ];
+            }
+
+            // Incluir PIX se necessário
+            if (isset($paymentMethod) && $paymentMethod === 'pix' && $novaAssinatura->status !== 'ativa' && isset($paymentLog)) {
+                $dadosResposta = $paymentLog->dados_resposta ?? [];
+                if (isset($dadosResposta['pix_qr_code_base64']) || isset($dadosResposta['pix_qr_code'])) {
+                    $responseData['pix_qr_code_base64'] = $dadosResposta['pix_qr_code_base64'] ?? null;
+                    $responseData['pix_qr_code'] = $dadosResposta['pix_qr_code'] ?? null;
+                    $responseData['pix_ticket_url'] = $dadosResposta['pix_ticket_url'] ?? null;
+                    $responseData['payment_id'] = $paymentLog->external_id ?? null;
+                }
+            }
+
+            return response()->json([
+                'message' => 'Plano alterado com sucesso',
+                'data' => $responseData,
                 'credito_aplicado' => $credito,
                 'valor_cobrado' => $valorCobrar,
+                'pending' => $novaAssinatura->status !== 'ativa',
             ], 200);
 
         } catch (\App\Domain\Exceptions\DomainException $e) {

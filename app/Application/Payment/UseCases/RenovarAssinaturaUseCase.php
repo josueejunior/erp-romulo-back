@@ -104,11 +104,15 @@ class RenovarAssinaturaUseCase
             $paymentLog->update([
                 'external_id' => $paymentResult->externalId,
                 'status' => $paymentResult->status,
-                'dados_resposta' => [
+                'dados_resposta' => array_merge([
                     'status' => $paymentResult->status,
                     'payment_method' => $paymentResult->paymentMethod,
                     'error_message' => $paymentResult->errorMessage,
-                ],
+                ], array_filter([
+                    'pix_qr_code' => $paymentResult->pixQrCode,
+                    'pix_qr_code_base64' => $paymentResult->pixQrCodeBase64,
+                    'pix_ticket_url' => $paymentResult->pixTicketUrl,
+                ])),
             ]);
 
             // Se aprovado, renovar assinatura
