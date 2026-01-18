@@ -299,6 +299,7 @@ Route::prefix('v1')->group(function () {
                 // Notas Fiscais
                 Route::module('notas-fiscais', ApiNotaFiscalController::class, 'notaFiscal')
                     ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
+                Route::patch('/notas-fiscais/{notaFiscal}/pagar', [ApiNotaFiscalController::class, 'pagar']);
             });
             
             // Contratos

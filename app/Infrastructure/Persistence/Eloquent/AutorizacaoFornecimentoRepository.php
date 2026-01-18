@@ -108,7 +108,12 @@ class AutorizacaoFornecimentoRepository implements AutorizacaoFornecimentoReposi
 
     public function deletar(int $id): void
     {
-        AutorizacaoFornecimentoModel::findOrFail($id)->delete();
+        \Illuminate\Support\Facades\DB::transaction(function () use ($id) {
+            $model = AutorizacaoFornecimentoModel::findOrFail($id);
+            // Deletar vínculos de itens associados a esta AF
+            \App\Modules\Processo\Models\ProcessoItemVinculo::where('autorizacao_fornecimento_id', $id)->delete();
+            $model->delete();
+        });
     }
 
     /**

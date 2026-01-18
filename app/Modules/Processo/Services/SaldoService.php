@@ -357,15 +357,20 @@ class SaldoService
                 }
             }
 
-            if ($itemAlvo) {
+            if ($itemAlvo && $itemAlvo->quantidade_disponivel > 0) {
+                // Limitar quantidade ao disponível
+                $qtdAvail = (float) $itemAlvo->quantidade_disponivel;
+                $qtdEmpenho = (float) ($empenho->quantidade ?: $itemAlvo->quantidade); // Tentar usar qtd do empenho se existir
+                $qtdFinal = min($qtdAvail, $qtdEmpenho);
+
                 \App\Modules\Processo\Models\ProcessoItemVinculo::create([
                     'empresa_id' => $processo->empresa_id,
                     'processo_item_id' => $itemAlvo->id,
                     'empenho_id' => $empenho->id,
                     'contrato_id' => $empenho->contrato_id, // 🔥 Garantir vínculo com o contrato
                     'autorizacao_fornecimento_id' => $empenho->autorizacao_fornecimento_id, // 🔥 Garantir vínculo com a AF
-                    'quantidade' => (float) $itemAlvo->quantidade,
-                    'valor_unitario' => (float) ($empenho->valor / ($itemAlvo->quantidade ?: 1)),
+                    'quantidade' => $qtdFinal,
+                    'valor_unitario' => (float) ($empenho->valor / ($qtdFinal ?: 1)),
                     'valor_total' => (float) $empenho->valor,
                     'observacoes' => 'Vínculo gerado automaticamente via Recálculo (Correção de Legado)',
                 ]);

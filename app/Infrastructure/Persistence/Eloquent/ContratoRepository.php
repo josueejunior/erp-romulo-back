@@ -106,7 +106,12 @@ class ContratoRepository implements ContratoRepositoryInterface
 
     public function deletar(int $id): void
     {
-        ContratoModel::findOrFail($id)->delete();
+        \Illuminate\Support\Facades\DB::transaction(function () use ($id) {
+            $model = ContratoModel::findOrFail($id);
+            // Deletar vínculos de itens associados a este contrato
+            \App\Modules\Processo\Models\ProcessoItemVinculo::where('contrato_id', $id)->delete();
+            $model->delete();
+        });
     }
 
     /**

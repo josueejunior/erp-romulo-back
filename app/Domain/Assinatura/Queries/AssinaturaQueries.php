@@ -30,11 +30,18 @@ final class AssinaturaQueries
      * Busca assinatura atual por empresa (mais recente válida)
      * 
      * 🔥 NOVO: Assinatura pertence à empresa, não ao usuário
+     * 🔥 CORREÇÃO: Busca por empresa_id OU tenant_id para compatibilidade
+     *    com assinaturas que foram criadas apenas com tenant_id
+     *    Retorna a assinatura mais recente (por data_fim e id)
      */
     public static function assinaturaAtualPorEmpresa(int $empresaId): ?AssinaturaModel
     {
+        // Buscar por empresa_id OU tenant_id - a mais recente
         return self::baseQueryValida()
-            ->where('empresa_id', $empresaId)
+            ->where(function($query) use ($empresaId) {
+                $query->where('empresa_id', $empresaId)
+                      ->orWhere('tenant_id', $empresaId);
+            })
             ->first();
     }
 
@@ -120,10 +127,15 @@ final class AssinaturaQueries
      * Verifica se empresa tem assinatura válida
      * 
      * 🔥 NOVO: Assinatura pertence à empresa
+     * 🔥 CORREÇÃO: Também verifica por tenant_id para compatibilidade
      */
     public static function empresaTemAssinaturaValida(int $empresaId): bool
     {
-        return AssinaturaModel::where('empresa_id', $empresaId)
+        // Buscar por empresa_id OU tenant_id
+        return AssinaturaModel::where(function($query) use ($empresaId) {
+                $query->where('empresa_id', $empresaId)
+                      ->orWhere('tenant_id', $empresaId);
+            })
             ->whereIn('status', StatusAssinatura::statusAtivos())
             ->whereDate('data_fim', '>=', now())
             ->exists();

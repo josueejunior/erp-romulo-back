@@ -175,7 +175,16 @@ class EmpenhoRepository implements EmpenhoRepositoryInterface
 
     public function deletar(int $id): void
     {
-        EmpenhoModel::findOrFail($id)->delete();
+        DB::transaction(function () use ($id) {
+            $model = EmpenhoModel::findOrFail($id);
+            
+            // Deletar vínculos de itens associados a este empenho
+            // Isso é CRÍTICO para liberar o saldo do item de processo e evitar "Valores Divergentes"
+            \App\Modules\Processo\Models\ProcessoItemVinculo::where('empenho_id', $id)->delete();
+            
+            // Deletar o empenho (Soft Delete)
+            $model->delete();
+        });
     }
 }
 

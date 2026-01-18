@@ -49,6 +49,7 @@ class NotaFiscalController extends BaseApiController
         private BuscarNotaFiscalUseCase $buscarNotaFiscalUseCase,
         private AtualizarNotaFiscalUseCase $atualizarNotaFiscalUseCase,
         private ExcluirNotaFiscalUseCase $excluirNotaFiscalUseCase,
+        private \App\Application\NotaFiscal\UseCases\PagarNotaFiscalUseCase $pagarNotaFiscalUseCase,
         private ProcessoRepositoryInterface $processoRepository,
         private NotaFiscalRepositoryInterface $notaFiscalRepository,
         private \App\Modules\Processo\Services\ProcessoItemVinculoService $processoItemVinculoService,
@@ -484,6 +485,26 @@ class NotaFiscalController extends BaseApiController
             ], 404);
         } catch (\Exception $e) {
             return $this->handleException($e, 'Erro ao excluir nota fiscal');
+        }
+    }
+    /**
+     * Marcar nota fiscal como paga
+     */
+    public function pagar(Request $request): JsonResponse
+    {
+        try {
+            $notaFiscalId = (int) $request->route()->parameter('notaFiscal');
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
+            $this->pagarNotaFiscalUseCase->executar($notaFiscalId, $empresa->id);
+            
+            return response()->json([
+                'message' => 'Nota fiscal marcada como paga com sucesso',
+            ]);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao marcar nota fiscal como paga');
         }
     }
 }

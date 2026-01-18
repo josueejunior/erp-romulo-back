@@ -55,12 +55,12 @@ class FinanceiroService
             return in_array($item->statusItem, ['aceito', 'aceito_habilitado']);
         });
 
-        $receitaEstimada = $itensVencidos->sum(fn($item) => $item->valorEstimado ?? 0);
-        $receitaFinal = $itensVencidos->sum(fn($item) => $item->valorFinalSessao ?? 0);
-        $receitaArrematada = $itensVencidos->sum(fn($item) => $item->valorArrematado ?? 0);
-        $receitaNegociada = $itensVencidos->sum(fn($item) => $item->valorNegociado ?? 0);
+        $receitaEstimada = $itensVencidos->sum(fn($item) => ($item->valorEstimado ?? 0) * ($item->quantidade ?? 1));
+        $receitaFinal = $itensVencidos->sum(fn($item) => ($item->valorFinalSessao ?? 0) * ($item->quantidade ?? 1));
+        $receitaArrematada = $itensVencidos->sum(fn($item) => ($item->valorArrematado ?? 0) * ($item->quantidade ?? 1));
+        $receitaNegociada = $itensVencidos->sum(fn($item) => ($item->valorNegociado ?? 0) * ($item->quantidade ?? 1));
 
-        // Prioridade: valor arrematado > valor negociado > valor final sessão > valor estimado
+        // Prioridade: valor arrematada > valor negociada > valor final sessão > valor estimada
         $receitaTotal = $receitaArrematada > 0 
             ? $receitaArrematada 
             : ($receitaNegociada > 0 
