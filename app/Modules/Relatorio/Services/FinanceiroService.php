@@ -49,31 +49,29 @@ class FinanceiroService
      */
     public function calcularReceita(Processo $processo): array
     {
-        // Usar repository para buscar itens aceitos
-        $itensPorProcesso = $this->processoItemRepository->buscarPorProcesso($processo->id);
-        $itensVencidos = collect($itensPorProcesso)->filter(function ($item) {
-            return in_array($item->statusItem, ['aceito', 'aceito_habilitado']);
+        // Buscar itens do processo que foram aceitos
+        $itens = $this->processoItemRepository->buscarPorProcesso($processo->id);
+        $itensAceitos = collect($itens)->filter(function ($item) {
+            return in_array($item->status_item, ['aceito', 'aceito_habilitado']);
         });
 
-        $receitaEstimada = $itensVencidos->sum(fn($item) => ($item->valorEstimado ?? 0) * ($item->quantidade ?? 1));
-        $receitaFinal = $itensVencidos->sum(fn($item) => ($item->valorFinalSessao ?? 0) * ($item->quantidade ?? 1));
-        $receitaArrematada = $itensVencidos->sum(fn($item) => ($item->valorArrematado ?? 0) * ($item->quantidade ?? 1));
-        $receitaNegociada = $itensVencidos->sum(fn($item) => ($item->valorNegociado ?? 0) * ($item->quantidade ?? 1));
+        // Valores baseados nos novos campos (atualizados via ProcessoItemVinculoService)
+        $valorArrematado = $itensAceitos->sum('valor_arrematado');
+        $valorEmpenhado = $itensAceitos->sum('valor_empenhado');
+        $valorFaturado = $itensAceitos->sum('valor_faturado');
+        $valorPago = $itensAceitos->sum('valor_pago');
 
-        // Prioridade: valor arrematada > valor negociada > valor final sessão > valor estimada
-        $receitaTotal = $receitaArrematada > 0 
-            ? $receitaArrematada 
-            : ($receitaNegociada > 0 
-                ? $receitaNegociada 
-                : ($receitaFinal > 0 ? $receitaFinal : $receitaEstimada));
+        // Receita Total (pode variar dependendo do que o usuário considera "Receita")
+        // No dashboard geralmente usamos o Arrematado como "Potencial" e Faturado como "Realizado"
+        $receitaTotal = $valorArrematado; 
 
         return [
-            'receita_estimada' => round($receitaEstimada, 2),
-            'receita_final' => round($receitaFinal, 2),
-            'receita_arrematada' => round($receitaArrematada, 2),
-            'receita_negociada' => round($receitaNegociada, 2),
+            'arrematado' => round($valorArrematado, 2),
+            'empenhado' => round($valorEmpenhado, 2),
+            'faturado' => round($valorFaturado, 2),
+            'pago' => round($valorPago, 2),
             'receita_total' => round($receitaTotal, 2),
-            'quantidade_itens' => $itensVencidos->count(),
+            'quantidade_itens' => $itensAceitos->count(),
         ];
     }
 
@@ -229,80 +227,68 @@ class FinanceiroService
         $dataInicio = $mes->copy()->startOfMonth();
         $dataFim = $mes->copy()->endOfMonth();
 
-        // Usar repository para buscar processos encerrados no mês
-        $filtros = [
-            'data_recebimento_pagamento_inicio' => $dataInicio,
-            'data_recebimento_pagamento_fim' => $dataFim,
-        ];
-        
-        if ($empresaId) {
-            $filtros['empresa_id'] = $empresaId;
-        }
-        
-        $processosEncerrados = $this->processoRepository->buscarModelosComFiltros($filtros, ['itens', 'notasFiscais']);
+        // 1. Receita (NFs de Saída no período)
+        $notasSaida = $this->notaFiscalRepository->buscarComFiltros([
+            'empresa_id' => $empresaId,
+            'tipo' => 'saida',
+            'data_emissao_inicio' => $dataInicio,
+            'data_emissao_fim' => $dataFim,
+        ]);
 
-        $receitaTotal = 0;
-        $custosDiretosTotal = 0;
-        $processosDetalhados = [];
+        $receitaTotal = collect($notasSaida->items())->sum('valor');
 
-        foreach ($processosEncerrados as $processo) {
-            // Receita: notas fiscais de saída (vendas) - usar repository
-            $notasSaida = $this->notaFiscalRepository->buscarPorProcesso($processo->id, [
-                'tipo' => 'saida',
-                'empresa_id' => $processo->empresa_id,
-            ]);
-            $receita = collect($notasSaida)->sum(fn($nf) => $nf->valor ?? 0);
+        // 2. Custos Diretos (NFs de Entrada no período)
+        $notasEntrada = $this->notaFiscalRepository->buscarComFiltros([
+            'empresa_id' => $empresaId,
+            'tipo' => 'entrada',
+            'data_emissao_inicio' => $dataInicio,
+            'data_emissao_fim' => $dataFim,
+        ]);
 
-            // Se não tiver NF de saída, usar valores dos itens
-            if ($receita == 0) {
-                $receita = $this->calcularReceita($processo)['receita_total'];
-            }
+        $custosDiretosTotal = collect($notasEntrada->items())->sum(function($nf) {
+            return $nf->custo_total > 0 ? $nf->custo_total : ($nf->custo_produto + $nf->custo_frete);
+        });
 
-            // Custos diretos: notas fiscais de entrada (compras) - usar repository
-            $notasEntrada = $this->notaFiscalRepository->buscarPorProcesso($processo->id, [
-                'tipo' => 'entrada',
-                'empresa_id' => $processo->empresa_id,
-            ]);
-            $custosDiretos = collect($notasEntrada)->sum(fn($nf) => $nf->custoTotal ?? 0);
-
-            // Se não tiver NF de entrada, usar custo_produto
-            if ($custosDiretos == 0) {
-                $custosDiretos = collect($notasEntrada)->sum(fn($nf) => $nf->custoProduto ?? 0);
-            }
-
-            $lucroBruto = $receita - $custosDiretos;
-            $margem = $receita > 0 ? ($lucroBruto / $receita) * 100 : 0;
-
-            $receitaTotal += $receita;
-            $custosDiretosTotal += $custosDiretos;
-
-            $processosDetalhados[] = [
-                'id' => $processo->id,
-                'numero_modalidade' => $processo->numero_modalidade,
-                'objeto_resumido' => $processo->objeto_resumido,
-                'data_recebimento' => $processo->data_recebimento_pagamento?->format('d/m/Y'),
-                'receita' => round($receita, 2),
-                'custos_diretos' => round($custosDiretos, 2),
-                'lucro_bruto' => round($lucroBruto, 2),
-                'margem' => round($margem, 2),
-            ];
-        }
-
-        // Custos indiretos do mês
+        // 3. Custos Indiretos do mês
         $custosIndiretos = $this->calcularCustosIndiretosPeriodo($dataInicio, $dataFim, $empresaId);
         $custosIndiretosTotal = $custosIndiretos['total'];
 
-        // Cálculo final
+        // 4. Detalhar processos que tiveram movimento no período
+        $processosIds = collect($notasSaida->items())->pluck('processo_id')
+            ->merge(collect($notasEntrada->items())->pluck('processo_id'))
+            ->unique()
+            ->filter()
+            ->toArray();
+
+        $processosDetalhados = [];
+        if (!empty($processosIds)) {
+            $processos = \App\Modules\Processo\Models\Processo::whereIn('id', $processosIds)->get();
+            foreach ($processos as $processo) {
+                // Receita do processo no mês
+                $recProc = collect($notasSaida->items())->where('processo_id', $processo->id)->sum('valor');
+                // Custo do processo no mês
+                $custoProc = collect($notasEntrada->items())->where('processo_id', $processo->id)->sum(function($nf) {
+                    return $nf->custo_total > 0 ? $nf->custo_total : ($nf->custo_produto + $nf->custo_frete);
+                });
+
+                $processosDetalhados[] = [
+                    'id' => $processo->id,
+                    'numero_modalidade' => $processo->numero_modalidade,
+                    'objeto_resumido' => $processo->objeto_resumido,
+                    'receita' => round($recProc, 2),
+                    'custos_diretos' => round($custoProc, 2),
+                    'lucro_bruto' => round($recProc - $custoProc, 2),
+                    'margem' => $recProc > 0 ? round((($recProc - $custoProc) / $recProc) * 100, 2) : 0,
+                ];
+            }
+        }
+
+        // Cálculo final consolidado
         $lucroBruto = $receitaTotal - $custosDiretosTotal;
         $lucroLiquido = $lucroBruto - $custosIndiretosTotal;
 
-        $margemBruta = $receitaTotal > 0 
-            ? ($lucroBruto / $receitaTotal) * 100 
-            : 0;
-        
-        $margemLiquida = $receitaTotal > 0 
-            ? ($lucroLiquido / $receitaTotal) * 100 
-            : 0;
+        $margemBruta = $receitaTotal > 0 ? ($lucroBruto / $receitaTotal) * 100 : 0;
+        $margemLiquida = $receitaTotal > 0 ? ($lucroLiquido / $receitaTotal) * 100 : 0;
 
         return [
             'mes' => $mes->format('m/Y'),
@@ -319,7 +305,7 @@ class FinanceiroService
                 'margem_bruta' => round($margemBruta, 2),
                 'margem_liquida' => round($margemLiquida, 2),
             ],
-            'quantidade_processos' => $processosEncerrados->count(),
+            'quantidade_processos' => count($processosDetalhados),
             'processos' => $processosDetalhados,
             'custos_indiretos_detalhados' => $custosIndiretos['custos']->map(function($custo) {
                 return [

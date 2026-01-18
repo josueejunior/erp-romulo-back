@@ -64,21 +64,50 @@ class ProcessoItemVinculoService
     /**
      * Valida se a quantidade não excede a disponível
      */
-    public function validateQuantidade(ProcessoItem $item, float $quantidade, ?ProcessoItemVinculo $vinculoExcluir = null): void
+    public function validateQuantidade(ProcessoItem $item, float $quantidade, array $data, ?ProcessoItemVinculo $vinculoExcluir = null): void
     {
-        $quantidadeVinculada = $item->vinculos()
-            ->when($vinculoExcluir, function ($query) use ($vinculoExcluir) {
-                return $query->where('id', '!=', $vinculoExcluir->id);
-            })
-            ->sum('quantidade');
+        // Validar por tipo de documento para permitir fluxo (Contrato -> AF -> Empenho -> NF)
+        // Cada nível pode ter até a quantidade total do item.
+        $tipos = [
+            'contrato_id' => 'Contrato',
+            'autorizacao_fornecimento_id' => 'AF',
+            'empenho_id' => 'Empenho',
+            'nota_fiscal_id' => 'Nota Fiscal'
+        ];
+        
+        foreach ($tipos as $campo => $label) {
+            if (!empty($data[$campo])) {
+                $quantidadeVinculada = $item->vinculos()
+                    ->whereNotNull($campo)
+                    ->when($vinculoExcluir, function ($query) use ($vinculoExcluir) {
+                        return $query->where('id', '!=', $vinculoExcluir->id);
+                    })
+                    ->sum('quantidade');
 
-        $quantidadeDisponivel = $item->quantidade - $quantidadeVinculada;
+                $disponivel = $item->quantidade - $quantidadeVinculada;
 
-        if ($quantidade > $quantidadeDisponivel) {
-            throw new \Exception(
-                "Quantidade solicitada ({$quantidade}) excede a quantidade disponível ({$quantidadeDisponivel}). " .
-                "Quantidade total do item: {$item->quantidade}, já vinculada: {$quantidadeVinculada}."
-            );
+                if ($quantidade > $disponivel) {
+                    throw new \Exception(
+                        "Quantidade solicitada ({$quantidade}) excede a quantidade disponível para {$label} ({$disponivel}). " .
+                        "Quantidade total do item: {$item->quantidade}, já vinculada a {$label}: {$quantidadeVinculada}."
+                    );
+                }
+            }
+        }
+        
+        // Se não houver documento específico, validar contra o saldo geral (fallback)
+        if (empty($data['contrato_id']) && empty($data['autorizacao_fornecimento_id']) && 
+            empty($data['empenho_id']) && empty($data['nota_fiscal_id'])) {
+            $quantidadeVinculada = $item->vinculos()
+                ->when($vinculoExcluir, function ($query) use ($vinculoExcluir) {
+                    return $query->where('id', '!=', $vinculoExcluir->id);
+                })
+                ->sum('quantidade');
+            
+            $disponivel = $item->quantidade - $quantidadeVinculada;
+            if ($quantidade > $disponivel) {
+                throw new \Exception("Quantidade indisponível: {$quantidade} solicitada, {$disponivel} disponível.");
+            }
         }
     }
 
@@ -197,7 +226,7 @@ class ProcessoItemVinculoService
         }
 
         $validated = $validator->validated();
-        $this->validateQuantidade($item, (float) $validated['quantidade']);
+        $this->validateQuantidade($item, (float) $validated['quantidade'], $data);
 
         // Calcular valor_total se não fornecido
         if (empty($validated['valor_total']) && !empty($validated['quantidade']) && !empty($validated['valor_unitario'])) {
@@ -260,7 +289,7 @@ class ProcessoItemVinculoService
         }
 
         $validated = $validator->validated();
-        $this->validateQuantidade($item, (float) $validated['quantidade'], $vinculo);
+        $this->validateQuantidade($item, (float) $validated['quantidade'], $data, $vinculo);
 
         // Calcular valor_total se não fornecido
         if (empty($validated['valor_total']) && !empty($validated['quantidade']) && !empty($validated['valor_unitario'])) {

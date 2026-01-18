@@ -219,78 +219,75 @@ class NotaFiscalController extends BaseApiController
     public function storeWeb(NotaFiscalCreateRequest|array $request, int $processoId): JsonResponse
     {
         try {
-            $empresa = $this->getEmpresaAtivaOrFail();
-            
-            // Se for array, já está validado. Se for FormRequest, chamar validated()
-            $data = is_array($request) ? $request : $request->validated();
-            $data['processo_id'] = $processoId;
-            
-            // Extrair itens antes de criar a nota fiscal
-            $itens = $data['itens'] ?? [];
-            unset($data['itens']); // Remover itens do data principal
-            
-            // Usar Use Case DDD (contém toda a lógica de negócio, incluindo tenant)
-            $dto = CriarNotaFiscalDTO::fromArray($data);
-            $notaFiscalDomain = $this->criarNotaFiscalUseCase->executar($dto);
-            
-            // Buscar modelo Eloquent para resposta usando repository
-            $notaFiscal = $this->notaFiscalRepository->buscarModeloPorId(
-                $notaFiscalDomain->id,
-                ['empenho', 'contrato', 'autorizacaoFornecimento', 'fornecedor']
-            );
-            
-            if (!$notaFiscal) {
-                return response()->json(['message' => 'Nota fiscal não encontrada após criação.'], 404);
-            }
-            
-            // 🔥 Criar vínculos com itens do processo
-            $vinculosErros = [];
-            if (!empty($itens)) {
-                $processo = $this->processoRepository->buscarModeloPorId($processoId);
+            return \Illuminate\Support\Facades\DB::transaction(function () use ($request, $processoId) {
+                $empresa = $this->getEmpresaAtivaOrFail();
                 
-                foreach ($itens as $itemData) {
-                    try {
-                        $processoItem = \App\Modules\Processo\Models\ProcessoItem::find($itemData['processo_item_id']);
-                        if (!$processoItem) {
-                            $vinculosErros[] = "Item {$itemData['processo_item_id']} não encontrado.";
-                            continue;
+                // Se for array, já está validado. Se for FormRequest, chamar validated()
+                $data = is_array($request) ? $request : $request->validated();
+                $data['processo_id'] = $processoId;
+                
+                // Extrair itens antes de criar a nota fiscal
+                $itens = $data['itens'] ?? [];
+                unset($data['itens']); // Remover itens do data principal
+                
+                // Usar Use Case DDD (contém toda a lógica de negócio, incluindo tenant)
+                $dto = CriarNotaFiscalDTO::fromArray($data);
+                $notaFiscalDomain = $this->criarNotaFiscalUseCase->executar($dto);
+                
+                // Buscar modelo Eloquent para resposta usando repository
+                $notaFiscal = $this->notaFiscalRepository->buscarModeloPorId(
+                    $notaFiscalDomain->id,
+                    ['empenho', 'contrato', 'autorizacaoFornecimento', 'fornecedor']
+                );
+                
+                if (!$notaFiscal) {
+                    throw new \Exception('Nota fiscal não encontrada após criação.');
+                }
+                
+                // 🔥 Criar vínculos com itens do processo
+                if (!empty($itens)) {
+                    $processo = $this->processoRepository->buscarModeloPorId($processoId);
+                    
+                    foreach ($itens as $itemData) {
+                        try {
+                            $processoItem = \App\Modules\Processo\Models\ProcessoItem::find($itemData['processo_item_id']);
+                            if (!$processoItem) {
+                                throw new \Exception("Item {$itemData['processo_item_id']} não encontrado.");
+                            }
+                            
+                            $vinculoData = [
+                                'processo_item_id' => $itemData['processo_item_id'],
+                                'nota_fiscal_id' => $notaFiscal->id,
+                                'quantidade' => $itemData['quantidade'] ?? 1,
+                                'valor_unitario' => $itemData['valor_unitario'] ?? 0,
+                                'valor_total' => $itemData['valor_total'] ?? ($itemData['quantidade'] * $itemData['valor_unitario']),
+                            ];
+                            
+                            // Se a NF tem empenho, vincular também ao empenho
+                            if ($notaFiscal->empenho_id) {
+                                $vinculoData['empenho_id'] = $notaFiscal->empenho_id;
+                            }
+                            
+                            $this->processoItemVinculoService->store($processo, $processoItem, $vinculoData, $empresa->id);
+                        } catch (\Exception $e) {
+                            // Se falhar o vínculo, lançamos exceção para dar rollback em TUDO
+                            throw $e;
                         }
-                        
-                        $vinculoData = [
-                            'processo_item_id' => $itemData['processo_item_id'],
-                            'nota_fiscal_id' => $notaFiscal->id,
-                            'quantidade' => $itemData['quantidade'] ?? 1,
-                            'valor_unitario' => $itemData['valor_unitario'] ?? 0,
-                            'valor_total' => $itemData['valor_total'] ?? ($itemData['quantidade'] * $itemData['valor_unitario']),
-                        ];
-                        
-                        // Se a NF tem empenho, vincular também ao empenho
-                        if ($notaFiscal->empenho_id) {
-                            $vinculoData['empenho_id'] = $notaFiscal->empenho_id;
-                        }
-                        
-                        $this->processoItemVinculoService->store($processo, $processoItem, $vinculoData, $empresa->id);
-                    } catch (\Exception $e) {
-                        $vinculosErros[] = "Erro ao vincular item {$itemData['processo_item_id']}: {$e->getMessage()}";
-                        Log::warning('Erro ao vincular item à nota fiscal', [
-                            'nota_fiscal_id' => $notaFiscal->id,
-                            'item_data' => $itemData,
-                            'error' => $e->getMessage(),
-                        ]);
                     }
                 }
-            }
-            
-            $responseData = [
-                'message' => 'Nota fiscal criada com sucesso',
-                'data' => $notaFiscal->toArray(),
-            ];
-            
-            if (!empty($vinculosErros)) {
-                $responseData['avisos'] = $vinculosErros;
-            }
-            
-            return response()->json($responseData, 201);
+                
+                // Recalcular financeiros do processo para o Dashboard
+                try {
+                    $this->saldoService->recalcularValoresFinanceirosItens($processoId);
+                } catch (\Exception $e) {
+                    \Log::warning('Erro ao recalcular financeiros após criar nota fiscal: ' . $e->getMessage());
+                }
+
+                return response()->json([
+                    'message' => 'Nota fiscal criada com sucesso',
+                    'data' => $notaFiscal->toArray(),
+                ], 201);
+            });
         } catch (\App\Domain\Exceptions\DomainException $e) {
             $statusCode = $e->getMessage() === 'Notas fiscais só podem ser criadas para processos em execução.' ? 403 : 
                          ($e->getMessage() === 'Nota fiscal deve estar vinculada a um Empenho, Contrato ou Autorização de Fornecimento.' ? 400 : 400);
@@ -418,86 +415,84 @@ class NotaFiscalController extends BaseApiController
      */
     public function updateWeb(Request $request, int $processoId, int $notaFiscalId)
     {
-        $empresa = $this->getEmpresaAtivaOrFail();
-        
         try {
-            // Validar dados usando as mesmas regras do create
-            $rules = (new NotaFiscalCreateRequest())->rules();
-            $validator = Validator::make($request->all(), $rules);
-            
-            if ($validator->fails()) {
-                return response()->json([
-                    'message' => 'Dados inválidos',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-            
-            $data = $validator->validated();
-            
-            // Extrair itens antes de atualizar a nota fiscal
-            $itens = $data['itens'] ?? [];
-            unset($data['itens']); // Remover itens do data principal
-            
-            // Usar Use Case DDD (contém toda a lógica de negócio)
-            $dto = AtualizarNotaFiscalDTO::fromArray($data, $notaFiscalId);
-            $notaFiscalDomain = $this->atualizarNotaFiscalUseCase->executar($dto, $empresa->id);
-            
-            // 🔥 Atualizar vínculos com itens do processo
-            // Primeiro, remover vínculos antigos para esta NF para evitar duplicidade ou órfãos
-            \App\Modules\Processo\Models\ProcessoItemVinculo::where('nota_fiscal_id', $notaFiscalId)->delete();
-            
-            $vinculosErros = [];
-            if (!empty($itens)) {
-                $processo = $this->processoRepository->buscarModeloPorId($processoId);
+            return \Illuminate\Support\Facades\DB::transaction(function () use ($request, $processoId, $notaFiscalId) {
+                $empresa = $this->getEmpresaAtivaOrFail();
                 
-                foreach ($itens as $itemData) {
-                    try {
-                        $processoItem = \App\Modules\Processo\Models\ProcessoItem::find($itemData['processo_item_id']);
-                        if (!$processoItem) {
-                            $vinculosErros[] = "Item {$itemData['processo_item_id']} não encontrado.";
-                            continue;
+                // Validar dados usando as mesmas regras do create
+                $rules = (new NotaFiscalCreateRequest())->rules();
+                $validator = Validator::make($request->all(), $rules);
+                
+                if ($validator->fails()) {
+                    throw new \Illuminate\Validation\ValidationException($validator);
+                }
+                
+                $data = $validator->validated();
+                
+                // Extrair itens antes de atualizar a nota fiscal
+                $itens = $data['itens'] ?? [];
+                unset($data['itens']); // Remover itens do data principal
+                
+                // Usar Use Case DDD (contém toda a lógica de negócio)
+                $dto = AtualizarNotaFiscalDTO::fromArray($data, $notaFiscalId);
+                $notaFiscalDomain = $this->atualizarNotaFiscalUseCase->executar($dto, $empresa->id);
+                
+                // 🔥 Atualizar vínculos com itens do processo
+                // Primeiro, remover vínculos antigos para esta NF para evitar duplicidade ou órfãos
+                \App\Modules\Processo\Models\ProcessoItemVinculo::where('nota_fiscal_id', $notaFiscalId)->delete();
+                
+                if (!empty($itens)) {
+                    $processo = $this->processoRepository->buscarModeloPorId($processoId);
+                    
+                    foreach ($itens as $itemData) {
+                        try {
+                            $processoItem = \App\Modules\Processo\Models\ProcessoItem::find($itemData['processo_item_id']);
+                            if (!$processoItem) {
+                                throw new \Exception("Item {$itemData['processo_item_id']} não encontrado.");
+                            }
+                            
+                            $vinculoData = [
+                                'processo_item_id' => $itemData['processo_item_id'],
+                                'nota_fiscal_id' => $notaFiscalId,
+                                'quantidade' => $itemData['quantidade'] ?? 1,
+                                'valor_unitario' => $itemData['valor_unitario'] ?? 0,
+                                'valor_total' => $itemData['valor_total'] ?? ($itemData['quantidade'] * $itemData['valor_unitario']),
+                            ];
+                            
+                            // Se a NF tem empenho, vincular também ao empenho
+                            if ($notaFiscalDomain->empenhoId) {
+                                $vinculoData['empenho_id'] = $notaFiscalDomain->empenhoId;
+                            }
+                            
+                            $this->processoItemVinculoService->store($processo, $processoItem, $vinculoData, $empresa->id);
+                        } catch (\Exception $e) {
+                            throw $e;
                         }
-                        
-                        $vinculoData = [
-                            'processo_item_id' => $itemData['processo_item_id'],
-                            'nota_fiscal_id' => $notaFiscalId,
-                            'quantidade' => $itemData['quantidade'] ?? 1,
-                            'valor_unitario' => $itemData['valor_unitario'] ?? 0,
-                            'valor_total' => $itemData['valor_total'] ?? ($itemData['quantidade'] * $itemData['valor_unitario']),
-                        ];
-                        
-                        // Se a NF tem empenho, vincular também ao empenho
-                        if ($notaFiscalDomain->empenhoId) {
-                            $vinculoData['empenho_id'] = $notaFiscalDomain->empenhoId;
-                        }
-                        
-                        $this->processoItemVinculoService->store($processo, $processoItem, $vinculoData, $empresa->id);
-                    } catch (\Exception $e) {
-                        $vinculosErros[] = "Erro ao vincular item {$itemData['processo_item_id']}: {$e->getMessage()}";
                     }
                 }
-            }
-            
-            // Buscar modelo Eloquent para resposta usando repository
-            $notaFiscalModel = $this->notaFiscalRepository->buscarModeloPorId(
-                $notaFiscalDomain->id,
-                ['empenho', 'contrato', 'autorizacaoFornecimento', 'fornecedor', 'processo']
-            );
-            
-            if (!$notaFiscalModel) {
-                return response()->json(['message' => 'Nota fiscal não encontrada após atualização.'], 404);
-            }
-            
-            $responseData = [
-                'message' => 'Nota fiscal atualizada com sucesso',
-                'data' => $notaFiscalModel->toArray(),
-            ];
-            
-            if (!empty($vinculosErros)) {
-                $responseData['avisos'] = $vinculosErros;
-            }
-            
-            return response()->json($responseData);
+                
+                // Recalcular financeiros do processo para o Dashboard
+                try {
+                    $this->saldoService->recalcularValoresFinanceirosItens($processoId);
+                } catch (\Exception $e) {
+                    \Log::warning('Erro ao recalcular financeiros após atualizar nota fiscal: ' . $e->getMessage());
+                }
+
+                // Buscar modelo Eloquent para resposta usando repository
+                $notaFiscalModel = $this->notaFiscalRepository->buscarModeloPorId(
+                    $notaFiscalDomain->id,
+                    ['empenho', 'contrato', 'autorizacaoFornecimento', 'fornecedor', 'processo']
+                );
+                
+                if (!$notaFiscalModel) {
+                    throw new \Exception('Nota fiscal não encontrada após atualização.');
+                }
+                
+                return response()->json([
+                    'message' => 'Nota fiscal atualizada com sucesso',
+                    'data' => $notaFiscalModel->toArray(),
+                ]);
+            });
         } catch (\App\Domain\Exceptions\DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage(),

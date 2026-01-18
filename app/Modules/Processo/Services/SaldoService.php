@@ -390,17 +390,22 @@ class SaldoService
         }
     }
 
-    /**
-     * Recalcula valores financeiros de todos os itens do processo
-     * Útil quando o processo entra em execução ou quando há necessidade de atualizar valores
-     */
-    public function recalcularValoresFinanceirosItens(Processo $processo): array
+    public function recalcularValoresFinanceirosItens(Processo|int $processo): array
     {
+        if (is_numeric($processo)) {
+            $processo = Processo::find($processo);
+        }
+
+        if (!$processo) {
+            return [];
+        }
+
         // Passo preliminar: Reparar vínculos perdidos (legado)
         $this->repararVinculosEmpenhosAntigos($processo);
 
+        // Buscar itens que têm potencial financeiro (Aceitos ou em execução)
         $itens = $processo->itens()
-            ->whereIn('status_item', ['aceito', 'aceito_habilitado'])
+            ->whereIn('status_item', ['aceito', 'aceito_habilitado', 'aguardando_entrega'])
             ->get();
 
         $itensAtualizados = [];

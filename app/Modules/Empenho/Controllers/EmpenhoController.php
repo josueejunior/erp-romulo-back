@@ -286,6 +286,13 @@ class EmpenhoController extends BaseApiController
                     }
                 }
                 
+                // Recalcular financeiros do processo para o Dashboard
+                try {
+                    $this->saldoService->recalcularValoresFinanceirosItens($processoId);
+                } catch (\Exception $e) {
+                    \Log::warning('Erro ao recalcular financeiros após criar empenho: ' . $e->getMessage());
+                }
+
                 return response()->json([
                     'message' => 'Empenho criado com sucesso',
                     'data' => $empenho->toArray(),
