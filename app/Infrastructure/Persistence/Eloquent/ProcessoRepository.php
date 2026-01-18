@@ -330,11 +330,7 @@ class ProcessoRepository implements ProcessoRepositoryInterface
         $result = $query->selectRaw('
             SUM(processo_itens.valor_vencido) as potencial_total,
             SUM(processo_itens.lucro_bruto) as lucro_total_bruto,
-            SUM(COALESCE((
-                SELECT SUM(v.valor_total) 
-                FROM processo_item_vinculos v 
-                WHERE v.processo_item_id = processo_itens.id
-            ), 0)) as valor_ja_vinculado
+            SUM(processo_itens.valor_empenhado) as valor_ja_vinculado
         ')->first();
 
         $vinculado = (float) ($result->valor_ja_vinculado ?? 0);

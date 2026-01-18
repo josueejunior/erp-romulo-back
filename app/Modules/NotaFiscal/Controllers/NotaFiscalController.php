@@ -326,7 +326,7 @@ class NotaFiscalController extends BaseApiController
             // Buscar modelo Eloquent apenas para serialização (Infrastructure)
             $notaFiscalModel = $this->notaFiscalRepository->buscarModeloPorId(
                 $notaFiscalDomain->id,
-                ['empenho', 'contrato', 'autorizacaoFornecimento', 'fornecedor', 'processo']
+                ['empenho', 'contrato', 'autorizacaoFornecimento', 'fornecedor', 'processo', 'vinculos']
             );
             
             if (!$notaFiscalModel) {
@@ -434,9 +434,49 @@ class NotaFiscalController extends BaseApiController
             
             $data = $validator->validated();
             
+            // Extrair itens antes de atualizar a nota fiscal
+            $itens = $data['itens'] ?? [];
+            unset($data['itens']); // Remover itens do data principal
+            
             // Usar Use Case DDD (contém toda a lógica de negócio)
             $dto = AtualizarNotaFiscalDTO::fromArray($data, $notaFiscalId);
             $notaFiscalDomain = $this->atualizarNotaFiscalUseCase->executar($dto, $empresa->id);
+            
+            // 🔥 Atualizar vínculos com itens do processo
+            // Primeiro, remover vínculos antigos para esta NF para evitar duplicidade ou órfãos
+            \App\Modules\Processo\Models\ProcessoItemVinculo::where('nota_fiscal_id', $notaFiscalId)->delete();
+            
+            $vinculosErros = [];
+            if (!empty($itens)) {
+                $processo = $this->processoRepository->buscarModeloPorId($processoId);
+                
+                foreach ($itens as $itemData) {
+                    try {
+                        $processoItem = \App\Modules\Processo\Models\ProcessoItem::find($itemData['processo_item_id']);
+                        if (!$processoItem) {
+                            $vinculosErros[] = "Item {$itemData['processo_item_id']} não encontrado.";
+                            continue;
+                        }
+                        
+                        $vinculoData = [
+                            'processo_item_id' => $itemData['processo_item_id'],
+                            'nota_fiscal_id' => $notaFiscalId,
+                            'quantidade' => $itemData['quantidade'] ?? 1,
+                            'valor_unitario' => $itemData['valor_unitario'] ?? 0,
+                            'valor_total' => $itemData['valor_total'] ?? ($itemData['quantidade'] * $itemData['valor_unitario']),
+                        ];
+                        
+                        // Se a NF tem empenho, vincular também ao empenho
+                        if ($notaFiscalDomain->empenhoId) {
+                            $vinculoData['empenho_id'] = $notaFiscalDomain->empenhoId;
+                        }
+                        
+                        $this->processoItemVinculoService->store($processo, $processoItem, $vinculoData, $empresa->id);
+                    } catch (\Exception $e) {
+                        $vinculosErros[] = "Erro ao vincular item {$itemData['processo_item_id']}: {$e->getMessage()}";
+                    }
+                }
+            }
             
             // Buscar modelo Eloquent para resposta usando repository
             $notaFiscalModel = $this->notaFiscalRepository->buscarModeloPorId(
@@ -448,10 +488,16 @@ class NotaFiscalController extends BaseApiController
                 return response()->json(['message' => 'Nota fiscal não encontrada após atualização.'], 404);
             }
             
-            return response()->json([
+            $responseData = [
                 'message' => 'Nota fiscal atualizada com sucesso',
                 'data' => $notaFiscalModel->toArray(),
-            ]);
+            ];
+            
+            if (!empty($vinculosErros)) {
+                $responseData['avisos'] = $vinculosErros;
+            }
+            
+            return response()->json($responseData);
         } catch (\App\Domain\Exceptions\DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage(),

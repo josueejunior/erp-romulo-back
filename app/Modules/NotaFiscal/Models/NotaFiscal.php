@@ -105,6 +105,11 @@ class NotaFiscal extends BaseModel
     {
         return $this->belongsTo(Fornecedor::class);
     }
+
+    public function vinculos(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(\App\Modules\Processo\Models\ProcessoItemVinculo::class, 'nota_fiscal_id');
+    }
 }
 
 
