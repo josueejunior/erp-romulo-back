@@ -6,6 +6,7 @@ use App\Models\BaseModel;
 use App\Modules\Contrato\Models\Contrato;
 use App\Modules\AutorizacaoFornecimento\Models\AutorizacaoFornecimento;
 use App\Modules\Empenho\Models\Empenho;
+use App\Modules\NotaFiscal\Models\NotaFiscal;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ProcessoItemVinculo extends BaseModel
@@ -18,6 +19,7 @@ class ProcessoItemVinculo extends BaseModel
         'contrato_id',
         'autorizacao_fornecimento_id',
         'empenho_id',
+        'nota_fiscal_id',
         'quantidade',
         'valor_unitario',
         'valor_total',
@@ -51,6 +53,11 @@ class ProcessoItemVinculo extends BaseModel
     public function empenho(): BelongsTo
     {
         return $this->belongsTo(Empenho::class);
+    }
+
+    public function notaFiscal(): BelongsTo
+    {
+        return $this->belongsTo(NotaFiscal::class);
     }
 }
 
