@@ -232,68 +232,65 @@ class EmpenhoController extends BaseApiController
     public function storeWeb(array $data, int $processoId): JsonResponse
     {
         try {
-            // Adicionar processo_id aos dados
-            $data['processo_id'] = $processoId;
-            
-            // Extrair itens antes de criar o empenho
-            $itens = $data['itens'] ?? [];
-            unset($data['itens']); // Remover itens do data principal
-            
-            // Usar Use Case DDD (contém toda a lógica de negócio, incluindo tenant)
-            $dto = CriarEmpenhoDTO::fromArray($data);
-            $empenhoDomain = $this->criarEmpenhoUseCase->executar($dto);
-            
-            // Buscar modelo Eloquent para resposta usando repository
-            $empenho = $this->empenhoRepository->buscarModeloPorId(
-                $empenhoDomain->id,
-                ['processo', 'contrato', 'autorizacaoFornecimento']
-            );
-            
-            if (!$empenho) {
-                return response()->json(['message' => 'Empenho não encontrado após criação.'], 404);
-            }
-            
-            // 🔥 Criar vínculos com itens do processo
-            $vinculosErros = [];
-            if (!empty($itens)) {
-                $processo = $this->processoRepository->buscarModeloPorId($processoId);
-                $empresa = $this->getEmpresaAtivaOrFail();
+            return \Illuminate\Support\Facades\DB::transaction(function () use ($data, $processoId) {
+                // Adicionar processo_id aos dados
+                $data['processo_id'] = $processoId;
                 
-                foreach ($itens as $itemData) {
-                    try {
-                        $processoItem = \App\Modules\Processo\Models\ProcessoItem::find($itemData['processo_item_id']);
-                        if (!$processoItem) {
-                            $vinculosErros[] = "Item {$itemData['processo_item_id']} não encontrado.";
-                            continue;
+                // Extrair itens antes de criar o empenho
+                $itens = $data['itens'] ?? [];
+                unset($data['itens']); // Remover itens do data principal
+                
+                // Usar Use Case DDD (contém toda a lógica de negócio, incluindo tenant)
+                $dto = CriarEmpenhoDTO::fromArray($data);
+                $empenhoDomain = $this->criarEmpenhoUseCase->executar($dto);
+                
+                // Buscar modelo Eloquent para resposta usando repository
+                $empenho = $this->empenhoRepository->buscarModeloPorId(
+                    $empenhoDomain->id,
+                    ['processo', 'contrato', 'autorizacaoFornecimento']
+                );
+                
+                if (!$empenho) {
+                    throw new \Exception('Empenho não encontrado após criação.');
+                }
+                
+                // 🔥 Criar vínculos com itens do processo
+                $vinculosErros = [];
+                if (!empty($itens)) {
+                    $processo = $this->processoRepository->buscarModeloPorId($processoId);
+                    $empresa = $this->getEmpresaAtivaOrFail();
+                    
+                    foreach ($itens as $itemData) {
+                        try {
+                            $processoItem = \App\Modules\Processo\Models\ProcessoItem::find($itemData['processo_item_id']);
+                            if (!$processoItem) {
+                                throw new \Exception("Item {$itemData['processo_item_id']} não encontrado.");
+                            }
+                            
+                            $vinculoData = [
+                                'processo_item_id' => $itemData['processo_item_id'],
+                                'empenho_id' => $empenho->id,
+                                'contrato_id' => $empenho->contrato_id,
+                                'autorizacao_fornecimento_id' => $empenho->autorizacao_fornecimento_id,
+                                'quantidade' => $itemData['quantidade'] ?? 1,
+                                'valor_unitario' => $itemData['valor_unitario'] ?? 0,
+                                'valor_total' => $itemData['valor_total'] ?? ($itemData['quantidade'] * $itemData['valor_unitario']),
+                            ];
+                            
+                            $this->processoItemVinculoService->store($processo, $processoItem, $vinculoData, $empresa->id);
+                        } catch (\Exception $e) {
+                            // No storeWeb, se um item falhar, queremos dar rollback em TUDO
+                            // para evitar empenhos inconsistentes
+                            throw $e; 
                         }
-                        
-                        $vinculoData = [
-                            'processo_item_id' => $itemData['processo_item_id'],
-                            'empenho_id' => $empenho->id,
-                            'contrato_id' => $empenho->contrato_id,
-                            'autorizacao_fornecimento_id' => $empenho->autorizacao_fornecimento_id,
-                            'quantidade' => $itemData['quantidade'] ?? 1,
-                            'valor_unitario' => $itemData['valor_unitario'] ?? 0,
-                            'valor_total' => $itemData['valor_total'] ?? ($itemData['quantidade'] * $itemData['valor_unitario']),
-                        ];
-                        
-                        $this->processoItemVinculoService->store($processo, $processoItem, $vinculoData, $empresa->id);
-                    } catch (\Exception $e) {
-                        $vinculosErros[] = "Erro ao vincular item {$itemData['processo_item_id']}: {$e->getMessage()}";
                     }
                 }
-            }
-            
-            $responseData = [
-                'message' => 'Empenho criado com sucesso',
-                'data' => $empenho->toArray(),
-            ];
-            
-            if (!empty($vinculosErros)) {
-                $responseData['avisos'] = $vinculosErros;
-            }
-            
-            return response()->json($responseData, 201);
+                
+                return response()->json([
+                    'message' => 'Empenho criado com sucesso',
+                    'data' => $empenho->toArray(),
+                ], 201);
+            });
         } catch (\App\Domain\Exceptions\DomainException $e) {
             $statusCode = $e->getMessage() === 'Empenhos só podem ser criados para processos em execução.' ? 403 : 
                          ($e->getMessage() === 'Processo é obrigatório para criar empenho.' ? 400 : 400);
@@ -301,7 +298,7 @@ class EmpenhoController extends BaseApiController
                 'message' => $e->getMessage(),
             ], $statusCode);
         } catch (\Exception $e) {
-            return $this->handleException($e, 'Erro ao criar empenho');
+            return $this->handleException($e, 'Erro ao criar empenho: ' . $e->getMessage());
         }
     }
 
@@ -424,94 +421,87 @@ class EmpenhoController extends BaseApiController
         $empresa = $this->getEmpresaAtivaOrFail();
         
         try {
-            // Validar dados usando as mesmas regras do create
-            $rules = (new EmpenhoCreateRequest())->rules();
-            $validator = \Illuminate\Support\Facades\Validator::make($request->all(), $rules);
-            
-            if ($validator->fails()) {
-                return response()->json([
-                    'message' => 'Dados inválidos',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-            
-            $data = $validator->validated();
-            
-            // Extrair itens antes de atualizar o empenho
-            $itens = $data['itens'] ?? [];
-            unset($data['itens']); // Remover itens do data principal
-            
-            // Usar Use Case DDD (contém toda a lógica de negócio)
-            $dto = AtualizarEmpenhoDTO::fromArray($data, $empenhoId);
-            $empenhoDomain = $this->atualizarEmpenhoUseCase->executar($dto, $empresa->id);
-            
-            // 🔥 Atualizar vínculos com itens do processo
-            // Remover vínculos de empenho existentes (exceto os que já estão em Notas Fiscais, se houver regra contra isso)
-            // Mas aqui o empenho é o documento principal sendo atualizado.
-            \App\Modules\Processo\Models\ProcessoItemVinculo::where('empenho_id', $empenhoId)
-                ->whereNull('nota_fiscal_id') // Não remover se já foi faturado? Ou remover tudo e recriar?
-                ->delete();
-            
-            $vinculosErros = [];
-            if (!empty($itens)) {
+            return \Illuminate\Support\Facades\DB::transaction(function () use ($request, $processoId, $empenhoId, $empresa) {
+                // Validar dados usando as mesmas regras do create
+                $rules = (new EmpenhoCreateRequest())->rules();
+                $validator = \Illuminate\Support\Facades\Validator::make($request->all(), $rules);
+                
+                if ($validator->fails()) {
+                    return response()->json([
+                        'message' => 'Dados inválidos',
+                        'errors' => $validator->errors()
+                    ], 422);
+                }
+                
+                $data = $validator->validated();
+                
+                // Extrair itens antes de atualizar o empenho
+                $itens = $data['itens'] ?? [];
+                unset($data['itens']); // Remover itens do data principal
+                
+                // Usar Use Case DDD (contém toda a lógica de negócio)
+                $dto = AtualizarEmpenhoDTO::fromArray($data, $empenhoId);
+                $empenhoDomain = $this->atualizarEmpenhoUseCase->executar($dto, $empresa->id);
+                
+                // 🔥 Atualizar vínculos com itens do processo
+                // Remover vínculos de empenho existentes (exceto os que já estão em Notas Fiscais)
+                \App\Modules\Processo\Models\ProcessoItemVinculo::where('empenho_id', $empenhoId)
+                    ->whereNull('nota_fiscal_id')
+                    ->delete();
+                
                 $processo = $this->processoRepository->buscarModeloPorId($processoId);
                 
-                foreach ($itens as $itemData) {
-                    try {
-                        $processoItem = \App\Modules\Processo\Models\ProcessoItem::find($itemData['processo_item_id']);
-                        if (!$processoItem) {
-                            $vinculosErros[] = "Item {$itemData['processo_item_id']} não encontrado.";
-                            continue;
+                if (!empty($itens)) {
+                    foreach ($itens as $itemData) {
+                        try {
+                            $processoItem = \App\Modules\Processo\Models\ProcessoItem::find($itemData['processo_item_id']);
+                            if (!$processoItem) {
+                                throw new \Exception("Item {$itemData['processo_item_id']} não encontrado.");
+                            }
+                            
+                            $vinculoData = [
+                                'processo_item_id' => $itemData['processo_item_id'],
+                                'empenho_id' => $empenhoId,
+                                'contrato_id' => $empenhoDomain->contratoId,
+                                'autorizacao_fornecimento_id' => $empenhoDomain->autorizacaoFornecimentoId,
+                                'quantidade' => $itemData['quantidade'] ?? 1,
+                                'valor_unitario' => $itemData['valor_unitario'] ?? 0,
+                                'valor_total' => $itemData['valor_total'] ?? ($itemData['quantidade'] * $itemData['valor_unitario']),
+                            ];
+                            
+                            $this->processoItemVinculoService->store($processo, $processoItem, $vinculoData, $empresa->id);
+                        } catch (\Exception $e) {
+                            // Se um item falhar, queremos dar rollback em TUDO
+                            throw $e;
                         }
-                        
-                        $vinculoData = [
-                            'processo_item_id' => $itemData['processo_item_id'],
-                            'empenho_id' => $empenhoId,
-                            'contrato_id' => $empenhoDomain->contratoId,
-                            'autorizacao_fornecimento_id' => $empenhoDomain->autorizacaoFornecimentoId,
-                            'quantidade' => $itemData['quantidade'] ?? 1,
-                            'valor_unitario' => $itemData['valor_unitario'] ?? 0,
-                            'valor_total' => $itemData['valor_total'] ?? ($itemData['quantidade'] * $itemData['valor_unitario']),
-                        ];
-                        
-                        $this->processoItemVinculoService->store($processo, $processoItem, $vinculoData, $empresa->id);
-                    } catch (\Exception $e) {
-                        $vinculosErros[] = "Erro ao vincular item {$itemData['processo_item_id']}: {$e->getMessage()}";
                     }
                 }
-            }
-            
-            // Buscar modelo Eloquent para resposta usando repository
-            $empenhoModel = $this->empenhoRepository->buscarModeloPorId(
-                $empenhoDomain->id,
-                ['processo', 'contrato', 'autorizacaoFornecimento']
-            );
-            
-            if (!$empenhoModel) {
-                return response()->json(['message' => 'Empenho não encontrado após atualização.'], 404);
-            }
-            
-            $responseData = [
-                'message' => 'Empenho atualizado com sucesso',
-                'data' => $empenhoModel->toArray(),
-            ];
-            
-            if (!empty($vinculosErros)) {
-                $responseData['avisos'] = $vinculosErros;
-            }
-            
-            return response()->json($responseData);
+                
+                // Recalcular valores financeiros dos itens do processo para garantir Dashboard atualizado
+                if ($processo) {
+                    $saldoService = app(\App\Modules\Processo\Services\SaldoService::class);
+                    $saldoService->recalcularValoresFinanceirosItens($processo);
+                }
+                
+                // Buscar modelo Eloquent para resposta usando repository
+                $empenhoModel = $this->empenhoRepository->buscarModeloPorId(
+                    $empenhoDomain->id,
+                    ['processo', 'contrato', 'autorizacaoFornecimento']
+                );
+                
+                if (!$empenhoModel) {
+                    return response()->json(['message' => 'Empenho não encontrado após atualização.'], 404);
+                }
+                
+                return response()->json([
+                    'message' => 'Empenho atualizado com sucesso',
+                    'data' => $empenhoModel->toArray(),
+                ]);
+            });
         } catch (\App\Domain\Exceptions\DomainException $e) {
-            return response()->json([
-                'message' => $e->getMessage(),
-            ], 400);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json([
-                'message' => 'Dados inválidos',
-                'errors' => $e->errors()
-            ], 422);
+            return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
-            return $this->handleException($e, 'Erro ao atualizar empenho');
+            return $this->handleException($e, 'Erro ao atualizar empenho: ' . $e->getMessage());
         }
     }
 

@@ -35,6 +35,10 @@ class NotaFiscalCreateRequest extends FormRequest
             'situacao' => 'nullable|string',
             'data_pagamento' => 'nullable|date',
             'observacoes' => 'nullable|string',
+            'itens' => 'nullable|array',
+            'itens.*.processo_item_id' => 'required|integer|exists:processo_itens,id',
+            'itens.*.quantidade' => 'required|numeric|min:0',
+            'itens.*.valor_unitario' => 'required|numeric|min:0',
         ];
     }
 }

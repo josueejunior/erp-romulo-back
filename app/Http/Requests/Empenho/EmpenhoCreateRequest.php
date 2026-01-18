@@ -24,6 +24,10 @@ class EmpenhoCreateRequest extends FormRequest
             'situacao' => 'nullable|string',
             'observacoes' => 'nullable|string',
             'numero_cte' => 'nullable|string|max:255',
+            'itens' => 'nullable|array',
+            'itens.*.processo_item_id' => 'required|integer|exists:processo_itens,id',
+            'itens.*.quantidade' => 'required|numeric|min:0',
+            'itens.*.valor_unitario' => 'required|numeric|min:0',
         ];
     }
 }
