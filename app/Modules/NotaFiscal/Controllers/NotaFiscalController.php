@@ -51,6 +51,7 @@ class NotaFiscalController extends BaseApiController
         private ExcluirNotaFiscalUseCase $excluirNotaFiscalUseCase,
         private ProcessoRepositoryInterface $processoRepository,
         private NotaFiscalRepositoryInterface $notaFiscalRepository,
+        private \App\Modules\Processo\Services\ProcessoItemVinculoService $processoItemVinculoService,
     ) {
         $this->notaFiscalService = $notaFiscalService; // Para métodos que ainda precisam do Service
     }
@@ -217,9 +218,15 @@ class NotaFiscalController extends BaseApiController
     public function storeWeb(NotaFiscalCreateRequest|array $request, int $processoId): JsonResponse
     {
         try {
+            $empresa = $this->getEmpresaAtivaOrFail();
+            
             // Se for array, já está validado. Se for FormRequest, chamar validated()
             $data = is_array($request) ? $request : $request->validated();
             $data['processo_id'] = $processoId;
+            
+            // Extrair itens antes de criar a nota fiscal
+            $itens = $data['itens'] ?? [];
+            unset($data['itens']); // Remover itens do data principal
             
             // Usar Use Case DDD (contém toda a lógica de negócio, incluindo tenant)
             $dto = CriarNotaFiscalDTO::fromArray($data);
@@ -235,10 +242,54 @@ class NotaFiscalController extends BaseApiController
                 return response()->json(['message' => 'Nota fiscal não encontrada após criação.'], 404);
             }
             
-            return response()->json([
+            // 🔥 Criar vínculos com itens do processo
+            $vinculosErros = [];
+            if (!empty($itens)) {
+                $processo = $this->processoRepository->buscarModeloPorId($processoId);
+                
+                foreach ($itens as $itemData) {
+                    try {
+                        $processoItem = \App\Modules\Processo\Models\ProcessoItem::find($itemData['processo_item_id']);
+                        if (!$processoItem) {
+                            $vinculosErros[] = "Item {$itemData['processo_item_id']} não encontrado.";
+                            continue;
+                        }
+                        
+                        $vinculoData = [
+                            'processo_item_id' => $itemData['processo_item_id'],
+                            'nota_fiscal_id' => $notaFiscal->id,
+                            'quantidade' => $itemData['quantidade'] ?? 1,
+                            'valor_unitario' => $itemData['valor_unitario'] ?? 0,
+                            'valor_total' => $itemData['valor_total'] ?? ($itemData['quantidade'] * $itemData['valor_unitario']),
+                        ];
+                        
+                        // Se a NF tem empenho, vincular também ao empenho
+                        if ($notaFiscal->empenho_id) {
+                            $vinculoData['empenho_id'] = $notaFiscal->empenho_id;
+                        }
+                        
+                        $this->processoItemVinculoService->store($processo, $processoItem, $vinculoData, $empresa->id);
+                    } catch (\Exception $e) {
+                        $vinculosErros[] = "Erro ao vincular item {$itemData['processo_item_id']}: {$e->getMessage()}";
+                        Log::warning('Erro ao vincular item à nota fiscal', [
+                            'nota_fiscal_id' => $notaFiscal->id,
+                            'item_data' => $itemData,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+            }
+            
+            $responseData = [
                 'message' => 'Nota fiscal criada com sucesso',
                 'data' => $notaFiscal->toArray(),
-            ], 201);
+            ];
+            
+            if (!empty($vinculosErros)) {
+                $responseData['avisos'] = $vinculosErros;
+            }
+            
+            return response()->json($responseData, 201);
         } catch (\App\Domain\Exceptions\DomainException $e) {
             $statusCode = $e->getMessage() === 'Notas fiscais só podem ser criadas para processos em execução.' ? 403 : 
                          ($e->getMessage() === 'Nota fiscal deve estar vinculada a um Empenho, Contrato ou Autorização de Fornecimento.' ? 400 : 400);

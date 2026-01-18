@@ -8,6 +8,7 @@ use App\Modules\Processo\Models\Processo;
 use App\Domain\Contrato\Repositories\ContratoRepositoryInterface;
 use App\Domain\AutorizacaoFornecimento\Repositories\AutorizacaoFornecimentoRepositoryInterface;
 use App\Domain\Empenho\Repositories\EmpenhoRepositoryInterface;
+use App\Domain\NotaFiscal\Repositories\NotaFiscalRepositoryInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
@@ -17,6 +18,7 @@ class ProcessoItemVinculoService
         private ContratoRepositoryInterface $contratoRepository,
         private AutorizacaoFornecimentoRepositoryInterface $autorizacaoRepository,
         private EmpenhoRepositoryInterface $empenhoRepository,
+        private NotaFiscalRepositoryInterface $notaFiscalRepository,
     ) {}
     /**
      * Valida dados para criar/atualizar vínculo
@@ -28,6 +30,7 @@ class ProcessoItemVinculoService
             'contrato_id' => 'nullable|exists:contratos,id',
             'autorizacao_fornecimento_id' => 'nullable|exists:autorizacoes_fornecimento,id',
             'empenho_id' => 'nullable|exists:empenhos,id',
+            'nota_fiscal_id' => 'nullable|exists:notas_fiscais,id',
             'quantidade' => 'required|numeric|min:0.01',
             'valor_unitario' => 'required|numeric|min:0',
             'valor_total' => 'required|numeric|min:0',
@@ -38,6 +41,7 @@ class ProcessoItemVinculoService
             'contrato_id.exists' => 'O contrato não foi encontrado.',
             'autorizacao_fornecimento_id.exists' => 'A autorização de fornecimento não foi encontrada.',
             'empenho_id.exists' => 'O empenho não foi encontrado.',
+            'nota_fiscal_id.exists' => 'A nota fiscal não foi encontrada.',
             'quantidade.required' => 'A quantidade é obrigatória.',
             'quantidade.min' => 'A quantidade deve ser maior que zero.',
             'valor_unitario.required' => 'O valor unitário é obrigatório.',
@@ -52,8 +56,8 @@ class ProcessoItemVinculoService
      */
     public function validateVinculoExists(array $data): void
     {
-        if (empty($data['contrato_id']) && empty($data['autorizacao_fornecimento_id']) && empty($data['empenho_id'])) {
-            throw new \Exception('É necessário informar pelo menos um vínculo (Contrato, AF ou Empenho).');
+        if (empty($data['contrato_id']) && empty($data['autorizacao_fornecimento_id']) && empty($data['empenho_id']) && empty($data['nota_fiscal_id'])) {
+            throw new \Exception('É necessário informar pelo menos um vínculo (Contrato, AF, Empenho ou Nota Fiscal).');
         }
     }
 
@@ -113,6 +117,13 @@ class ProcessoItemVinculoService
                 throw new \Exception('O empenho não pertence a este processo.');
             }
         }
+
+        if (!empty($data['nota_fiscal_id'])) {
+            $notaFiscal = $this->notaFiscalRepository->buscarPorId($data['nota_fiscal_id']);
+            if (!$notaFiscal || $notaFiscal->processoId !== $processo->id) {
+                throw new \Exception('A nota fiscal não pertence a este processo.');
+            }
+        }
     }
 
     /**
@@ -131,7 +142,7 @@ class ProcessoItemVinculoService
     public function listByItem(ProcessoItem $item): array
     {
         $vinculos = $item->vinculos()
-            ->with(['contrato', 'autorizacaoFornecimento', 'empenho'])
+            ->with(['contrato', 'autorizacaoFornecimento', 'empenho', 'notaFiscal'])
             ->get();
 
         return $vinculos->map(function ($vinculo) {
@@ -152,6 +163,12 @@ class ProcessoItemVinculoService
                 'empenho' => $vinculo->empenho ? [
                     'id' => $vinculo->empenho->id,
                     'numero' => $vinculo->empenho->numero,
+                ] : null,
+                'nota_fiscal_id' => $vinculo->nota_fiscal_id,
+                'nota_fiscal' => $vinculo->notaFiscal ? [
+                    'id' => $vinculo->notaFiscal->id,
+                    'numero' => $vinculo->notaFiscal->numero,
+                    'tipo' => $vinculo->notaFiscal->tipo,
                 ] : null,
                 'quantidade' => (float) $vinculo->quantidade,
                 'valor_unitario' => (float) $vinculo->valor_unitario,
@@ -207,6 +224,7 @@ class ProcessoItemVinculoService
                 'contrato_id' => $validated['contrato_id'] ?? null,
                 'autorizacao_fornecimento_id' => $validated['autorizacao_fornecimento_id'] ?? null,
                 'empenho_id' => $validated['empenho_id'] ?? null,
+                'nota_fiscal_id' => $validated['nota_fiscal_id'] ?? null,
                 'quantidade' => (float) $validated['quantidade'],
                 'valor_unitario' => (float) $validated['valor_unitario'],
                 'valor_total' => (float) $validated['valor_total'],
@@ -216,7 +234,7 @@ class ProcessoItemVinculoService
             // Atualizar valores financeiros do item
             $item->atualizarValoresFinanceiros();
 
-            return $vinculo->load(['contrato', 'autorizacaoFornecimento', 'empenho']);
+            return $vinculo->load(['contrato', 'autorizacaoFornecimento', 'empenho', 'notaFiscal']);
         });
     }
 
@@ -254,6 +272,7 @@ class ProcessoItemVinculoService
                 'contrato_id' => $validated['contrato_id'] ?? null,
                 'autorizacao_fornecimento_id' => $validated['autorizacao_fornecimento_id'] ?? null,
                 'empenho_id' => $validated['empenho_id'] ?? null,
+                'nota_fiscal_id' => $validated['nota_fiscal_id'] ?? null,
                 'quantidade' => (float) $validated['quantidade'],
                 'valor_unitario' => (float) $validated['valor_unitario'],
                 'valor_total' => (float) $validated['valor_total'],
@@ -263,7 +282,7 @@ class ProcessoItemVinculoService
             // Atualizar valores financeiros do item
             $item->atualizarValoresFinanceiros();
 
-            return $vinculo->load(['contrato', 'autorizacaoFornecimento', 'empenho']);
+            return $vinculo->load(['contrato', 'autorizacaoFornecimento', 'empenho', 'notaFiscal']);
         });
     }
 
