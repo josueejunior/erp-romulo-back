@@ -65,6 +65,11 @@ class Empenho extends BaseModel
         return $this->hasMany(NotaFiscal::class);
     }
 
+    public function vinculos(): HasMany
+    {
+        return $this->hasMany(\App\Modules\Processo\Models\ProcessoItemVinculo::class, 'empenho_id');
+    }
+
     public function concluir(): void
     {
         $this->concluido = true;

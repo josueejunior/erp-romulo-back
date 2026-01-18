@@ -329,7 +329,7 @@ class EmpenhoController extends BaseApiController
             // Buscar modelo Eloquent apenas para serialização (Infrastructure)
             $empenhoModel = $this->empenhoRepository->buscarModeloPorId(
                 $empenhoDomain->id,
-                ['processo', 'contrato', 'autorizacaoFornecimento', 'notasFiscais']
+                ['processo', 'contrato', 'autorizacaoFornecimento', 'notasFiscais', 'vinculos']
             );
             
             if (!$empenhoModel) {
