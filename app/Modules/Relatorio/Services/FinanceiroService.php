@@ -246,7 +246,16 @@ class FinanceiroService
         ]);
 
         $custosDiretosTotal = collect($notasEntrada->items())->sum(function($nf) {
-            return $nf->custoTotal > 0 ? $nf->custoTotal : ($nf->custoProduto + $nf->custoFrete);
+            // Prioridade: custoTotal > (custoProduto + custoFrete) > valor da NF
+            if ($nf->custoTotal > 0) {
+                return $nf->custoTotal;
+            }
+            $custosDetalhados = ($nf->custoProduto ?? 0) + ($nf->custoFrete ?? 0);
+            if ($custosDetalhados > 0) {
+                return $custosDetalhados;
+            }
+            // Fallback: usar o valor da NF de entrada como custo direto
+            return $nf->valor ?? 0;
         });
 
         // 3. Custos Indiretos do mês
@@ -268,7 +277,14 @@ class FinanceiroService
                 $recProc = collect($notasSaida->items())->where('processoId', $processo->id)->sum('valor');
                 // Custo do processo no mês
                 $custoProc = collect($notasEntrada->items())->where('processoId', $processo->id)->sum(function($nf) {
-                    return $nf->custoTotal > 0 ? $nf->custoTotal : ($nf->custoProduto + $nf->custoFrete);
+                    if ($nf->custoTotal > 0) {
+                        return $nf->custoTotal;
+                    }
+                    $custosDetalhados = ($nf->custoProduto ?? 0) + ($nf->custoFrete ?? 0);
+                    if ($custosDetalhados > 0) {
+                        return $custosDetalhados;
+                    }
+                    return $nf->valor ?? 0;
                 });
 
                 $processosDetalhados[] = [
