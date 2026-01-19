@@ -246,7 +246,7 @@ class FinanceiroService
         ]);
 
         $custosDiretosTotal = collect($notasEntrada->items())->sum(function($nf) {
-            return $nf->custo_total > 0 ? $nf->custo_total : ($nf->custo_produto + $nf->custo_frete);
+            return $nf->custoTotal > 0 ? $nf->custoTotal : ($nf->custoProduto + $nf->custoFrete);
         });
 
         // 3. Custos Indiretos do mês
@@ -254,8 +254,8 @@ class FinanceiroService
         $custosIndiretosTotal = $custosIndiretos['total'];
 
         // 4. Detalhar processos que tiveram movimento no período
-        $processosIds = collect($notasSaida->items())->pluck('processo_id')
-            ->merge(collect($notasEntrada->items())->pluck('processo_id'))
+        $processosIds = collect($notasSaida->items())->pluck('processoId')
+            ->merge(collect($notasEntrada->items())->pluck('processoId'))
             ->unique()
             ->filter()
             ->toArray();
@@ -265,10 +265,10 @@ class FinanceiroService
             $processos = \App\Modules\Processo\Models\Processo::whereIn('id', $processosIds)->get();
             foreach ($processos as $processo) {
                 // Receita do processo no mês
-                $recProc = collect($notasSaida->items())->where('processo_id', $processo->id)->sum('valor');
+                $recProc = collect($notasSaida->items())->where('processoId', $processo->id)->sum('valor');
                 // Custo do processo no mês
-                $custoProc = collect($notasEntrada->items())->where('processo_id', $processo->id)->sum(function($nf) {
-                    return $nf->custo_total > 0 ? $nf->custo_total : ($nf->custo_produto + $nf->custo_frete);
+                $custoProc = collect($notasEntrada->items())->where('processoId', $processo->id)->sum(function($nf) {
+                    return $nf->custoTotal > 0 ? $nf->custoTotal : ($nf->custoProduto + $nf->custoFrete);
                 });
 
                 $processosDetalhados[] = [

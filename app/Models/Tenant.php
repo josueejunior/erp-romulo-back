@@ -532,21 +532,55 @@ class Tenant extends BaseTenant implements TenantWithDatabase
     /**
      * Verifica se o plano tem acesso a um recurso específico
      */
+    /**
+     * Verifica se o plano tem acesso a um recurso específico
+     */
+    /**
+     * Verifica se o plano tem acesso a um recurso específico
+     */
     public function temRecurso(string $recurso): bool
     {
+        // 1. Garantir que a assinatura está ativa e atualizada
+        // Isso atualiza o plano_atual_id no banco se necessário
         if (!$this->temAssinaturaAtiva()) {
             return false;
         }
 
+        // 2. Forçar recarregamento do plano para garantir dados frescos
+        // Se temAssinaturaAtiva atualizou o ID, o relacionamento cacheado estaria obsoleto
+        $this->load('planoAtual');
         $plano = $this->planoAtual;
         
         if (!$plano) {
-            return false;
+            // Última tentativa: buscar direto pelo ID se existir
+            if ($this->plano_atual_id) {
+                $plano = \App\Modules\Assinatura\Models\Plano::find($this->plano_atual_id);
+            }
+            
+            if (!$plano) {
+                \Log::warning('Tenant::temRecurso - Plano não encontrado mesmo com assinatura ativa', ['tenant_id' => $this->id]);
+                return false;
+            }
         }
 
         $recursosDisponiveis = $plano->recursos_disponiveis ?? [];
         
-        return in_array($recurso, $recursosDisponiveis);
+        if (in_array($recurso, $recursosDisponiveis)) {
+            return true;
+        }
+
+        // 🔥 FALLBACK ROBUSTO: Planos Premium (Ilimitado, Master, Profissional) têm acesso a tudo
+        $nomePlano = \Illuminate\Support\Str::lower($plano->nome ?? '');
+        $isPremium = \Illuminate\Support\Str::contains($nomePlano, ['master', 'profissional', 'ilimitado', 'premium']);
+
+        if ($isPremium) {
+            // Lista de recursos garantidos para premium
+            if (in_array($recurso, ['relatorios', 'calendarios', 'dashboard_analytics', 'gestao_financeira'])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

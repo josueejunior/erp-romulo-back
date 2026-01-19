@@ -49,12 +49,13 @@ class RelatorioFinanceiroController extends BaseApiController
         try {
             // Validar acesso ao relatório
             $tenant = $this->getTenant();
-            if (!$tenant || !$tenant->temAcessoRelatorios()) {
-                return response()->json([
-                    'message' => 'Os relatórios não estão disponíveis no seu plano. Faça upgrade para o plano Profissional ou superior.',
-                ], 403);
+            if (!$tenant) {
+                 \Log::error('RelatorioFinanceiroController: Tenant não encontrado no contexto.');
+                 return response()->json(['message' => 'Empresa não encontrada.'], 403);
             }
 
+            // ✅ Relatórios disponíveis para TODOS os planos (não verificar temAcessoRelatorios)
+            
             // RBAC: apenas usuários autorizados podem ver relatórios financeiros
             if (!PermissionHelper::canViewFinancialReports()) {
                 return response()->json([
@@ -106,12 +107,12 @@ class RelatorioFinanceiroController extends BaseApiController
         try {
             // Validar acesso ao relatório
             $tenant = $this->getTenant();
-            if (!$tenant || !$tenant->temAcessoRelatorios()) {
-                return response()->json([
-                    'message' => 'Os relatórios não estão disponíveis no seu plano. Faça upgrade para o plano Profissional ou superior.',
-                ], 403);
+            if (!$tenant) {
+                return response()->json(['message' => 'Empresa não encontrada.'], 403);
             }
 
+            // ✅ Relatórios disponíveis para TODOS os planos
+            
             if (!PermissionHelper::canViewFinancialReports()) {
                 return response()->json([
                     'message' => 'Você não tem permissão para visualizar relatórios financeiros.',
