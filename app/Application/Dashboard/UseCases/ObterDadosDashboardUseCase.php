@@ -252,11 +252,11 @@ class ObterDadosDashboardUseCase
                 $evolucaoMensal[] = [
                     'mes' => $mes->format('Y-m'),
                     'mes_label' => $mes->format('M/Y'),
-                    'receita' => $dadosMes['receita_total'] ?? 0,
-                    'lucro_bruto' => $dadosMes['lucro_bruto'] ?? 0,
-                    'lucro_liquido' => $dadosMes['lucro_liquido'] ?? 0,
-                    'margem_bruta' => $dadosMes['margem_bruta'] ?? 0,
-                    'margem_liquida' => $dadosMes['margem_liquida'] ?? 0,
+                    'receita' => $dadosMes['resumo']['receita_total'] ?? 0,
+                    'lucro_bruto' => $dadosMes['resumo']['lucro_bruto'] ?? 0,
+                    'lucro_liquido' => $dadosMes['resumo']['lucro_liquido'] ?? 0,
+                    'margem_bruta' => $dadosMes['resumo']['margem_bruta'] ?? 0,
+                    'margem_liquida' => $dadosMes['resumo']['margem_liquida'] ?? 0,
                 ];
             }
 
@@ -274,13 +274,13 @@ class ObterDadosDashboardUseCase
                     'processos' => $processosComDados,
                 ],
                 'mes_atual' => [
-                    'receita' => $dadosMesAtual['receita_total'] ?? 0,
-                    'custos_diretos' => $dadosMesAtual['custos_diretos'] ?? 0,
-                    'custos_indiretos' => $dadosMesAtual['custos_indiretos'] ?? 0,
-                    'lucro_bruto' => $dadosMesAtual['lucro_bruto'] ?? 0,
-                    'lucro_liquido' => $dadosMesAtual['lucro_liquido'] ?? 0,
-                    'margem_bruta' => $dadosMesAtual['margem_bruta'] ?? 0,
-                    'margem_liquida' => $dadosMesAtual['margem_liquida'] ?? 0,
+                    'receita' => $dadosMesAtual['resumo']['receita_total'] ?? 0,
+                    'custos_diretos' => $dadosMesAtual['resumo']['custos_diretos'] ?? 0,
+                    'custos_indiretos' => $dadosMesAtual['resumo']['custos_indiretos'] ?? 0,
+                    'lucro_bruto' => $dadosMesAtual['resumo']['lucro_bruto'] ?? 0,
+                    'lucro_liquido' => $dadosMesAtual['resumo']['lucro_liquido'] ?? 0,
+                    'margem_bruta' => $dadosMesAtual['resumo']['margem_bruta'] ?? 0,
+                    'margem_liquida' => $dadosMesAtual['resumo']['margem_liquida'] ?? 0,
                     'processos' => $dadosMesAtual['quantidade_processos'] ?? 0,
                 ],
                 'evolucao_mensal' => $evolucaoMensal,

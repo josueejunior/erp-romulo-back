@@ -129,6 +129,20 @@ class NotaFiscalRepository implements NotaFiscalRepositoryInterface
             $query->where('situacao', $filtros['situacao']);
         }
 
+        // Filtro por tipo (entrada/saida)
+        if (isset($filtros['tipo'])) {
+            $query->where('tipo', $filtros['tipo']);
+        }
+
+        // Filtros por data de emissão
+        if (isset($filtros['data_emissao_inicio'])) {
+            $query->where('data_emissao', '>=', $filtros['data_emissao_inicio']);
+        }
+
+        if (isset($filtros['data_emissao_fim'])) {
+            $query->where('data_emissao', '<=', $filtros['data_emissao_fim']);
+        }
+
         // Carregar relacionamentos necessários
         $query->with(['processo', 'empenho', 'contrato', 'autorizacaoFornecimento', 'fornecedor']);
 
