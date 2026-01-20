@@ -23,7 +23,8 @@ final class AssinaturaDomainService
             ? ($plano->preco_anual ?? 0) 
             : ($plano->preco_mensal ?? 0);
             
-        return $valor === 0 || $valor === null;
+        // 🔥 CORRIGIDO: Cast para float para evitar erros de comparação estrita (0 !== 0.00)
+        return (float)$valor === 0.0 || $valor === null;
     }
 
     /**

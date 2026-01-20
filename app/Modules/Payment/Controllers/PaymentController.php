@@ -243,7 +243,7 @@ class PaymentController extends BaseApiController
 
                     // Criar nova assinatura gratuita usando Use Case (garante tenancy correto)
                     $dataInicio = Carbon::now();
-                    $dataFim = $dataInicio->copy()->addDays(14); // Trial de 14 dias
+                    $dataFim = $dataInicio->copy()->addDays(3); // 🔥 CORRIGIDO: Trial reduzido para 3 dias conforme solicitado
 
                     // 🔥 CRÍTICO: Obter usuário autenticado
                     $user = auth()->user();
