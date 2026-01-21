@@ -29,7 +29,18 @@ class UserLookupObserver
             return;
         }
 
-        $tenantId = tenancy()->tenant->id;
+        // Garantir que temos o ID do tenant (Stancl/Tenancy pode retornar vazio em contextos de seed)
+        $tenantId = tenancy()->tenant->id ?? tenancy()->tenant->getAttribute('id');
+        
+        if (empty($tenantId)) {
+            Log::warning('UserLookupObserver: Ignorando sincronização pois tenantId está vazio', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+            ]);
+            return;
+        }
+
+        $tenantId = (int) $tenantId;
         
         try {
             // Buscar empresas do usuário
@@ -39,10 +50,10 @@ class UserLookupObserver
                 // Se não tem empresa, usar CNPJ do tenant como fallback
                 $cnpjLimpo = preg_replace('/\D/', '', tenancy()->tenant->cnpj ?? '');
                 
-                if (!empty($user->email) && !empty($cnpjLimpo)) {
+                if (!empty($user->email) && !empty($cnpjLimpo) && !empty($user->id)) {
                     $this->lookupService->registrar(
                         tenantId: $tenantId,
-                        userId: $user->id,
+                        userId: (int) $user->id,
                         empresaId: null,
                         email: $user->email,
                         cnpj: $cnpjLimpo,
@@ -53,14 +64,14 @@ class UserLookupObserver
                 foreach ($empresas as $empresa) {
                     $cnpjLimpo = preg_replace('/\D/', '', $empresa->cnpj ?? tenancy()->tenant->cnpj ?? '');
                     
-                    if (empty($cnpjLimpo) || empty($user->email)) {
+                    if (empty($cnpjLimpo) || empty($user->email) || empty($user->id)) {
                         continue;
                     }
                     
                     $this->lookupService->registrar(
                         tenantId: $tenantId,
-                        userId: $user->id,
-                        empresaId: $empresa->id,
+                        userId: (int) $user->id,
+                        empresaId: (int) $empresa->id,
                         email: $user->email,
                         cnpj: $cnpjLimpo,
                     );
@@ -92,7 +103,14 @@ class UserLookupObserver
             return;
         }
 
-        $tenantId = tenancy()->tenant->id;
+        // Garantir que temos o ID do tenant
+        $tenantId = tenancy()->tenant->id ?? tenancy()->tenant->getAttribute('id');
+        
+        if (empty($tenantId)) {
+            return;
+        }
+
+        $tenantId = (int) $tenantId;
         
         try {
             // Se email mudou, atualizar lookup
@@ -103,10 +121,10 @@ class UserLookupObserver
                 if ($empresas->isEmpty()) {
                     $cnpjLimpo = preg_replace('/\D/', '', tenancy()->tenant->cnpj ?? '');
                     
-                    if (!empty($user->email) && !empty($cnpjLimpo)) {
+                    if (!empty($user->email) && !empty($cnpjLimpo) && !empty($user->id)) {
                         $this->lookupService->registrar(
                             tenantId: $tenantId,
-                            userId: $user->id,
+                            userId: (int) $user->id,
                             empresaId: null,
                             email: $user->email,
                             cnpj: $cnpjLimpo,
@@ -116,14 +134,14 @@ class UserLookupObserver
                     foreach ($empresas as $empresa) {
                         $cnpjLimpo = preg_replace('/\D/', '', $empresa->cnpj ?? tenancy()->tenant->cnpj ?? '');
                         
-                        if (empty($cnpjLimpo) || empty($user->email)) {
+                        if (empty($cnpjLimpo) || empty($user->email) || empty($user->id)) {
                             continue;
                         }
                         
                         $this->lookupService->registrar(
                             tenantId: $tenantId,
-                            userId: $user->id,
-                            empresaId: $empresa->id,
+                            userId: (int) $user->id,
+                            empresaId: (int) $empresa->id,
                             email: $user->email,
                             cnpj: $cnpjLimpo,
                         );

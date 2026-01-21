@@ -40,15 +40,19 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('processo_item_vinculos', function (Blueprint $table) {
-            // Remover foreign key primeiro
-            $table->dropForeign(['nota_fiscal_id']);
-            
-            // Remover índice
-            $table->dropIndex(['nota_fiscal_id']);
-            
-            // Remover coluna
-            $table->dropColumn('nota_fiscal_id');
-        });
+        if (Schema::hasTable('processo_item_vinculos')) {
+            Schema::table('processo_item_vinculos', function (Blueprint $table) {
+                if (Schema::hasColumn('processo_item_vinculos', 'nota_fiscal_id')) {
+                    // Remover foreign key primeiro
+                    $table->dropForeign(['nota_fiscal_id']);
+                    
+                    // Remover índice
+                    $table->dropIndex(['nota_fiscal_id']);
+                    
+                    // Remover coluna
+                    $table->dropColumn('nota_fiscal_id');
+                }
+            });
+        }
     }
 };
