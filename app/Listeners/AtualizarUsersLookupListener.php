@@ -87,11 +87,20 @@ class AtualizarUsersLookupListener
                 ]);
             }
 
+            // Validar userId antes de prosseguir
+            if (empty($userId)) {
+                Log::warning('AtualizarUsersLookupListener - userId está vazio', [
+                    'tenant_id' => $event->tenantId,
+                    'email' => $event->email,
+                ]);
+                return;
+            }
+
             // Registrar na tabela users_lookup
             $this->usersLookupService->registrar(
-                tenantId: $event->tenantId,
-                userId: $userId,
-                empresaId: $event->empresaId,
+                tenantId: (int) $event->tenantId,
+                userId: (int) $userId,
+                empresaId: $event->empresaId ? (int) $event->empresaId : null,
                 email: $event->email,
                 cnpj: $event->cnpj
             );
