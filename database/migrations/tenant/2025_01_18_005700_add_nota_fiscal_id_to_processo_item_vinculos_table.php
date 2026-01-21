@@ -14,19 +14,25 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('processo_item_vinculos', function (Blueprint $table) {
-            // Adicionar coluna nota_fiscal_id após empenho_id
-            $table->unsignedBigInteger('nota_fiscal_id')->nullable()->after('empenho_id');
-            
-            // Adicionar foreign key
-            $table->foreign('nota_fiscal_id')
-                ->references('id')
-                ->on('notas_fiscais')
-                ->onDelete('set null');
-            
-            // Adicionar índice para melhor performance
-            $table->index('nota_fiscal_id');
-        });
+        if (Schema::hasTable('processo_item_vinculos')) {
+            Schema::table('processo_item_vinculos', function (Blueprint $table) {
+                // Adicionar coluna nota_fiscal_id após empenho_id se não existir
+                if (!Schema::hasColumn('processo_item_vinculos', 'nota_fiscal_id')) {
+                    $table->unsignedBigInteger('nota_fiscal_id')->nullable()->after('empenho_id');
+                    
+                    // Adicionar foreign key se a tabela notas_fiscais existir
+                    if (Schema::hasTable('notas_fiscais')) {
+                        $table->foreign('nota_fiscal_id')
+                            ->references('id')
+                            ->on('notas_fiscais')
+                            ->onDelete('set null');
+                    }
+                    
+                    // Adicionar índice para melhor performance
+                    $table->index('nota_fiscal_id');
+                }
+            });
+        }
     }
 
     /**

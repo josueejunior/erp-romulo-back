@@ -392,7 +392,7 @@ class ProcessarAssinaturaPlanoUseCase
                 'tenant_id' => $tenant->id,
                 'empresa_id' => $empresa?->id, // 🔥 NOVO: Assinatura pertence à empresa
                 'plano_id' => $plano->id,
-                'status' => 'suspensa', // Alterado de 'pendente' para 'suspensa' para evitar violação de constraint no DB
+                'status' => 'suspensa',
                 'data_inicio' => $dataInicio,
                 'data_fim' => $dataFim,
                 'valor_pago' => $paymentResult->amount->toReais(),
@@ -416,10 +416,23 @@ class ProcessarAssinaturaPlanoUseCase
 
     /**
      * Gera chave de idempotência única
+     * Tenta usar header da requisição ou gera hash baseado em janela de tempo (1 min)
+     * para previnir duplo clique/race condition
      */
     private function generateIdempotencyKey(int $tenantId, int $planoId, string $periodo): string
     {
-        return "tenant_{$tenantId}_plano_{$planoId}_{$periodo}_" . time();
+        // 1. Tentar pegar do header (ideal)
+        $headerKey = request()->header('X-Idempotency-Key');
+        if ($headerKey) {
+            return $headerKey;
+        }
+
+        // 2. Fallback: Hash baseado nos dados + janela de 1 minuto + User ID
+        // Isso previne cliques duplos simultâneos
+        $userId = auth()->id() ?? 'guest';
+        $timeWindow = date('YmdHi'); // Resolução de 1 minuto
+        
+        return hash('sha256', "tenant_{$tenantId}_plano_{$planoId}_{$periodo}_user_{$userId}_{$timeWindow}");
     }
 }
 

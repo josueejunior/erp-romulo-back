@@ -1,0 +1,1174 @@
+=== TODAS AS TABELAS ===_migrations
+admin_users
+afiliado_comissoes_recorrentes
+afiliado_indicacoes
+afiliado_pagamentos_comissoes
+afiliado_referencias
+afiliados
+assinaturas
+audit_logs
+autorizacoes_fornecimento
+cache
+cache_locks
+contratos
+cupons
+cupons_uso
+custo_indiretos
+documento_habilitacao_logs
+documento_habilitacao_versoes
+documentos_habilitacao
+domains
+empenhos
+empresa_user
+empresas
+failed_jobs
+formacao_precos
+fornecedores
+job_batches
+jobs
+model_has_permissions
+model_has_roles
+notas_fiscais
+notificacoes
+onboarding_progress
+orcamento_itens
+orcamentos
+orgao_responsaveis
+orgaos
+password_reset_tokens
+payment_logs
+permissions
+personal_access_tokens
+planos
+processo_documentos
+processo_item_vinculos
+processo_itens
+processos
+produtos
+role_has_permissions
+roles
+sessions
+setors
+tenant_empresas
+tenants
+transportadoras
+user_notification_preferences
+users
+users_lookup
+=== DETALHES DAS TABELAS PRINCIPAIS ===--- Tabela: users ---Array
+(
+    [0] => stdClass Object
+        (
+            [column_name] => id
+            [data_type] => bigint
+            [is_nullable] => NO
+            [column_default] => nextval('users_id_seq'::regclass)
+        )
+
+    [1] => stdClass Object
+        (
+            [column_name] => empresa_ativa_id
+            [data_type] => bigint
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [2] => stdClass Object
+        (
+            [column_name] => name
+            [data_type] => character varying
+            [is_nullable] => NO
+            [column_default] => 
+        )
+
+    [3] => stdClass Object
+        (
+            [column_name] => email
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [4] => stdClass Object
+        (
+            [column_name] => email_verified_at
+            [data_type] => timestamp without time zone
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [5] => stdClass Object
+        (
+            [column_name] => password
+            [data_type] => character varying
+            [is_nullable] => NO
+            [column_default] => 
+        )
+
+    [6] => stdClass Object
+        (
+            [column_name] => remember_token
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [7] => stdClass Object
+        (
+            [column_name] => criado_em
+            [data_type] => timestamp without time zone
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [8] => stdClass Object
+        (
+            [column_name] => atualizado_em
+            [data_type] => timestamp without time zone
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [9] => stdClass Object
+        (
+            [column_name] => excluido_em
+            [data_type] => timestamp without time zone
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [10] => stdClass Object
+        (
+            [column_name] => foto_perfil
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+)
+--- Tabela: tenants ---Array
+(
+    [0] => stdClass Object
+        (
+            [column_name] => id
+            [data_type] => bigint
+            [is_nullable] => NO
+            [column_default] => nextval('tenants_id_seq'::regclass)
+        )
+
+    [1] => stdClass Object
+        (
+            [column_name] => razao_social
+            [data_type] => character varying
+            [is_nullable] => NO
+            [column_default] => 
+        )
+
+    [2] => stdClass Object
+        (
+            [column_name] => cnpj
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [3] => stdClass Object
+        (
+            [column_name] => email
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [4] => stdClass Object
+        (
+            [column_name] => status
+            [data_type] => character varying
+            [is_nullable] => NO
+            [column_default] => 'ativa'::character varying
+        )
+
+    [5] => stdClass Object
+        (
+            [column_name] => endereco
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [6] => stdClass Object
+        (
+            [column_name] => cidade
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [7] => stdClass Object
+        (
+            [column_name] => estado
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [8] => stdClass Object
+        (
+            [column_name] => cep
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [9] => stdClass Object
+        (
+            [column_name] => telefones
+            [data_type] => json
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [10] => stdClass Object
+        (
+            [column_name] => emails_adicionais
+            [data_type] => json
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [11] => stdClass Object
+        (
+            [column_name] => banco
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [12] => stdClass Object
+        (
+            [column_name] => agencia
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [13] => stdClass Object
+        (
+            [column_name] => conta
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [14] => stdClass Object
+        (
+            [column_name] => tipo_conta
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [15] => stdClass Object
+        (
+            [column_name] => pix
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [16] => stdClass Object
+        (
+            [column_name] => representante_legal_nome
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [17] => stdClass Object
+        (
+            [column_name] => representante_legal_cpf
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [18] => stdClass Object
+        (
+            [column_name] => representante_legal_cargo
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [19] => stdClass Object
+        (
+            [column_name] => logo
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [20] => stdClass Object
+        (
+            [column_name] => plano_atual_id
+            [data_type] => bigint
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [21] => stdClass Object
+        (
+            [column_name] => assinatura_atual_id
+            [data_type] => bigint
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [22] => stdClass Object
+        (
+            [column_name] => criado_em
+            [data_type] => timestamp without time zone
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [23] => stdClass Object
+        (
+            [column_name] => atualizado_em
+            [data_type] => timestamp without time zone
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [24] => stdClass Object
+        (
+            [column_name] => data
+            [data_type] => json
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [25] => stdClass Object
+        (
+            [column_name] => utm_source
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [26] => stdClass Object
+        (
+            [column_name] => utm_medium
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [27] => stdClass Object
+        (
+            [column_name] => utm_campaign
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [28] => stdClass Object
+        (
+            [column_name] => utm_term
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [29] => stdClass Object
+        (
+            [column_name] => utm_content
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [30] => stdClass Object
+        (
+            [column_name] => fingerprint
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+)
+--- Tabela: empresas ---Array
+(
+    [0] => stdClass Object
+        (
+            [column_name] => id
+            [data_type] => bigint
+            [is_nullable] => NO
+            [column_default] => nextval('empresas_id_seq'::regclass)
+        )
+
+    [1] => stdClass Object
+        (
+            [column_name] => razao_social
+            [data_type] => character varying
+            [is_nullable] => NO
+            [column_default] => 
+        )
+
+    [2] => stdClass Object
+        (
+            [column_name] => cnpj
+            [data_type] => character varying
+            [is_nullable] => NO
+            [column_default] => 
+        )
+
+    [3] => stdClass Object
+        (
+            [column_name] => cep
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [4] => stdClass Object
+        (
+            [column_name] => logradouro
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [5] => stdClass Object
+        (
+            [column_name] => numero
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [6] => stdClass Object
+        (
+            [column_name] => bairro
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [7] => stdClass Object
+        (
+            [column_name] => complemento
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [8] => stdClass Object
+        (
+            [column_name] => cidade
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [9] => stdClass Object
+        (
+            [column_name] => estado
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [10] => stdClass Object
+        (
+            [column_name] => email
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [11] => stdClass Object
+        (
+            [column_name] => telefone
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [12] => stdClass Object
+        (
+            [column_name] => telefones
+            [data_type] => json
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [13] => stdClass Object
+        (
+            [column_name] => emails_adicionais
+            [data_type] => json
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [14] => stdClass Object
+        (
+            [column_name] => banco_nome
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [15] => stdClass Object
+        (
+            [column_name] => banco_agencia
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [16] => stdClass Object
+        (
+            [column_name] => banco_conta
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [17] => stdClass Object
+        (
+            [column_name] => banco_tipo
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [18] => stdClass Object
+        (
+            [column_name] => representante_legal
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [19] => stdClass Object
+        (
+            [column_name] => logo
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [20] => stdClass Object
+        (
+            [column_name] => status
+            [data_type] => character varying
+            [is_nullable] => NO
+            [column_default] => 'ativa'::character varying
+        )
+
+    [21] => stdClass Object
+        (
+            [column_name] => criado_em
+            [data_type] => timestamp without time zone
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [22] => stdClass Object
+        (
+            [column_name] => atualizado_em
+            [data_type] => timestamp without time zone
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [23] => stdClass Object
+        (
+            [column_name] => excluido_em
+            [data_type] => timestamp without time zone
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [24] => stdClass Object
+        (
+            [column_name] => nome_fantasia
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [25] => stdClass Object
+        (
+            [column_name] => cargo_representante
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [26] => stdClass Object
+        (
+            [column_name] => afiliado_id
+            [data_type] => bigint
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [27] => stdClass Object
+        (
+            [column_name] => afiliado_codigo
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [28] => stdClass Object
+        (
+            [column_name] => afiliado_desconto_aplicado
+            [data_type] => numeric
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [29] => stdClass Object
+        (
+            [column_name] => afiliado_aplicado_em
+            [data_type] => timestamp without time zone
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+)
+--- Tabela: planos ---Array
+(
+    [0] => stdClass Object
+        (
+            [column_name] => id
+            [data_type] => bigint
+            [is_nullable] => NO
+            [column_default] => nextval('planos_id_seq'::regclass)
+        )
+
+    [1] => stdClass Object
+        (
+            [column_name] => nome
+            [data_type] => character varying
+            [is_nullable] => NO
+            [column_default] => 
+        )
+
+    [2] => stdClass Object
+        (
+            [column_name] => descricao
+            [data_type] => text
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [3] => stdClass Object
+        (
+            [column_name] => preco_mensal
+            [data_type] => numeric
+            [is_nullable] => NO
+            [column_default] => 
+        )
+
+    [4] => stdClass Object
+        (
+            [column_name] => preco_anual
+            [data_type] => numeric
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [5] => stdClass Object
+        (
+            [column_name] => limite_processos
+            [data_type] => integer
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [6] => stdClass Object
+        (
+            [column_name] => restricao_diaria
+            [data_type] => boolean
+            [is_nullable] => NO
+            [column_default] => true
+        )
+
+    [7] => stdClass Object
+        (
+            [column_name] => limite_usuarios
+            [data_type] => integer
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [8] => stdClass Object
+        (
+            [column_name] => limite_armazenamento_mb
+            [data_type] => integer
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [9] => stdClass Object
+        (
+            [column_name] => recursos_disponiveis
+            [data_type] => json
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [10] => stdClass Object
+        (
+            [column_name] => ativo
+            [data_type] => boolean
+            [is_nullable] => NO
+            [column_default] => true
+        )
+
+    [11] => stdClass Object
+        (
+            [column_name] => ordem
+            [data_type] => integer
+            [is_nullable] => NO
+            [column_default] => 0
+        )
+
+    [12] => stdClass Object
+        (
+            [column_name] => criado_em
+            [data_type] => timestamp without time zone
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [13] => stdClass Object
+        (
+            [column_name] => atualizado_em
+            [data_type] => timestamp without time zone
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [14] => stdClass Object
+        (
+            [column_name] => percentual_comissao_afiliado
+            [data_type] => numeric
+            [is_nullable] => NO
+            [column_default] => '100'::numeric
+        )
+
+)
+--- Tabela: assinaturas ---Array
+(
+    [0] => stdClass Object
+        (
+            [column_name] => id
+            [data_type] => bigint
+            [is_nullable] => NO
+            [column_default] => nextval('assinaturas_id_seq'::regclass)
+        )
+
+    [1] => stdClass Object
+        (
+            [column_name] => tenant_id
+            [data_type] => bigint
+            [is_nullable] => NO
+            [column_default] => 
+        )
+
+    [2] => stdClass Object
+        (
+            [column_name] => plano_id
+            [data_type] => bigint
+            [is_nullable] => NO
+            [column_default] => 
+        )
+
+    [3] => stdClass Object
+        (
+            [column_name] => status
+            [data_type] => character varying
+            [is_nullable] => NO
+            [column_default] => 'ativa'::character varying
+        )
+
+    [4] => stdClass Object
+        (
+            [column_name] => data_inicio
+            [data_type] => date
+            [is_nullable] => NO
+            [column_default] => 
+        )
+
+    [5] => stdClass Object
+        (
+            [column_name] => data_fim
+            [data_type] => date
+            [is_nullable] => NO
+            [column_default] => 
+        )
+
+    [6] => stdClass Object
+        (
+            [column_name] => data_cancelamento
+            [data_type] => date
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [7] => stdClass Object
+        (
+            [column_name] => valor_pago
+            [data_type] => numeric
+            [is_nullable] => NO
+            [column_default] => 
+        )
+
+    [8] => stdClass Object
+        (
+            [column_name] => metodo_pagamento
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [9] => stdClass Object
+        (
+            [column_name] => transacao_id
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [10] => stdClass Object
+        (
+            [column_name] => dias_grace_period
+            [data_type] => integer
+            [is_nullable] => NO
+            [column_default] => 7
+        )
+
+    [11] => stdClass Object
+        (
+            [column_name] => observacoes
+            [data_type] => text
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [12] => stdClass Object
+        (
+            [column_name] => criado_em
+            [data_type] => timestamp without time zone
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [13] => stdClass Object
+        (
+            [column_name] => atualizado_em
+            [data_type] => timestamp without time zone
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [14] => stdClass Object
+        (
+            [column_name] => user_id
+            [data_type] => bigint
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [15] => stdClass Object
+        (
+            [column_name] => empresa_id
+            [data_type] => bigint
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [16] => stdClass Object
+        (
+            [column_name] => mercado_pago_customer_id
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [17] => stdClass Object
+        (
+            [column_name] => mercado_pago_card_id
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [18] => stdClass Object
+        (
+            [column_name] => mercado_pago_subscription_id
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [19] => stdClass Object
+        (
+            [column_name] => ultima_tentativa_cobranca
+            [data_type] => timestamp without time zone
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [20] => stdClass Object
+        (
+            [column_name] => tentativas_cobranca
+            [data_type] => integer
+            [is_nullable] => NO
+            [column_default] => 0
+        )
+
+)
+--- Tabela: payment_logs ---Array
+(
+    [0] => stdClass Object
+        (
+            [column_name] => id
+            [data_type] => bigint
+            [is_nullable] => NO
+            [column_default] => nextval('payment_logs_id_seq'::regclass)
+        )
+
+    [1] => stdClass Object
+        (
+            [column_name] => tenant_id
+            [data_type] => bigint
+            [is_nullable] => NO
+            [column_default] => 
+        )
+
+    [2] => stdClass Object
+        (
+            [column_name] => plano_id
+            [data_type] => bigint
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [3] => stdClass Object
+        (
+            [column_name] => valor
+            [data_type] => numeric
+            [is_nullable] => NO
+            [column_default] => 
+        )
+
+    [4] => stdClass Object
+        (
+            [column_name] => periodo
+            [data_type] => character varying
+            [is_nullable] => NO
+            [column_default] => 
+        )
+
+    [5] => stdClass Object
+        (
+            [column_name] => status
+            [data_type] => character varying
+            [is_nullable] => NO
+            [column_default] => 
+        )
+
+    [6] => stdClass Object
+        (
+            [column_name] => external_id
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [7] => stdClass Object
+        (
+            [column_name] => idempotency_key
+            [data_type] => character varying
+            [is_nullable] => NO
+            [column_default] => 
+        )
+
+    [8] => stdClass Object
+        (
+            [column_name] => metodo_pagamento
+            [data_type] => character varying
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [9] => stdClass Object
+        (
+            [column_name] => dados_requisicao
+            [data_type] => json
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [10] => stdClass Object
+        (
+            [column_name] => dados_resposta
+            [data_type] => json
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [11] => stdClass Object
+        (
+            [column_name] => erro
+            [data_type] => text
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [12] => stdClass Object
+        (
+            [column_name] => criado_em
+            [data_type] => timestamp without time zone
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [13] => stdClass Object
+        (
+            [column_name] => atualizado_em
+            [data_type] => timestamp without time zone
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+)
+--- Tabela: cupons ---Array
+(
+    [0] => stdClass Object
+        (
+            [column_name] => id
+            [data_type] => bigint
+            [is_nullable] => NO
+            [column_default] => nextval('cupons_id_seq'::regclass)
+        )
+
+    [1] => stdClass Object
+        (
+            [column_name] => codigo
+            [data_type] => character varying
+            [is_nullable] => NO
+            [column_default] => 
+        )
+
+    [2] => stdClass Object
+        (
+            [column_name] => tipo
+            [data_type] => character varying
+            [is_nullable] => NO
+            [column_default] => 'percentual'::character varying
+        )
+
+    [3] => stdClass Object
+        (
+            [column_name] => valor
+            [data_type] => numeric
+            [is_nullable] => NO
+            [column_default] => 
+        )
+
+    [4] => stdClass Object
+        (
+            [column_name] => data_validade_inicio
+            [data_type] => date
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [5] => stdClass Object
+        (
+            [column_name] => data_validade_fim
+            [data_type] => date
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [6] => stdClass Object
+        (
+            [column_name] => limite_uso
+            [data_type] => integer
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [7] => stdClass Object
+        (
+            [column_name] => total_usado
+            [data_type] => integer
+            [is_nullable] => NO
+            [column_default] => 0
+        )
+
+    [8] => stdClass Object
+        (
+            [column_name] => uso_unico_por_usuario
+            [data_type] => boolean
+            [is_nullable] => NO
+            [column_default] => true
+        )
+
+    [9] => stdClass Object
+        (
+            [column_name] => planos_permitidos
+            [data_type] => json
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [10] => stdClass Object
+        (
+            [column_name] => valor_minimo_compra
+            [data_type] => numeric
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [11] => stdClass Object
+        (
+            [column_name] => ativo
+            [data_type] => boolean
+            [is_nullable] => NO
+            [column_default] => true
+        )
+
+    [12] => stdClass Object
+        (
+            [column_name] => descricao
+            [data_type] => text
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [13] => stdClass Object
+        (
+            [column_name] => criado_em
+            [data_type] => timestamp without time zone
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+    [14] => stdClass Object
+        (
+            [column_name] => atualizado_em
+            [data_type] => timestamp without time zone
+            [is_nullable] => YES
+            [column_default] => 
+        )
+
+)

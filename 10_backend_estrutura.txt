@@ -1,0 +1,728 @@
+=== ESTRUTURA DO BACKEND ===
+
+--- Diretórios Principais ---
+total 852K
+drwxr-xr-x 19 root root 4.0K Jan 21 01:12 .
+drwxr-xr-x  7 root root 4.0K Jan  6 10:58 ..
+-rw-r--r--  1 root root  237 Dec 17 17:43 .dockerignore
+-rw-r--r--  1 root root  252 Dec 15 17:43 .editorconfig
+-rw-r--r--  1 root root 3.4K Jan 20 00:08 .env
+-rw-r--r--  1 root root 1.1K Dec 15 17:43 .env.example
+drwxr-xr-x  8 root root 4.0K Jan 20 12:28 .git
+-rw-r--r--  1 root root  186 Dec 15 17:43 .gitattributes
+drwxr-xr-x  3 root root 4.0K Dec 15 17:43 .github
+-rw-r--r--  1 root root  304 Jan 10 14:30 .gitignore
+-rw-r--r--  1 root root 8.6K Jan 15 14:15 .phpunit.result.cache
+-rw-r--r--  1 root root  120 Dec 15 17:43 .styleci.yml
+-rw-r--r--  1 root root 2.1K Jan 21 01:12 00_RESUMO_EXECUTIVO.txt
+-rw-r--r--  1 root root   61 Jan 21 01:33 10_backend_estrutura.txt
+-rw-r--r--  1 root root  28K Jan 21 01:12 11_banco_de_dados.txt
+-rw-r--r--  1 root root 1.5K Jan 21 01:12 12_planos_assinaturas.txt
+-rw-r--r--  1 root root  23K Jan 21 01:12 13_controllers_criticos.txt
+-rw-r--r--  1 root root  31K Jan 21 01:12 14_rotas_api.txt
+-rw-r--r--  1 root root  14K Jan 21 01:12 15_configs_laravel.txt
+-rw-r--r--  1 root root 1.5K Jan 21 01:12 16_migrations.txt
+-rw-r--r--  1 root root 2.7K Jan 21 01:12 25_integrações_webhooks.txt
+-rw-r--r--  1 root root  12K Jan 14 16:06 ANALISE_DDD_CONTROLLERS.md
+-rw-r--r--  1 root root 9.1K Dec 15 17:43 CHANGELOG.md
+drwxr-xr-x  2 root root 4.0K Dec 23 14:03 Custo
+-rw-r--r--  1 root root 3.1K Jan 13 11:11 Dockerfile
+-rw-r--r--  1 root root 4.4K Jan  7 19:38 MELHORIAS_EMPENHO_FLUXO.md
+drwxr-xr-x  2 root root 4.0K Dec 23 14:03 Orgao
+-rw-r--r--  1 root root 4.1K Jan 14 16:06 REFATORACAO_DDD_PROGRESSO.md
+drwxr-xr-x 21 root root 4.0K Jan  9 12:39 app
+-rw-r--r--  1 root root  425 Dec 15 17:43 artisan
+drwxr-xr-x  3 root root 4.0K Jan  9 19:14 bootstrap
+-rw-r--r--  1 root root 3.1K Jan  6 19:13 composer.json
+-rw-r--r--  1 root root 337K Jan  6 19:13 composer.lock
+drwxr-xr-x  2 root root 4.0K Jan 15 20:19 config
+drwxr-xr-x  5 root root 4.0K Dec 20 20:54 database
+drwxr-xr-x  2 root root 4.0K Jan 10 11:41 docker
+-rw-r--r--  1 root root 2.1K Dec 17 11:23 docker-compose.yml
+-rw-r--r--  1 root root 4.4K Jan  3 00:36 docker-entrypoint.sh
+drwxr-xr-x  2 root root 4.0K Jan 15 15:36 docs
+-rw-r--r--  1 root root 2.7K Jan  7 11:14 move-modulo-processo.sh
+-rw-r--r--  1 root root  894 Jan  7 11:14 organize-modules.sh
+-rw-r--r--  1 root root  93K Dec 23 14:03 package-lock.json
+-rw-r--r--  1 root root  479 Dec 23 14:03 package.json
+-rw-r--r--  1 root root 1.3K Dec 15 17:43 phpunit.xml
+drwxr-xr-x  2 root root 4.0K Dec 16 11:55 public
+drwxr-xr-x  5 root root 4.0K Dec 15 17:43 resources
+drwxr-xr-x  2 root root 4.0K Jan 17 16:24 routes
+drwxr-xr-x  2 root root 4.0K Jan 15 14:10 scripts
+drwxr-xr-x  6 root root 4.0K Jan  7 11:16 storage
+drwxr-xr-x  4 root root 4.0K Dec 15 17:43 tests
+drwxr-xr-x 50 root root 4.0K Jan  6 19:13 vendor
+-rw-r--r--  1 root root  436 Dec 15 17:43 vite.config.js
+
+--- Estrutura de App ---
+app/
+├── Application
+│   ├── Afiliado
+│   │   ├── DTOs
+│   │   └── UseCases
+│   ├── Assinatura
+│   │   ├── DTOs
+│   │   ├── Resources
+│   │   └── UseCases
+│   ├── Auditoria
+│   │   └── UseCases
+│   ├── Auth
+│   │   ├── DTOs
+│   │   ├── Presenters
+│   │   └── UseCases
+│   ├── AutorizacaoFornecimento
+│   │   ├── DTOs
+│   │   └── UseCases
+│   ├── Backup
+│   │   └── UseCases
+│   ├── CadastroPublico
+│   │   ├── DTOs
+│   │   ├── Services
+│   │   └── UseCases
+│   ├── Calendario
+│   │   ├── DTOs
+│   │   ├── Presenters
+│   │   └── UseCases
+│   ├── Contrato
+│   │   ├── DTOs
+│   │   └── UseCases
+│   ├── CustoIndireto
+│   │   ├── DTOs
+│   │   └── UseCases
+│   ├── Dashboard
+│   │   └── UseCases
+│   ├── DocumentoHabilitacao
+│   │   ├── DTOs
+│   │   └── UseCases
+│   ├── Empenho
+│   │   ├── DTOs
+│   │   ├── Presenters
+│   │   └── UseCases
+│   ├── Empresa
+│   │   └── UseCases
+│   ├── FormacaoPreco
+│   │   ├── DTOs
+│   │   └── UseCases
+│   ├── Fornecedor
+│   │   ├── DTOs
+│   │   ├── Resources
+│   │   └── UseCases
+│   ├── NotaFiscal
+│   │   ├── DTOs
+│   │   └── UseCases
+│   ├── Onboarding
+│   │   ├── DTOs
+│   │   ├── Presenters
+│   │   └── UseCases
+│   ├── Orcamento
+│   │   ├── DTOs
+│   │   ├── Exporters
+│   │   └── UseCases
+│   ├── Orgao
+│   │   ├── DTOs
+│   │   ├── Resources
+│   │   └── UseCases
+│   ├── OrgaoResponsavel
+│   │   ├── DTOs
+│   │   └── UseCases
+│   ├── Payment
+│   │   └── UseCases
+│   ├── Plano
+│   │   └── UseCases
+│   ├── Processo
+│   │   ├── Commands
+│   │   ├── DTOs
+│   │   ├── Presenters
+│   │   └── UseCases
+│   ├── ProcessoDocumento
+│   │   ├── DTOs
+│   │   └── UseCases
+│   ├── ProcessoItem
+│   │   ├── DTOs
+│   │   └── UseCases
+│   ├── Relatorio
+│   │   └── UseCases
+│   ├── Setor
+│   │   ├── DTOs
+│   │   └── UseCases
+│   ├── Shared
+│   │   └── Traits
+│   └── Tenant
+│       ├── DTOs
+│       └── UseCases
+├── Console
+│   └── Commands
+│       ├── AlertarDocumentosVencimento.php
+│       ├── AtualizarSituacaoEmpenhos.php
+│       ├── AtualizarStatusProcessos.php
+│       ├── AtualizarStatusProcessosAutomatico.php
+│       ├── AtualizarVigenciaContratosAFs.php
+│       ├── CalcularComissoesRecorrentes.php
+│       ├── CleanupProcessoDocumentos.php
+│       ├── CleanupTempTables.php
+│       ├── ClearRateLimit.php
+│       ├── ListTenantDatabases.php
+│       ├── NotificarProcessosDisputas.php
+│       ├── NotificarProcessosJulgamento.php
+│       ├── PopularTenantEmpresasMapping.php
+│       ├── PopularUsersLookupCommand.php
+│       ├── ProvisionarPoolBancosCommand.php
+│       ├── RecalcularSaldos.php
+│       ├── RedisCacheClear.php
+│       ├── TenantConnectionInfo.php
+│       ├── TenantMigrate.php
+│       ├── TenantMigrateRefresh.php
+│       ├── TenantMigrateRollback.php
+│       ├── VerificarAssinaturasExpiradas.php
+│       ├── VerificarConfiguracaoEmail.php
+│       ├── VerificarEmpresasTenants.php
+│       ├── VerificarPagamentosPendentes.php
+│       ├── VerificarTenantsBancoCorreto.php
+│       └── VerificarValoresProcessoItem.php
+├── Contracts
+│   ├── ApplicationContextContract.php
+│   ├── IAuthIdentity.php
+│   └── IService.php
+├── Database
+│   ├── Eloquent
+│   │   └── Scopes
+│   ├── Migrations
+│   │   └── Migration.php
+│   └── Schema
+│       └── Blueprint.php
+├── Domain
+│   ├── Afiliado
+│   │   └── Events
+│   ├── Assinatura
+│   │   ├── Entities
+│   │   ├── Enums
+│   │   ├── Events
+│   │   ├── Queries
+│   │   ├── Repositories
+│   │   └── Services
+│   ├── Auditoria
+│   │   ├── Entities
+│   │   ├── Enums
+│   │   └── Repositories
+│   ├── Auth
+│   │   ├── Entities
+│   │   ├── Events
+│   │   ├── Repositories
+│   │   └── Services
+│   ├── AutorizacaoFornecimento
+│   │   ├── Entities
+│   │   ├── Enums
+│   │   └── Repositories
+│   ├── Contrato
+│   │   ├── Entities
+│   │   ├── Queries
+│   │   └── Repositories
+│   ├── CustoIndireto
+│   │   ├── Entities
+│   │   └── Repositories
+│   ├── DocumentoHabilitacao
+│   │   ├── Entities
+│   │   └── Repositories
+│   ├── Empenho
+│   │   ├── Entities
+│   │   └── Repositories
+│   ├── Empresa
+│   │   ├── Entities
+│   │   └── Repositories
+│   ├── Exceptions
+│   │   ├── AutorizacaoFornecimentoNaoEncontradaException.php
+│   │   ├── AutorizacaoFornecimentoPossuiEmpenhosException.php
+│   │   ├── BusinessRuleException.php
+│   │   ├── CnpjJaCadastradoException.php
+│   │   ├── ContratoNaoEncontradoException.php
+│   │   ├── ContratoPossuiEmpenhosException.php
+│   │   ├── CredenciaisInvalidasException.php
+│   │   ├── DatabaseAlreadyExistsException.php
+│   │   ├── DomainException.php
+│   │   ├── EmailEmpresaDesativadaException.php
+│   │   ├── EmailJaCadastradoException.php
+│   │   ├── EntidadeNaoPertenceException.php
+│   │   ├── FormacaoPrecoNaoEncontradaException.php
+│   │   ├── MultiplosTenantsException.php
+│   │   ├── NotFoundException.php
+│   │   ├── ProcessoEmExecucaoException.php
+│   │   ├── ProcessoNaoEmExecucaoException.php
+│   │   ├── UnauthorizedException.php
+│   │   └── ValidationException.php
+│   ├── Factories
+│   │   ├── FornecedorFactory.php
+│   │   └── ProcessoFactory.php
+│   ├── FormacaoPreco
+│   │   ├── Entities
+│   │   ├── Repositories
+│   │   └── ValueObjects
+│   ├── Fornecedor
+│   │   ├── Entities
+│   │   └── Repositories
+│   ├── Guards
+│   │   └── TenantContextGuard.php
+│   ├── NotaFiscal
+│   │   ├── Entities
+│   │   └── Repositories
+│   ├── Onboarding
+│   │   ├── Entities
+│   │   └── Repositories
+│   ├── Orcamento
+│   │   ├── Entities
+│   │   └── Repositories
+│   ├── OrcamentoItem
+│   │   ├── Entities
+│   │   └── Repositories
+│   ├── Orgao
+│   │   ├── Entities
+│   │   └── Repositories
+│   ├── OrgaoResponsavel
+│   │   ├── Entities
+│   │   └── Repositories
+│   ├── Payment
+│   │   ├── Entities
+│   │   ├── Events
+│   │   ├── Repositories
+│   │   └── ValueObjects
+│   ├── Plano
+│   │   ├── Entities
+│   │   └── Repositories
+│   ├── Processo
+│   │   ├── Entities
+│   │   ├── Repositories
+│   │   ├── Services
+│   │   └── Strategies
+│   ├── ProcessoDocumento
+│   │   ├── Entities
+│   │   └── Repositories
+│   ├── ProcessoItem
+│   │   ├── Entities
+│   │   ├── Enums
+│   │   └── Repositories
+│   ├── Relatorio
+│   │   └── Queries
+│   ├── Setor
+│   │   ├── Entities
+│   │   └── Repositories
+│   ├── Shared
+│   │   ├── Events
+│   │   ├── Services
+│   │   └── ValueObjects
+│   ├── Tenant
+│   │   ├── Entities
+│   │   ├── Events
+│   │   ├── Repositories
+│   │   └── Services
+│   └── UsersLookup
+│       ├── Entities
+│       └── Repositories
+├── Helpers
+│   ├── InputSanitizer.php
+│   ├── LogSanitizer.php
+│   ├── PermissionHelper.php
+│   └── RouteHelper.php
+├── Http
+│   ├── Controllers
+│   │   ├── Admin
+│   │   ├── Afiliado
+│   │   ├── Api
+│   │   ├── Controller.php
+│   │   ├── EmpresaSelecaoController.php
+│   │   ├── Public
+│   │   ├── Traits
+│   │   └── UploadController.php
+│   ├── Middleware
+│   │   ├── AuthenticateAndBootstrap.php
+│   │   ├── AuthenticateJWT.php
+│   │   ├── BootstrapApplicationContext.php
+│   │   ├── BuildAuthContext.php
+│   │   ├── CheckOnboarding.php
+│   │   ├── CheckPermission.php
+│   │   ├── CheckSubscription.php
+│   │   ├── EnsureAdmin.php
+│   │   ├── EnsureEmpresaAtiva.php
+│   │   ├── EnsureEmpresaAtivaContext.php
+│   │   ├── EnsureTenantHasActiveSubscription.php
+│   │   ├── HandleApiErrors.php
+│   │   ├── HandleCorsCustom.php
+│   │   ├── InitializeApplicationContext.php
+│   │   ├── InitializeTenancyByRequestData.php
+│   │   ├── InitializeTenant.php
+│   │   ├── IsSuperAdmin.php
+│   │   ├── OptionalAuthenticate.php
+│   │   ├── RateLimitRedis.php
+│   │   ├── ResolveTenantContext.php
+│   │   ├── SanitizeInputs.php
+│   │   ├── SecurityHeaders.php
+│   │   └── SetAuthContext.php
+│   ├── Requests
+│   │   ├── Admin
+│   │   ├── Assinatura
+│   │   ├── Auth
+│   │   ├── Configuracoes
+│   │   ├── Contrato
+│   │   ├── CustoIndireto
+│   │   ├── Empenho
+│   │   ├── FormacaoPreco
+│   │   ├── Fornecedor
+│   │   ├── NotaFiscal
+│   │   ├── Notificacao
+│   │   ├── Onboarding
+│   │   ├── Orcamento
+│   │   ├── Orgao
+│   │   ├── Payment
+│   │   ├── Plano
+│   │   ├── Processo
+│   │   ├── ProcessoItem
+│   │   └── Tenant
+│   ├── Resources
+│   │   ├── AuthResource.php
+│   │   ├── FormacaoPrecoResource.php
+│   │   ├── FornecedorResource.php
+│   │   ├── OrcamentoResource.php
+│   │   ├── OrgaoResource.php
+│   │   ├── SetorResource.php
+│   │   ├── TransportadoraResource.php
+│   │   └── UserResource.php
+│   ├── Responses
+│   │   └── ApiResponse.php
+│   └── Routing
+│       └── ModuleRegistrar.php
+├── Infrastructure
+│   ├── Auth
+│   │   └── UserRoleService.php
+│   ├── Events
+│   │   └── LaravelEventDispatcher.php
+│   ├── Payment
+│   │   └── MercadoPagoGateway.php
+│   ├── Persistence
+│   │   └── Eloquent
+│   └── Tenant
+│       ├── TenantDatabasePoolService.php
+│       ├── TenantDatabaseService.php
+│       └── TenantRolesService.php
+├── Jobs
+│   ├── ProcessarCobrancaRecorrente.php
+│   ├── SetupTenantJob.php
+│   └── VerificarPagamentoPendenteJob.php
+├── Listeners
+│   ├── AssinaturaNotificacaoListener.php
+│   ├── AtualizarUsersLookupListener.php
+│   ├── EmpresaAtivaAlteradaListener.php
+│   ├── EmpresaCriadaListener.php
+│   ├── EmpresaVinculadaListener.php
+│   ├── GerarComissaoAfiliadoListener.php
+│   ├── RegistrarAuditoriaListener.php
+│   ├── SenhaAlteradaListener.php
+│   └── UsuarioCriadoListener.php
+├── Mail
+│   ├── AssinaturaNotificacaoEmail.php
+│   ├── BemVindoEmail.php
+│   └── EmpresaCriadaEmail.php
+├── Models
+│   ├── AfiliadoComissaoRecorrente.php
+│   ├── AfiliadoPagamentoComissao.php
+│   ├── AfiliadoReferencia.php
+│   ├── AuditLog.php
+│   ├── AuditoriaLog.php
+│   ├── BaseModel.php
+│   ├── Concerns
+│   │   ├── BelongsToEmpresa.php
+│   │   └── HasEmpresaScope.php
+│   ├── Empresa.php
+│   ├── OnboardingProgress.php
+│   ├── Orgao.php
+│   ├── PaymentLog.php
+│   ├── Tenant.php
+│   ├── TenantEmpresa.php
+│   ├── Traits
+│   │   ├── BelongsToEmpresaTrait.php
+│   │   ├── BelongsToTenant.php
+│   │   ├── HasSoftDeletesWithEmpresa.php
+│   │   ├── HasTimestampsCustomizados.php
+│   │   └── StoreTimestamps.php
+│   └── UserLookup.php
+├── Modules
+│   ├── Afiliado
+│   │   ├── Controllers
+│   │   └── Models
+│   ├── Assinatura
+│   │   ├── Controllers
+│   │   └── Models
+│   ├── Auth
+│   │   ├── Controllers
+│   │   └── Models
+│   ├── AutorizacaoFornecimento
+│   │   ├── Controllers
+│   │   ├── Models
+│   │   └── Services
+│   ├── Calendario
+│   │   ├── Controllers
+│   │   └── Services
+│   ├── Contrato
+│   │   ├── Controllers
+│   │   ├── Models
+│   │   └── Services
+│   ├── Custo
+│   │   ├── Controllers
+│   │   ├── Models
+│   │   └── Services
+│   ├── Dashboard
+│   │   ├── Controllers
+│   │   └── Services
+│   ├── Documento
+│   │   ├── Controllers
+│   │   ├── Models
+│   │   └── Services
+│   ├── Empenho
+│   │   ├── Controllers
+│   │   ├── Models
+│   │   └── Services
+│   ├── Empresa
+│   │   └── Controllers
+│   ├── Fornecedor
+│   │   ├── Controllers
+│   │   ├── Models
+│   │   └── Services
+│   ├── NotaFiscal
+│   │   ├── Controllers
+│   │   ├── Models
+│   │   └── Services
+│   ├── Notification
+│   │   ├── Controllers
+│   │   └── Services
+│   ├── Onboarding
+│   │   └── Controllers
+│   ├── Orcamento
+│   │   ├── Controllers
+│   │   ├── Domain
+│   │   ├── Events
+│   │   ├── Listeners
+│   │   ├── Models
+│   │   ├── Providers
+│   │   ├── Repositories
+│   │   ├── Services
+│   │   └── UseCases
+│   ├── Orgao
+│   │   ├── Controllers
+│   │   ├── Models
+│   │   ├── Observers
+│   │   ├── Policies
+│   │   ├── Resources
+│   │   └── Services
+│   ├── Payment
+│   │   └── Controllers
+│   ├── Permission
+│   │   └── Models
+│   ├── Processo
+│   │   ├── Controllers
+│   │   ├── Models
+│   │   ├── Observers
+│   │   ├── Policies
+│   │   ├── Resources
+│   │   └── Services
+│   ├── Produto
+│   │   ├── Controllers
+│   │   └── Models
+│   └── Relatorio
+│       ├── Controllers
+│       └── Services
+├── Notifications
+│   ├── ResetPasswordNotification.php
+│   └── UsuarioCriadoNotification.php
+├── Observers
+│   ├── AuditObserver.php
+│   ├── ContratoObserver.php
+│   ├── EmpenhoObserver.php
+│   ├── NotaFiscalObserver.php
+│   ├── ProcessoItemVinculoObserver.php
+│   └── UserLookupObserver.php
+├── Policies
+│   ├── ContratoPolicy.php
+│   └── OrcamentoPolicy.php
+├── Providers
+│   ├── AppServiceProvider.php
+│   ├── DatabaseServiceProvider.php
+│   ├── SchemaServiceProvider.php
+│   └── TenancyServiceProvider.php
+├── Rules
+│   ├── CnpjValido.php
+│   ├── CpfValido.php
+│   ├── DbTypeRule.php
+│   ├── NumeroProcessoRule.php
+│   ├── StrongPassword.php
+│   ├── ValidarSomaValores.php
+│   ├── ValidarValorTotal.php
+│   └── ValidarVinculoProcesso.php
+└── Services
+    ├── AdminTenancyRunner.php
+    ├── ApplicationContext.php
+    ├── AuthIdentityService.php
+    ├── BaseService.php
+    ├── CircuitBreaker.php
+    ├── CnpjConsultaService.php
+    ├── JWTService.php
+    ├── RedisService.php
+    ├── TenantService.php
+    └── Traits
+        ├── AuthScope.php
+        └── CheckEmpresaUsage.php
+
+344 directories, 168 files
+
+--- Controllers ---
+app/Modules/Orcamento/Controllers/DashboardController.php
+app/Modules/Orcamento/Controllers/FormacaoPrecoController.php
+app/Modules/Orcamento/Controllers/RelatorioController.php
+app/Modules/Orcamento/Controllers/NotificacaoController.php
+app/Modules/Orcamento/Controllers/OrcamentoController.php
+app/Modules/Onboarding/Controllers/OnboardingController.php
+app/Modules/Notification/Controllers/NotificationController.php
+app/Modules/Empenho/Controllers/EmpenhoController.php
+app/Modules/Documento/Controllers/DocumentoHabilitacaoController.php
+app/Modules/Afiliado/Controllers/AfiliadoController.php
+app/Modules/Contrato/Controllers/ContratoController.php
+app/Modules/Orgao/Controllers/OrgaoController.php
+app/Modules/Orgao/Controllers/OrgaoResponsavelController.php
+app/Modules/Orgao/Controllers/SetorController.php
+app/Modules/NotaFiscal/Controllers/NotaFiscalController.php
+app/Modules/Empresa/Controllers/TenantController.php
+app/Modules/AutorizacaoFornecimento/Controllers/AutorizacaoFornecimentoController.php
+app/Modules/Payment/Controllers/PaymentController.php
+app/Modules/Payment/Controllers/WebhookController.php
+app/Modules/Produto/Controllers/ProdutoController.php
+app/Modules/Custo/Controllers/CustoIndiretoController.php
+app/Modules/Auth/Controllers/FixUserRolesController.php
+app/Modules/Auth/Controllers/AuthController.php
+app/Modules/Auth/Controllers/UserController.php
+app/Modules/Processo/Controllers/DisputaController.php
+app/Modules/Processo/Controllers/ExportacaoController.php
+app/Modules/Processo/Controllers/ProcessoItemVinculoController.php
+app/Modules/Processo/Controllers/SaldoController.php
+app/Modules/Processo/Controllers/ProcessoController.php
+app/Modules/Processo/Controllers/ProcessoItemController.php
+app/Modules/Processo/Controllers/JulgamentoController.php
+app/Modules/Fornecedor/Controllers/FornecedorController.php
+app/Modules/Relatorio/Controllers/RelatorioFinanceiroController.php
+app/Modules/Assinatura/Controllers/CupomController.php
+app/Modules/Assinatura/Controllers/AssinaturaController.php
+app/Modules/Assinatura/Controllers/PlanoController.php
+app/Modules/Calendario/Controllers/CalendarioDisputasController.php
+app/Modules/Calendario/Controllers/CalendarioController.php
+app/Modules/Dashboard/Controllers/DashboardController.php
+app/Http/Controllers/Admin/AdminPlanoController.php
+app/Http/Controllers/Admin/AdminUserController.php
+app/Http/Controllers/Admin/AdminTenantsIncompletosController.php
+app/Http/Controllers/Admin/AdminTenantController.php
+app/Http/Controllers/Admin/AdminComissoesController.php
+app/Http/Controllers/Admin/AdminAuthController.php
+app/Http/Controllers/Admin/AdminAssinaturaController.php
+app/Http/Controllers/Admin/AdminBackupController.php
+app/Http/Controllers/Public/ConfiguracoesController.php
+app/Http/Controllers/Public/OnboardingController.php
+app/Http/Controllers/Public/CadastroPublicoController.php
+
+--- Models ---
+app/Models/Tenant.php
+app/Models/AuditLog.php
+app/Models/Traits/HasSoftDeletesWithEmpresa.php
+app/Models/Traits/BelongsToEmpresaTrait.php
+app/Models/Traits/HasTimestampsCustomizados.php
+app/Models/Traits/BelongsToTenant.php
+app/Models/Traits/StoreTimestamps.php
+app/Models/Orgao.php
+app/Models/AfiliadoReferencia.php
+app/Models/TenantEmpresa.php
+app/Models/OnboardingProgress.php
+app/Models/Concerns/HasEmpresaScope.php
+app/Models/Concerns/BelongsToEmpresa.php
+app/Models/AuditoriaLog.php
+app/Models/AfiliadoPagamentoComissao.php
+app/Models/PaymentLog.php
+app/Models/BaseModel.php
+app/Models/Empresa.php
+app/Models/AfiliadoComissaoRecorrente.php
+app/Models/UserLookup.php
+app/Modules/Orcamento/Models/OrcamentoItem.php
+app/Modules/Orcamento/Models/Notificacao.php
+app/Modules/Orcamento/Models/Orcamento.php
+app/Modules/Orcamento/Models/FormacaoPreco.php
+app/Modules/Empenho/Models/Empenho.php
+app/Modules/Documento/Models/DocumentoHabilitacaoLog.php
+app/Modules/Documento/Models/DocumentoHabilitacao.php
+app/Modules/Documento/Models/DocumentoHabilitacaoVersao.php
+app/Modules/Afiliado/Models/Afiliado.php
+app/Modules/Afiliado/Models/AfiliadoIndicacao.php
+app/Modules/Contrato/Models/Contrato.php
+app/Modules/Orgao/Models/Orgao.php
+app/Modules/Orgao/Models/Setor.php
+app/Modules/Orgao/Models/OrgaoResponsavel.php
+app/Modules/NotaFiscal/Models/NotaFiscal.php
+app/Modules/AutorizacaoFornecimento/Models/AutorizacaoFornecimento.php
+app/Modules/Produto/Models/Produto.php
+app/Modules/Custo/Models/CustoIndireto.php
+app/Modules/Auth/Models/AdminUser.php
+app/Modules/Auth/Models/User.php
+app/Modules/Auth/Models/PersonalAccessToken.php
+app/Modules/Auth/Models/UserNotificationPreferences.php
+app/Modules/Permission/Models/Role.php
+app/Modules/Permission/Models/Permission.php
+app/Modules/Processo/Models/ProcessoItemVinculo.php
+app/Modules/Processo/Models/Processo.php
+app/Modules/Processo/Models/ProcessoDocumento.php
+app/Modules/Processo/Models/ProcessoItem.php
+app/Modules/Fornecedor/Models/Transportadora.php
+app/Modules/Fornecedor/Models/Fornecedor.php
+
+--- Use Cases ---
+app/Application/Orcamento/UseCases/AtualizarOrcamentoItemUseCase.php
+app/Application/Orcamento/UseCases/AtualizarOrcamentoUseCase.php
+app/Application/Orcamento/UseCases/BuscarOrcamentoUseCase.php
+app/Application/Orcamento/UseCases/CriarOrcamentoUseCase.php
+app/Application/Orcamento/UseCases/ExcluirOrcamentoUseCase.php
+app/Application/Onboarding/UseCases/GerenciarOnboardingUseCase.php
+app/Application/CustoIndireto/UseCases/ObterResumoCustoIndiretosUseCase.php
+app/Application/CustoIndireto/UseCases/ListarCustoIndiretosUseCase.php
+app/Application/CustoIndireto/UseCases/BuscarCustoIndiretoUseCase.php
+app/Application/CustoIndireto/UseCases/ExcluirCustoIndiretoUseCase.php
+app/Application/CustoIndireto/UseCases/AtualizarCustoIndiretoUseCase.php
+app/Application/CustoIndireto/UseCases/CriarCustoIndiretoUseCase.php
+app/Application/ProcessoDocumento/UseCases/ImportarDocumentosProcessoUseCase.php
+app/Application/ProcessoDocumento/UseCases/CriarDocumentoCustomUseCase.php
+app/Application/ProcessoDocumento/UseCases/ListarDocumentosProcessoUseCase.php
+app/Application/ProcessoDocumento/UseCases/SincronizarDocumentosProcessoUseCase.php
+app/Application/ProcessoDocumento/UseCases/AtualizarDocumentoProcessoUseCase.php
+app/Application/ProcessoDocumento/UseCases/BaixarArquivoDocumentoUseCase.php
+app/Application/FormacaoPreco/UseCases/CriarFormacaoPrecoUseCase.php
+app/Application/Empenho/UseCases/ConcluirEmpenhoUseCase.php
+app/Application/Empenho/UseCases/BuscarEmpenhoUseCase.php
+app/Application/Empenho/UseCases/ListarEmpenhosUseCase.php
+app/Application/Empenho/UseCases/ExcluirEmpenhoUseCase.php
+app/Application/Empenho/UseCases/CriarEmpenhoUseCase.php
+app/Application/Empenho/UseCases/AtualizarEmpenhoUseCase.php
+app/Application/Plano/UseCases/CriarPlanoUseCase.php
+app/Application/Plano/UseCases/AtualizarPlanoUseCase.php
+app/Application/Plano/UseCases/ListarPlanosAdminUseCase.php
+app/Application/Plano/UseCases/ListarPlanosUseCase.php
+app/Application/Plano/UseCases/BuscarPlanoUseCase.php
+app/Application/Plano/UseCases/DeletarPlanoUseCase.php
+app/Application/Afiliado/UseCases/MarcarComissaoComoPagaUseCase.php
+app/Application/Afiliado/UseCases/ExcluirAfiliadoUseCase.php
+app/Application/Afiliado/UseCases/CalcularDisponibilidadeComissaoUseCase.php
+app/Application/Afiliado/UseCases/RastrearReferenciaAfiliadoUseCase.php
+app/Application/Afiliado/UseCases/BuscarDetalhesAfiliadoUseCase.php
+app/Application/Afiliado/UseCases/AtualizarComissaoIndicacaoUseCase.php
+app/Application/Afiliado/UseCases/CriarPagamentoComissaoUseCase.php
+app/Application/Afiliado/UseCases/AtualizarAfiliadoUseCase.php
+app/Application/Afiliado/UseCases/ValidarCupomAfiliadoUseCase.php
+app/Application/Afiliado/UseCases/ListarAfiliadosUseCase.php
+app/Application/Afiliado/UseCases/CalcularComissaoRecorrenteUseCase.php
+app/Application/Afiliado/UseCases/BuscarComissoesAfiliadoUseCase.php
+app/Application/Afiliado/UseCases/BuscarAfiliadoUseCase.php
+app/Application/Afiliado/UseCases/ListarPagamentosComissaoUseCase.php
+app/Application/Afiliado/UseCases/CriarAfiliadoUseCase.php
+app/Application/Afiliado/UseCases/CriarIndicacaoAfiliadoUseCase.php
+app/Application/Afiliado/UseCases/ValidarSelfReferralUseCase.php
+app/Application/Afiliado/UseCases/ListarComissoesAdminUseCase.php
+app/Application/Afiliado/UseCases/BuscarCupomAutomaticoUseCase.php

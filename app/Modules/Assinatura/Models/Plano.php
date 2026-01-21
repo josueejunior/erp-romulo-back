@@ -78,5 +78,24 @@ class Plano extends BaseModel
     {
         return $this->restricao_diaria === true;
     }
+    /**
+     * Calcula o preço final do plano com base no período e regras de negócio
+     * Centraliza a lógica de 50% de desconto promocional
+     */
+    public function calcularPreco(string $periodo, int $meses = 1): float
+    {
+        // Regra de negócio: 50% de desconto promocional em todos os planos
+        $descontoPromocional = 0.5;
+
+        if ($periodo === 'anual' || $meses === 12) {
+            // Se o plano tiver preco_anual no DB, usa ele como base. 
+            // Senão usa mensal * 10 (regra de 2 meses grátis no anual)
+            $precoBaseAnual = $this->preco_anual ?: ($this->preco_mensal * 10);
+            return round($precoBaseAnual * $descontoPromocional, 2);
+        }
+
+        // Mensal
+        return round($this->preco_mensal * $descontoPromocional * $meses, 2);
+    }
 }
 

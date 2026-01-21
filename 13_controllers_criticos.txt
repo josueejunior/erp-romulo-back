@@ -1,0 +1,585 @@
+=== CONTROLLERS CRÍTICOS ===
+
+=========================================
+FILE: app/Modules/Assinatura/Controllers/AssinaturaController.php
+=========================================
+<?php
+
+namespace App\Modules\Assinatura\Controllers;
+
+use App\Http\Controllers\Api\BaseApiController;
+use App\Http\Controllers\Traits\HasAuthContext;
+use App\Application\Assinatura\UseCases\BuscarAssinaturaAtualUseCase;
+use App\Application\Assinatura\UseCases\ObterStatusAssinaturaUseCase;
+use App\Application\Assinatura\UseCases\ListarAssinaturasUseCase;
+use App\Application\Assinatura\UseCases\CancelarAssinaturaUseCase;
+use App\Application\Assinatura\UseCases\CriarAssinaturaUseCase;
+use App\Application\Assinatura\UseCases\TrocarPlanoAssinaturaUseCase;
+use App\Application\Assinatura\UseCases\BuscarTenantDoUsuarioUseCase;
+use App\Application\Assinatura\DTOs\CriarAssinaturaDTO;
+use App\Application\Assinatura\Resources\AssinaturaResource;
+use App\Application\Payment\UseCases\RenovarAssinaturaUseCase;
+use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
+use App\Domain\Payment\Repositories\PaymentProviderInterface;
+use App\Http\Requests\Assinatura\RenovarAssinaturaRequest;
+use App\Http\Requests\Assinatura\CriarAssinaturaRequest;
+use App\Http\Requests\Assinatura\TrocarPlanoRequest;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+
+/**
+ * Controller para Assinaturas
+ * 
+ * Refatorado para seguir DDD rigorosamente:
+ * - Usa Form Requests para validação
+ * - Usa Use Cases para lógica de negócio
+ * - Usa Resources para transformação
+ * - Não acessa modelos Eloquent diretamente
+ * - Não contém lógica de infraestrutura (cache, etc.)
+ * 
+ * Segue o mesmo padrão do OrgaoController:
+ * - Tenant ID: Obtido automaticamente via tenancy()->tenant (middleware já inicializou)
+ * - Empresa ID: Obtido automaticamente via getEmpresaAtivaOrFail() que prioriza header X-Empresa-ID
+ */
+class AssinaturaController extends BaseApiController
+{
+    use HasAuthContext;
+
+    public function __construct(
+        private BuscarAssinaturaAtualUseCase $buscarAssinaturaAtualUseCase,
+        private ObterStatusAssinaturaUseCase $obterStatusAssinaturaUseCase,
+        private ListarAssinaturasUseCase $listarAssinaturasUseCase,
+        private CancelarAssinaturaUseCase $cancelarAssinaturaUseCase,
+        private CriarAssinaturaUseCase $criarAssinaturaUseCase,
+        private TrocarPlanoAssinaturaUseCase $trocarPlanoAssinaturaUseCase,
+        private RenovarAssinaturaUseCase $renovarAssinaturaUseCase,
+        private BuscarTenantDoUsuarioUseCase $buscarTenantDoUsuarioUseCase,
+        private PaymentProviderInterface $paymentProvider,
+        private AssinaturaResource $assinaturaResource,
+        private AssinaturaRepositoryInterface $assinaturaRepository,
+    ) {}
+
+
+
+    /**
+     * Retorna assinatura atual do USUÁRIO
+     * Retorna entidade de domínio transformada via Resource
+     * 
+     * ✅ O QUE O CONTROLLER FAZ:
+     * - Recebe request
+     * - Obtém usuário autenticado
+     * - Busca tenant baseado na empresa ativa do USUÁRIO
+     * - Chama Use Case para buscar assinatura
+     * - Transforma entidade em DTO de resposta
+     * 
+     * ❌ O QUE O CONTROLLER NÃO FAZ:
+     * - Não lê tenant_id diretamente do header
+     * - Não usa tenant do contexto sem validar
+     * - A validação é baseada no USUÁRIO, não no tenant/empresa do header
+     * 
+     * 🔥 IMPORTANTE: A assinatura é validada pelo USUÁRIO, não pelo tenant/empresa.
+     * Busca o tenant onde a empresa ativa do usuário está.
+     * Permite acesso mesmo sem assinatura (retorna null) para que o frontend possa tratar.
+     */
+    public function atual(Request $request): JsonResponse
+    {
+        try {
+            // Obter usuário autenticado (fonte de verdade)
+            $user = $this->getUserOrFail();
+            
+            // Buscar tenant baseado na empresa ativa do USUÁRIO
+            $tenant = $this->buscarTenantDoUsuarioUseCase->executar($user);
+            
+            if (!$tenant) {
+                \Log::warning('AssinaturaController::atual() - Não foi possível determinar tenant do usuário', [
+                    'user_id' => $user->id,
+                    'empresa_ativa_id' => $user->empresa_ativa_id,
+                ]);
+                
+                return response()->json([
+                    'data' => null,
+                    'message' => 'Nenhuma assinatura encontrada',
+                    'code' => 'NO_SUBSCRIPTION'
+                ], 200);
+            }
+
+            // 🔥 CRÍTICO: Verificar se usuário tem empresa ativa
+            if (!$user->empresa_ativa_id) {
+                \Log::warning('AssinaturaController::atual() - Usuário não tem empresa ativa', [
+                    'user_id' => $user->id,
+                ]);
+                
+                return response()->json([
+                    'data' => null,
+                    'message' => 'Nenhuma empresa ativa encontrada. Selecione uma empresa para ver a assinatura.',
+                    'code' => 'NO_ACTIVE_COMPANY'
+                ], 200);
+            }
+
+            \Log::info('AssinaturaController@atual - Buscando assinatura da empresa', [
+                'user_id' => $user->id,
+                'empresa_ativa_id' => $user->empresa_ativa_id,
+                'tenant_id' => $tenant->id,
+            ]);
+            
+            // 🔥 CORRIGIDO: Buscar assinatura da EMPRESA ATIVA do usuário, não do usuário
+            // A assinatura pertence à empresa, não ao usuário
+            try {
+                $assinatura = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($user->empresa_ativa_id);
+                
+                if (!$assinatura) {
+                    \Log::info('AssinaturaController@atual - Nenhuma assinatura encontrada para a empresa', [
+                        'empresa_ativa_id' => $user->empresa_ativa_id,
+                    ]);
+                    
+                    return response()->json([
+                        'data' => null,
+                        'message' => 'Nenhuma assinatura encontrada para esta empresa',
+                        'code' => 'NO_SUBSCRIPTION'
+                    ], 200);
+                }
+                
+                // Transformar entidade do domínio em DTO de resposta
+                $responseDTO = $this->assinaturaResource->toResponse($assinatura);
+
+                \Log::info('AssinaturaController@atual - Assinatura encontrada', [
+                    'assinatura_id' => $assinatura->id,
+                    'empresa_id' => $assinatura->empresaId,
+                    'status' => $assinatura->status,
+                ]);
+
+                return response()->json([
+                    'data' => $responseDTO->toArray()
+                ]);
+            } catch (\App\Domain\Exceptions\NotFoundException $e) {
+                // Não há assinatura - retornar null para que o frontend possa tratar
+                \Log::info('AssinaturaController@atual - NotFoundException capturada', [
+                    'empresa_ativa_id' => $user->empresa_ativa_id,
+                    'message' => $e->getMessage(),
+                ]);
+                
+                return response()->json([
+                    'data' => null,
+                    'message' => 'Nenhuma assinatura encontrada para esta empresa',
+                    'code' => 'NO_SUBSCRIPTION'
+                ], 200);
+            }
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao buscar assinatura atual');
+        }
+    }
+    
+
+    /**
+     * Retorna status da assinatura com limites utilizados
+     * Retorna dados de status e limites utilizados
+     * 
+     * ✅ O QUE O CONTROLLER FAZ:
+     * - Recebe request
+     * - Obtém usuário autenticado
+     * - Busca tenant baseado na empresa ativa do USUÁRIO
+     * - Obtém empresa automaticamente via getEmpresaAtivaOrFail()
+     * - Chama Use Case para obter status
+     * - Retorna dados de status e limites
+     * 
+     * ❌ O QUE O CONTROLLER NÃO FAZ:
+     * - Não lê tenant_id diretamente do header
+     * - Não usa tenant do contexto sem validar
+     * - A validação é baseada no USUÁRIO, não no tenant/empresa do header
+     * 
+     * 🔥 IMPORTANTE: A assinatura é validada pelo USUÁRIO, não pelo tenant/empresa.
+     * Permite acesso mesmo sem assinatura (retorna null) para que o frontend possa tratar.
+     */
+    public function status(Request $request): JsonResponse
+    {
+        try {
+            // Obter usuário autenticado (fonte de verdade)
+            $user = $this->getUserOrFail();
+            
+            // Buscar tenant baseado na empresa ativa do USUÁRIO
+            $tenant = $this->buscarTenantDoUsuarioUseCase->executar($user);
+            
+            if (!$tenant) {
+                \Log::warning('AssinaturaController::status() - Não foi possível determinar tenant do usuário', [
+                    'user_id' => $user->id,
+                    'empresa_ativa_id' => $user->empresa_ativa_id,
+
+
+=========================================
+FILE: app/Modules/Assinatura/Controllers/PlanoController.php
+=========================================
+<?php
+
+namespace App\Modules\Assinatura\Controllers;
+
+use App\Http\Controllers\Api\BaseApiController;
+use App\Application\Plano\UseCases\ListarPlanosUseCase;
+use App\Application\Plano\UseCases\BuscarPlanoUseCase;
+use App\Domain\Plano\Repositories\PlanoRepositoryInterface;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
+
+/**
+ * Controller para gerenciamento de Planos
+ * 
+ * Refatorado para seguir DDD rigorosamente:
+ * - Usa Use Cases para lógica de negócio
+ * - Usa Repository para acesso a dados
+ * - Não acessa modelos Eloquent diretamente
+ * - Não contém lógica de infraestrutura (cache, etc.)
+ * 
+ * Rotas públicas - podem ser visualizadas sem autenticação
+ * Não requer tenant ou empresa (planos são globais)
+ * 
+ * Segue o mesmo padrão do OrgaoController:
+ * - Não precisa de tenant_id (planos são globais)
+ * - Não precisa de empresa_id (planos são globais)
+ */
+class PlanoController extends BaseApiController
+{
+    public function __construct(
+        private ListarPlanosUseCase $listarPlanosUseCase,
+        private BuscarPlanoUseCase $buscarPlanoUseCase,
+        private PlanoRepositoryInterface $planoRepository,
+    ) {}
+
+    /**
+     * Lista todos os planos ativos
+     * Retorna entidades de domínio transformadas
+     * 
+     * ✅ O QUE O CONTROLLER FAZ:
+     * - Recebe request
+     * - Aplica filtros opcionais
+     * - Chama Use Case para listar
+     * - Transforma entidades em arrays
+     * 
+     * ❌ O QUE O CONTROLLER NÃO FAZ:
+     * - Não lê tenant_id (planos são globais)
+     * - Não acessa Tenant (planos são globais)
+     * - Não filtra por empresa (planos são globais)
+     * 
+     * GET /api/v1/planos
+     */
+    public function list(Request $request): JsonResponse
+    {
+        Log::info('🔍 PlanoController::list - Iniciando listagem de planos', [
+            'path' => $request->path(),
+            'method' => $request->method(),
+            'query_params' => $request->query(),
+            'headers' => $request->headers->all(),
+        ]);
+
+        try {
+            // Preparar filtros
+            $filtros = [];
+            
+            // Aplicar filtros se necessário
+            if ($request->has('ativo')) {
+                $filtros['ativo'] = $request->boolean('ativo');
+            }
+
+            Log::info('🔍 PlanoController::list - Filtros preparados', [
+                'filtros' => $filtros,
+            ]);
+
+            // Executar Use Case (retorna entidades de domínio)
+            Log::info('🔍 PlanoController::list - Chamando ListarPlanosUseCase::executar');
+            $planosDomain = $this->listarPlanosUseCase->executar($filtros);
+
+            Log::info('🔍 PlanoController::list - UseCase retornou planos domain', [
+                'count' => $planosDomain->count(),
+                'ids' => $planosDomain->pluck('id')->toArray(),
+            ]);
+
+            // Converter entidades de domínio para modelos Eloquent para manter compatibilidade com frontend
+            Log::info('🔍 PlanoController::list - Convertendo entidades para modelos Eloquent');
+            $planos = $planosDomain->map(function ($planoDomain) {
+                $modelo = $this->planoRepository->buscarModeloPorId($planoDomain->id);
+                Log::debug('🔍 PlanoController::list - Convertendo plano', [
+                    'domain_id' => $planoDomain->id,
+                    'modelo_encontrado' => $modelo !== null,
+                ]);
+                return $modelo;
+            })->filter(); // Remove nulls
+
+            Log::info('🔍 PlanoController::list - Conversão concluída', [
+                'planos_count' => $planos->count(),
+                'planos_ids' => $planos->pluck('id')->toArray(),
+            ]);
+
+            $response = [
+                'data' => $planos->values()->all(),
+                'meta' => [
+                    'total' => $planos->count(),
+                ],
+            ];
+
+            Log::info('✅ PlanoController::list - Retornando resposta', [
+                'total' => $planos->count(),
+                'response_keys' => array_keys($response),
+            ]);
+
+            return response()->json($response);
+        } catch (\Exception $e) {
+            Log::error('❌ PlanoController::list - Erro ao listar planos', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+            return $this->handleException($e, 'Erro ao listar planos');
+        }
+    }
+
+    /**
+     * Busca um plano específico por ID
+     * Retorna entidade de domínio transformada
+     * 
+     * ✅ O QUE O CONTROLLER FAZ:
+     * - Recebe request
+     * - Chama Use Case para buscar
+     * - Transforma entidade em array
+     * 
+     * ❌ O QUE O CONTROLLER NÃO FAZ:
+     * - Não lê tenant_id (planos são globais)
+     * - Não acessa Tenant (planos são globais)
+     * - Não filtra por empresa (planos são globais)
+     * 
+     * GET /api/v1/planos/{plano}
+     */
+    public function get(Request $request, int $plano): JsonResponse
+    {
+        try {
+            // Executar Use Case
+            $planoDomain = $this->buscarPlanoUseCase->executar($plano);
+            
+            // Buscar modelo Eloquent para resposta (mantém compatibilidade com frontend)
+            $planoModel = $this->planoRepository->buscarModeloPorId($planoDomain->id);
+
+            if (!$planoModel) {
+                return response()->json([
+                    'message' => 'Plano não encontrado'
+                ], 404);
+            }
+
+            return response()->json([
+                'data' => $planoModel
+            ]);
+        } catch (\App\Domain\Exceptions\NotFoundException $e) {
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 404);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao buscar plano');
+        }
+    }
+}
+
+
+
+=========================================
+FILE: app/Http/Controllers/Admin/AdminAssinaturaController.php
+=========================================
+<?php
+
+namespace App\Http\Controllers\Admin;
+
+use App\Http\Controllers\Controller;
+use App\Http\Responses\ApiResponse;
+use App\Application\Assinatura\UseCases\ListarAssinaturasAdminUseCase;
+use App\Application\Assinatura\UseCases\BuscarAssinaturaAdminUseCase;
+use App\Application\Assinatura\UseCases\AtualizarAssinaturaAdminUseCase;
+use App\Application\Assinatura\UseCases\CriarAssinaturaAdminUseCase;
+use App\Application\Tenant\UseCases\ListarTenantsParaFiltroUseCase;
+use App\Http\Requests\Assinatura\AtualizarAssinaturaAdminRequest;
+use App\Http\Requests\Admin\TrocarPlanoAssinaturaAdminRequest;
+use App\Http\Requests\Admin\StoreAssinaturaAdminRequest;
+use App\Models\Tenant;
+use App\Modules\Assinatura\Models\Assinatura;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+
+/**
+ * Controller Admin para gerenciar assinaturas de todos os tenants
+ * 
+ * 100% DDD - Apenas recebe request e delega para Use Cases
+ * 
+ * Padrão similar ao OrgaoController:
+ * - Métodos auxiliares para extrair IDs da rota
+ * - Métodos handle* que recebem IDs diretamente
+ * - Métodos públicos que podem usar Route Model Binding ou extrair IDs
+ */
+class AdminAssinaturaController extends Controller
+{
+    public function __construct(
+        private ListarAssinaturasAdminUseCase $listarAssinaturasAdminUseCase,
+        private BuscarAssinaturaAdminUseCase $buscarAssinaturaAdminUseCase,
+        private AtualizarAssinaturaAdminUseCase $atualizarAssinaturaAdminUseCase,
+        private CriarAssinaturaAdminUseCase $criarAssinaturaAdminUseCase,
+        private ListarTenantsParaFiltroUseCase $listarTenantsParaFiltroUseCase,
+    ) {}
+
+    /**
+     * Extrai o tenant_id da rota
+     * Padrão similar ao OrgaoController::getRouteId()
+     */
+    protected function getTenantIdFromRoute($route): ?int
+    {
+        $parameters = $route->parameters();
+        // Tentar 'tenantId' primeiro, depois 'tenant', depois 'id'
+        $id = $parameters['tenantId'] ?? $parameters['tenant'] ?? $parameters['id'] ?? null;
+        return $id ? (int) $id : null;
+    }
+
+    /**
+     * Extrai o assinatura_id da rota
+     * Padrão similar ao OrgaoController::getRouteId()
+     */
+    protected function getAssinaturaIdFromRoute($route): ?int
+    {
+        $parameters = $route->parameters();
+        // Tentar 'assinaturaId' primeiro, depois 'assinatura', depois 'id'
+        $id = $parameters['assinaturaId'] ?? $parameters['assinatura'] ?? $parameters['id'] ?? null;
+        return $id ? (int) $id : null;
+    }
+
+    /**
+     * Listar todas as assinaturas de todos os tenants
+     */
+    public function index(Request $request)
+    {
+        try {
+            $filtros = [
+                'tenant_id' => $request->tenant_id,
+                'status' => $request->status,
+                'search' => $request->search,
+            ];
+
+            // Executar Use Case
+            $todasAssinaturas = $this->listarAssinaturasAdminUseCase->executar($filtros);
+
+            // Paginação manual
+            $perPage = $request->per_page ?? 15;
+            $currentPage = $request->page ?? 1;
+            $total = $todasAssinaturas->count();
+            $offset = ($currentPage - 1) * $perPage;
+            $paginated = $todasAssinaturas->slice($offset, $perPage)->values();
+
+            // Criar paginator manual (UseCase retorna Collection, não Paginator)
+            $paginator = new \Illuminate\Pagination\LengthAwarePaginator(
+                $paginated,
+                $total,
+                $perPage,
+                $currentPage,
+                [
+                    'path' => $request->url(),
+                    'pageName' => 'page',
+                ]
+            );
+
+            return ApiResponse::paginated($paginator);
+        } catch (\Exception $e) {
+            Log::error('Erro ao listar assinaturas', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return ApiResponse::error('Erro ao listar assinaturas.', 500);
+        }
+    }
+
+    /**
+     * Método handleGet - recebe IDs diretamente
+     * Padrão similar ao OrgaoController::handleGet()
+     */
+    protected function handleGet(Request $request, array $mergeParams = []): \Illuminate\Http\JsonResponse
+    {
+        $route = $request->route();
+        $tenantId = $this->getTenantIdFromRoute($route);
+        $assinaturaId = $this->getAssinaturaIdFromRoute($route);
+        
+        if (!$tenantId || !$assinaturaId) {
+            return ApiResponse::error('Tenant ID ou Assinatura ID não fornecido', 400);
+        }
+
+        try {
+            // Executar Use Case
+            $data = $this->buscarAssinaturaAdminUseCase->executar($tenantId, $assinaturaId);
+
+            return ApiResponse::item($data);
+        } catch (\App\Domain\Exceptions\NotFoundException $e) {
+            return ApiResponse::error($e->getMessage(), 404);
+        } catch (\Exception $e) {
+            Log::error('Erro ao buscar assinatura', [
+                'error' => $e->getMessage(),
+                'tenant_id' => $tenantId,
+                'assinatura_id' => $assinaturaId,
+            ]);
+            return ApiResponse::error('Erro ao buscar assinatura.', 500);
+        }
+    }
+
+    /**
+     * Método público - pode usar Route Model Binding ou extrair IDs da rota
+     * Padrão similar ao OrgaoController::show()
+     * 
+     * Suporta duas formas:
+     * 1. Route Model Binding: show(Request $request, Tenant $tenant, Assinatura $assinatura)
+     * 2. IDs numéricos: show(Request $request, int $tenantId, int $assinaturaId)
+     */
+    public function show(Request $request, Tenant|int $tenantOrId, Assinatura|int $assinaturaOrId = null)
+    {
+        // Se os modelos foram injetados via Route Model Binding, usar os IDs deles
+        if ($tenantOrId instanceof Tenant && $assinaturaOrId instanceof Assinatura) {
+            $request->route()->setParameter('tenantId', $tenantOrId->id);
+            $request->route()->setParameter('assinaturaId', $assinaturaOrId->id);
+        } elseif (is_int($tenantOrId) && is_int($assinaturaOrId)) {
+            // Se são IDs numéricos, definir nos parâmetros da rota
+            $request->route()->setParameter('tenantId', $tenantOrId);
+            $request->route()->setParameter('assinaturaId', $assinaturaOrId);
+        }
+        
+        return $this->handleGet($request);
+    }
+
+    /**
+     * Método handleUpdate - recebe IDs diretamente
+     * Padrão similar ao OrgaoController::handleUpdate()
+     */
+    protected function handleUpdate(AtualizarAssinaturaAdminRequest $request, int|string $tenantId, int|string $assinaturaId, array $mergeParams = []): \Illuminate\Http\JsonResponse
+    {
+        try {
+            // Request já está validado via Form Request
+            $validated = $request->validated();
+
+            // Garantir que são inteiros
+            $tenantId = (int) $tenantId;
+            $assinaturaId = (int) $assinaturaId;
+
+            // Executar Use Case
+            $assinaturaDomain = $this->atualizarAssinaturaAdminUseCase->executar($tenantId, $assinaturaId, $validated);
+
+            // Buscar modelo para resposta
+            $assinaturaModel = $this->buscarAssinaturaAdminUseCase->executar($tenantId, $assinaturaId);
+
+            return ApiResponse::success(
+                'Assinatura atualizada com sucesso',
+                $assinaturaModel
+            );
+        } catch (\App\Domain\Exceptions\NotFoundException $e) {
+            return ApiResponse::error($e->getMessage(), 404);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return ApiResponse::error($e->getMessage(), 400);
+        } catch (\Exception $e) {
+            Log::error('Erro ao atualizar assinatura', [
+                'error' => $e->getMessage(),
+                'tenant_id' => $tenantId,
+                'assinatura_id' => $assinaturaId,
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return ApiResponse::error('Erro ao atualizar assinatura.', 500);
+        }
+    }
+
+
+

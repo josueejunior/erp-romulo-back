@@ -1,0 +1,15 @@
+=== PLANOS CADASTRADOS ===ID: 2 | Nome: Básico | Mensal: R$ 277.14 | Anual: R$ N/A | Limite Processos: 5 | Limite Usuários: 2 | Ativo: SIM
+ID: 3 | Nome: Intermediário | Mensal: R$ 342.86 | Anual: R$ N/A | Limite Processos: 20 | Limite Usuários: 5 | Ativo: SIM
+ID: 4 | Nome: Avançado | Mensal: R$ 457.14 | Anual: R$ N/A | Limite Processos: 30 | Limite Usuários: ilimitado | Ativo: SIM
+ID: 5 | Nome: Ilimitado | Mensal: R$ 854.28 | Anual: R$ N/A | Limite Processos: ilimitado | Limite Usuários: ilimitado | Ativo: SIM
+ID: 1 | Nome: Gratuito | Mensal: R$ 0.00 | Anual: R$ N/A | Limite Processos: 3 | Limite Usuários: 1 | Ativo: SIM
+=== ASSINATURAS ATIVAS ===Total de assinaturas ativas: 5
+=== LOGS DE PAGAMENTO RECENTES (últimos 10) ===ID: 9 | Plano: 2 | Valor: R$ 3325.68 | Status: pending | Método: pix | Data: 
+ID: 8 | Plano: 2 | Valor: R$ 3325.68 | Status: pending | Método: pix | Data: 
+ID: 7 | Plano: 2 | Valor: R$ 277.14 | Status: pending | Método: pix | Data: 
+ID: 6 | Plano: 2 | Valor: R$ 277.14 | Status: failed | Método: pix | Data: 
+ID: 5 | Plano: 2 | Valor: R$ 277.14 | Status: failed | Método: pix | Data: 
+ID: 4 | Plano: 2 | Valor: R$ 277.14 | Status: failed | Método: pix | Data: 
+ID: 3 | Plano: 2 | Valor: R$ 277.14 | Status: failed | Método: pix | Data: 
+ID: 2 | Plano: 2 | Valor: R$ 277.14 | Status: pending | Método: pix | Data: 
+ID: 1 | Plano: 2 | Valor: R$ 277.14 | Status: pending | Método: pix | Data: 

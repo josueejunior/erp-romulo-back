@@ -38,10 +38,21 @@ class WebhookController extends Controller
             ]);
 
             // Validar assinatura (se configurado)
+            // Validar assinatura (OBRIGATÓRIO para segurança)
             $signature = $request->header('X-Signature');
-            if ($signature && !$this->paymentProvider->validateWebhookSignature($payload, $signature)) {
+            
+            if (!$signature) {
+                Log::warning('Webhook sem assinatura (X-Signature)', [
+                    'ip' => $request->ip(),
+                    'headers' => $request->headers->all(),
+                ]);
+                return response()->json(['message' => 'Assinatura obrigatória'], 401);
+            }
+
+            if (!$this->paymentProvider->validateWebhookSignature($payload, $signature)) {
                 Log::warning('Webhook com assinatura inválida', [
                     'signature' => $signature,
+                    'ip' => $request->ip(),
                 ]);
                 return response()->json(['message' => 'Assinatura inválida'], 401);
             }

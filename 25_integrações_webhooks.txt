@@ -1,0 +1,32 @@
+=== WEBHOOKS E INTEGRAÇÕES ===
+
+--- Arquivos relacionados a Webhook ---
+app/Application/Assinatura/UseCases/AtualizarAssinaturaViaWebhookUseCase.php
+app/Modules/Payment/Controllers/WebhookController.php
+
+--- Integrações Externas ---
+app/Application/Auth/UseCases/SolicitarResetSenhaUseCase.php:                    $frontendUrl = config('app.frontend_url') ?? env('FRONTEND_URL') ?? 'https://gestor.addsimp.com';
+app/Application/Auth/UseCases/SolicitarResetSenhaUseCase.php:                        $frontendUrl = 'https://gestor.addsimp.com';
+app/Services/CnpjConsultaService.php:    protected string $receitaWsUrl = 'https://www.receitaws.com.br/v1/cnpj/';
+app/Services/CnpjConsultaService.php:    protected string $brasilApiUrl = 'https://brasilapi.com.br/api/cnpj/v1/';
+app/Http/Controllers/Public/CadastroAfiliadoController.php:            $baseUrl = env('FRONTEND_URL', config('app.frontend_url', 'https://addsimp.com'));
+app/Http/Controllers/Api/ApiDocumentation.php: *         url="https://addireta.com"
+app/Http/Middleware/SecurityHeaders.php:            "font-src 'self' https://fonts.gstatic.com",
+app/Http/Middleware/SecurityHeaders.php:            "connect-src 'self' https://api.addireta.com wss:",
+app/Notifications/ResetPasswordNotification.php:        $frontendUrl = config('app.frontend_url') ?? env('FRONTEND_URL') ?? 'https://gestor.addsimp.com';
+app/Notifications/ResetPasswordNotification.php:            $frontendUrl = 'https://gestor.addsimp.com';
+app/Notifications/UsuarioCriadoNotification.php:        $frontendUrl = config('app.frontend_url') ?? env('FRONTEND_URL') ?? 'https://gestor.addsimp.com';
+app/Notifications/UsuarioCriadoNotification.php:            $frontendUrl = 'https://gestor.addsimp.com';
+config/queue.php:            'prefix' => env('SQS_PREFIX', 'https://sqs.us-east-1.amazonaws.com/your-account-id'),
+config/l5-swagger.php:            'L5_SWAGGER_CONST_HOST' => env('L5_SWAGGER_CONST_HOST', 'https://api.addsimp.com'),
+config/sanctum.php:    | See: https://docs.github.com/en/code-security/secret-scanning/about-secret-scanning
+config/session.php:    | See: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie#samesitesamesite-value
+config/cors.php:                    'https://gestor.addsimp.com',
+config/cors.php:                    'https://www.gestor.addsimp.com',
+config/cors.php:                    'https://gestor.addsimp.com.br',
+config/cors.php:                    'https://www.gestor.addsimp.com.br',
+
+--- Variáveis de APIs no .env ---
+MP_ACCESS_TOKEN=APP_USR-6218067898485730-011919-1a1502082a19d8261f2fd9934cd0285c-3132495254
+MP_PUBLIC_KEY=APP_USR-5417c38f-f8bf-4824-b418-8595c343fbe2
+MP_SANDBOX=false

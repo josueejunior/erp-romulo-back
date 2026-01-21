@@ -136,8 +136,8 @@ Route::prefix('v1')->group(function () {
         Route::get('/cupons/{codigo}/validar', [\App\Modules\Assinatura\Controllers\CupomController::class, 'validar']);
 
         Route::prefix('payments')->group(function () {
-            Route::post('/processar-assinatura', [ApiPaymentController::class, 'processarAssinatura']);
-            Route::get('/{externalId}/status', [ApiPaymentController::class, 'checkStatus']);
+            Route::post('/processar-assinatura', [ApiPaymentController::class, 'processarAssinatura'])->middleware('throttle:10,1');
+            Route::get('/{externalId}/status', [ApiPaymentController::class, 'checkStatus'])->middleware('throttle:30,1');
         });
         
         // Notificações (não precisa de assinatura ativa)
@@ -376,7 +376,7 @@ Route::prefix('v1')->group(function () {
 
     // Webhooks (públicos, sem autenticação)
     Route::prefix('webhooks')->group(function () {
-        Route::post('/mercadopago', [ApiWebhookController::class, 'mercadopago']);
+        Route::post('/mercadopago', [ApiWebhookController::class, 'mercadopago'])->middleware('throttle:600,1');
     });
 });
 

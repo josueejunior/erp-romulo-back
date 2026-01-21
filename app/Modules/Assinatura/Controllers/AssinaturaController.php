@@ -415,27 +415,9 @@ class AssinaturaController extends BaseApiController
             $meses = $validated['meses'];
             $plano = $assinaturaModel->plano;
 
-            // Calcular valor base (com desconto promocional de 50% sincronizado com o frontend)
-            $descontoPromocional = 0.5; // 50% OFF
-            
-            // Mapeamento de preços promocionais fixos (conforme definido no frontend em Planos.jsx)
-            $precosMensaisPromocionais = [
-                'Essencial' => 138.57,
-                'Profissional' => 171.43,
-                'Master' => 228.57,
-                'Ilimitado' => 427.14,
-            ];
-
-            if ($meses === 12) {
-                // Se for 12 meses (anual), usa preco_anual do DB ou mensal * 10
-                $precoBaseAnual = $plano->preco_anual ?: ($plano->preco_mensal * 10);
-                $valor = $precoBaseAnual * $descontoPromocional;
-            } else {
-                // Se estiver no mapeamento fixo, usa o valor fixo * meses. 
-                // Senão aplica 50% no valor mensal do banco * meses.
-                $precoBaseMensal = $precosMensaisPromocionais[$plano->nome] ?? ($plano->preco_mensal * $descontoPromocional);
-                $valor = $precoBaseMensal * $meses;
-            }
+            // Calcular valor base (lógica centralizada no Model)
+            $periodo = $meses === 12 ? 'anual' : 'mensal';
+            $valor = $plano->calcularPreco($periodo, $meses);
 
             // Buscar dados da empresa para criar referência do pedido
             $empresaFinder = new \App\Domain\Tenant\Services\EmpresaFinder();
@@ -444,9 +426,10 @@ class AssinaturaController extends BaseApiController
             $cnpjEmpresa = $empresaData['cnpj'] ?? $tenant->cnpj ?? '';
             
             // Criar referência do pedido: Nome da empresa_plano_cnpj
-            $externalReference = $nomeEmpresa . '_' . $plano->nome . '_' . ($cnpjEmpresa ?: 'sem_cnpj');
-            // Limitar tamanho (Mercado Pago aceita até 256 caracteres)
-            $externalReference = substr($externalReference, 0, 256);
+            $rawReference = $nomeEmpresa . '_' . $plano->nome . '_' . ($cnpjEmpresa ?: 'sem_cnpj');
+            // Sanitizar
+            $safeReference = preg_replace('/[^a-zA-Z0-9_\-]/', '', str_replace(' ', '_', $rawReference));
+            $externalReference = substr($safeReference, 0, 256);
             
             // Determinar método de pagamento
             $paymentMethod = $validated['payment_method_id'] ?? 'credit_card';
@@ -649,9 +632,10 @@ class AssinaturaController extends BaseApiController
                 $cnpjEmpresa = $empresaData['cnpj'] ?? $tenant->cnpj ?? '';
                 
                 // Criar referência do pedido: Nome da empresa_plano_cnpj
-                $externalReference = $nomeEmpresa . '_' . $novoPlano->nome . '_' . ($cnpjEmpresa ?: 'sem_cnpj');
-                // Limitar tamanho (Mercado Pago aceita até 256 caracteres)
-                $externalReference = substr($externalReference, 0, 256);
+                $rawReference = $nomeEmpresa . '_' . $novoPlano->nome . '_' . ($cnpjEmpresa ?: 'sem_cnpj');
+                // Sanitizar
+                $safeReference = preg_replace('/[^a-zA-Z0-9_\-]/', '', str_replace(' ', '_', $rawReference));
+                $externalReference = substr($safeReference, 0, 256);
                 
                 // Determinar método de pagamento
                 $paymentMethod = $paymentData['payment_method_id'] ?? 'credit_card';
@@ -681,7 +665,8 @@ class AssinaturaController extends BaseApiController
                 $paymentRequest = \App\Domain\Payment\ValueObjects\PaymentRequest::fromArray($paymentRequestData);
 
                 // Gerar chave de idempotência
-                $idempotencyKey = 'plan_change_' . $tenant->id . '_' . $novaAssinatura->id . '_' . time();
+                $timeWindow = date('YmdHi'); // Resolução 1 min
+                $idempotencyKey = hash('sha256', 'plan_change_' . $tenant->id . '_' . $novaAssinatura->id . '_' . $timeWindow);
 
                 // Processar pagamento
                 $paymentResult = $this->paymentProvider->processPayment($paymentRequest, $idempotencyKey);
@@ -691,8 +676,10 @@ class AssinaturaController extends BaseApiController
                     'tenant_id' => $tenant->id,
                     'plano_id' => $novoPlanoId,
                     'valor' => $valorCobrar,
+		    'periodo' => $periodo ?? 'mensal',
                     'status' => $paymentResult->status,
                     'external_id' => $paymentResult->externalId,
+		    'idempotency_key' => $paymentResult->externalId ?? uniqid('pmt_', true),
                     'metodo_pagamento' => $paymentResult->paymentMethod,
                     'dados_resposta' => array_merge([
                         'status' => $paymentResult->status,

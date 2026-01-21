@@ -1,0 +1,24 @@
+=== MIGRATIONS DO BANCO ===
+
+total 44K
+drwxr-xr-x  5 root root 4.0K Jan 18 01:02 .
+drwxr-xr-x  5 root root 4.0K Dec 20 20:54 ..
+-rw-r--r--  1 root root 1.8K Jan 18 01:02 2025_01_18_010100_add_nota_fiscal_id_to_processo_item_vinculos_table.php
+-rw-r--r--  1 root root  536 Dec 31 17:34 2025_12_31_173403_add_nome_fantasia_cargo_representante_to_empresas_table.php
+-rw-r--r--  1 root root  798 Jan 16 18:13 2026_01_16_181249_add_proxima_entrega_to_processo_itens.php
+drwxr-xr-x  2 root root 4.0K Jan  7 11:14 Modules
+drwxr-xr-x  8 root root 4.0K Jan 15 16:26 central
+drwxr-xr-x 17 root root 4.0K Jan 18 00:56 tenant
+
+=== MIGRATIONS RELACIONADAS A PAGAMENTO ===
+
+database/migrations/central/planos
+database/migrations/central/planos/2025_12_19_000001_create_planos_table.php
+database/migrations/central/planos/2026_01_10_163700_add_percentual_comissao_afiliado_to_planos_table.php
+database/migrations/tenant/assinaturas
+database/migrations/tenant/assinaturas/2026_01_20_000001_add_aguardando_pagamento_status_to_assinaturas.php
+database/migrations/tenant/assinaturas/2026_01_22_000000_add_mercado_pago_customer_fields_to_assinaturas.php
+database/migrations/tenant/assinaturas/2026_01_06_140000_add_user_id_to_assinaturas_table.php
+database/migrations/tenant/assinaturas/2025_12_19_000002_create_assinaturas_table.php
+database/migrations/tenant/assinaturas/2025_12_19_000002_create_payment_logs_table.php
+database/migrations/tenant/assinaturas/2026_01_17_000000_add_empresa_id_to_assinaturas_table.php
