@@ -14,15 +14,17 @@ use Illuminate\Database\Eloquent\Builder;
  */
 final class AssinaturaQueries
 {
-    /**
-     * Busca assinatura atual por usuário (mais recente válida)
-     * 
-     * @deprecated Use assinaturaAtualPorEmpresa() - assinatura pertence à empresa
-     */
     public static function assinaturaAtualPorUsuario(int $userId): ?AssinaturaModel
     {
         return self::baseQueryValida()
             ->where('user_id', $userId)
+            ->reorder()
+            ->orderByRaw("CASE 
+                WHEN status IN ('ativa', 'trial') THEN 1 
+                WHEN status IN ('aguardando_pagamento', 'pendente') THEN 2 
+                ELSE 3 
+            END ASC")
+            ->orderByDesc('data_fim')
             ->first();
     }
 
@@ -42,6 +44,14 @@ final class AssinaturaQueries
                 $query->where('empresa_id', $empresaId)
                       ->orWhere('tenant_id', $empresaId);
             })
+            // 🔥 PRIORIDADE: Ativa/Trial vence Aguardando Pagamento
+            ->reorder()
+            ->orderByRaw("CASE 
+                WHEN status IN ('ativa', 'trial') THEN 1 
+                WHEN status IN ('aguardando_pagamento', 'pendente') THEN 2 
+                ELSE 3 
+            END ASC")
+            ->orderByDesc('data_fim') // Desempate pela data final
             ->first();
     }
 
@@ -52,6 +62,13 @@ final class AssinaturaQueries
     {
         return self::baseQueryValida()
             ->where('tenant_id', $tenantId)
+            ->reorder()
+            ->orderByRaw("CASE 
+                WHEN status IN ('ativa', 'trial') THEN 1 
+                WHEN status IN ('aguardando_pagamento', 'pendente') THEN 2 
+                ELSE 3 
+            END ASC")
+            ->orderByDesc('data_fim')
             ->first();
     }
 

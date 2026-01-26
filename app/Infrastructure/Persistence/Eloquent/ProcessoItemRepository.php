@@ -109,6 +109,25 @@ class ProcessoItemRepository implements ProcessoItemRepositoryInterface
     public function buscarPorId(int $id): ?ProcessoItem
     {
         $model = ProcessoItemModel::find($id);
+        
+        if (!$model) {
+            \Log::warning('ProcessoItemRepository::buscarPorId - Item não encontrado', [
+                'id' => $id,
+                'empresa_scop' => auth()->user()?->empresa_ativa_id,
+                'model_class' => ProcessoItemModel::class,
+            ]);
+            
+            // Tentar buscar sem escopo para depuração
+            $modelRaw = ProcessoItemModel::withoutGlobalScopes()->find($id);
+            if ($modelRaw) {
+                \Log::info('ProcessoItemRepository::buscarPorId - Item EXISTE mas foi filtrado pelo escopo', [
+                    'id' => $id,
+                    'item_empresa_id' => $modelRaw->empresa_id,
+                    'context_empresa_id' => auth()->user()?->empresa_ativa_id ?? 'N/A',
+                ]);
+            }
+        }
+
         return $model ? $this->toDomain($model) : null;
     }
 

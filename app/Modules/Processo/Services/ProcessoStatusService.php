@@ -94,10 +94,22 @@ class ProcessoStatusService
         // Validações específicas
         switch ($novoStatus) {
             case 'perdido':
-                if (!$this->deveSugerirPerdido($processo)) {
+                // 🔥 CORREÇÃO: Permitir marcar como perdido se não houver itens
+                // O método deveSugerirPerdido retornava false se empty, bloqueando a ação manual
+                if ($processo->itens->isEmpty()) {
+                     return ['pode' => true, 'motivo' => ''];
+                }
+
+                // Se houver itens, valida se todos estão "perdidos" (desclassificados ou inabilitados)
+                // Usamos a lógica direta aqui em vez de deveSugerirPerdido para não restringir ao status 'julgamento_habilitacao'
+                $todosPerdidos = $processo->itens->every(function ($item) {
+                    return in_array($item->status_item, ['desclassificado', 'inabilitado']);
+                });
+
+                if (!$todosPerdidos) {
                     return [
                         'pode' => false,
-                        'motivo' => 'Não é possível marcar como perdido: há itens aceitos ou em análise'
+                        'motivo' => 'Não é possível marcar como perdido: há itens aceitos ou em análise. Desclassifique-os primeiro.'
                     ];
                 }
                 break;

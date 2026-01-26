@@ -36,22 +36,19 @@ class TrocarPlanoAssinaturaUseCase
     /**
      * Calcular valores da troca de plano sem executar
      */
+    /**
+     * Calcular valores da troca de plano sem executar
+     */
     public function simular(int $tenantId, int $novoPlanoId, string $periodo = 'mensal'): array
     {
-        // Buscar assinatura atual
-        // 🔥 DDD/LEGADO: Usamos withoutGlobalScopes() para garantir que encontramos a assinatura mesmo se houver filtros de empresa ou tenancy
-        // e permitimos qualquer status que não esteja encerrado (cancelado/expirado)
-        $assinaturaAtual = Assinatura::withoutGlobalScopes()
-            ->where('tenant_id', $tenantId)
-            ->whereNotIn('status', ['cancelada', 'expirada'])
-            ->orderByDesc('id') // Pegar a mais recente se houver mais de uma
-            ->first();
+        // Buscar assinatura atual (fonte da verdade do que o usuário tem ATIVO)
+        // 🔥 CORREÇÃO: Usar Query Object para priorizar status ativa/trial
+        $assinaturaAtual = \App\Domain\Assinatura\Queries\AssinaturaQueries::assinaturaAtualPorTenant($tenantId);
 
         Log::debug('TrocarPlanoAssinaturaUseCase::simular - Buscando assinatura', [
             'tenant_id' => $tenantId,
             'encontrada' => $assinaturaAtual ? $assinaturaAtual->id : 'não',
             'status' => $assinaturaAtual ? $assinaturaAtual->status : null,
-            'empresa_id' => $assinaturaAtual ? $assinaturaAtual->empresa_id : null,
         ]);
 
         if (!$assinaturaAtual) {
@@ -69,22 +66,13 @@ class TrocarPlanoAssinaturaUseCase
 
     /**
      * Executar troca de plano
-     * 
-     * @param int $tenantId
-     * @param int $novoPlanoId
-     * @param string $periodo 'mensal' ou 'anual'
-     * @return array ['assinatura' => Assinatura, 'credito' => float, 'valor_cobrar' => float]
      */
     public function executar(int $tenantId, int $novoPlanoId, string $periodo = 'mensal'): array
     {
         return DB::transaction(function () use ($tenantId, $novoPlanoId, $periodo) {
-            // Buscar assinatura atual
-            // 🔥 DDD/LEGADO: Usamos withoutGlobalScopes() para garantir que encontramos a assinatura
-            $assinaturaAtual = Assinatura::withoutGlobalScopes()
-                ->where('tenant_id', $tenantId)
-                ->whereNotIn('status', ['cancelada', 'expirada'])
-                ->orderByDesc('id')
-                ->first();
+            // Buscar assinatura atual (fonte da verdade do que o usuário tem ATIVO)
+            // 🔥 CORREÇÃO: Usar Query Object para priorizar status ativa/trial
+            $assinaturaAtual = \App\Domain\Assinatura\Queries\AssinaturaQueries::assinaturaAtualPorTenant($tenantId);
 
             Log::info('TrocarPlanoAssinaturaUseCase::executar - Iniciando troca', [
                 'tenant_id' => $tenantId,
@@ -102,22 +90,54 @@ class TrocarPlanoAssinaturaUseCase
                 throw new DomainException('Plano não encontrado ou inativo');
             }
 
-            // Não permitir trocar para o mesmo plano
-            if ($assinaturaAtual->plano_id === $novoPlanoId) {
-                throw new DomainException('Você já está neste plano');
+            // Não permitir trocar para o mesmo plano se a assinatura atual já for ATIVA para esse plano
+            if ((int)$assinaturaAtual->plano_id === (int)$novoPlanoId && $assinaturaAtual->status === 'ativa') {
+                // Verificar se é apenas troca de período (mensal/anual)
+                $dataFim = $assinaturaAtual->data_fim;
+                $dataInicio = $assinaturaAtual->data_inicio;
+                $diffMeses = $dataInicio->diffInMonths($dataFim);
+                
+                $periodoAtual = $diffMeses >= 11 ? 'anual' : 'mensal';
+                
+                if ($periodoAtual === $periodo) {
+                    throw new DomainException('Você já está neste plano');
+                }
             }
+
+            // 🔥 MELHORIA: Cancelar outras assinaturas 'aguardando_pagamento' para o mesmo tenant
+            // Isso evita lixo no banco e confusão de múltiplas cobranças pendentes
+            Assinatura::withoutGlobalScopes()
+                ->where('tenant_id', $tenantId)
+                ->where('status', 'aguardando_pagamento')
+                ->where('plano_id', $novoPlanoId)
+                ->update([
+                    'status' => 'cancelada',
+                    'observacoes' => DB::raw("COALESCE(observacoes, '') || '\nCancelada por nova tentativa de troca de plano em " . now()->format('Y-m-d H:i:s') . "'")
+                ]);
 
             $valores = $this->calcularValores($assinaturaAtual, $novoPlano, $periodo);
             $creditoProporcional = $valores['credito'];
             $valorCobrar = $valores['valor_cobrar'];
             $valorNovoPlano = $valores['novo_valor'];
 
-            // Cancelar assinatura atual
-            $assinaturaAtual->update([
-                'status' => 'cancelada',
-                'data_cancelamento' => now(),
-                'observacoes' => ($assinaturaAtual->observacoes ?? '') . "\n\nCancelada para upgrade/downgrade de plano em " . now()->format('Y-m-d H:i:s'),
-            ]);
+            // Cancelar assinatura atual APENAS se não houver cobrança (downgrade ou crédito suficiente)
+            // Se houver cobrança (aguardando_pagamento), a anterior continua ativa até o pagamento confirmar
+            if ($valorCobrar <= 0) {
+                // 🔥 CORREÇÃO: Cancelar TODAS as assinaturas ativas/trial do tenant para evitar colisão de unique constraint
+                // "assinaturas_tenant_ativa_unique" impede duplicidade de status 'ativa'
+                $assinaturasParaCancelar = Assinatura::withoutGlobalScopes()
+                    ->where('tenant_id', $tenantId)
+                    ->whereNotIn('status', ['cancelada', 'expirada'])
+                    ->get();
+
+                foreach ($assinaturasParaCancelar as $assinaturaParaCancelar) {
+                    $assinaturaParaCancelar->update([
+                        'status' => 'cancelada',
+                        'data_cancelamento' => now(),
+                        'observacoes' => ($assinaturaParaCancelar->observacoes ?? '') . "\n\nCancelada para upgrade/downgrade de plano em " . now()->format('Y-m-d H:i:s'),
+                    ]);
+                }
+            }
 
             // Criar nova assinatura
             $dataInicio = now();
@@ -145,9 +165,10 @@ class TrocarPlanoAssinaturaUseCase
                 'observacoes' => "Criada por upgrade/downgrade. Crédito aplicado: R$ {$creditoProporcional}. Valor cobrado: R$ {$valorCobrar}",
             ]);
 
-            // Atualizar tenant usando repository
+            // Atualizar tenant usando repository APENAS se a assinatura estiver ativa
+            // Se estiver aguardando pagamento, o webhook ou callback fará a atualização
             $tenantModel = $this->tenantRepository->buscarModeloPorId($tenantId);
-            if ($tenantModel) {
+            if ($tenantModel && $novaAssinatura->status === 'ativa') {
                 $tenantModel->update([
                     'plano_atual_id' => $novoPlanoId,
                     'assinatura_atual_id' => $novaAssinatura->id,
@@ -156,6 +177,7 @@ class TrocarPlanoAssinaturaUseCase
 
             return [
                 'assinatura' => $novaAssinatura,
+                'assinatura_antiga' => $assinaturaAtual,
                 'credito' => $creditoProporcional,
                 'valor_cobrar' => $valorCobrar,
                 'status' => $valorCobrar > 0 ? 'aguardando_pagamento' : 'ativado',
@@ -170,19 +192,10 @@ class TrocarPlanoAssinaturaUseCase
     {
         $planoAtual = $assinaturaAtual->plano;
         // Calcular valor do novo plano com desconto promocional de 50% (sincronizado com frontend)
-        $descontoPromocional = 0.5;
-        $precosMensaisPromocionais = [
-            'Essencial' => 138.57,
-            'Profissional' => 171.43,
-            'Master' => 228.57,
-            'Ilimitado' => 427.14,
-        ];
-
         if ($periodo === 'anual') {
-            $precoBaseAnual = $novoPlano->preco_anual ?: ($novoPlano->preco_mensal * 10);
-            $valorNovoPlano = $precoBaseAnual * $descontoPromocional;
+            $valorNovoPlano = $novoPlano->preco_anual ?: ($novoPlano->preco_mensal * 10);
         } else {
-            $valorNovoPlano = $precosMensaisPromocionais[$novoPlano->nome] ?? ($novoPlano->preco_mensal * $descontoPromocional);
+            $valorNovoPlano = $novoPlano->preco_mensal;
         }
         
         // 🔥 CRÍTICO: Se valor_pago não existe ou é 0, usar valor do plano atual

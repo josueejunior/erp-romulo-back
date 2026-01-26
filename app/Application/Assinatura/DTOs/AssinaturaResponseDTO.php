@@ -18,6 +18,8 @@ class AssinaturaResponseDTO
         public readonly ?string $transacaoId = null,
         public readonly int $diasRestantes = 0,
         public readonly ?PlanoResponseDTO $plano = null,
+        public readonly ?array $usage = null,
+        public readonly ?array $warning = null,
     ) {}
 
     /**
@@ -36,6 +38,8 @@ class AssinaturaResponseDTO
             'transacao_id' => $this->transacaoId,
             'dias_restantes' => $this->diasRestantes,
             'plano' => $this->plano?->toArray(),
+            'usage' => $this->usage,
+            'warning' => $this->warning,
         ];
     }
 }

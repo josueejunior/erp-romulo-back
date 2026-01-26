@@ -96,6 +96,10 @@ class FormacaoPrecoController extends BaseApiController
     {
         try {
             [$processo, $item, $orcamento] = $this->resolveContext($request);
+            
+            // ✅ Segurança: Validar permissão (mesma regra da Web)
+            $this->authorize('create', $processo);
+
             $empresaId = $this->getEmpresaAtivaOrFail()->id;
 
             // FormRequest já validou os dados
@@ -128,17 +132,28 @@ class FormacaoPrecoController extends BaseApiController
      * ✅ DDD: 
      * - Usa resolveContext para eliminar repetição
      * - FormRequest valida dados (Service assume válidos)
+     * - ACL via authorize
      */
-    public function update(FormacaoPrecoRequest $request, int $id): JsonResponse|FormacaoPrecoResource
+    public function update(FormacaoPrecoRequest $request): JsonResponse|FormacaoPrecoResource
     {
         try {
             [$processo, $item, $orcamento] = $this->resolveContext($request);
             $empresaId = $this->getEmpresaAtivaOrFail()->id;
 
-            $formacaoPreco = $this->formacaoPrecoRepository->buscarModeloPorId($id);
+            // Recuperar ID da rota com segurança
+            $id = $request->route('formacao_preco') ?? $request->route('formacaoPreco') ?? $request->route('id');
+            
+            if (!$id) {
+                 return response()->json(['message' => 'ID da formação de preço não fornecido'], 400);
+            }
+
+            $formacaoPreco = $this->formacaoPrecoRepository->buscarModeloPorId((int) $id);
             if (!$formacaoPreco) {
                 throw new FormacaoPrecoNaoEncontradaException();
             }
+
+            // ✅ Segurança: Validar permissão (mesma regra da Web)
+            $this->authorize('update', $formacaoPreco);
 
             // FormRequest já validou os dados
             $formacaoPreco = $this->formacaoPrecoService->update(

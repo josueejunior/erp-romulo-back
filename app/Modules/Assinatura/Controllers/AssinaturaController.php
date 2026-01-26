@@ -85,48 +85,19 @@ class AssinaturaController extends BaseApiController
             // Buscar tenant baseado na empresa ativa do USUÁRIO
             $tenant = $this->buscarTenantDoUsuarioUseCase->executar($user);
             
-            if (!$tenant) {
-                \Log::warning('AssinaturaController::atual() - Não foi possível determinar tenant do usuário', [
-                    'user_id' => $user->id,
-                    'empresa_ativa_id' => $user->empresa_ativa_id,
-                ]);
-                
+            if (!$tenant || !$user->empresa_ativa_id) {
                 return response()->json([
                     'data' => null,
-                    'message' => 'Nenhuma assinatura encontrada',
+                    'message' => 'Nenhuma assinatura ou empresa ativa encontrada',
                     'code' => 'NO_SUBSCRIPTION'
                 ], 200);
             }
 
-            // 🔥 CRÍTICO: Verificar se usuário tem empresa ativa
-            if (!$user->empresa_ativa_id) {
-                \Log::warning('AssinaturaController::atual() - Usuário não tem empresa ativa', [
-                    'user_id' => $user->id,
-                ]);
-                
-                return response()->json([
-                    'data' => null,
-                    'message' => 'Nenhuma empresa ativa encontrada. Selecione uma empresa para ver a assinatura.',
-                    'code' => 'NO_ACTIVE_COMPANY'
-                ], 200);
-            }
-
-            \Log::info('AssinaturaController@atual - Buscando assinatura da empresa', [
-                'user_id' => $user->id,
-                'empresa_ativa_id' => $user->empresa_ativa_id,
-                'tenant_id' => $tenant->id,
-            ]);
-            
-            // 🔥 CORRIGIDO: Buscar assinatura da EMPRESA ATIVA do usuário, não do usuário
-            // A assinatura pertence à empresa, não ao usuário
+            // 🔥 CORRIGIDO: Buscar assinatura da EMPRESA ATIVA do usuário
             try {
                 $assinatura = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($user->empresa_ativa_id);
                 
                 if (!$assinatura) {
-                    \Log::info('AssinaturaController@atual - Nenhuma assinatura encontrada para a empresa', [
-                        'empresa_ativa_id' => $user->empresa_ativa_id,
-                    ]);
-                    
                     return response()->json([
                         'data' => null,
                         'message' => 'Nenhuma assinatura encontrada para esta empresa',
@@ -134,28 +105,33 @@ class AssinaturaController extends BaseApiController
                     ], 200);
                 }
                 
-                // Transformar entidade do domínio em DTO de resposta
-                $responseDTO = $this->assinaturaResource->toResponse($assinatura);
+                // 🔥 NOVO: Obter também o status de uso para uma resposta completa (MAIS EFICIENTE)
+                $usage = null;
+                $warning = null;
+                try {
+                    $statusData = $this->obterStatusAssinaturaUseCase->executar($user->empresa_ativa_id, $user->empresa_ativa_id);
+                    $usage = [
+                        'processos_utilizados' => $statusData['processos_utilizados'] ?? 0,
+                        'usuarios_utilizados' => $statusData['usuarios_utilizados'] ?? 0,
+                        'limite_processos' => $statusData['limite_processos'],
+                        'limite_usuarios' => $statusData['limite_usuarios'],
+                    ];
+                    $warning = $statusData['warning'] ?? null;
+                } catch (\Exception $e) {
+                    \Log::warning('Erro ao carregar status de uso na assinatura: ' . $e->getMessage());
+                }
 
-                \Log::info('AssinaturaController@atual - Assinatura encontrada', [
-                    'assinatura_id' => $assinatura->id,
-                    'empresa_id' => $assinatura->empresaId,
-                    'status' => $assinatura->status,
-                ]);
+                // Transformar entidade do domínio em DTO de resposta rico
+                $responseDTO = $this->assinaturaResource->toResponse($assinatura, $usage, $warning);
 
                 return response()->json([
                     'data' => $responseDTO->toArray()
-                ]);
+                ], 200);
+
             } catch (\App\Domain\Exceptions\NotFoundException $e) {
-                // Não há assinatura - retornar null para que o frontend possa tratar
-                \Log::info('AssinaturaController@atual - NotFoundException capturada', [
-                    'empresa_ativa_id' => $user->empresa_ativa_id,
-                    'message' => $e->getMessage(),
-                ]);
-                
                 return response()->json([
                     'data' => null,
-                    'message' => 'Nenhuma assinatura encontrada para esta empresa',
+                    'message' => 'Nenhuma assinatura encontrada',
                     'code' => 'NO_SUBSCRIPTION'
                 ], 200);
             }
@@ -668,18 +644,35 @@ class AssinaturaController extends BaseApiController
                 $timeWindow = date('YmdHi'); // Resolução 1 min
                 $idempotencyKey = hash('sha256', 'plan_change_' . $tenant->id . '_' . $novaAssinatura->id . '_' . $timeWindow);
 
-                // Processar pagamento
-                $paymentResult = $this->paymentProvider->processPayment($paymentRequest, $idempotencyKey);
+                // Processar pagamento com tratamento de erro robusto
+                try {
+                    $paymentResult = $this->paymentProvider->processPayment($paymentRequest, $idempotencyKey);
+                } catch (\Exception $e) {
+                    \Log::error('Erro ao processar pagamento de troca de plano - Cancelando assinatura parcial', [
+                        'tenant_id' => $tenant->id,
+                        'assinatura_id' => $novaAssinatura->id,
+                        'erro' => $e->getMessage()
+                    ]);
+                    
+                    // 🔥 SEGURO: Se falhar o processamento, cancelar a assinatura nova que está pendente
+                    // para não bloquear o usuário em "já estou neste plano" nas próximas tentativas
+                    $novaAssinatura->update([
+                        'status' => 'cancelada',
+                        'observacoes' => "Falha no processamento do pagamento: " . $e->getMessage()
+                    ]);
+                    
+                    throw $e;
+                }
 
                 // Salvar log de pagamento (opcional, mas bom ter para PIX)
                 $paymentLog = \App\Models\PaymentLog::create([
                     'tenant_id' => $tenant->id,
                     'plano_id' => $novoPlanoId,
                     'valor' => $valorCobrar,
-		    'periodo' => $periodo ?? 'mensal',
+                    'periodo' => $periodo ?? 'mensal',
                     'status' => $paymentResult->status,
                     'external_id' => $paymentResult->externalId,
-		    'idempotency_key' => $paymentResult->externalId ?? uniqid('pmt_', true),
+                    'idempotency_key' => $paymentResult->externalId ?? uniqid('pmt_', true),
                     'metodo_pagamento' => $paymentResult->paymentMethod,
                     'dados_resposta' => array_merge([
                         'status' => $paymentResult->status,
@@ -699,15 +692,36 @@ class AssinaturaController extends BaseApiController
                         'metodo_pagamento' => $paymentResult->paymentMethod,
                         'transacao_id' => $paymentResult->externalId,
                     ]);
+
+                    // 🔥 CRÍTICO: Cancelar assinatura antiga se o pagamento foi aprovado
+                    if (isset($resultado['assinatura_antiga']) && (int)$resultado['assinatura_antiga']->id !== (int)$novaAssinatura->id) {
+                        $antiga = $resultado['assinatura_antiga'];
+                        $antiga->update([
+                            'status' => 'cancelada',
+                            'data_cancelamento' => now(),
+                            'observacoes' => ($antiga->observacoes ?? '') . "\n\nCancelada após upgrade com cartão em " . now()->format('Y-m-d H:i:s'),
+                        ]);
+                        
+                        // Atualizar tenant
+                        $tenantModel = \App\Models\Tenant::find($tenant->id);
+                        if ($tenantModel) {
+                            $tenantModel->update([
+                                'plano_atual_id' => $novoPlanoId,
+                                'assinatura_atual_id' => $novaAssinatura->id,
+                            ]);
+                        }
+                    }
                 } elseif ($paymentResult->isPending()) {
                     $novaAssinatura->update([
-                        'status' => 'aguardando_pagamento', // 🔥 CORRIGIDO: 'aguardando_pagamento' para pagamentos aguardando confirmação
+                        'status' => 'aguardando_pagamento',
                         'metodo_pagamento' => $paymentResult->paymentMethod,
                         'transacao_id' => $paymentResult->externalId,
                         'observacoes' => ($novaAssinatura->observacoes ?? '') . "\nPagamento pendente (" . $paymentMethod . ") - aguardando confirmação. ID: " . $paymentResult->externalId,
                     ]);
                 } else {
-                    // Se rejeitado, lançar exceção
+                    // Se estiver rejeitado, marcar a nova assinatura como cancelada para não travar
+                    $novaAssinatura->update(['status' => 'cancelada']);
+                    
                     throw new \App\Domain\Exceptions\DomainException(
                         $paymentResult->errorMessage ?? 'Pagamento rejeitado pelo gateway.'
                     );
@@ -728,15 +742,19 @@ class AssinaturaController extends BaseApiController
                 ];
             }
 
-            // Incluir PIX se necessário
-            if (isset($paymentMethod) && $paymentMethod === 'pix' && $novaAssinatura->status !== 'ativa' && isset($paymentLog)) {
-                $dadosResposta = $paymentLog->dados_resposta ?? [];
-                if (isset($dadosResposta['pix_qr_code_base64']) || isset($dadosResposta['pix_qr_code'])) {
-                    $responseData['pix_qr_code_base64'] = $dadosResposta['pix_qr_code_base64'] ?? null;
-                    $responseData['pix_qr_code'] = $dadosResposta['pix_qr_code'] ?? null;
-                    $responseData['pix_ticket_url'] = $dadosResposta['pix_ticket_url'] ?? null;
-                    $responseData['payment_id'] = $paymentLog->external_id ?? null;
-                    $responseData['amount'] = (float) $paymentLog->valor;
+            // 🔥 MELHORIA: Garantir inclusão dos dados PIX na resposta se disponível
+            if (isset($paymentResult) && $paymentResult->paymentMethod === 'pix' && $novaAssinatura->status !== 'ativa') {
+                $responseData['pix_qr_code_base64'] = $paymentResult->pixQrCodeBase64;
+                $responseData['pix_qr_code'] = $paymentResult->pixQrCode;
+                $responseData['pix_ticket_url'] = $paymentResult->pixTicketUrl;
+                $responseData['payment_id'] = $paymentResult->externalId;
+                $responseData['amount'] = (float) $valorCobrar;
+                
+                // Backup via log se necessário
+                if (!$responseData['pix_qr_code'] && isset($paymentLog)) {
+                    $dados = $paymentLog->dados_resposta ?? [];
+                    $responseData['pix_qr_code'] = $dados['pix_qr_code'] ?? null;
+                    $responseData['pix_qr_code_base64'] = $dados['pix_qr_code_base64'] ?? null;
                 }
             }
 

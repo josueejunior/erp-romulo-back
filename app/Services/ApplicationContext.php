@@ -587,9 +587,9 @@ class ApplicationContext implements ApplicationContextContract
                 return $this->assinaturaCache;
             }
             
-            // 🔥 PERMITIR ACESSO: Status 'ativa', 'trial', 'pendente' (aguardando pagamento) ou 'aguardando_pagamento'
+            // 🔥 PERMITIR ACESSO: Status 'ativa' ou 'trial'
             // se estiver dentro do período de vigência ou grace period
-            $statusPermitidos = ['ativa', 'trial', 'pendente', 'aguardando_pagamento'];
+            $statusPermitidos = ['ativa', 'trial'];
             if (in_array($assinatura->status, $statusPermitidos) && $estaAtiva) {
                 $warning = null;
                 
@@ -601,18 +601,21 @@ class ApplicationContext implements ApplicationContextContract
                     ];
                 }
                 
-                // Se está pendente, adicionar aviso de pagamento pendente
-                if (in_array($assinatura->status, ['pendente', 'aguardando_pagamento'])) {
-                    $warning = array_merge($warning ?? [], [
-                        'pagamento_pendente' => true,
-                        'metodo_pagamento' => $assinatura->metodoPagamento,
-                    ]);
-                }
-                
                 $this->assinaturaCache = [
                     'pode_acessar' => true,
                     'code' => 'SUBSCRIPTION_ACTIVE',
                     'warning' => $warning,
+                ];
+                return $this->assinaturaCache;
+            }
+            
+            // 🔥 TRATAMENTO PARA PAGAMENTO PENDENTE (Upgrade ou Renovação)
+            if (in_array($assinatura->status, ['pendente', 'aguardando_pagamento'])) {
+                $this->assinaturaCache = [
+                    'pode_acessar' => false,
+                    'code' => 'PAYMENT_PENDING',
+                    'message' => 'O pagamento da sua assinatura está pendente de confirmação. Assim que o pagamento for confirmado, seu acesso será liberado.',
+                    'metodo_pagamento' => $assinatura->metodoPagamento,
                 ];
                 return $this->assinaturaCache;
             }

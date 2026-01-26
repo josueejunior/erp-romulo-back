@@ -597,36 +597,25 @@ class MercadoPagoGateway implements PaymentProviderInterface
         $pixQrCodeBase64 = null;
         $pixTicketUrl = null;
         
-        $pointOfInteraction = $payment['point_of_interaction'] ?? null;
-        if ($pointOfInteraction) {
-            // Converter objeto para array se necessário
-            if (is_object($pointOfInteraction)) {
-                if (method_exists($pointOfInteraction, 'toArray')) {
-                    $pointOfInteraction = $pointOfInteraction->toArray();
-                } elseif (method_exists($pointOfInteraction, 'getContent')) {
-                    $pointOfInteraction = $pointOfInteraction->getContent();
-                } else {
-                    $pointOfInteraction = (array) $pointOfInteraction;
-                }
+        // 🔥 MELHORIA: Extração ultra-robusta de dados PIX
+        $poi = $payment['point_of_interaction'] ?? null;
+        if (is_object($poi)) {
+            if (method_exists($poi, 'toArray')) { $poi = $poi->toArray(); }
+            elseif (method_exists($poi, 'getContent')) { $poi = $poi->getContent(); }
+            else { $poi = (array) $poi; }
+        }
+
+        if (is_array($poi) && isset($poi['transaction_data'])) {
+            $td = $poi['transaction_data'];
+            if (is_object($td)) {
+                if (method_exists($td, 'toArray')) { $td = $td->toArray(); }
+                elseif (method_exists($td, 'getContent')) { $td = $td->getContent(); }
+                else { $td = (array) $td; }
             }
-            
-            if (is_array($pointOfInteraction)) {
-                $transactionData = $pointOfInteraction['transaction_data'] ?? [];
-                if (is_object($transactionData)) {
-                    if (method_exists($transactionData, 'toArray')) {
-                        $transactionData = $transactionData->toArray();
-                    } elseif (method_exists($transactionData, 'getContent')) {
-                        $transactionData = $transactionData->getContent();
-                    } else {
-                        $transactionData = (array) $transactionData;
-                    }
-                }
-                
-                if (is_array($transactionData)) {
-                    $pixQrCode = $transactionData['qr_code'] ?? null;
-                    $pixQrCodeBase64 = $transactionData['qr_code_base64'] ?? null;
-                    $pixTicketUrl = $transactionData['ticket_url'] ?? null;
-                }
+            if (is_array($td)) {
+                $pixQrCode = $td['qr_code'] ?? $td['qr_code_string'] ?? null;
+                $pixQrCodeBase64 = $td['qr_code_base64'] ?? null;
+                $pixTicketUrl = $td['ticket_url'] ?? null;
             }
         }
 

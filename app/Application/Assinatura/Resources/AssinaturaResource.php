@@ -24,7 +24,7 @@ class AssinaturaResource
      * @param Assinatura $assinatura Entidade do domínio
      * @return AssinaturaResponseDTO DTO para resposta JSON
      */
-    public function toResponse(Assinatura $assinatura): AssinaturaResponseDTO
+    public function toResponse(Assinatura $assinatura, ?array $usage = null, ?array $warning = null): AssinaturaResponseDTO
     {
         // Buscar modelo para acessar relacionamento com plano (necessário para resposta)
         $model = $this->assinaturaRepository->buscarModeloPorId($assinatura->id);
@@ -59,6 +59,8 @@ class AssinaturaResource
             transacaoId: $assinatura->transacaoId,
             diasRestantes: $diasRestantes,
             plano: $planoDTO,
+            usage: $usage,
+            warning: $warning,
         );
     }
 }

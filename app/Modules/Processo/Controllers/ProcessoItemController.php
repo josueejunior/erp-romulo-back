@@ -269,12 +269,19 @@ class ProcessoItemController extends BaseApiController
      * 
      * ✅ DDD: Usa FormRequest, Use Case e DTO
      */
-    public function update(ProcessoItemUpdateRequest $request, $id)
+    public function update(ProcessoItemUpdateRequest $request, $processo, $item)
     {
         try {
-            $route = $request->route();
-            $processoId = (int) $route->parameter('processo');
-            $itemId = (int) $id;
+            $processoId = (int) $processo;
+            $itemId = (int) $item;
+            
+            // Fallback caso venha via route parameter mas não via injeção direta (precaução)
+            if (!$processoId) {
+                $processoId = (int) $request->route('processo');
+            }
+            if (!$itemId) {
+                $itemId = (int) $request->route('item');
+            }
             
             if (!$processoId) {
                 return response()->json(['message' => 'Processo não fornecido'], 400);

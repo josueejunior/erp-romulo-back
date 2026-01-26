@@ -263,71 +263,33 @@ class Tenant extends BaseTenant implements TenantWithDatabase
      */
     public function temAssinaturaAtiva(): bool
     {
-        // Buscar usuário autenticado (priorizar ApplicationContext, fallback para auth())
-        $user = null;
-        if (app()->bound(\App\Contracts\ApplicationContextContract::class)) {
-            $context = app(\App\Contracts\ApplicationContextContract::class);
-            if ($context->isInitialized()) {
-                $user = $context->getUser();
-            }
-        }
+        // Buscar usuário autenticado
+        $user = auth()->user();
         
-        if (!$user) {
-            $user = auth()->user();
-        }
-        
-        if (!$user) {
-            \Log::warning('Tenant::temAssinaturaAtiva() - Usuário não autenticado', [
-                'tenant_id' => $this->id,
-            ]);
-            return false;
-        }
-
-        // Buscar assinatura ativa do usuário (não do tenant)
+        // 🔥 CORREÇÃO: Buscar assinatura da EMPRESA/TENANT (fonte da verdade)
+        // Não buscar por user_id primeiro, pois o usuário pode ter múltiplas empresas com assinaturas diferentes
         $assinaturaRepository = app(\App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface::class);
-        $assinaturaDomain = $assinaturaRepository->buscarAssinaturaAtualPorUsuario($user->id);
+        $assinaturaDomain = $assinaturaRepository->buscarAssinaturaAtualPorEmpresa($this->id);
 
-        // 🔥 FALLBACK: Se não encontrou por user_id, buscar por tenant_id
-        // Isso é necessário para assinaturas criadas antes da migração para user_id
+        // Se não encontrou pela empresa, tentar pelo tenant_id (legado)
         if (!$assinaturaDomain) {
-            \Log::debug('Tenant::temAssinaturaAtiva() - Assinatura não encontrada por user_id, tentando por tenant_id', [
-                'tenant_id' => $this->id,
-                'user_id' => $user->id,
-            ]);
+            $assinaturaDomain = $assinaturaRepository->buscarAssinaturaAtual($this->id);
+        }
+
+        // Se ainda não encontrou, como último recurso, buscar pela assinatura do usuário 
+        // mas apenas se ele estiver vinculado a este tenant/empresa
+        if (!$assinaturaDomain && $user) {
+            $assinaturaDomain = $assinaturaRepository->buscarAssinaturaAtualPorUsuario($user->id);
             
-            // Buscar pelo tenant usando a query direta
-            $assinaturaModel = \App\Domain\Assinatura\Queries\AssinaturaQueries::assinaturaAtualPorTenant($this->id);
-            
-            if ($assinaturaModel) {
-                // Atualizar a assinatura com o user_id para futuras buscas
-                if (!$assinaturaModel->user_id) {
-                    $assinaturaModel->user_id = $user->id;
-                    $assinaturaModel->save();
-                    \Log::info('Tenant::temAssinaturaAtiva() - Assinatura atualizada com user_id', [
-                        'tenant_id' => $this->id,
-                        'user_id' => $user->id,
-                        'assinatura_id' => $assinaturaModel->id,
-                    ]);
-                }
-                
-                $isAtiva = $assinaturaModel->isAtiva();
-                
-                // Atualizar cache do tenant
-                if ($isAtiva && ($this->assinatura_atual_id !== $assinaturaModel->id || !$this->plano_atual_id)) {
-                    $this->update([
-                        'assinatura_atual_id' => $assinaturaModel->id,
-                        'plano_atual_id' => $assinaturaModel->plano_id,
-                    ]);
-                    $this->refresh();
-                }
-                
-                return $isAtiva;
+            // Validar se essa assinatura pertence ao tenant atual
+            if ($assinaturaDomain && (int)$assinaturaDomain->tenantId !== (int)$this->id) {
+                $assinaturaDomain = null;
             }
-            
-            \Log::debug('Tenant::temAssinaturaAtiva() - Assinatura não encontrada para o usuário nem para o tenant', [
+        }
+
+        if (!$assinaturaDomain) {
+            \Log::debug('Tenant::temAssinaturaAtiva() - Assinatura não encontrada', [
                 'tenant_id' => $this->id,
-                'user_id' => $user->id,
-                'assinatura_atual_id' => $this->assinatura_atual_id,
             ]);
             return false;
         }
@@ -335,40 +297,19 @@ class Tenant extends BaseTenant implements TenantWithDatabase
         // Buscar modelo da assinatura para verificar status
         $assinaturaModel = $assinaturaRepository->buscarModeloPorId($assinaturaDomain->id);
         if (!$assinaturaModel) {
-            \Log::warning('Tenant::temAssinaturaAtiva() - Modelo de assinatura não encontrado', [
-                'tenant_id' => $this->id,
-                'user_id' => $user->id,
-                'assinatura_domain_id' => $assinaturaDomain->id,
-            ]);
             return false;
         }
 
         $isAtiva = $assinaturaModel->isAtiva();
 
-        // Se a assinatura está ativa e o tenant não tem assinatura_atual_id ou tem uma diferente, atualizar
-        if ($isAtiva && ($this->assinatura_atual_id !== $assinaturaModel->id || !$this->plano_atual_id)) {
+        // Se a assinatura está ativa e o tenant não tem assinatura_atual_id ou tem uma diferente, atualizar cache
+        if ($isAtiva && ($this->assinatura_atual_id !== $assinaturaModel->id || (int)$this->plano_atual_id !== (int)$assinaturaModel->plano_id)) {
             $this->update([
                 'assinatura_atual_id' => $assinaturaModel->id,
                 'plano_atual_id' => $assinaturaModel->plano_id,
             ]);
             $this->refresh();
-            
-            \Log::info('Tenant::temAssinaturaAtiva() - Tenant atualizado com assinatura do usuário', [
-                'tenant_id' => $this->id,
-                'user_id' => $user->id,
-                'assinatura_id' => $assinaturaModel->id,
-                'plano_id' => $assinaturaModel->plano_id,
-            ]);
         }
-
-        \Log::debug('Tenant::temAssinaturaAtiva() - Verificação', [
-            'tenant_id' => $this->id,
-            'user_id' => $user->id,
-            'assinatura_id' => $assinaturaModel->id,
-            'is_ativa' => $isAtiva,
-            'status' => $assinaturaModel->status ?? 'N/A',
-            'data_fim' => $assinaturaModel->data_fim ?? 'N/A',
-        ]);
 
         return $isAtiva;
     }
