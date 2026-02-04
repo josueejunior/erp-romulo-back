@@ -310,16 +310,22 @@ class ProcessoItem extends BaseModel
         // 3. Valor Faturado e Pago (Baseado nos Vínculos Diretos de Nota Fiscal)
         // ✅ Prioridade absoluta: Vínculos diretos com Nota Fiscal (tipo saída)
         // Isso elimina erros de rateio proporcional.
+        // 3. Valor Faturado e Pago (Baseado nos Vínculos de Nota Fiscal)
+        // ✅ Usa a tabela de vínculos (processo_item_vinculos) que suporta 1:N itens
+        
         $this->valor_faturado = (float) $this->vinculos()
+            ->whereNotNull('nota_fiscal_id')
             ->whereHas('notaFiscal', function($q) {
                 $q->where('tipo', 'saida');
             })
             ->sum('valor_total');
-
+            
+        // 4. Valor Pago (apenas NFs pagas)
         $this->valor_pago = (float) $this->vinculos()
+            ->whereNotNull('nota_fiscal_id')
             ->whereHas('notaFiscal', function($q) {
                 $q->where('tipo', 'saida')
-                  ->where('situacao', 'paga');
+                  ->whereIn('situacao', ['paga', 'pago']); // Aceitar variações
             })
             ->sum('valor_total');
 
@@ -339,9 +345,14 @@ class ProcessoItem extends BaseModel
         // 4. Saldo em aberto (pendência de recebimento)
         $this->saldo_aberto = round($this->valor_faturado - $this->valor_pago, 2);
         
-        // 5. Lucro bruto
+        // 5. Lucro bruto (Estimado sobre o total do contrato)
         $custoTotal = (float) $this->getCustoTotal();
-        $this->lucro_bruto = round($this->valor_faturado - $custoTotal, 2);
+        // Usamos valor_vencido para projetar o lucro total do item ganho
+        $this->lucro_bruto = round($this->valor_vencido - $custoTotal, 2);
+        
+        // Lucro realizado (sobre o faturado) seria outra métrica dinâmica
+        $lucroRealizado = round($this->valor_faturado - ($custoTotal * ($this->quantidade > 0 ? ($this->valor_faturado / ($this->valor_vencido ?: 1)) : 0)), 2);
+        
         $this->lucro_liquido = $this->lucro_bruto;
 
         // Salvar sem disparar eventos

@@ -21,10 +21,9 @@ class PagarNotaFiscalUseCase
             throw new DomainException('Nota fiscal não encontrada.');
         }
 
-        // Regra de negócio: Apenas notas de saída podem ser pagas (recebidas do órgão)
-        if ($notaFiscalModel->tipo !== 'saida') {
-            throw new DomainException('Apenas notas fiscais de saída podem ser marcadas como pagas.');
-        }
+        // Nota: Tanto notas de entrada quanto de saída podem ser pagas
+        // - Entrada: Pagamento ao fornecedor
+        // - Saída: Recebimento do órgão
 
         $notaFiscalModel->situacao = 'paga';
         $notaFiscalModel->data_pagamento = Carbon::now();

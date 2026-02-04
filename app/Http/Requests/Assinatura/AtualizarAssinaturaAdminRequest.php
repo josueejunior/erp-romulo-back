@@ -11,6 +11,15 @@ class AtualizarAssinaturaAdminRequest extends FormRequest
         return true; // Validação de autorização feita no middleware
     }
 
+    protected function prepareForValidation()
+    {
+        if ($this->has('status')) {
+            $this->merge([
+                'status' => strtolower($this->status),
+            ]);
+        }
+    }
+
     public function rules(): array
     {
         return [

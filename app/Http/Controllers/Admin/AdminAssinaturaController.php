@@ -338,6 +338,7 @@ class AdminAssinaturaController extends Controller
                 $assinaturaId,
                 [
                     'plano_id' => $novoPlanoId,
+                    'status' => 'ativa', // 🔥 Forçar ativação ao trocar de plano via Admin
                     // O valor_pago será atualizado automaticamente pelo Use Case
                 ]
             );

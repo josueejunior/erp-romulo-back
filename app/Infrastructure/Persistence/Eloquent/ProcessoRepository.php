@@ -324,21 +324,21 @@ class ProcessoRepository implements ProcessoRepositoryInterface
         $query->whereNull('processos.excluido_em');
 
         // 6. Calcular totais
-        // valor_total_vencido: Total arrematado (Potencial total)
-        // valor_total_vinculado: O que já está em Contratos/AFs/Empenhos
-        // valor_total_standby: O que ainda falta vehicular (vencido - vinculado)
+        // valor_vencido: Valor total arrematado (Potencial total do contrato)
+        // valor_empenhado: O que já foi empenhado pelo órgão
+        // lucro_bruto: Margem estimada
         $result = $query->selectRaw('
-            SUM(processo_itens.valor_vencido) as potencial_total,
-            SUM(processo_itens.lucro_bruto) as lucro_total_bruto,
-            SUM(processo_itens.valor_empenhado) as valor_ja_vinculado
+            COALESCE(SUM(processo_itens.valor_vencido), 0) as potencial_total,
+            COALESCE(SUM(processo_itens.lucro_bruto), 0) as lucro_total_bruto,
+            COALESCE(SUM(processo_itens.valor_empenhado), 0) as valor_ja_vinculado
         ')->first();
 
-        $vinculado = (float) ($result->valor_ja_vinculado ?? 0);
-        $potencial = (float) ($result->potencial_total ?? 0);
+        $vinculado = (float) ($result->valor_ja_vinculado ?? 0); // Empenhado
+        $potencial = (float) ($result->potencial_total ?? 0);    // Arrematado
 
         return [
-            'valor_total_execucao' => $vinculado, // O que está em execução real (Contratos/AFs)
-            'valor_total_standby' => $potencial - $vinculado, // O que resta para o futuro
+            'valor_total_execucao' => $potencial, // Mostra o total arrematado como "Em Execução"
+            'valor_total_standby' => max(0, $potencial - $vinculado), // O que falta empenhar
             'lucro_estimado' => (float) ($result->lucro_total_bruto ?? 0),
         ];
     }

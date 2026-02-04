@@ -91,6 +91,8 @@ class AtualizarAssinaturaAdminUseCase
             $isTesteGratis = ($assinaturaModel->valor_pago == 0 || $assinaturaModel->metodo_pagamento === 'gratuito');
             $isMudandoParaAtiva = ($dados['status'] === 'ativa' && $assinaturaModel->status !== 'ativa');
             
+            /* 
+            // ⚠️ TEMPORÁRIO: Bloqueio removido para permitir ativação manual pelo Admin (ex: PIX manual)
             if ($isTesteGratis && $isMudandoParaAtiva) {
                 // Verificar se há transação_id (pagamento finalizado)
                 if (!$assinaturaModel->transacao_id) {
@@ -99,7 +101,8 @@ class AtualizarAssinaturaAdminUseCase
                         "O cliente deve completar o checkout e finalizar o pagamento antes de ativar a assinatura."
                     );
                 }
-            }
+            } 
+            */
             
             $assinaturaModel->status = $dados['status'];
         }

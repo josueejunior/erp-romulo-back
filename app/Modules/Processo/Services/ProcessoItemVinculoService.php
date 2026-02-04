@@ -64,8 +64,53 @@ class ProcessoItemVinculoService
     /**
      * Valida se a quantidade não excede a disponível
      */
+    /**
+     * Valida se a quantidade não excede a disponível
+     */
     public function validateQuantidade(ProcessoItem $item, float $quantidade, array $data, ?ProcessoItemVinculo $vinculoExcluir = null): void
     {
+        \Log::info('ProcessoItemVinculoService::validateQuantidade', [
+            'data' => $data,
+            'ignore_flag' => $data['ignore_quantity_check'] ?? 'NULL',
+            'ignore_is_true' => (!empty($data['ignore_quantity_check']) && $data['ignore_quantity_check'] === true),
+            'nota_fiscal_id' => $data['nota_fiscal_id'] ?? 'NULL'
+        ]);
+
+        // 1. Se a flag de ignorar estiver presente (vinda do Controller para Entradas), retornar imediatamente.
+        if (!empty($data['ignore_quantity_check']) && $data['ignore_quantity_check'] === true) {
+            \Log::info('Ignorando validação de quantidade via flag explícita');
+            return;
+        }
+
+        // 2. Fallback: Se for uma Nota Fiscal de ENTRADA (Custo), não validar limite de quantidade do item.
+        if (!empty($data['nota_fiscal_id'])) {
+            $notaFiscal = $this->notaFiscalRepository->buscarPorId($data['nota_fiscal_id']);
+            
+            // Log do resultado do Repository
+            \Log::info('Checando Nota Fiscal via Repository', [
+                'found' => (bool) $notaFiscal,
+                'tipo' => $notaFiscal ? $notaFiscal->tipo : 'N/A'
+            ]);
+            
+            if ($notaFiscal && strtolower($notaFiscal->tipo) === 'entrada') {
+                \Log::info('Ignorando validação de quantidade via tipo entrada (repository)');
+                return; 
+            }
+
+            // FALLBACK ROBUSTO: Se o repository falhar (ex: escopo de tenant), tenta direto no banco.
+            try {
+                $tipoDb = DB::table('notas_fiscais')->where('id', $data['nota_fiscal_id'])->value('tipo');
+                \Log::info('Checando Nota Fiscal via DB', ['tipo_db' => $tipoDb]);
+                
+                if ($tipoDb && strtolower($tipoDb) === 'entrada') {
+                    \Log::info('Ignorando validação de quantidade via tipo entrada (DB Raw)');
+                    return; 
+                }
+            } catch (\Exception $e) {
+                \Log::error('Erro ao checar tipo via DB: ' . $e->getMessage());
+            }
+        }
+
         // Validar por tipo de documento para permitir fluxo (Contrato -> AF -> Empenho -> NF)
         // Cada nível pode ter até a quantidade total do item.
         $tipos = [
@@ -77,10 +122,39 @@ class ProcessoItemVinculoService
         
         foreach ($tipos as $campo => $label) {
             if (!empty($data[$campo])) {
+                
+                // 🔥 LÓGICA DE HIERARQUIA: Evitar dupla contagem contra o saldo do ITEM.
+                // Se estamos criando/editando uma Nota Fiscal, não devemos validar se o Empenho/Contrato pai cabe no Item.
+                // Eles já cabem (foram validados quando criados). A NF apenas consome o saldo deles (que seria outra validação).
+                
+                // 1. Se tem NF, ignorar validação de limites globais dos pais (Empenho, AF, Contrato)
+                if (!empty($data['nota_fiscal_id']) && $campo !== 'nota_fiscal_id') {
+                    continue; 
+                }
+
+                // 2. Se tem Empenho (e não tem NF), ignorar validação de limites dos pais (AF, Contrato)
+                if (!empty($data['empenho_id']) && empty($data['nota_fiscal_id']) && ($campo === 'contrato_id' || $campo === 'autorizacao_fornecimento_id')) {
+                    continue;
+                }
+                
+                // 3. Se tem AF (e não tem NF nem Empenho), ignorar validação de limites do pai (Contrato)
+                if (!empty($data['autorizacao_fornecimento_id']) && empty($data['nota_fiscal_id']) && empty($data['empenho_id']) && $campo === 'contrato_id') {
+                    continue;
+                }
+
+                // Ao calcular o que já foi consumido, IGNORAR notas de entrada
                 $quantidadeVinculada = $item->vinculos()
                     ->whereNotNull($campo)
                     ->when($vinculoExcluir, function ($query) use ($vinculoExcluir) {
                         return $query->where('id', '!=', $vinculoExcluir->id);
+                    })
+                    ->where(function($q) {
+                        // Considerar se NÃO tem NF (é empenho/contrato puro) 
+                        // OU se tem NF, ela NÃO pode ser de entrada
+                        $q->whereNull('nota_fiscal_id')
+                          ->orWhereHas('notaFiscal', function($nf) {
+                              $nf->where('tipo', '!=', 'entrada');
+                          });
                     })
                     ->sum('quantidade');
 
@@ -101,6 +175,12 @@ class ProcessoItemVinculoService
             $quantidadeVinculada = $item->vinculos()
                 ->when($vinculoExcluir, function ($query) use ($vinculoExcluir) {
                     return $query->where('id', '!=', $vinculoExcluir->id);
+                })
+                ->where(function($q) {
+                     $q->whereNull('nota_fiscal_id')
+                       ->orWhereHas('notaFiscal', function($nf) {
+                           $nf->where('tipo', '!=', 'entrada');
+                       });
                 })
                 ->sum('quantidade');
             

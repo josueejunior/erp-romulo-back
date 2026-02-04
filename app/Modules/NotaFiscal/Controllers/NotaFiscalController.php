@@ -261,6 +261,7 @@ class NotaFiscalController extends BaseApiController
                                 'quantidade' => $itemData['quantidade'] ?? 1,
                                 'valor_unitario' => $itemData['valor_unitario'] ?? 0,
                                 'valor_total' => $itemData['valor_total'] ?? ($itemData['quantidade'] * $itemData['valor_unitario']),
+                                'ignore_quantity_check' => ($notaFiscal->tipo === 'entrada'), // 🔥 Ignorar validação de quantidade para entradas
                             ];
                             
                             // Se a NF tem empenho, vincular também ao empenho
@@ -323,7 +324,7 @@ class NotaFiscalController extends BaseApiController
             // Buscar modelo Eloquent apenas para serialização (Infrastructure)
             $notaFiscalModel = $this->notaFiscalRepository->buscarModeloPorId(
                 $notaFiscalDomain->id,
-                ['empenho', 'contrato', 'autorizacaoFornecimento', 'fornecedor', 'processo', 'vinculos']
+                ['empenho', 'contrato', 'autorizacaoFornecimento', 'fornecedor', 'processo']
             );
             
             if (!$notaFiscalModel) {
@@ -429,6 +430,19 @@ class NotaFiscalController extends BaseApiController
                 
                 $data = $validator->validated();
                 
+                // 🔥 GARANTIA: Se o tipo veio no request mas via validator se perdeu (improvável, mas possível), restaurar.
+                if ($request->has('tipo') && !isset($data['tipo'])) {
+                   $data['tipo'] = $request->input('tipo');
+                   \Log::info('Restaurando tipo manualmente para data:', ['tipo' => $data['tipo']]);
+                }
+
+                \Log::info('NotaFiscalController::updateWeb - Dados Validados', [
+                    'request_all' => $request->all(),
+                    'validated_data' => $data,
+                    'tipo_in_request' => $request->input('tipo'),
+                    'tipo_in_data' => $data['tipo'] ?? 'NULL',
+                ]);
+                
                 // Extrair itens antes de atualizar a nota fiscal
                 $itens = $data['itens'] ?? [];
                 unset($data['itens']); // Remover itens do data principal
@@ -451,12 +465,16 @@ class NotaFiscalController extends BaseApiController
                                 throw new \Exception("Item {$itemData['processo_item_id']} não encontrado.");
                             }
                             
+                            // Determinar se é entrada considerando Request E Domain
+                            $tipoReal = $request->input('tipo') ?? $notaFiscalDomain->tipo;
+                            
                             $vinculoData = [
                                 'processo_item_id' => $itemData['processo_item_id'],
                                 'nota_fiscal_id' => $notaFiscalId,
                                 'quantidade' => $itemData['quantidade'] ?? 1,
                                 'valor_unitario' => $itemData['valor_unitario'] ?? 0,
                                 'valor_total' => $itemData['valor_total'] ?? ($itemData['quantidade'] * $itemData['valor_unitario']),
+                                'ignore_quantity_check' => ($tipoReal === 'entrada'), // 🔥 Ignorar validação de quantidade para entradas
                             ];
                             
                             // Se a NF tem empenho, vincular também ao empenho

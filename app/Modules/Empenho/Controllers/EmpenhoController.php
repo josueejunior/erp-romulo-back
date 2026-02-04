@@ -451,9 +451,10 @@ class EmpenhoController extends BaseApiController
                 $empenhoDomain = $this->atualizarEmpenhoUseCase->executar($dto, $empresa->id);
                 
                 // 🔥 Atualizar vínculos com itens do processo
-                // Remover vínculos de empenho existentes (exceto os que já estão em Notas Fiscais)
+                // Remover vínculos de empenho existentes
+                // ⚠️ TEMPORÁRIO: whereNull('nota_fiscal_id') comentado pois coluna não existe no BD
                 \App\Modules\Processo\Models\ProcessoItemVinculo::where('empenho_id', $empenhoId)
-                    ->whereNull('nota_fiscal_id')
+                    // ->whereNull('nota_fiscal_id') // Coluna ainda não existe
                     ->delete();
                 
                 $processo = $this->processoRepository->buscarModeloPorId($processoId);
