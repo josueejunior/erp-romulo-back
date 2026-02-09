@@ -215,15 +215,23 @@ return Application::configure(basePath: dirname(__DIR__))
                     'line' => $e->getPrevious()->getLine(),
                 ] : null,
             ]);
-            
-            if ($request->expectsJson() && !($e instanceof \Illuminate\Validation\ValidationException)) {
+
+            // API: sempre retornar JSON com CORS (para gestor.addsimp.com receber erro legível)
+            $isApi = $request->is('api/*') || $request->expectsJson();
+            if ($isApi && !($e instanceof \Illuminate\Validation\ValidationException)) {
+                $statusCode = 500;
+                $message = config('app.debug') ? $e->getMessage() : 'Erro interno do servidor';
+                // Mensagem amigável quando o banco do tenant não existe
+                if (str_contains($e->getMessage(), 'does not exist') && str_contains($e->getMessage(), 'tenant_')) {
+                    $statusCode = 503;
+                    $message = 'Ambiente da empresa ainda não está pronto. Tente novamente em alguns segundos ou entre em contato com o suporte.';
+                }
                 $response = response()->json([
-                    'message' => config('app.debug') 
-                        ? $e->getMessage() 
-                        : 'Erro interno do servidor',
+                    'message' => $message,
+                    'error' => config('app.debug') ? get_class($e) : null,
                     'file' => config('app.debug') ? $e->getFile() : null,
                     'line' => config('app.debug') ? $e->getLine() : null,
-                ], 500);
+                ], $statusCode);
                 return $addCorsToResponse($response, $request);
             }
         });

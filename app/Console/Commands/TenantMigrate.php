@@ -80,7 +80,15 @@ class TenantMigrate extends Command
             
             try {
                 tenancy()->initialize($tenant);
-                
+                // Garantir que a conexão padrão seja o banco do tenant (no CLI o bootstrapper pode não trocar)
+                $centralConnectionName = config('tenancy.database.central_connection', 'pgsql');
+                if (config('database.default') === $centralConnectionName) {
+                    $tenantDbName = $tenant->database()->getName();
+                    config(['database.connections.tenant.database' => $tenantDbName]);
+                    \Illuminate\Support\Facades\DB::purge('tenant');
+                    config(['database.default' => 'tenant']);
+                }
+
                 if ($this->option('status')) {
                     // Mostrar status das migrations
                     if ($pathOption) {

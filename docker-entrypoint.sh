@@ -87,9 +87,9 @@ else
     php artisan key:generate --force || true
 fi
 
-# Executar migrations do banco central (tenants)
-echo "📦 Executando migrations do banco central..."
-php artisan migrate --force || {
+# Executar apenas migrations do banco central (não roda tabelas de tenant)
+echo "📦 Executando migrations do banco central (migrate:central)..."
+php artisan migrate:central --force || {
     echo "⚠️  Aviso: Erro ao executar migrations do banco central (pode ser normal se já executado)"
 }
 

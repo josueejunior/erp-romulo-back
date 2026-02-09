@@ -15,13 +15,9 @@ return new class extends Migration
     {
         Schema::create('assinaturas', function (Blueprint $table) {
             $table->id();
-            // tenant_id deve ser bigInteger para corresponder ao id da tabela tenants
+            // tenant_id: referência lógica ao tenant (tabela tenants fica só no banco central)
             $table->unsignedBigInteger('tenant_id');
-            $table->foreign('tenant_id')
-                ->references('id')
-                ->on('tenants')
-                ->onDelete('cascade');
-            $table->foreignId('plano_id')->constrained('planos')->onDelete('restrict');
+            $table->unsignedBigInteger('plano_id');
             $table->status(['ativa', 'cancelada', 'suspensa', 'expirada'], 'ativa');
             $table->date('data_inicio');
             $table->date('data_fim');

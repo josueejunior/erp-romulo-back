@@ -69,16 +69,8 @@ class ProcessoItemVinculoService
      */
     public function validateQuantidade(ProcessoItem $item, float $quantidade, array $data, ?ProcessoItemVinculo $vinculoExcluir = null): void
     {
-        \Log::info('ProcessoItemVinculoService::validateQuantidade', [
-            'data' => $data,
-            'ignore_flag' => $data['ignore_quantity_check'] ?? 'NULL',
-            'ignore_is_true' => (!empty($data['ignore_quantity_check']) && $data['ignore_quantity_check'] === true),
-            'nota_fiscal_id' => $data['nota_fiscal_id'] ?? 'NULL'
-        ]);
-
         // 1. Se a flag de ignorar estiver presente (vinda do Controller para Entradas), retornar imediatamente.
         if (!empty($data['ignore_quantity_check']) && $data['ignore_quantity_check'] === true) {
-            \Log::info('Ignorando validação de quantidade via flag explícita');
             return;
         }
 
@@ -86,28 +78,19 @@ class ProcessoItemVinculoService
         if (!empty($data['nota_fiscal_id'])) {
             $notaFiscal = $this->notaFiscalRepository->buscarPorId($data['nota_fiscal_id']);
             
-            // Log do resultado do Repository
-            \Log::info('Checando Nota Fiscal via Repository', [
-                'found' => (bool) $notaFiscal,
-                'tipo' => $notaFiscal ? $notaFiscal->tipo : 'N/A'
-            ]);
-            
             if ($notaFiscal && strtolower($notaFiscal->tipo) === 'entrada') {
-                \Log::info('Ignorando validação de quantidade via tipo entrada (repository)');
                 return; 
             }
 
             // FALLBACK ROBUSTO: Se o repository falhar (ex: escopo de tenant), tenta direto no banco.
             try {
                 $tipoDb = DB::table('notas_fiscais')->where('id', $data['nota_fiscal_id'])->value('tipo');
-                \Log::info('Checando Nota Fiscal via DB', ['tipo_db' => $tipoDb]);
                 
                 if ($tipoDb && strtolower($tipoDb) === 'entrada') {
-                    \Log::info('Ignorando validação de quantidade via tipo entrada (DB Raw)');
                     return; 
                 }
             } catch (\Exception $e) {
-                \Log::error('Erro ao checar tipo via DB: ' . $e->getMessage());
+                // Silently fail interaction with DB if something is wrong, fallback to standard validation
             }
         }
 

@@ -11,14 +11,18 @@ use App\Domain\Tenant\Entities\Tenant;
 interface TenantDatabaseServiceInterface
 {
     /**
-     * Criar banco de dados do tenant
+     * Criar banco de dados do tenant.
+     *
+     * @param bool $forceCreate Se true, cria o banco mesmo quando TENANCY_CREATE_DATABASES=false (ex.: nova conta/cadastro público).
      */
-    public function criarBancoDados(Tenant $tenant): void;
+    public function criarBancoDados(Tenant $tenant, bool $forceCreate = false): void;
 
     /**
-     * Executar migrations no banco do tenant
+     * Executar migrations no banco do tenant.
+     *
+     * @param bool $forceCreate Se true, executa mesmo quando TENANCY_CREATE_DATABASES=false (ex.: nova conta/cadastro público).
      */
-    public function executarMigrations(Tenant $tenant): void;
+    public function executarMigrations(Tenant $tenant, bool $forceCreate = false): void;
 
     /**
      * Encontrar o próximo número de tenant disponível

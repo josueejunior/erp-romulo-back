@@ -193,15 +193,64 @@ class ResolveTenantContext
         }
 
         tenancy()->initialize($tenant);
-        
-        // 🔥 CORREÇÃO: Setar TenantContext para que Use Cases possam acessar
-        // O TenantContext é usado por Application Services para obter tenant_id
-        \App\Domain\Shared\ValueObjects\TenantContext::set($tenantId);
-        
-        Log::debug('⬅ ResolveTenantContext: tenancy inicializado', ['tenant_id' => $tenantId]);
-        Log::debug('⬅ ResolveTenantContext: TenantContext setado', ['tenant_id' => $tenantId]);
 
-        return $next($request);
+        // 🔥 MULTI-DATABASE: Sempre trocar para o banco do tenant quando a conexão padrão ainda for a central.
+        // Assim as queries (processos, empresas, users do tenant, etc.) vão para tenant_XX e não para erp_licitacoes.
+        $centralConnectionName = config('tenancy.database.central_connection', 'pgsql');
+        $defaultConnectionName = config('database.default');
+        $tenantDbName = $tenant->database()->getName();
+        if ($defaultConnectionName === $centralConnectionName) {
+            config(['database.connections.tenant.database' => $tenantDbName]);
+            \Illuminate\Support\Facades\DB::purge('tenant');
+            config(['database.default' => 'tenant']);
+            Log::info('ResolveTenantContext: Conexão trocada para banco do tenant', [
+                'tenant_id' => $tenantId,
+                'tenant_database' => $tenantDbName,
+            ]);
+        }
+
+        // 🔥 CORREÇÃO: Setar TenantContext para que Use Cases possam acessar
+        \App\Domain\Shared\ValueObjects\TenantContext::set($tenantId);
+
+        // Não chamar getDatabaseName() aqui: abriria a conexão e falharia se o banco não existir.
+        Log::debug('⬅ ResolveTenantContext: tenancy inicializado', [
+            'tenant_id' => $tenantId,
+            'database_connection' => config('database.default'),
+            'database_name' => $tenantDbName,
+        ]);
+
+        try {
+            return $next($request);
+        } catch (\Throwable $e) {
+            $msg = $e->getMessage();
+            $previousMsg = $e->getPrevious() ? $e->getPrevious()->getMessage() : '';
+            $isTenantDbMissing = (str_contains($msg, 'does not exist') && (str_contains($msg, 'tenant_') || str_contains($msg, 'tenant"')))
+                || (str_contains($previousMsg, 'does not exist') && (str_contains($previousMsg, 'tenant_') || str_contains($previousMsg, 'tenant"')));
+
+            if ($isTenantDbMissing) {
+                Log::warning('ResolveTenantContext: Banco do tenant não existe, tentando criar', [
+                    'tenant_id' => $tenantId,
+                    'error' => $msg,
+                ]);
+                try {
+                    $databaseService = app(\App\Domain\Tenant\Services\TenantDatabaseServiceInterface::class);
+                    $tenantDomain = app(\App\Domain\Tenant\Repositories\TenantRepositoryInterface::class)->buscarPorId($tenantId);
+                    if ($tenantDomain) {
+                        $databaseService->criarBancoDados($tenantDomain, forceCreate: true);
+                        $databaseService->executarMigrations($tenantDomain, forceCreate: true);
+                        Log::info('ResolveTenantContext: Banco do tenant criado, repetindo request', ['tenant_id' => $tenantId]);
+                        \Illuminate\Support\Facades\DB::purge('tenant');
+                        return $next($request);
+                    }
+                } catch (\Throwable $createEx) {
+                    Log::error('ResolveTenantContext: Falha ao criar banco do tenant', [
+                        'tenant_id' => $tenantId,
+                        'error' => $createEx->getMessage(),
+                    ]);
+                }
+            }
+            throw $e;
+        }
     }
 
     /**

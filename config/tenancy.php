@@ -34,20 +34,34 @@ return [
      * - Para habilitar bancos separados, adicione DatabaseTenancyBootstrapper::class
      *   e defina TENANCY_CREATE_DATABASES=true no .env
      */
-    'bootstrappers' => [
-        // DatabaseTenancyBootstrapper removido - usando Single Database Tenancy
-        // Stancl\Tenancy\Bootstrappers\DatabaseTenancyBootstrapper::class,
+    'bootstrappers' => array_values(array_filter([
+        /**
+         * IMPORTANTE
+         * - Quando TENANCY_CREATE_DATABASES=true, habilitamos o bootstrapper de banco
+         *   para que a inicialização de tenancy troque a conexão para o DB do tenant.
+         * - Quando false, mantemos single database (sem troca de conexão).
+         */
+        env('TENANCY_CREATE_DATABASES', false)
+            ? Stancl\Tenancy\Bootstrappers\DatabaseTenancyBootstrapper::class
+            : null,
+
         Stancl\Tenancy\Bootstrappers\CacheTenancyBootstrapper::class,
         Stancl\Tenancy\Bootstrappers\FilesystemTenancyBootstrapper::class,
         Stancl\Tenancy\Bootstrappers\QueueTenancyBootstrapper::class,
         // Stancl\Tenancy\Bootstrappers\RedisTenancyBootstrapper::class, // Note: phpredis is needed
-    ],
+    ])),
 
     /**
      * Database tenancy config. Used by DatabaseTenancyBootstrapper.
      */
     'database' => [
         'central_connection' => env('DB_CONNECTION', 'pgsql'),
+
+        /**
+         * Se true, cada tenant usa seu próprio banco (conexão troca para tenant_XX).
+         * Defina TENANCY_CREATE_DATABASES=true no .env e rode config:clear (ou config:cache).
+         */
+        'use_tenant_databases' => env('TENANCY_CREATE_DATABASES', false),
 
         /**
          * Connection used as a "template" for the dynamically created tenant database connection.

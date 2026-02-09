@@ -16,8 +16,8 @@ return new class extends Migration
         Schema::create('audit_logs', function (Blueprint $table) {
             $table->id();
             $table->foreignUsuario(true);
+            // tenant_id: referência lógica (tabela tenants fica só no banco central)
             $table->unsignedBigInteger('tenant_id')->nullable();
-            $table->foreign('tenant_id')->references('id')->on('tenants')->onDelete('cascade');
             $table->string('action', Blueprint::VARCHAR_TINY); // created, updated, deleted, status_changed, payment_processed, etc
             $table->string('model_type', Blueprint::VARCHAR_DEFAULT); // App\Models\Processo
             $table->unsignedBigInteger('model_id');

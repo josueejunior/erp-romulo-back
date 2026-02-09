@@ -433,15 +433,7 @@ class NotaFiscalController extends BaseApiController
                 // 🔥 GARANTIA: Se o tipo veio no request mas via validator se perdeu (improvável, mas possível), restaurar.
                 if ($request->has('tipo') && !isset($data['tipo'])) {
                    $data['tipo'] = $request->input('tipo');
-                   \Log::info('Restaurando tipo manualmente para data:', ['tipo' => $data['tipo']]);
                 }
-
-                \Log::info('NotaFiscalController::updateWeb - Dados Validados', [
-                    'request_all' => $request->all(),
-                    'validated_data' => $data,
-                    'tipo_in_request' => $request->input('tipo'),
-                    'tipo_in_data' => $data['tipo'] ?? 'NULL',
-                ]);
                 
                 // Extrair itens antes de atualizar a nota fiscal
                 $itens = $data['itens'] ?? [];

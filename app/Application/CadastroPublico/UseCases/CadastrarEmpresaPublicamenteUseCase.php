@@ -605,11 +605,11 @@ final class CadastrarEmpresaPublicamenteUseCase
         }
 
         try {
-            // 4. Criar banco de dados
-            $this->databaseService->criarBancoDados($tenant);
+            // 4. Criar banco de dados do tenant (sempre na nova conta; ignora TENANCY_CREATE_DATABASES)
+            $this->databaseService->criarBancoDados($tenant, forceCreate: true);
             
-            // 5. Executar migrations
-            $this->databaseService->executarMigrations($tenant);
+            // 5. Executar migrations no banco do tenant
+            $this->databaseService->executarMigrations($tenant, forceCreate: true);
             
             // 6. Buscar tenant model
             $tenantModel = $this->tenantRepository->buscarModeloPorId($tenant->id);

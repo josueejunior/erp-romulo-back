@@ -7,7 +7,8 @@ use App\Domain\Tenant\Services\TenantDatabaseServiceInterface;
 use App\Domain\Tenant\Services\TenantDatabasePoolServiceInterface;
 use App\Models\Tenant as TenantModel;
 use Stancl\Tenancy\Jobs\CreateDatabase;
-use Stancl\Tenancy\Jobs\MigrateDatabase;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 
@@ -84,15 +85,13 @@ class TenantDatabaseService implements TenantDatabaseServiceInterface
 
     /**
      * Criar banco de dados do tenant
-     * 
-     * 🔥 ARQUITETURA SINGLE DATABASE:
-     * Este método só cria banco se TENANCY_CREATE_DATABASES=true
-     * Por padrão, usando Single Database Tenancy (isolamento por empresa_id no banco central)
+     *
+     * Quando $forceCreate=true (ex.: cadastro público / nova conta), cria o banco mesmo sem TENANCY_CREATE_DATABASES.
      */
-    public function criarBancoDados(Tenant $tenant): void
+    public function criarBancoDados(Tenant $tenant, bool $forceCreate = false): void
     {
-        // Se não estiver configurado para criar bancos separados, pular
-        if (!env('TENANCY_CREATE_DATABASES', false)) {
+        $deveCriar = $forceCreate || config('tenancy.database.use_tenant_databases', env('TENANCY_CREATE_DATABASES', false));
+        if (!$deveCriar) {
             Log::info('TenantDatabaseService::criarBancoDados - Criação de banco desabilitada (Single Database Tenancy)', [
                 'tenant_id' => $tenant->id,
                 'arquitetura' => 'Single Database - isolamento por empresa_id',
@@ -282,24 +281,104 @@ class TenantDatabaseService implements TenantDatabaseServiceInterface
 
     /**
      * Executar migrations do tenant
-     * 
-     * 🔥 ARQUITETURA SINGLE DATABASE:
-     * Este método só executa migrations se TENANCY_CREATE_DATABASES=true
-     * Por padrão, usando Single Database Tenancy (isolamento por empresa_id no banco central)
+     *
+     * Quando $forceCreate=true (ex.: cadastro público / nova conta), executa mesmo sem TENANCY_CREATE_DATABASES.
+     * Roda as migrations inline (mesma lógica do tenants:migrate) para garantir que todas as subpastas
+     * (incl. permissions) sejam executadas antes de qualquer seeder/roles.
      */
-    public function executarMigrations(Tenant $tenant): void
+    public function executarMigrations(Tenant $tenant, bool $forceCreate = false): void
     {
-        // Se não estiver configurado para criar bancos separados, pular
-        if (!env('TENANCY_CREATE_DATABASES', false)) {
+        $deveExecutar = $forceCreate || config('tenancy.database.use_tenant_databases', env('TENANCY_CREATE_DATABASES', false));
+        if (!$deveExecutar) {
             Log::info('TenantDatabaseService::executarMigrations - Execução de migrations desabilitada (Single Database Tenancy)', [
                 'tenant_id' => $tenant->id,
                 'arquitetura' => 'Single Database - isolamento por empresa_id',
             ]);
             return;
         }
-        
+
         $tenantModel = TenantModel::findOrFail($tenant->id);
-        MigrateDatabase::dispatchSync($tenantModel);
+        tenancy()->initialize($tenantModel);
+
+        try {
+            $centralConnectionName = config('tenancy.database.central_connection', 'pgsql');
+            if (config('database.default') === $centralConnectionName) {
+                $tenantDbName = $tenantModel->database()->getName();
+                config(['database.connections.tenant.database' => $tenantDbName]);
+                DB::purge('tenant');
+                config(['database.default' => 'tenant']);
+            }
+
+            $tenantPath = database_path('migrations/tenant');
+            if (!File::exists($tenantPath)) {
+                throw new \RuntimeException("Diretório de migrations de tenant não encontrado: {$tenantPath}");
+            }
+
+            $subdirs = $this->getMigrationSubdirectories($tenantPath);
+            if (empty($subdirs)) {
+                Log::warning('TenantDatabaseService::executarMigrations - Nenhuma migration encontrada em tenant path', [
+                    'tenant_id' => $tenant->id,
+                    'path' => $tenantPath,
+                ]);
+                return;
+            }
+
+            $subdirs = $this->orderMigrationPaths($subdirs, $tenantPath);
+
+            foreach ($subdirs as $subdir) {
+                Artisan::call('migrate', [
+                    '--path' => $subdir,
+                    '--realpath' => true,
+                    '--force' => true,
+                ]);
+            }
+
+            Log::info('TenantDatabaseService::executarMigrations - Concluído', [
+                'tenant_id' => $tenant->id,
+                'paths_count' => count($subdirs),
+            ]);
+        } finally {
+            if (tenancy()->initialized) {
+                tenancy()->end();
+            }
+        }
+    }
+
+    /**
+     * Diretórios que contêm arquivos de migration (mesma lógica do comando TenantMigrate).
+     */
+    private function getMigrationSubdirectories(string $basePath): array
+    {
+        $subdirs = [];
+        foreach (File::allFiles($basePath) as $file) {
+            if ($file->getExtension() === 'php') {
+                $path = $file->getPath();
+                if (!in_array($path, $subdirs, true)) {
+                    $subdirs[] = $path;
+                }
+            }
+        }
+        return $subdirs;
+    }
+
+    /**
+     * Ordena paths para rodar permissions primeiro (tabelas de roles/permissions antes de seeders).
+     */
+    private function orderMigrationPaths(array $paths, string $basePath): array
+    {
+        $permissionsDir = $basePath . DIRECTORY_SEPARATOR . 'permissions';
+        usort($paths, function ($a, $b) use ($permissionsDir) {
+            $aIsPermissions = $a === $permissionsDir || str_starts_with($a, $permissionsDir . DIRECTORY_SEPARATOR);
+            $bIsPermissions = $b === $permissionsDir || str_starts_with($b, $permissionsDir . DIRECTORY_SEPARATOR);
+            if ($aIsPermissions && !$bIsPermissions) {
+                return -1;
+            }
+            if (!$aIsPermissions && $bIsPermissions) {
+                return 1;
+            }
+            return strcmp($a, $b);
+        });
+        return $paths;
     }
 }
 
