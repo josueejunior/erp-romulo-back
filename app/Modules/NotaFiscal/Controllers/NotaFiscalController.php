@@ -188,8 +188,11 @@ class NotaFiscalController extends BaseApiController
         }
         
         // Validar dados manualmente (mesmo padrão do EmpenhoController)
-        $rules = (new NotaFiscalCreateRequest())->rules();
-        $validator = Validator::make($request->all(), $rules);
+        // Usar também as mensagens personalizadas do FormRequest
+        $formRequest = new NotaFiscalCreateRequest();
+        $rules = $formRequest->rules();
+        $messages = method_exists($formRequest, 'messages') ? $formRequest->messages() : [];
+        $validator = Validator::make($request->all(), $rules, $messages);
         
         if ($validator->fails()) {
             return response()->json([
@@ -355,8 +358,10 @@ class NotaFiscalController extends BaseApiController
             $empresa = $this->getEmpresaAtivaOrFail();
             
             // Validar dados (Form Request - validação de formato)
-            $rules = (new NotaFiscalCreateRequest())->rules();
-            $validator = Validator::make($request->all(), $rules);
+            $formRequest = new NotaFiscalCreateRequest();
+            $rules = $formRequest->rules();
+            $messages = method_exists($formRequest, 'messages') ? $formRequest->messages() : [];
+            $validator = Validator::make($request->all(), $rules, $messages);
             
             if ($validator->fails()) {
                 return response()->json([
@@ -421,8 +426,10 @@ class NotaFiscalController extends BaseApiController
                 $empresa = $this->getEmpresaAtivaOrFail();
                 
                 // Validar dados usando as mesmas regras do create
-                $rules = (new NotaFiscalCreateRequest())->rules();
-                $validator = Validator::make($request->all(), $rules);
+                $formRequest = new NotaFiscalCreateRequest();
+                $rules = $formRequest->rules();
+                $messages = method_exists($formRequest, 'messages') ? $formRequest->messages() : [];
+                $validator = Validator::make($request->all(), $rules, $messages);
                 
                 if ($validator->fails()) {
                     throw new \Illuminate\Validation\ValidationException($validator);
