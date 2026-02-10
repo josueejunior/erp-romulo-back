@@ -49,14 +49,28 @@ class ProcessarAssinaturaPlanoUseCase
             throw new DomainException('O plano selecionado não está ativo.');
         }
 
-        // Calcular valor e data de expiração
-        $valor = $periodo === 'anual' ? $plano->preco_anual : $plano->preco_mensal;
+        // 🔥 CORREÇÃO: Calcular valor usando método calcularPreco que aplica desconto promocional de 50%
+        // O frontend já aplica o desconto e envia o valor com desconto, então precisamos comparar com o valor calculado
+        $valor = $plano->calcularPreco($periodo);
         $diasValidade = $periodo === 'anual' ? 365 : 30;
 
-            // Validar valor
-            if ($paymentRequest->amount->toReais() != $valor) {
-                throw new DomainException('O valor do pagamento não corresponde ao valor do plano.');
-            }
+        // 🔥 CORREÇÃO: Validar valor com tolerância de 0.01 para evitar problemas de arredondamento
+        $valorPagamento = $paymentRequest->amount->toReais();
+        $diferenca = abs($valorPagamento - $valor);
+        
+        if ($diferenca > 0.01) {
+            Log::error('ProcessarAssinaturaPlanoUseCase - Valor do pagamento não corresponde ao valor do plano', [
+                'valor_esperado' => $valor,
+                'valor_recebido' => $valorPagamento,
+                'diferenca' => $diferenca,
+                'plano_id' => $plano->id,
+                'plano_nome' => $plano->nome,
+                'periodo' => $periodo,
+                'preco_mensal_original' => $plano->preco_mensal,
+                'preco_anual_original' => $plano->preco_anual,
+            ]);
+            throw new DomainException('O valor do pagamento não corresponde ao valor do plano.');
+        }
 
         // Gerar chave de idempotência única
         $idempotencyKey = $this->generateIdempotencyKey($tenant->id, $plano->id, $periodo);

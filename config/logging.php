@@ -94,6 +94,14 @@ return [
             'processors' => [PsrLogMessageProcessor::class],
         ],
 
+        'fatal' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/fatal.log'),
+            'level' => 'critical',
+            'days' => 30, // Manter logs de fatal errors por 30 dias
+            'replace_placeholders' => true,
+        ],
+
         'stderr' => [
             'driver' => 'monolog',
             'level' => env('LOG_LEVEL', 'debug'),

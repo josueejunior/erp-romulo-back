@@ -2,7 +2,7 @@
 
 namespace App\Modules\Orgao\Models;
 
-use App\Models\BaseModel;
+use App\Models\TenantModel;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Models\Traits\HasSoftDeletesWithEmpresa;
 use App\Models\Traits\HasTimestampsCustomizados;
@@ -11,7 +11,7 @@ use App\Modules\Processo\Models\Processo;
 use App\Modules\Orgao\Models\Setor;
 use App\Modules\Orgao\Models\OrgaoResponsavel;
 
-class Orgao extends BaseModel
+class Orgao extends TenantModel
 {
     use HasSoftDeletesWithEmpresa, HasTimestampsCustomizados, BelongsToEmpresaTrait;
     

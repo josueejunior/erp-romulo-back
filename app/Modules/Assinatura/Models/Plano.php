@@ -5,8 +5,19 @@ namespace App\Modules\Assinatura\Models;
 use App\Models\BaseModel;
 use App\Models\Traits\HasTimestampsCustomizados;
 
+/**
+ * Model para planos de assinatura
+ * 
+ * 🔥 IMPORTANTE: Esta tabela está no banco CENTRAL, não no banco do tenant
+ */
 class Plano extends BaseModel
 {
+    /**
+     * 🔥 IMPORTANTE: Sempre usar conexão central, mesmo quando no contexto do tenant
+     * Esta tabela está no banco central, não no banco do tenant
+     */
+    protected $connection = 'pgsql';
+    
     use HasTimestampsCustomizados;
     
     public $timestamps = true;
@@ -24,6 +35,16 @@ class Plano extends BaseModel
         'recursos_disponiveis',
         'ativo',
         'ordem',
+    ];
+
+    /**
+     * Atributos calculados que devem aparecer automaticamente no JSON da API.
+     * Mantém a compatibilidade com o frontend atual, mas centraliza a regra
+     * de preço promocional (ex.: 50% OFF) no backend.
+     */
+    protected $appends = [
+        'preco_promocional_mensal',
+        'preco_promocional_anual',
     ];
 
     protected function casts(): array
@@ -78,9 +99,10 @@ class Plano extends BaseModel
     {
         return $this->restricao_diaria === true;
     }
+
     /**
-     * Calcula o preço final do plano com base no período e regras de negócio
-     * Centraliza a lógica de 50% de desconto promocional
+     * Calcula o preço final do plano com base no período e regras de negócio.
+     * Centraliza a lógica de desconto promocional (ex.: 50% OFF).
      */
     public function calcularPreco(string $periodo, int $meses = 1): float
     {
@@ -88,14 +110,40 @@ class Plano extends BaseModel
         $descontoPromocional = 0.5;
 
         if ($periodo === 'anual' || $meses === 12) {
-            // Se o plano tiver preco_anual no DB, usa ele como base. 
+            // Se o plano tiver preco_anual no DB, usa ele como base.
             // Senão usa mensal * 10 (regra de 2 meses grátis no anual)
             $precoBaseAnual = $this->preco_anual ?: ($this->preco_mensal * 10);
             return round($precoBaseAnual * $descontoPromocional, 2);
         }
 
-        // Mensal
+        // Mensal (multiplicado por quantidade de meses, se necessário)
         return round($this->preco_mensal * $descontoPromocional * $meses, 2);
+    }
+
+    /**
+     * Preço mensal promocional (usado na tela de planos).
+     * Ex.: valor de tabela R$ 277,14 → R$ 138,57 com 50% OFF.
+     */
+    public function getPrecoPromocionalMensalAttribute(): ?float
+    {
+        if ($this->preco_mensal === null) {
+            return null;
+        }
+
+        return $this->calcularPreco('mensal', 1);
+    }
+
+    /**
+     * Preço anual promocional (usado na tela de planos).
+     * Considera as regras de anual (ex.: 2 meses grátis).
+     */
+    public function getPrecoPromocionalAnualAttribute(): ?float
+    {
+        if ($this->preco_mensal === null && $this->preco_anual === null) {
+            return null;
+        }
+
+        return $this->calcularPreco('anual', 12);
     }
 }
 

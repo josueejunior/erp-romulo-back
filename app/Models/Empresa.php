@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use App\Models\Traits\HasTimestampsCustomizados;
 use App\Modules\Processo\Models\Processo;
 
-class Empresa extends BaseModel
+class Empresa extends TenantModel
 {
     use SoftDeletes, HasTimestampsCustomizados;
     

@@ -73,6 +73,9 @@ class TenantMigrate extends Command
                 $this->warn("⚠️  Nenhuma migration encontrada em: {$tenantPath}");
                 return 1;
             }
+            
+            // Ordenar subdiretórios considerando dependências
+            $subdirs = $this->orderMigrationPaths($subdirs, $tenantPath);
         }
 
         foreach ($tenants as $tenant) {
@@ -183,6 +186,55 @@ class TenantMigrate extends Command
         }
 
         return $subdirs;
+    }
+    
+    /**
+     * Ordena paths para rodar migrations na ordem correta considerando dependências
+     * Mesma lógica do TenantDatabaseService::orderMigrationPaths
+     */
+    protected function orderMigrationPaths(array $paths, string $basePath): array
+    {
+        // Definir ordem de prioridade (menor número = maior prioridade)
+        $priority = [
+            'permissions' => 1,
+            'usuarios' => 2,
+            'empresas' => 3,
+            'fornecedores' => 4,
+            'orgaos' => 5,
+            'documentos' => 6,
+            'processos' => 7,
+            'contratos' => 8,
+            'autorizacoes_fornecimento' => 9,
+            'empenhos' => 10,
+            'orcamentos' => 11,
+            'notas_fiscais' => 12,
+            'assinaturas' => 13,
+        ];
+        
+        usort($paths, function ($a, $b) use ($basePath, $priority) {
+            $aPriority = $this->getPathPriority($a, $basePath, $priority);
+            $bPriority = $this->getPathPriority($b, $basePath, $priority);
+            
+            if ($aPriority !== $bPriority) {
+                return $aPriority <=> $bPriority;
+            }
+            
+            // Se mesma prioridade, ordem alfabética
+            return strcmp($a, $b);
+        });
+        
+        return $paths;
+    }
+    
+    /**
+     * Obtém a prioridade de um path baseado no diretório
+     */
+    protected function getPathPriority(string $path, string $basePath, array $priority): int
+    {
+        $relativePath = str_replace($basePath . DIRECTORY_SEPARATOR, '', $path);
+        $dirName = explode(DIRECTORY_SEPARATOR, $relativePath)[0];
+        
+        return $priority[$dirName] ?? 999; // Prioridade baixa para diretórios não listados
     }
 
     /**

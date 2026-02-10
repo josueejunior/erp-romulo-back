@@ -25,9 +25,52 @@ trait ResolvesContext
      */
     protected function resolveContext(Request $request): array
     {
+        // 🔥 DEBUG: Log todos os parâmetros da rota
+        $route = $request->route();
+        $allParameters = $route ? $route->parameters() : [];
+        
+        \Log::info('ResolvesContext::resolveContext - INICIANDO resolução de contexto', [
+            'url' => $request->fullUrl(),
+            'method' => $request->method(),
+            'all_parameters' => $allParameters,
+            'route_name' => $route?->getName(),
+            'route_uri' => $route?->uri(),
+            'route_action' => $route?->getAction(),
+        ]);
+        
         $processoId = $request->route()->parameter('processo');
         $itemId = $request->route()->parameter('item');
         $orcamentoId = $request->route()->parameter('orcamento');
+        
+        \Log::info('ResolvesContext::resolveContext - IDs extraídos', [
+            'processo_id' => $processoId,
+            'item_id' => $itemId,
+            'orcamento_id' => $orcamentoId,
+        ]);
+
+        if (!$processoId) {
+            \Log::error('ResolvesContext::resolveContext - Processo não encontrado na rota', [
+                'all_parameters' => $allParameters,
+                'route_name' => $route?->getName(),
+            ]);
+            throw new NotFoundException('Processo não encontrado na rota. Parâmetros disponíveis: ' . json_encode($allParameters));
+        }
+        
+        if (!$itemId) {
+            \Log::error('ResolvesContext::resolveContext - Item não encontrado na rota', [
+                'all_parameters' => $allParameters,
+                'route_name' => $route?->getName(),
+            ]);
+            throw new NotFoundException('Item não encontrado na rota. Parâmetros disponíveis: ' . json_encode($allParameters));
+        }
+        
+        if (!$orcamentoId) {
+            \Log::error('ResolvesContext::resolveContext - Orçamento não encontrado na rota', [
+                'all_parameters' => $allParameters,
+                'route_name' => $route?->getName(),
+            ]);
+            throw new NotFoundException('Orçamento não encontrado na rota. Parâmetros disponíveis: ' . json_encode($allParameters));
+        }
 
         $processo = $this->processoRepository->buscarModeloPorId($processoId);
         if (!$processo) {

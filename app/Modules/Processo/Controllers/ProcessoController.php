@@ -142,9 +142,25 @@ class ProcessoController extends BaseApiController
                 return $value !== '' && $value !== null;
             });
             
+            // 🔥 CORREÇÃO: Remover somente_alerta se for false antes de passar para o UseCase
+            if (isset($filtros['somente_alerta']) && (
+                $filtros['somente_alerta'] === false || 
+                $filtros['somente_alerta'] === 'false' || 
+                $filtros['somente_alerta'] === '0' || 
+                $filtros['somente_alerta'] === 0
+            )) {
+                unset($filtros['somente_alerta']);
+            }
+            
             $filtros['empresa_id'] = $empresa->id;
 
             $resumo = $this->obterResumoProcessosUseCase->executar($filtros);
+
+            \Log::debug('ProcessoController::resumo - Resumo retornado para frontend', [
+                'empresa_id' => $empresa->id,
+                'resumo_data' => $resumo,
+                'resumo_keys' => array_keys($resumo),
+            ]);
 
             return response()->json(['data' => $resumo]);
         } catch (\InvalidArgumentException $e) {

@@ -119,6 +119,20 @@ class ProcessoItemController extends BaseApiController
                 return response()->json(['message' => 'Erro ao buscar item'], 500);
             }
 
+            // 🔥 CORREÇÃO: Atualizar valores financeiros antes de retornar
+            // Isso garante que saldo_aberto, lucro_liquido, etc. estejam sempre atualizados
+            try {
+                $itemModel->atualizarValoresFinanceiros();
+                // Recarregar o modelo para ter os valores atualizados
+                $itemModel = $itemModel->fresh(['fornecedor', 'transportadora']);
+            } catch (\Exception $e) {
+                \Log::warning('Erro ao atualizar valores financeiros do item', [
+                    'item_id' => $itemModel->id,
+                    'error' => $e->getMessage(),
+                ]);
+                // Continuar mesmo se houver erro na atualização
+            }
+
             return response()->json(['data' => $itemModel]);
         } catch (NotFoundException $e) {
             return response()->json(['message' => $e->getMessage()], 404);

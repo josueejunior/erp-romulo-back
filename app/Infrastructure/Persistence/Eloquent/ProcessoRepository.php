@@ -168,20 +168,50 @@ class ProcessoRepository implements ProcessoRepositoryInterface
         // Aplicar filtro de empresa_id com isolamento
         $query = $this->aplicarFiltroEmpresa(ProcessoModel::class, $filtros);
 
+        // 🔥 DEBUG: Log da conexão e status antes de aplicar filtro
+        \Log::debug('ProcessoRepository::buscarComFiltros - Antes de aplicar filtro de status', [
+            'empresa_id' => $filtros['empresa_id'] ?? null,
+            'status_filtro' => $filtros['status'] ?? null,
+            'database_connection' => $query->getConnection()->getName(),
+            'database_name' => $query->getConnection()->getDatabaseName(),
+            'sql_antes_status' => $query->toSql(),
+            'bindings_antes_status' => $query->getBindings(),
+        ]);
+
         if (isset($filtros['status'])) {
             if (is_array($filtros['status'])) {
                 $query->whereIn('status', $filtros['status']);
             } else {
                 $query->where('status', $filtros['status']);
             }
+            
+            // 🔥 DEBUG: Log após aplicar filtro de status
+            \Log::debug('ProcessoRepository::buscarComFiltros - Após aplicar filtro de status', [
+                'status_filtro' => $filtros['status'],
+                'sql_apos_status' => $query->toSql(),
+                'bindings_apos_status' => $query->getBindings(),
+            ]);
         }
 
-        if (isset($filtros['data_hora_sessao_publica_inicio'])) {
-            $query->where('data_hora_sessao_publica', '>=', $filtros['data_hora_sessao_publica_inicio']);
-        }
-
-        if (isset($filtros['data_hora_sessao_publica_fim'])) {
-            $query->where('data_hora_sessao_publica', '<=', $filtros['data_hora_sessao_publica_fim']);
+        // 🔥 CORREÇÃO: Incluir processos sem data OU com data no período
+        // Processos com status "participacao" devem aparecer mesmo sem data definida
+        if (isset($filtros['data_hora_sessao_publica_inicio']) || isset($filtros['data_hora_sessao_publica_fim'])) {
+            $query->where(function($q) use ($filtros) {
+                // Processos com data no período
+                if (isset($filtros['data_hora_sessao_publica_inicio']) && isset($filtros['data_hora_sessao_publica_fim'])) {
+                    $q->whereBetween('data_hora_sessao_publica', [
+                        $filtros['data_hora_sessao_publica_inicio'], 
+                        $filtros['data_hora_sessao_publica_fim']
+                    ]);
+                } elseif (isset($filtros['data_hora_sessao_publica_inicio'])) {
+                    $q->where('data_hora_sessao_publica', '>=', $filtros['data_hora_sessao_publica_inicio']);
+                } elseif (isset($filtros['data_hora_sessao_publica_fim'])) {
+                    $q->where('data_hora_sessao_publica', '<=', $filtros['data_hora_sessao_publica_fim']);
+                }
+                
+                // OU processos sem data (especialmente para status "participacao")
+                $q->orWhereNull('data_hora_sessao_publica');
+            });
         }
 
         if (isset($filtros['search']) && !empty($filtros['search'])) {
@@ -205,7 +235,15 @@ class ProcessoRepository implements ProcessoRepositoryInterface
             $query->where('modalidade', $filtros['modalidade']);
         }
 
-        if (isset($filtros['somente_alerta']) && $filtros['somente_alerta']) {
+        // 🔥 CORREÇÃO: Verificar se somente_alerta é realmente true (não string "false" ou "true")
+        $somenteAlerta = isset($filtros['somente_alerta']) && (
+            $filtros['somente_alerta'] === true || 
+            $filtros['somente_alerta'] === 'true' || 
+            $filtros['somente_alerta'] === '1' || 
+            $filtros['somente_alerta'] === 1
+        );
+        
+        if ($somenteAlerta) {
             $query->where(function ($q) {
                 $hoje = \Carbon\Carbon::now();
                 
@@ -232,6 +270,16 @@ class ProcessoRepository implements ProcessoRepositoryInterface
             });
         }
 
+        // 🔥 DEBUG: Log antes de executar query final
+        \Log::debug('ProcessoRepository::buscarComFiltros - Query final antes de paginar', [
+            'empresa_id' => $filtros['empresa_id'] ?? null,
+            'status_filtro' => $filtros['status'] ?? null,
+            'sql_final' => $query->toSql(),
+            'bindings_final' => $query->getBindings(),
+            'database_connection' => $query->getConnection()->getName(),
+            'database_name' => $query->getConnection()->getDatabaseName(),
+        ]);
+
         if (isset($filtros['somente_standby']) && $filtros['somente_standby']) {
             $query->where('status', 'execucao')
                 ->whereHas('itens', function ($q) {
@@ -241,6 +289,15 @@ class ProcessoRepository implements ProcessoRepositoryInterface
         }
 
         $perPage = $filtros['per_page'] ?? 15;
+        $page = $filtros['page'] ?? 1;
+        
+        // 🔥 DEBUG: Contar total antes de paginar
+        $totalAntes = $query->count();
+        \Log::debug('ProcessoRepository::buscarComFiltros - Total antes de paginar', [
+            'empresa_id' => $filtros['empresa_id'] ?? null,
+            'status_filtro' => $filtros['status'] ?? null,
+            'total_antes_paginar' => $totalAntes,
+        ]);
         
         // Ordenar por data_hora_sessao_publica se for para próximas disputas
         if (isset($filtros['data_hora_sessao_publica_inicio'])) {
@@ -249,7 +306,18 @@ class ProcessoRepository implements ProcessoRepositoryInterface
             $query->orderBy('criado_em', 'desc');
         }
         
-        $paginator = $query->paginate($perPage);
+        $paginator = $query->paginate($perPage, ['*'], 'page', $page);
+        
+        // 🔥 DEBUG: Log do resultado após paginar
+        \Log::debug('ProcessoRepository::buscarComFiltros - Resultado após paginar', [
+            'empresa_id' => $filtros['empresa_id'] ?? null,
+            'status_filtro' => $filtros['status'] ?? null,
+            'total' => $paginator->total(),
+            'count' => $paginator->count(),
+            'per_page' => $perPage,
+            'current_page' => $page,
+            'status_dos_processos' => $paginator->getCollection()->pluck('status')->unique()->toArray(),
+        ]);
 
         // Validar que todos os registros pertencem à empresa correta
         $this->validarEmpresaIds($paginator, $filtros['empresa_id']);

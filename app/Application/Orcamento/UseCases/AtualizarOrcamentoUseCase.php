@@ -5,9 +5,11 @@ namespace App\Application\Orcamento\UseCases;
 use App\Application\Orcamento\DTOs\AtualizarOrcamentoDTO;
 use App\Domain\Orcamento\Entities\Orcamento;
 use App\Domain\Orcamento\Repositories\OrcamentoRepositoryInterface;
+use App\Domain\OrcamentoItem\Repositories\OrcamentoItemRepositoryInterface;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\ProcessoItem\Repositories\ProcessoItemRepositoryInterface;
 use DomainException;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Application Service: AtualizarOrcamentoUseCase
@@ -18,6 +20,7 @@ class AtualizarOrcamentoUseCase
 {
     public function __construct(
         private OrcamentoRepositoryInterface $orcamentoRepository,
+        private OrcamentoItemRepositoryInterface $orcamentoItemRepository,
         private ProcessoRepositoryInterface $processoRepository,
         private ProcessoItemRepositoryInterface $processoItemRepository,
     ) {}
@@ -57,7 +60,32 @@ class AtualizarOrcamentoUseCase
         }
 
         // Validar que orçamento pertence ao item
-        if ($orcamentoExistente->processoItemId !== $itemId) {
+        // 🔥 CORREÇÃO: Orçamentos podem ter processo_item_id diretamente (formato antigo)
+        // ou ter múltiplos itens em orcamento_itens (formato novo)
+        $orcamentoModel = $this->orcamentoRepository->buscarModeloPorId($orcamentoExistente->id);
+        $pertenceAoItem = false;
+        
+        // Verificar formato antigo (processo_item_id direto no orçamento)
+        if ($orcamentoExistente->processoItemId === $itemId) {
+            $pertenceAoItem = true;
+        }
+        // Verificar formato novo (processo_item_id em orcamento_itens)
+        elseif ($orcamentoModel && $orcamentoModel->itens) {
+            $temItem = $orcamentoModel->itens()
+                ->where('processo_item_id', $itemId)
+                ->exists();
+            if ($temItem) {
+                $pertenceAoItem = true;
+            }
+        }
+        
+        if (!$pertenceAoItem) {
+            Log::warning('AtualizarOrcamentoUseCase - Orçamento não pertence ao item', [
+                'orcamento_id' => $orcamentoExistente->id,
+                'orcamento_processo_item_id' => $orcamentoExistente->processoItemId,
+                'item_id_solicitado' => $itemId,
+                'tem_itens' => $orcamentoModel && $orcamentoModel->itens ? $orcamentoModel->itens->count() : 0,
+            ]);
             throw new DomainException('Orçamento não pertence ao item.');
         }
 
@@ -82,9 +110,60 @@ class AtualizarOrcamentoUseCase
         if ($dto->fornecedorEscolhido === true) {
             $itemModel = $this->processoItemRepository->buscarModeloPorId($itemId);
             if ($itemModel) {
-                $itemModel->orcamentos()
-                    ->where('id', '!=', $orcamentoExistente->id)
-                    ->update(['fornecedor_escolhido' => false]);
+                // Desmarcar outros orçamentos do mesmo item (formato antigo)
+                // 🔥 CORREÇÃO: Buscar IDs primeiro e depois atualizar diretamente na tabela para evitar ambiguidade no HasManyThrough
+                $outrosOrcamentosIds = $itemModel->orcamentos()
+                    ->where('orcamentos.id', '!=', $orcamentoExistente->id)
+                    ->pluck('orcamentos.id')
+                    ->toArray();
+                
+                if (!empty($outrosOrcamentosIds)) {
+                    \App\Modules\Orcamento\Models\Orcamento::whereIn('id', $outrosOrcamentosIds)
+                        ->update(['fornecedor_escolhido' => false]);
+                }
+                
+                // 🔥 CORREÇÃO: Também desmarcar outros orcamento_itens do mesmo processo_item (formato novo)
+                $orcamentoModel = $this->orcamentoRepository->buscarModeloPorId($orcamentoExistente->id);
+                if ($orcamentoModel) {
+                    // Buscar o orcamento_item correspondente a este processo_item
+                    $orcamentoItem = $orcamentoModel->itens()
+                        ->where('processo_item_id', $itemId)
+                        ->first();
+                    
+                    if ($orcamentoItem) {
+                        // Desmarcar outros orcamento_itens do mesmo processo_item
+                        $this->orcamentoItemRepository->desmarcarEscolhido($orcamentoModel->id, $itemId);
+                        
+                        // Marcar este orcamento_item como escolhido
+                        $orcamentoItem->fornecedor_escolhido = true;
+                        $orcamentoItem->save();
+                        
+                        Log::info('AtualizarOrcamentoUseCase - OrcamentoItem marcado como escolhido', [
+                            'orcamento_id' => $orcamentoExistente->id,
+                            'orcamento_item_id' => $orcamentoItem->id,
+                            'processo_item_id' => $itemId,
+                        ]);
+                    }
+                }
+            }
+        } elseif ($dto->fornecedorEscolhido === false) {
+            // Se desmarcou, também desmarcar o orcamento_item correspondente
+            $orcamentoModel = $this->orcamentoRepository->buscarModeloPorId($orcamentoExistente->id);
+            if ($orcamentoModel) {
+                $orcamentoItem = $orcamentoModel->itens()
+                    ->where('processo_item_id', $itemId)
+                    ->first();
+                
+                if ($orcamentoItem) {
+                    $orcamentoItem->fornecedor_escolhido = false;
+                    $orcamentoItem->save();
+                    
+                    Log::info('AtualizarOrcamentoUseCase - OrcamentoItem desmarcado', [
+                        'orcamento_id' => $orcamentoExistente->id,
+                        'orcamento_item_id' => $orcamentoItem->id,
+                        'processo_item_id' => $itemId,
+                    ]);
+                }
             }
         }
 

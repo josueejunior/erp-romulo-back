@@ -48,6 +48,7 @@ class PlanosSeeder extends Seeder
                     'formacao_precos', // calculadora, preço mínimo
                     'execucao', // contratos, AFs, empenhos, NF-e de entrada e saída
                     'controle_operacional', // status dos itens, saldo por processo
+                    'calendarios', // disputas e julgamentos agendados
                 ],
                 'ativo' => true,
                 'ordem' => 0,

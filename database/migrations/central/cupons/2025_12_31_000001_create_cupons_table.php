@@ -41,7 +41,8 @@ return new class extends Migration
             $table->foreignId('cupom_id')->constrained('cupons')->onDelete('cascade');
             $table->unsignedBigInteger('tenant_id');
             $table->foreign('tenant_id')->references('id')->on('tenants')->onDelete('cascade');
-            $table->foreignId('assinatura_id')->nullable()->constrained('assinaturas')->onDelete('set null');
+            // 🔥 IMPORTANTE: assinatura_id sem foreign key porque a tabela assinaturas está no banco do tenant
+            $table->unsignedBigInteger('assinatura_id')->nullable();
             $table->decimal('valor_desconto_aplicado', 10, 2);
             $table->decimal('valor_original', 10, 2);
             $table->decimal('valor_final', 10, 2);
@@ -51,6 +52,7 @@ return new class extends Migration
             // ⚡ Índices para performance
             $table->index('tenant_id');
             $table->index('cupom_id');
+            $table->index('assinatura_id'); // Índice mesmo sem foreign key
             $table->index('usado_em');
             $table->index(['cupom_id', 'tenant_id']);
         });

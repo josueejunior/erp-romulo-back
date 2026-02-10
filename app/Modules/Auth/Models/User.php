@@ -19,6 +19,33 @@ class User extends Authenticatable
 {
     use HasFactory, Notifiable, HasApiTokens, HasRoles, SoftDeletes, HasTimestampsCustomizados;
 
+    /**
+     * 🔥 IMPORTANTE: Usar conexão do tenant dinamicamente
+     * Esta tabela está no banco do tenant, não no banco central
+     * 
+     * @return string|null Nome da conexão ('tenant' ou null para usar padrão)
+     */
+    public function getConnectionName(): ?string
+    {
+        // Verificar se a conexão padrão já é 'tenant' (mais rápido)
+        $defaultConnection = config('database.default');
+        if ($defaultConnection === 'tenant') {
+            return 'tenant';
+        }
+        
+        // Se o tenancy estiver inicializado, usar conexão do tenant
+        try {
+            if (function_exists('tenancy') && tenancy()->initialized) {
+                return 'tenant';
+            }
+        } catch (\Exception $e) {
+            // Se houver erro, continuar
+        }
+        
+        // Fallback: retornar null para usar conexão padrão
+        return null;
+    }
+
     const CREATED_AT = Blueprint::CREATED_AT;
     const UPDATED_AT = Blueprint::UPDATED_AT;
     const DELETED_AT = Blueprint::DELETED_AT;

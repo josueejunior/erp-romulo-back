@@ -2,14 +2,14 @@
 
 namespace App\Modules\Processo\Models;
 
-use App\Models\BaseModel;
+use App\Models\TenantModel;
 use App\Modules\Contrato\Models\Contrato;
 use App\Modules\AutorizacaoFornecimento\Models\AutorizacaoFornecimento;
 use App\Modules\Empenho\Models\Empenho;
 use App\Modules\NotaFiscal\Models\NotaFiscal;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class ProcessoItemVinculo extends BaseModel
+class ProcessoItemVinculo extends TenantModel
 {
     protected $table = 'processo_item_vinculos';
 

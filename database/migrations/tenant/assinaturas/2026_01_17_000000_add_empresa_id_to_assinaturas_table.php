@@ -14,6 +14,14 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Verificar se a tabela empresas existe antes de adicionar foreign key
+        if (!Schema::hasTable('empresas')) {
+            throw new \RuntimeException(
+                'A tabela "empresas" deve existir antes de adicionar a foreign key empresa_id à tabela assinaturas. ' .
+                'Certifique-se de que as migrations de empresas sejam executadas antes das migrations de assinaturas.'
+            );
+        }
+
         Schema::table('assinaturas', function (Blueprint $table) {
             // Adicionar empresa_id (nullable para compatibilidade com dados existentes)
             $table->foreignId('empresa_id')->nullable()->after('user_id')->constrained('empresas')->onDelete('cascade');

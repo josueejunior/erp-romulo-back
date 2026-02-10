@@ -17,6 +17,14 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Verificar se a tabela users existe antes de adicionar foreign key
+        if (!Schema::hasTable('users')) {
+            throw new \RuntimeException(
+                'A tabela "users" deve existir antes de adicionar a foreign key user_id à tabela assinaturas. ' .
+                'Certifique-se de que as migrations de usuarios sejam executadas antes das migrations de assinaturas.'
+            );
+        }
+
         Schema::table('assinaturas', function (Blueprint $table) {
             // Adicionar coluna user_id (nullable inicialmente para permitir migração de dados existentes)
             $table->unsignedBigInteger('user_id')->nullable()->after('tenant_id');

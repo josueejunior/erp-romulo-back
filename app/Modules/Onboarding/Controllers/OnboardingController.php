@@ -148,6 +148,13 @@ class OnboardingController extends BaseApiController
             // Isso evita criar um novo onboarding se já foi concluído
             $jaConcluido = $this->gerenciarOnboardingUseCase->estaConcluido($dto);
             
+            Log::info('OnboardingController::status - Verificação de concluído', [
+                'user_id' => $user->id,
+                'tenant_id' => $tenantId,
+                'email' => $user->email,
+                'ja_concluido' => $jaConcluido,
+            ]);
+            
             if ($jaConcluido) {
                 Log::info('OnboardingController::status - Onboarding já foi concluído para este usuário', [
                     'user_id' => $user->id,
@@ -184,6 +191,13 @@ class OnboardingController extends BaseApiController
                     email: $user->email,
                 );
                 $onboardingDomain = $this->gerenciarOnboardingUseCase->iniciar($iniciarDto);
+                
+                Log::info('OnboardingController::status - Onboarding criado com sucesso', [
+                    'onboarding_id' => $onboardingDomain->id,
+                    'onboarding_concluido' => $onboardingDomain->onboardingConcluido,
+                    'user_id' => $user->id,
+                    'tenant_id' => $tenantId,
+                ]);
             } else {
                 Log::info('OnboardingController::status - Onboarding encontrado', [
                     'onboarding_id' => $onboardingDomain->id,
@@ -219,15 +233,28 @@ class OnboardingController extends BaseApiController
 
             if (!$onboardingModel) {
                 // Se não conseguir buscar modelo, usar dados da entidade
+                $data = $this->presenter->presentDomain($onboardingDomain);
+                Log::info('OnboardingController::status - Retornando dados da entidade (modelo não encontrado)', [
+                    'onboarding_id' => $onboardingDomain->id,
+                    'onboarding_concluido' => $data['onboarding_concluido'],
+                    'data_keys' => array_keys($data),
+                ]);
                 return response()->json([
                     'success' => true,
-                    'data' => $this->presenter->presentDomain($onboardingDomain),
+                    'data' => $data,
                 ]);
             }
 
+            $data = $this->presenter->present($onboardingModel);
+            Log::info('OnboardingController::status - Retornando dados do modelo', [
+                'onboarding_id' => $onboardingDomain->id,
+                'onboarding_concluido' => $data['onboarding_concluido'],
+                'data_keys' => array_keys($data),
+            ]);
+            
             return response()->json([
                 'success' => true,
-                'data' => $this->presenter->present($onboardingModel),
+                'data' => $data,
             ]);
         } catch (\Exception $e) {
             Log::error('OnboardingController::status - Erro inesperado', [
@@ -482,7 +509,8 @@ class OnboardingController extends BaseApiController
             }
 
             // Buscar plano gratuito (preco_mensal = 0)
-            $planosAtivos = $this->planoRepository->listar(['ativo' => true]);
+            // 🔥 CORREÇÃO: Incluir planos gratuitos para encontrar o plano de trial
+            $planosAtivos = $this->planoRepository->listar(['ativo' => true, 'incluir_gratuitos' => true]);
             $planoGratuito = null;
             
             foreach ($planosAtivos as $plano) {

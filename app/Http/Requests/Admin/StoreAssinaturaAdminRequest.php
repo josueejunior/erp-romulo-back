@@ -18,7 +18,7 @@ class StoreAssinaturaAdminRequest extends FormRequest
     {
         return [
             'tenant_id' => 'required|integer|exists:tenants,id',
-            'plano_id' => 'required|integer|exists:planos,id',
+            'plano_id' => ['required', 'integer', new \App\Rules\PlanoExists()],
             'empresa_id' => 'nullable|integer',
             'user_id' => 'nullable|integer',
             'status' => 'nullable|string|in:ativa,suspensa,expirada,cancelada',

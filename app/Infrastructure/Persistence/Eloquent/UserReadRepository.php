@@ -276,53 +276,31 @@ class UserReadRepository implements UserReadRepositoryInterface
     /**
      * Centraliza a query de usuários com isolamento de tenant
      * 
-     * 🔥 SEGURANÇA: Garante que toda query de usuário nasça com o filtro de Tenant,
-     * mesmo que o Laravel falhe em trocar a conexão. Se estivermos no banco central
-     * (fallback quando o banco tenant não existe), FORÇA join com empresas do tenant
-     * para garantir que dados não vazem entre tenants.
-     * 
-     * Nota: O Global Scope no Model User também aplica este filtro como camada adicional
-     * de segurança. Esta é uma implementação de "defesa em profundidade".
+     * 🔥 CORREÇÃO: Garante que a query use a conexão 'tenant' quando o tenancy estiver inicializado
+     * e o modelo User já está configurado para usar a conexão correta via getConnectionName()
      * 
      * @return \Illuminate\Database\Eloquent\Builder
      */
     protected function getIsolatedUserQuery(): \Illuminate\Database\Eloquent\Builder
     {
         $tenantId = tenancy()->tenant?->id;
-        
-        // 1. Tenta obter a conexão correta
-        $query = UserModel::withTrashed();
-
-        // 2. Segurança: Se estivermos no banco central, FORÇAR join com empresas do tenant
-        // Isso garante que mesmo se a conexão 'tenant' falhar, os dados não vazem
         $databaseName = DB::connection()->getDatabaseName();
         
-        if (!str_starts_with($databaseName, 'tenant_')) {
-            // Estamos no banco central (fallback) - aplicar filtro de segurança
-            // Filtrar empresas que pertencem ao tenant através da tabela tenant_empresas
-            if ($tenantId) {
-                // Buscar empresa_ids do tenant através da tabela tenant_empresas (banco central)
-                $empresaIds = \App\Models\TenantEmpresa::where('tenant_id', $tenantId)
-                    ->pluck('empresa_id')
-                    ->toArray();
-                
-                if (!empty($empresaIds)) {
-                    // Filtrar usuários que têm relacionamento com empresas do tenant
-                    $query->whereHas('empresas', function ($q) use ($empresaIds) {
-                        $q->whereIn('empresas.id', $empresaIds);
-                    });
-                } else {
-                    // Se não houver empresas mapeadas, não retornar nenhum usuário
-                    $query->whereRaw('1 = 0');
-                }
-            } else {
-                // Sem tenant_id, não retornar nenhum usuário por segurança
-                $query->whereRaw('1 = 0');
-            }
-        }
-        // Se estiver no banco tenant (str_starts_with($databaseName, 'tenant_')),
-        // a query já está isolada naturalmente pelo banco de dados
-
+        Log::debug('UserReadRepository::getIsolatedUserQuery - Contexto', [
+            'tenant_id' => $tenantId,
+            'database_name' => $databaseName,
+            'default_connection' => config('database.default'),
+            'tenancy_initialized' => tenancy()->initialized,
+        ]);
+        
+        // 🔥 CORREÇÃO: Usar UserModel que já tem getConnectionName() configurado
+        // O modelo User automaticamente usa a conexão 'tenant' quando o tenancy está inicializado
+        $query = UserModel::withTrashed();
+        
+        // Se estivermos no banco tenant, a query já está isolada naturalmente
+        // Se estivermos no banco central (fallback), o Global Scope do User já aplica o filtro
+        // Não precisamos aplicar filtros adicionais aqui pois o modelo já gerencia a conexão
+        
         return $query;
     }
     

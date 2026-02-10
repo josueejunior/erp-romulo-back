@@ -138,33 +138,66 @@ class AdminUserController extends Controller
                         'lookups_count' => count($lookupsDoTenant),
                     ]);
                     
-                    $detalhes = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($userIds) {
+                    $detalhes = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($userIds, $tenantId) {
+                        // 🔥 DEBUG: Log antes de buscar
+                        $databaseAtual = \DB::connection()->getDatabaseName();
+                        $connectionName = \DB::connection()->getName();
+                        
+                        Log::info('AdminUserController::indexGlobal - Iniciando busca de usuários', [
+                            'tenant_id' => $tenantId,
+                            'user_ids_procurados' => $userIds,
+                            'total_user_ids' => count($userIds),
+                            'database' => $databaseAtual,
+                            'connection_name' => $connectionName,
+                            'default_connection' => config('database.default'),
+                            'tenancy_initialized' => tenancy()->initialized,
+                            'tenant_atual_id' => tenancy()->tenant?->id,
+                        ]);
+                        
+                        // 🔥 VERIFICAÇÃO: Garantir que estamos no banco correto
+                        $tenantDbEsperado = "tenant_{$tenantId}";
+                        if ($databaseAtual !== $tenantDbEsperado) {
+                            Log::error('AdminUserController::indexGlobal - Banco incorreto!', [
+                                'tenant_id' => $tenantId,
+                                'database_esperado' => $tenantDbEsperado,
+                                'database_atual' => $databaseAtual,
+                            ]);
+                        }
+                        
                         // Buscar todos os usuários e filtrar pelos IDs necessários
                         $todosUsuarios = $this->userReadRepository->listarSemPaginacao([]);
                         
+                        Log::info('AdminUserController::indexGlobal - Usuários obtidos do repository', [
+                            'tenant_id' => $tenantId,
+                            'total_usuarios_encontrados' => count($todosUsuarios),
+                            'user_ids_encontrados' => array_column($todosUsuarios, 'id'),
+                            'user_ids_procurados' => $userIds,
+                        ]);
+                        
+                        // Filtrar pelos IDs necessários
                         $filtrados = array_filter($todosUsuarios, fn($user) => in_array($user['id'], $userIds));
                         
-                    // 🔥 DEBUG: Log detalhado dos usuários filtrados
-                    $usuariosFiltradosDetalhes = array_map(function ($user) {
-                        return [
-                            'id' => $user['id'] ?? null,
-                            'name' => $user['name'] ?? null,
-                            'email' => $user['email'] ?? null,
-                            'empresa_ativa_id' => $user['empresa_ativa_id'] ?? null,
-                            'total_empresas' => $user['total_empresas'] ?? 0,
-                            'empresas_ids' => array_column($user['empresas'] ?? [], 'id'),
-                            'roles' => $user['roles'] ?? [],
-                        ];
-                    }, $filtrados);
-                    
-                    Log::info('AdminUserController::indexGlobal - Usuários filtrados do tenant', [
-                        'tenant_id' => $tenantDomain->id ?? null,
-                        'total_antes_filtro' => count($todosUsuarios),
-                        'total_depois_filtro' => count($filtrados),
-                        'user_ids_procurados' => $userIds,
-                        'user_ids_encontrados' => array_map(fn($u) => $u['id'], $filtrados),
-                        'usuarios_detalhes' => $usuariosFiltradosDetalhes,
-                    ]);
+                        // 🔥 DEBUG: Log detalhado dos usuários filtrados
+                        $usuariosFiltradosDetalhes = array_map(function ($user) {
+                            return [
+                                'id' => $user['id'] ?? null,
+                                'name' => $user['name'] ?? null,
+                                'email' => $user['email'] ?? null,
+                                'empresa_ativa_id' => $user['empresa_ativa_id'] ?? null,
+                                'total_empresas' => $user['total_empresas'] ?? 0,
+                                'empresas_ids' => array_column($user['empresas'] ?? [], 'id'),
+                                'roles' => $user['roles'] ?? [],
+                            ];
+                        }, $filtrados);
+                        
+                        Log::info('AdminUserController::indexGlobal - Usuários filtrados do tenant', [
+                            'tenant_id' => $tenantId,
+                            'total_antes_filtro' => count($todosUsuarios),
+                            'total_depois_filtro' => count($filtrados),
+                            'user_ids_procurados' => $userIds,
+                            'user_ids_encontrados' => array_map(fn($u) => $u['id'], $filtrados),
+                            'usuarios_detalhes' => $usuariosFiltradosDetalhes,
+                        ]);
                         
                         return $filtrados;
                     });
@@ -505,8 +538,22 @@ class AdminUserController extends Controller
                     tenancy()->end();
                 }
                 
+                // 🔥 CRÍTICO: Limpar conexão 'tenant' ANTES de inicializar novo tenant
+                \Illuminate\Support\Facades\DB::purge('tenant');
+                
                 // Inicializar tenant correto
                 tenancy()->initialize($tenant);
+                
+                // 🔥 MULTI-DATABASE: Configurar conexão do banco do tenant
+                $centralConnectionName = config('tenancy.database.central_connection', 'pgsql');
+                $defaultConnectionName = config('database.default');
+                $tenantDbName = $tenant->database()->getName();
+                
+                if ($defaultConnectionName === $centralConnectionName) {
+                    config(['database.connections.tenant.database' => $tenantDbName]);
+                    \Illuminate\Support\Facades\DB::purge('tenant');
+                    config(['database.default' => 'tenant']);
+                }
                 
                 \Log::info('AdminUserController::index - Tenant inicializado pelo controller', [
                     'tenant_id' => $tenant->id,

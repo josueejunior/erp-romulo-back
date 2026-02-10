@@ -4,7 +4,7 @@ namespace App\Modules\Contrato\Models;
 
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use App\Models\BaseModel;
+use App\Models\TenantModel;
 use App\Models\Traits\HasSoftDeletesWithEmpresa;
 use App\Models\Traits\BelongsToEmpresaTrait;
 use App\Modules\Processo\Models\Processo;
@@ -14,7 +14,7 @@ use App\Modules\AutorizacaoFornecimento\Models\AutorizacaoFornecimento;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 
-class Contrato extends BaseModel
+class Contrato extends TenantModel
 {
     use HasSoftDeletesWithEmpresa, BelongsToEmpresaTrait;
 

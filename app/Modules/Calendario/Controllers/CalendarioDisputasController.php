@@ -45,13 +45,22 @@ class CalendarioDisputasController extends BaseApiController
                 }
             ]);
 
-        // Filtrar por período
-        if ($request->data_inicio) {
-            $query->where('data_hora_sessao_publica', '>=', $request->data_inicio);
-        }
-
-        if ($request->data_fim) {
-            $query->where('data_hora_sessao_publica', '<=', $request->data_fim);
+        // 🔥 CORREÇÃO: Filtrar por período, mas incluir processos sem data também
+        // Processos com status "participacao" devem aparecer mesmo sem data definida
+        if ($request->data_inicio || $request->data_fim) {
+            $query->where(function($q) use ($request) {
+                // Processos com data no período
+                if ($request->data_inicio && $request->data_fim) {
+                    $q->whereBetween('data_hora_sessao_publica', [$request->data_inicio, $request->data_fim]);
+                } elseif ($request->data_inicio) {
+                    $q->where('data_hora_sessao_publica', '>=', $request->data_inicio);
+                } elseif ($request->data_fim) {
+                    $q->where('data_hora_sessao_publica', '<=', $request->data_fim);
+                }
+                
+                // OU processos sem data (especialmente para status "participacao")
+                $q->orWhereNull('data_hora_sessao_publica');
+            });
         }
 
         // Filtrar por status
@@ -131,12 +140,22 @@ class CalendarioDisputasController extends BaseApiController
             ->whereIn('status', ['participacao', 'julgamento_habilitacao'])
             ->with(['orgao:id,uasg,razao_social', 'itens.formacoesPreco']);
 
-        if ($request->data_inicio) {
-            $query->where('data_hora_sessao_publica', '>=', $request->data_inicio);
-        }
-
-        if ($request->data_fim) {
-            $query->where('data_hora_sessao_publica', '<=', $request->data_fim);
+        // 🔥 CORREÇÃO: Incluir processos sem data OU com data no período
+        // Processos com status "participacao" devem aparecer mesmo sem data definida
+        if ($request->data_inicio || $request->data_fim) {
+            $query->where(function($q) use ($request) {
+                // Processos com data no período
+                if ($request->data_inicio && $request->data_fim) {
+                    $q->whereBetween('data_hora_sessao_publica', [$request->data_inicio, $request->data_fim]);
+                } elseif ($request->data_inicio) {
+                    $q->where('data_hora_sessao_publica', '>=', $request->data_inicio);
+                } elseif ($request->data_fim) {
+                    $q->where('data_hora_sessao_publica', '<=', $request->data_fim);
+                }
+                
+                // OU processos sem data (especialmente para status "participacao")
+                $q->orWhereNull('data_hora_sessao_publica');
+            });
         }
 
         $processos = $query->orderBy('data_hora_sessao_publica', 'asc')->get();

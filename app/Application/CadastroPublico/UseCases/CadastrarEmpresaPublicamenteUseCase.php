@@ -268,7 +268,8 @@ final class CadastrarEmpresaPublicamenteUseCase
             
             try {
                 // Buscar plano gratuito (preco_mensal = 0)
-                $planosAtivos = $this->planoRepository->listar(['ativo' => true]);
+                // 🔥 CORREÇÃO: Incluir planos gratuitos para encontrar o plano de trial
+                $planosAtivos = $this->planoRepository->listar(['ativo' => true, 'incluir_gratuitos' => true]);
                 $planoGratuito = null;
                 
                 // Iterar sobre os planos para encontrar o gratuito
@@ -413,11 +414,23 @@ final class CadastrarEmpresaPublicamenteUseCase
                 try {
                     $onboardingPresenter = app(\App\Application\Onboarding\Presenters\OnboardingApiPresenter::class);
                     $onboardingData = $onboardingPresenter->presentDomain($onboardingCriado);
+                    
+                    // 🔥 DEBUG: Log para garantir que onboarding está sendo retornado corretamente
+                    Log::info('CadastrarEmpresaPublicamenteUseCase - Onboarding incluído no payload', [
+                        'onboarding_id' => $onboardingCriado->id,
+                        'onboarding_concluido' => $onboardingCriado->onboardingConcluido,
+                        'onboarding_data' => $onboardingData,
+                    ]);
                 } catch (\Exception $e) {
                     Log::warning('CadastrarEmpresaPublicamenteUseCase - Erro ao buscar dados do onboarding para payload', [
                         'error' => $e->getMessage(),
                     ]);
                 }
+            } else {
+                Log::warning('CadastrarEmpresaPublicamenteUseCase - Onboarding não foi criado, não será incluído no payload', [
+                    'tenant_id' => $tenantResult['tenant']->id ?? null,
+                    'user_id' => $tenantResult['admin_user']->id ?? null,
+                ]);
             }
 
             $result = [
@@ -1082,6 +1095,7 @@ final class CadastrarEmpresaPublicamenteUseCase
                     'user_id' => $userId,
                     'email' => $email,
                     'onboarding_id' => $onboarding->id,
+                    'onboarding_concluido' => $onboarding->onboardingConcluido, // 🔥 DEBUG: Garantir que está false
                 ]);
             }
             
@@ -1094,6 +1108,7 @@ final class CadastrarEmpresaPublicamenteUseCase
                 'email' => $email,
             ]);
             // Não lança exceção - apenas loga para não bloquear o cadastro
+            return null; // Retornar null em caso de erro
         }
     }
 

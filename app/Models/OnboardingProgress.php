@@ -11,9 +11,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * Model para rastrear progresso de onboarding
  * 
  * Armazena o progresso do tutorial/onboarding do usuário
+ * 
+ * 🔥 IMPORTANTE: Esta tabela está no banco CENTRAL, não no banco do tenant
  */
 class OnboardingProgress extends Model
 {
+    /**
+     * 🔥 IMPORTANTE: Sempre usar conexão central, mesmo quando no contexto do tenant
+     * Esta tabela está no banco central, não no banco do tenant
+     */
+    protected $connection = 'pgsql';
+    
     protected $table = 'onboarding_progress';
 
     protected $fillable = [

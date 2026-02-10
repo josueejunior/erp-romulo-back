@@ -2,13 +2,13 @@
 
 namespace App\Modules\Processo\Models;
 
-use App\Models\BaseModel;
+use App\Models\TenantModel;
 use App\Modules\Documento\Models\DocumentoHabilitacao;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Models\Concerns\HasEmpresaScope;
 use App\Models\Traits\BelongsToEmpresaTrait;
 
-class ProcessoDocumento extends BaseModel
+class ProcessoDocumento extends TenantModel
 {
     use HasEmpresaScope, BelongsToEmpresaTrait;
     

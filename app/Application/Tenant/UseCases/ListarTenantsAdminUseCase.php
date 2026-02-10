@@ -34,8 +34,9 @@ class ListarTenantsAdminUseCase
             return $tenants; // Retornar paginator vazio
         }
 
-        // Buscar modelos Eloquent com eager loading de relacionamentos
-        $tenantModels = Tenant::with(['planoAtual', 'assinaturaAtual'])
+        // Buscar modelos Eloquent (sem eager loading de assinaturaAtual pois está no banco do tenant)
+        // planoAtual está no banco central, então pode ser carregado normalmente
+        $tenantModels = Tenant::with(['planoAtual'])
             ->whereIn('id', $tenantIds)
             ->get()
             ->keyBy('id');
@@ -98,17 +99,12 @@ class ListarTenantsAdminUseCase
                 $data['plano_atual_id'] = $tenantModel->plano_atual_id;
             }
             
-            if ($tenantModel->assinaturaAtual) {
-                $data['assinatura_atual'] = [
-                    'id' => $tenantModel->assinaturaAtual->id,
-                    'status' => $tenantModel->assinaturaAtual->status,
-                    'valor_pago' => $tenantModel->assinaturaAtual->valor_pago,
-                    'data_inicio' => $tenantModel->assinaturaAtual->data_inicio,
-                    'data_fim' => $tenantModel->assinaturaAtual->data_fim,
-                    'metodo_pagamento' => $tenantModel->assinaturaAtual->metodo_pagamento,
-                    'transacao_id' => $tenantModel->assinaturaAtual->transacao_id,
-                ];
+            // 🔥 CORREÇÃO: assinaturaAtual está no banco do tenant, não pode ser carregado via eager loading
+            // Apenas incluir o ID se existir (cache no tenant)
+            if ($tenantModel->assinatura_atual_id) {
                 $data['assinatura_atual_id'] = $tenantModel->assinatura_atual_id;
+                // Não tentar carregar o relacionamento aqui - está no banco do tenant
+                // Se necessário, buscar via AdminTenancyRunner em outro endpoint
             }
         } else {
             $data['created_at'] = null;

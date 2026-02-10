@@ -2,7 +2,7 @@
 
 namespace App\Modules\Processo\Models;
 
-use App\Models\BaseModel;
+use App\Models\TenantModel;
 use App\Modules\Orcamento\Models\FormacaoPreco;
 use App\Modules\Orcamento\Models\Orcamento;
 use App\Modules\Orcamento\Models\OrcamentoItem;
@@ -13,7 +13,7 @@ use App\Database\Schema\Blueprint;
 use App\Models\Concerns\HasEmpresaScope;
 use App\Models\Traits\BelongsToEmpresaTrait;
 
-class ProcessoItem extends BaseModel
+class ProcessoItem extends TenantModel
 {
     use HasEmpresaScope, BelongsToEmpresaTrait;
     
@@ -25,6 +25,7 @@ class ProcessoItem extends BaseModel
         'fornecedor_id',
         'transportadora_id',
         'numero_item',
+        'nome',
         'codigo_interno',
         'quantidade',
         'unidade',

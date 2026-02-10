@@ -23,6 +23,7 @@ class ProcessoItemUpdateRequest extends FormRequest
             'fornecedor_id' => ['nullable', 'exists:fornecedores,id'],
             'transportadora_id' => ['nullable', 'exists:fornecedores,id'],
             'numero_item' => ['sometimes', ...DbTypeRule::integer(), 'min:1'],
+            'nome' => [DbTypeRule::nullable(), ...DbTypeRule::string(DbTypeRule::VARCHAR_DEFAULT)],
             'codigo_interno' => [DbTypeRule::nullable(), ...DbTypeRule::string(DbTypeRule::VARCHAR_DEFAULT)],
             'quantidade' => ['sometimes', 'numeric', 'min:0.01'],
             'unidade' => ['sometimes', ...DbTypeRule::string(50)],

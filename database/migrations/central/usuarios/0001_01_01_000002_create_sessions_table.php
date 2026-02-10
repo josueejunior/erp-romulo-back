@@ -10,12 +10,16 @@ return new class extends Migration
 
     /**
      * Run the migrations.
+     * 
+     * 🔥 IMPORTANTE: A tabela users está no banco do tenant, não no central.
+     * Por isso, user_id é apenas uma coluna sem foreign key.
      */
     public function up(): void
     {
         Schema::create('sessions', function (Blueprint $table) {
             $table->string('id', Blueprint::VARCHAR_DEFAULT)->primary();
-            $table->foreignUserId(true)->index(); // user_id nullable (padrão Laravel)
+            // user_id sem foreign key porque users está no banco do tenant
+            $table->unsignedBigInteger('user_id')->nullable()->index();
             $table->string('ip_address', 45)->nullable();
             $table->text('user_agent')->nullable();
             $table->longText('payload');

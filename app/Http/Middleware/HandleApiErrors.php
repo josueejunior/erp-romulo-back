@@ -37,6 +37,18 @@ class HandleApiErrors
      */
     public function handle(Request $request, Closure $next): Response
     {
+        // 🔥 DEBUG: Log todas as requisições POST para formacao-preco
+        if ($request->method() === 'POST' && str_contains($request->path(), 'formacao-preco')) {
+            \Log::info('HandleApiErrors - Requisição POST para formacao-preco detectada', [
+                'url' => $request->fullUrl(),
+                'path' => $request->path(),
+                'method' => $request->method(),
+                'route_name' => $request->route()?->getName(),
+                'route_parameters' => $request->route()?->parameters(),
+                'request_data' => $request->all(),
+            ]);
+        }
+        
         try {
             $response = $next($request);
             
@@ -47,6 +59,16 @@ class HandleApiErrors
                     'method' => $request->method(),
                     'status' => $response->getStatusCode(),
                     'user_id' => auth()->id(),
+                ]);
+            }
+            
+            // 🔥 DEBUG: Log respostas 400 para formacao-preco
+            if ($response->getStatusCode() === 400 && str_contains($request->path(), 'formacao-preco')) {
+                \Log::error('HandleApiErrors - Resposta 400 para formacao-preco', [
+                    'url' => $request->fullUrl(),
+                    'method' => $request->method(),
+                    'status' => $response->getStatusCode(),
+                    'response_content' => $response->getContent(),
                 ]);
             }
             
@@ -105,13 +127,19 @@ class HandleApiErrors
             // 🔥 ARQUITETURA LIMPA: Usar método centralizado do HandleCorsCustom
             return app(\App\Http\Middleware\HandleCorsCustom::class)->addCorsHeaders($request, $response);
         } catch (ModelNotFoundException $e) {
-            \Log::warning('Model não encontrado', [
+            \Log::error('ModelNotFoundException capturada no HandleApiErrors', [
                 'model' => class_basename($e->getModel()),
+                'model_class' => $e->getModel(),
+                'ids' => $e->getIds(),
                 'url' => $request->fullUrl(),
+                'method' => $request->method(),
+                'route_name' => $request->route()?->getName(),
+                'route_parameters' => $request->route()?->parameters(),
+                'trace' => $e->getTraceAsString(),
             ]);
             
             $response = response()->json([
-                'message' => 'Recurso não encontrado',
+                'message' => 'Recurso não encontrado: ' . class_basename($e->getModel()),
             ], 404);
             
             // 🔥 ARQUITETURA LIMPA: Usar método centralizado do HandleCorsCustom
@@ -126,18 +154,29 @@ class HandleApiErrors
         } catch (\Exception $e) {
             \Log::error('Erro não tratado na API', [
                 'message' => $e->getMessage(),
+                'exception_class' => get_class($e),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
                 'url' => $request->fullUrl(),
                 'method' => $request->method(),
+                'route_name' => $request->route()?->getName(),
+                'route_parameters' => $request->route()?->parameters(),
                 'trace' => config('app.debug') ? $e->getTraceAsString() : null,
             ]);
             
-            $response = response()->json([
-                'message' => config('app.debug') 
-                    ? $e->getMessage() 
-                    : 'Erro interno do servidor',
-            ], 500);
+            // Se for DomainException, retornar 400 em vez de 500
+            if ($e instanceof \App\Domain\Exceptions\DomainException) {
+                $response = response()->json([
+                    'message' => $e->getMessage(),
+                    'code' => 'DOMAIN_ERROR',
+                ], 400);
+            } else {
+                $response = response()->json([
+                    'message' => config('app.debug') 
+                        ? $e->getMessage() 
+                        : 'Erro interno do servidor',
+                ], 500);
+            }
             
             // 🔥 ARQUITETURA LIMPA: Usar método centralizado do HandleCorsCustom
             return app(\App\Http\Middleware\HandleCorsCustom::class)->addCorsHeaders($request, $response);

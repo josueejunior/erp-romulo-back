@@ -44,6 +44,7 @@ class OrgaoController extends BaseApiController
         private AtualizarOrgaoUseCase $atualizarOrgaoUseCase,
         private DeletarOrgaoUseCase $deletarOrgaoUseCase,
         private OrgaoResource $orgaoResource,
+        private \App\Services\CnpjConsultaService $cnpjConsultaService,
     ) {}
 
     /**
@@ -238,5 +239,33 @@ class OrgaoController extends BaseApiController
     public function show(int $id): JsonResponse
     {
         return $this->get($id);
+    }
+
+    /**
+     * Consultar CNPJ na Receita Federal
+     * 
+     * Retorna dados da empresa para preenchimento automático
+     */
+    public function consultarCnpj(Request $request): JsonResponse
+    {
+        $cnpj = $request->input('cnpj') ?? $request->route('cnpj');
+        
+        if (!$cnpj) {
+            return response()->json(['message' => 'CNPJ é obrigatório'], 400);
+        }
+        
+        if (!$this->cnpjConsultaService->validarCnpj($cnpj)) {
+            return response()->json(['message' => 'CNPJ inválido'], 422);
+        }
+        
+        $dados = $this->cnpjConsultaService->consultar($cnpj);
+        
+        if (!$dados) {
+            return response()->json(['message' => 'CNPJ não encontrado ou serviço indisponível'], 404);
+        }
+        
+        return response()->json([
+            'data' => $dados,
+        ]);
     }
 }

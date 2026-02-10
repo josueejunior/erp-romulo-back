@@ -52,8 +52,32 @@ class ObterResumoProcessosUseCase
                     'per_page' => 1, // Apenas para contar
                 ]);
                 
+                \Log::debug('ObterResumoProcessosUseCase - Buscando processos por status', [
+                    'status' => $status,
+                    'empresa_id' => $filtrosMapeados['empresa_id'] ?? null,
+                    'filtros_status' => $filtrosStatus,
+                ]);
+                
+                // 🔥 CORREÇÃO: Usar buscarComFiltros e pegar total() do paginator
+                // O total() do paginator retorna o total de registros, não apenas da página atual
                 $paginator = $this->processoRepository->buscarComFiltros($filtrosStatus);
-                $resumo[$status] = $paginator->total();
+                $total = $paginator->total();
+                
+                // 🔥 DEBUG: Verificar se o total está correto
+                \Log::debug('ObterResumoProcessosUseCase - Resultado do paginator', [
+                    'status' => $status,
+                    'total' => $total,
+                    'count' => $paginator->count(),
+                    'per_page' => $paginator->perPage(),
+                    'current_page' => $paginator->currentPage(),
+                ]);
+                
+                $resumo[$status] = $total;
+                
+                \Log::debug('ObterResumoProcessosUseCase - Resultado para status', [
+                    'status' => $status,
+                    'total' => $total,
+                ]);
             } catch (\Exception $e) {
                 // Log do erro e continuar com os outros status
                 \Log::error('Erro ao calcular resumo para status', [
@@ -67,6 +91,12 @@ class ObterResumoProcessosUseCase
 
         // Adicionar alias 'julgamento' para compatibilidade
         $resumo['julgamento'] = $resumo['julgamento_habilitacao'] ?? 0;
+        
+        // 🔥 DEBUG: Log do resumo final
+        \Log::debug('ObterResumoProcessosUseCase - Resumo final', [
+            'empresa_id' => $filtrosMapeados['empresa_id'] ?? null,
+            'resumo' => $resumo,
+        ]);
 
         // Contagem especial: Standby
         $resumo['em_standby'] = $this->processoRepository->buscarComFiltros(array_merge($filtrosMapeados, [
@@ -108,6 +138,15 @@ class ObterResumoProcessosUseCase
         if (isset($filtros['periodo_sessao_fim'])) {
             $mapeados['data_hora_sessao_publica_fim'] = $filtros['periodo_sessao_fim'];
             unset($mapeados['periodo_sessao_fim']);
+        }
+
+        // 🔥 CORREÇÃO: Converter string "false" para boolean false
+        if (isset($filtros['somente_alerta'])) {
+            if ($filtros['somente_alerta'] === 'false' || $filtros['somente_alerta'] === false || $filtros['somente_alerta'] === '0' || $filtros['somente_alerta'] === 0) {
+                unset($mapeados['somente_alerta']); // Remover se for false
+            } else {
+                $mapeados['somente_alerta'] = true; // Converter para boolean true
+            }
         }
 
         // Remover filtros vazios que podem causar problemas

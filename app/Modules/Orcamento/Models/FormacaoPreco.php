@@ -11,6 +11,7 @@ class FormacaoPreco extends BaseModel
     protected $table = 'formacao_precos';
 
     protected $fillable = [
+        'empresa_id', // Adicionado para permitir atribuição em massa
         'processo_item_id',
         'orcamento_id', // Mantido para compatibilidade
         'orcamento_item_id', // Novo: para formações de preço vinculadas a itens de orçamento
@@ -81,7 +82,12 @@ class FormacaoPreco extends BaseModel
         parent::boot();
         
         static::saving(function ($model) {
-            $model->preco_minimo = $model->calcularMinimoVenda();
+            // 🔥 CORREÇÃO: Só recalcular preco_minimo se não foi fornecido explicitamente
+            // Se preco_minimo já tem um valor (não null), usar esse valor
+            // Caso contrário, recalcular usando a fórmula
+            if ($model->preco_minimo === null || $model->preco_minimo === 0) {
+                $model->preco_minimo = $model->calcularMinimoVenda();
+            }
             if (!$model->preco_recomendado) {
                 $model->preco_recomendado = $model->preco_minimo * 1.1; // 10% acima do mínimo
             }

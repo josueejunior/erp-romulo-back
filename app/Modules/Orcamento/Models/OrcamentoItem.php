@@ -4,12 +4,12 @@ namespace App\Modules\Orcamento\Models;
 
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use App\Models\BaseModel;
+use App\Models\TenantModel;
 use App\Modules\Processo\Models\ProcessoItem;
 use App\Models\Concerns\HasEmpresaScope;
 use App\Models\Traits\BelongsToEmpresaTrait;
 
-class OrcamentoItem extends BaseModel
+class OrcamentoItem extends TenantModel
 {
     use HasEmpresaScope, BelongsToEmpresaTrait;
     

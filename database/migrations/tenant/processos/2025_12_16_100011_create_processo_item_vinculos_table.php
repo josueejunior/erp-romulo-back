@@ -13,27 +13,43 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Verificar se processo_itens existe (obrigatório)
+        $this->checkTablesExist('processo_itens');
+
+        // Criar tabela sem foreign keys opcionais primeiro
         Schema::create('processo_item_vinculos', function (Blueprint $table) {
             $table->id();
             $table->foreignEmpresa();
             $table->foreignId('processo_item_id')->constrained('processo_itens')->onDelete('cascade');
-            $table->foreignId('contrato_id')->nullable()->constrained('contratos')->onDelete('cascade');
-            $table->foreignId('autorizacao_fornecimento_id')->nullable()->constrained('autorizacoes_fornecimento')->onDelete('cascade');
-            $table->foreignId('empenho_id')->nullable()->constrained('empenhos')->onDelete('cascade');
+            
+            // Colunas sem foreign keys (serão adicionadas depois quando as tabelas existirem)
+            $table->unsignedBigInteger('contrato_id')->nullable();
+            $table->unsignedBigInteger('autorizacao_fornecimento_id')->nullable();
+            $table->unsignedBigInteger('empenho_id')->nullable();
+            
             $table->decimal('quantidade', 15, 2)->default(0);
             $table->decimal('valor_unitario', 15, 2)->default(0);
             $table->decimal('valor_total', 15, 2)->default(0);
             $table->observacao('observacoes');
             $table->datetimes();
 
-            // Um item pode ter múltiplos vínculos, mas não pode ter o mesmo vínculo duplicado
-            $table->unique(['processo_item_id', 'contrato_id', 'autorizacao_fornecimento_id', 'empenho_id'], 'unique_vinculo');
-            
             // ⚡ Índices para performance
             $table->index('processo_item_id');
             $table->index('contrato_id');
             $table->index('autorizacao_fornecimento_id');
             $table->index('empenho_id');
+        });
+        
+        // Adicionar foreign keys de forma segura usando o helper
+        $this->addSafeForeignKeys('processo_item_vinculos', [
+            ['column' => 'contrato_id', 'table' => 'contratos', 'nullable' => true],
+            ['column' => 'autorizacao_fornecimento_id', 'table' => 'autorizacoes_fornecimento', 'nullable' => true],
+            ['column' => 'empenho_id', 'table' => 'empenhos', 'nullable' => true],
+        ]);
+        
+        // Adicionar constraint unique depois que todas as foreign keys estiverem criadas
+        Schema::table('processo_item_vinculos', function (Blueprint $table) {
+            $table->unique(['processo_item_id', 'contrato_id', 'autorizacao_fornecimento_id', 'empenho_id'], 'unique_vinculo');
         });
     }
 

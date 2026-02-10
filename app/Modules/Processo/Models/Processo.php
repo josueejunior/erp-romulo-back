@@ -2,7 +2,7 @@
 
 namespace App\Modules\Processo\Models;
 
-use App\Models\BaseModel;
+use App\Models\TenantModel;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Models\Traits\HasSoftDeletesWithEmpresa;
@@ -17,7 +17,7 @@ use App\Modules\Empenho\Models\Empenho;
 use App\Modules\NotaFiscal\Models\NotaFiscal;
 use App\Modules\Orcamento\Models\Orcamento;
 
-class Processo extends BaseModel
+class Processo extends TenantModel
 {
     use HasSoftDeletesWithEmpresa, BelongsToEmpresa;
 

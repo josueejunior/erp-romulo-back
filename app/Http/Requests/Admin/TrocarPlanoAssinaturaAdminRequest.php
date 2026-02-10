@@ -19,7 +19,7 @@ class TrocarPlanoAssinaturaAdminRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'novo_plano_id' => 'required|integer|exists:planos,id',
+            'novo_plano_id' => ['required', 'integer', new \App\Rules\PlanoExists()],
             'periodo' => 'nullable|string|in:mensal,anual',
         ];
     }

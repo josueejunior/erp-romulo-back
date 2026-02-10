@@ -2,14 +2,14 @@
 
 namespace App\Modules\Assinatura\Models;
 
-use App\Models\BaseModel;
+use App\Models\TenantModel;
 use Carbon\Carbon;
 use App\Models\Traits\HasTimestampsCustomizados;
 use App\Models\Tenant;
 use App\Models\Concerns\HasEmpresaScope;
 use App\Models\Traits\BelongsToEmpresaTrait;
 
-class Assinatura extends BaseModel
+class Assinatura extends TenantModel
 {
     use HasTimestampsCustomizados, HasEmpresaScope, BelongsToEmpresaTrait;
     

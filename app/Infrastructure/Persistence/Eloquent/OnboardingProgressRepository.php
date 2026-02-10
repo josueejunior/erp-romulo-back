@@ -95,21 +95,27 @@ class OnboardingProgressRepository implements OnboardingProgressRepositoryInterf
     ): ?OnboardingProgress {
         $query = OnboardingProgressModel::query();
 
-        // 🔥 CORREÇÃO: Priorizar userId e email (mais estáveis que tenant_id)
-        // Se temos userId, buscar por userId (mais confiável)
-        if ($userId) {
+        // 🔥 CORREÇÃO CRÍTICA: Sempre filtrar por tenant_id E user_id juntos quando ambos estiverem disponíveis
+        // Isso evita que um onboarding de outro tenant seja retornado
+        if ($userId && $tenantId) {
+            // Buscar por user_id E tenant_id juntos (mais específico)
+            $query->where('user_id', $userId)
+                  ->where('tenant_id', $tenantId);
+        } elseif ($userId) {
+            // Se só temos userId, buscar por userId (pode retornar de múltiplos tenants)
             $query->where('user_id', $userId);
-        } 
-        // Se temos email mas não userId, buscar por email
-        elseif ($email) {
+        } elseif ($email && $tenantId) {
+            // Se temos email E tenant_id, buscar por ambos
+            $query->where('email', $email)
+                  ->where('tenant_id', $tenantId);
+        } elseif ($email) {
+            // Se só temos email, buscar por email
             $query->where('email', $email);
-        }
-        // Se temos tenant_id, buscar por tenant_id
-        elseif ($tenantId) {
+        } elseif ($tenantId) {
+            // Se só temos tenant_id, buscar por tenant_id
             $query->where('tenant_id', $tenantId);
-        }
-        // Por último, tentar sessionId
-        elseif ($sessionId) {
+        } elseif ($sessionId) {
+            // Se só temos sessionId, buscar por sessionId
             $query->where('session_id', $sessionId);
         } else {
             return null;
@@ -147,14 +153,27 @@ class OnboardingProgressRepository implements OnboardingProgressRepositoryInterf
     ): ?OnboardingProgress {
         $query = OnboardingProgressModel::query();
 
-        // 🔥 CORREÇÃO: Priorizar userId e email (mais estáveis que tenant_id)
-        if ($userId) {
+        // 🔥 CORREÇÃO CRÍTICA: Sempre filtrar por tenant_id E user_id juntos quando ambos estiverem disponíveis
+        // Isso evita que um onboarding de outro tenant seja retornado
+        if ($userId && $tenantId) {
+            // Buscar por user_id E tenant_id juntos (mais específico)
+            $query->where('user_id', $userId)
+                  ->where('tenant_id', $tenantId);
+        } elseif ($userId) {
+            // Se só temos userId, buscar por userId (pode retornar de múltiplos tenants)
             $query->where('user_id', $userId);
+        } elseif ($email && $tenantId) {
+            // Se temos email E tenant_id, buscar por ambos
+            $query->where('email', $email)
+                  ->where('tenant_id', $tenantId);
         } elseif ($email) {
+            // Se só temos email, buscar por email
             $query->where('email', $email);
         } elseif ($tenantId) {
+            // Se só temos tenant_id, buscar por tenant_id
             $query->where('tenant_id', $tenantId);
         } elseif ($sessionId) {
+            // Se só temos sessionId, buscar por sessionId
             $query->where('session_id', $sessionId);
         } else {
             return null;
@@ -172,14 +191,27 @@ class OnboardingProgressRepository implements OnboardingProgressRepositoryInterf
     ): bool {
         $query = OnboardingProgressModel::query();
 
-        // 🔥 CORREÇÃO: Priorizar userId e email (mais estáveis que tenant_id)
-        if ($userId) {
+        // 🔥 CORREÇÃO CRÍTICA: Sempre filtrar por tenant_id E user_id juntos quando ambos estiverem disponíveis
+        // Isso evita que um onboarding concluído em outro tenant seja considerado
+        if ($userId && $tenantId) {
+            // Buscar por user_id E tenant_id juntos (mais específico)
+            $query->where('user_id', $userId)
+                  ->where('tenant_id', $tenantId);
+        } elseif ($userId) {
+            // Se só temos userId, buscar por userId (pode retornar de múltiplos tenants)
             $query->where('user_id', $userId);
+        } elseif ($email && $tenantId) {
+            // Se temos email E tenant_id, buscar por ambos
+            $query->where('email', $email)
+                  ->where('tenant_id', $tenantId);
         } elseif ($email) {
+            // Se só temos email, buscar por email
             $query->where('email', $email);
         } elseif ($tenantId) {
+            // Se só temos tenant_id, buscar por tenant_id
             $query->where('tenant_id', $tenantId);
         } elseif ($sessionId) {
+            // Se só temos sessionId, buscar por sessionId
             $query->where('session_id', $sessionId);
         } else {
             return false;
@@ -193,6 +225,7 @@ class OnboardingProgressRepository implements OnboardingProgressRepositoryInterf
             'email' => $email,
             'session_id' => $sessionId,
             'existe' => $existe,
+            'query_conditions' => $userId && $tenantId ? 'user_id + tenant_id' : ($userId ? 'user_id only' : ($email && $tenantId ? 'email + tenant_id' : ($email ? 'email only' : ($tenantId ? 'tenant_id only' : 'session_id only')))),
         ]);
         
         return $existe;

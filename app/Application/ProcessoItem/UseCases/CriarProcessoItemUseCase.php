@@ -74,6 +74,7 @@ class CriarProcessoItemUseCase
             fornecedorId: $dto->fornecedorId,
             transportadoraId: $dto->transportadoraId,
             numeroItem: (string) $numeroItem,
+            nome: $dto->nome,
             codigoInterno: $dto->codigoInterno,
             quantidade: $dto->quantidade,
             unidade: $dto->unidade,

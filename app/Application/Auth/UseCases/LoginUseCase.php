@@ -63,6 +63,21 @@ class LoginUseCase
             Log::debug('LoginUseCase::executar - Inicializando tenancy', ['tenant_id' => $tenant->id]);
             tenancy()->initialize($tenant);
 
+            // 🔥 MULTI-DATABASE: Sempre trocar para o banco do tenant quando a conexão padrão ainda for a central.
+            // Assim as queries (processos, empresas, users do tenant, etc.) vão para tenant_XX e não para erp_licitacoes.
+            $centralConnectionName = config('tenancy.database.central_connection', 'pgsql');
+            $defaultConnectionName = config('database.default');
+            $tenantDbName = $tenant->database()->getName();
+            if ($defaultConnectionName === $centralConnectionName) {
+                config(['database.connections.tenant.database' => $tenantDbName]);
+                \Illuminate\Support\Facades\DB::purge('tenant');
+                config(['database.default' => 'tenant']);
+                Log::debug('LoginUseCase::executar - Conexão trocada para banco do tenant', [
+                    'tenant_id' => $tenant->id,
+                    'tenant_database' => $tenantDbName,
+                ]);
+            }
+
             // 🛡️ CAMADA 2: Validação Cruzada (Integridade)
             // Verificar se o usuário realmente existe no banco do tenant
             // Isso previne "usuário fantasma" (existe no lookup mas não no tenant)

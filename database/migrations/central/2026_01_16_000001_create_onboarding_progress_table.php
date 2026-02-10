@@ -1,16 +1,19 @@
 <?php
 
-use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
+use App\Database\Migrations\Migration;
+use App\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Log;
 
 return new class extends Migration
 {
     public function up(): void
     {
+        // Criar tabela primeiro sem a foreign key
         Schema::create('onboarding_progress', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('tenant_id')->nullable()->constrained('tenants')->onDelete('cascade');
+            // Criar coluna tenant_id sem foreign key inicialmente
+            $table->unsignedBigInteger('tenant_id')->nullable();
             // user_id não pode ter foreign key porque a tabela 'users' está no banco do tenant, não no central
             $table->unsignedBigInteger('user_id')->nullable(); // Usuário que está fazendo onboarding (no banco do tenant)
             $table->string('session_id')->nullable()->index(); // Para rastrear antes do cadastro
@@ -28,6 +31,19 @@ return new class extends Migration
             $table->index(['user_id', 'onboarding_concluido']);
             $table->index(['session_id', 'onboarding_concluido']);
         });
+
+        // Adicionar foreign key de forma segura após criar a tabela
+        // Verificar se a tabela tenants existe antes de adicionar foreign key
+        if (Schema::hasTable('tenants')) {
+            Schema::table('onboarding_progress', function (Blueprint $table) {
+                $table->foreign('tenant_id')
+                    ->references('id')
+                    ->on('tenants')
+                    ->onDelete('cascade');
+            });
+        } else {
+            Log::warning("Migration: Tabela 'tenants' não existe, pulando foreign key para tenant_id em onboarding_progress.");
+        }
     }
 
     public function down(): void

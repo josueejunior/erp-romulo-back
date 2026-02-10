@@ -91,6 +91,17 @@ return Application::configure(basePath: dirname(__DIR__))
         // Exceções de Domínio - Bad Request (400)
         $exceptions->render(function (\App\Domain\Exceptions\DomainException $e, $request) use ($addCorsToResponse) {
             if ($request->expectsJson()) {
+                \Log::error('DomainException capturada no exception handler', [
+                    'message' => $e->getMessage(),
+                    'code' => $e->getCode(),
+                    'url' => $request->fullUrl(),
+                    'method' => $request->method(),
+                    'route_name' => $request->route()?->getName(),
+                    'route_parameters' => $request->route()?->parameters(),
+                    'exception_class' => get_class($e),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+                
                 $response = response()->json([
                     'message' => $e->getMessage(),
                     'code' => 'DOMAIN_ERROR',
@@ -200,6 +211,11 @@ return Application::configure(basePath: dirname(__DIR__))
         
         // Exceções genéricas não tratadas - Internal Server Error (500)
         $exceptions->render(function (\Throwable $e, $request) use ($addCorsToResponse) {
+            // 🔥 NOVO: Registrar fatal errors em log separado ANTES do log padrão
+            if (\App\Services\FatalErrorLogger::isFatal($e)) {
+                \App\Services\FatalErrorLogger::logFatalWithRequest($e, $request);
+            }
+            
             // Logar TODAS as exceções não tratadas, mesmo que não sejam JSON
             \Log::error('Exceção não tratada no Exception Handler', [
                 'message' => $e->getMessage(),
@@ -238,8 +254,39 @@ return Application::configure(basePath: dirname(__DIR__))
         
         // Logar exceções não tratadas para debugging
         $exceptions->report(function (\Throwable $e) {
+            // 🔥 NOVO: Registrar fatal errors em log separado
+            if (\App\Services\FatalErrorLogger::isFatal($e)) {
+                \App\Services\FatalErrorLogger::logFatalWithRequest($e, request());
+            }
+            
             if (app()->bound('sentry')) {
                 app('sentry')->captureException($e);
+            }
+        });
+        
+        // 🔥 NOVO: Capturar erros fatais do PHP (E_ERROR, E_PARSE, etc)
+        register_shutdown_function(function () {
+            $error = error_get_last();
+            if ($error !== null && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_RECOVERABLE_ERROR])) {
+                try {
+                    $fatalError = new \ErrorException(
+                        $error['message'],
+                        0,
+                        $error['type'],
+                        $error['file'],
+                        $error['line']
+                    );
+                    \App\Services\FatalErrorLogger::logFatalWithRequest($fatalError, request());
+                } catch (\Throwable $e) {
+                    // Se falhar, escrever diretamente no arquivo
+                    error_log(sprintf(
+                        "[%s] FATAL ERROR: %s in %s:%d",
+                        date('Y-m-d H:i:s'),
+                        $error['message'],
+                        $error['file'],
+                        $error['line']
+                    ));
+                }
             }
         });
     })->create();

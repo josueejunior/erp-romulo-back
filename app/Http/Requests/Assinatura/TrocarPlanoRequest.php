@@ -14,7 +14,7 @@ class TrocarPlanoRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'plano_id' => 'required|integer|exists:planos,id',
+            'plano_id' => ['required', 'integer', new \App\Rules\PlanoExists()],
             'periodo' => 'required|string|in:mensal,anual',
             'payment_data' => 'nullable|array',
             'payment_data.payment_method_id' => 'required_with:payment_data|string|in:credit_card,pix',

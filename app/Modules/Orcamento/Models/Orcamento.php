@@ -5,7 +5,7 @@ namespace App\Modules\Orcamento\Models;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use App\Models\BaseModel;
+use App\Models\TenantModel;
 use App\Models\Concerns\HasEmpresaScope;
 use App\Models\Traits\BelongsToEmpresaTrait;
 use App\Modules\Processo\Models\Processo;
@@ -13,7 +13,7 @@ use App\Modules\Processo\Models\ProcessoItem;
 use App\Modules\Fornecedor\Models\Fornecedor;
 use App\Modules\Fornecedor\Models\Transportadora;
 
-class Orcamento extends BaseModel
+class Orcamento extends TenantModel
 {
     use HasEmpresaScope, BelongsToEmpresaTrait;
     /**

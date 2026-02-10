@@ -2,13 +2,13 @@
 
 namespace App\Modules\Fornecedor\Models;
 
-use App\Models\BaseModel;
+use App\Models\TenantModel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Models\Traits\HasTimestampsCustomizados;
 
-class Transportadora extends BaseModel
+class Transportadora extends TenantModel
 {
     use HasFactory, SoftDeletes, HasTimestampsCustomizados;
     

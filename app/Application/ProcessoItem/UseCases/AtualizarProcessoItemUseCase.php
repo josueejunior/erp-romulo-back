@@ -77,6 +77,7 @@ class AtualizarProcessoItemUseCase
                 fornecedorId: $dto->campoFoiEnviado('fornecedor_id') ? $dto->fornecedorId : $itemExistente->fornecedorId,
                 transportadoraId: $dto->campoFoiEnviado('transportadora_id') ? $dto->transportadoraId : $itemExistente->transportadoraId,
                 numeroItem: $dto->campoFoiEnviado('numero_item') ? $dto->numeroItem : $itemExistente->numeroItem,
+                nome: $dto->campoFoiEnviado('nome') ? $dto->nome : $itemExistente->nome,
                 codigoInterno: $dto->campoFoiEnviado('codigo_interno') ? $dto->codigoInterno : $itemExistente->codigoInterno,
                 quantidade: $dto->campoFoiEnviado('quantidade') ? $dto->quantidade : $itemExistente->quantidade,
                 unidade: $dto->campoFoiEnviado('unidade') ? $dto->unidade : $itemExistente->unidade,

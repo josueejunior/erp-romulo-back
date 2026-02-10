@@ -66,13 +66,48 @@ class AdminTenancyRunner
         try {
             // Inicializar tenancy se necessário
             if ($precisaInicializar) {
+                // 🔥 CRÍTICO: Sempre finalizar tenancy anterior e limpar conexões antes de inicializar novo
                 if ($jaInicializado) {
                     tenancy()->end();
                 }
+                
+                // 🔥 CRÍTICO: Limpar conexão 'tenant' ANTES de inicializar novo tenant
+                // Isso garante que a conexão não mantenha referência ao banco anterior
+                \Illuminate\Support\Facades\DB::purge('tenant');
+                
+                // Inicializar tenancy para o novo tenant
                 tenancy()->initialize($tenantModel);
                 
-                Log::debug('AdminTenancyRunner::runForTenant() - Tenancy inicializado', [
+                // 🔥 MULTI-DATABASE: Configurar conexão do banco do tenant
+                // Assim como ResolveTenantContext faz, precisamos trocar a conexão padrão
+                // para o banco do tenant quando a conexão padrão ainda for a central
+                $centralConnectionName = config('tenancy.database.central_connection', 'pgsql');
+                $defaultConnectionName = config('database.default');
+                $tenantDbName = $tenantModel->database()->getName();
+                
+                // 🔥 CRÍTICO: Sempre configurar a conexão tenant com o banco correto
+                config(['database.connections.tenant.database' => $tenantDbName]);
+                \Illuminate\Support\Facades\DB::purge('tenant'); // Limpar novamente após configurar
+                config(['database.default' => 'tenant']); // Definir 'tenant' como conexão padrão
+                
+                // 🔥 VERIFICAÇÃO: Garantir que a conexão está correta
+                $databaseVerificado = \Illuminate\Support\Facades\DB::connection('tenant')->getDatabaseName();
+                if ($databaseVerificado !== $tenantDbName) {
+                    Log::error('AdminTenancyRunner::runForTenant() - Conexão não configurada corretamente', [
+                        'tenant_id' => $tenantDomain->id,
+                        'tenant_database_esperado' => $tenantDbName,
+                        'tenant_database_atual' => $databaseVerificado,
+                    ]);
+                    // Tentar corrigir
+                    \Illuminate\Support\Facades\DB::purge('tenant');
+                    config(['database.connections.tenant.database' => $tenantDbName]);
+                }
+                
+                Log::debug('AdminTenancyRunner::runForTenant() - Tenancy inicializado e conexão configurada', [
                     'tenant_id' => $tenantDomain->id,
+                    'tenant_database' => $tenantDbName,
+                    'database_verificado' => $databaseVerificado,
+                    'default_connection_after_init' => config('database.default'),
                 ]);
             }
 

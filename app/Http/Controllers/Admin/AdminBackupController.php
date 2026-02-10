@@ -61,15 +61,49 @@ class AdminBackupController extends Controller
                     // 🔥 NOVO: Buscar empresa_id associada ao tenant (primeira empresa do tenant)
                     $empresaId = null;
                     try {
-                        $tenantEmpresa = \App\Models\TenantEmpresa::where('tenant_id', $tenantDomain->id)->first();
-                        if ($tenantEmpresa) {
-                            $empresaId = $tenantEmpresa->empresa_id;
+                        // Usar método estático para buscar empresa_id
+                        $empresaId = \App\Models\TenantEmpresa::findEmpresaIdByTenantId($tenantDomain->id);
+                        
+                        if (!$empresaId) {
+                            // Se não encontrou na tabela tenant_empresas, tentar buscar diretamente no banco do tenant
+                            Log::warning('AdminBackupController::listarTenants - Empresa não encontrada em tenant_empresas, tentando buscar no banco do tenant', [
+                                'tenant_id' => $tenantDomain->id,
+                            ]);
+                            
+                            // Tentar buscar empresa diretamente no banco do tenant
+                            try {
+                                $tenantModel = $this->tenantRepository->buscarModeloPorId($tenantDomain->id);
+                                if ($tenantModel) {
+                                    // Inicializar tenancy temporariamente para buscar empresa
+                                    tenancy()->initialize($tenantModel);
+                                    
+                                    // Buscar primeira empresa do tenant
+                                    $empresa = \App\Models\Empresa::first();
+                                    if ($empresa) {
+                                        $empresaId = $empresa->id;
+                                        // Criar mapeamento para próxima vez
+                                        \App\Models\TenantEmpresa::createOrUpdateMapping($tenantDomain->id, $empresaId);
+                                        Log::info('AdminBackupController::listarTenants - Empresa encontrada no banco do tenant e mapeamento criado', [
+                                            'tenant_id' => $tenantDomain->id,
+                                            'empresa_id' => $empresaId,
+                                        ]);
+                                    }
+                                    
+                                    tenancy()->end();
+                                }
+                            } catch (\Exception $e2) {
+                                Log::error('AdminBackupController::listarTenants - Erro ao buscar empresa no banco do tenant', [
+                                    'tenant_id' => $tenantDomain->id,
+                                    'error' => $e2->getMessage(),
+                                ]);
+                            }
                         }
                     } catch (\Exception $e) {
                         // Ignorar erro se tabela não existir ou não conseguir buscar
-                        \Log::debug('AdminBackupController - Erro ao buscar empresa_id', [
+                        Log::error('AdminBackupController::listarTenants - Erro ao buscar empresa_id', [
                             'tenant_id' => $tenantDomain->id,
                             'error' => $e->getMessage(),
+                            'trace' => $e->getTraceAsString(),
                         ]);
                     }
                     

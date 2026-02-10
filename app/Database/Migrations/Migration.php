@@ -3,6 +3,7 @@
 namespace App\Database\Migrations;
 
 use Illuminate\Database\Migrations\Migration as BaseMigration;
+use App\Database\Migrations\Traits\HasDependencyChecks;
 
 /**
  * Classe base customizada para migrations
@@ -10,6 +11,8 @@ use Illuminate\Database\Migrations\Migration as BaseMigration;
  */
 abstract class Migration extends BaseMigration
 {
+    use HasDependencyChecks;
+    
     /**
      * Nome da tabela (pode ser definido na classe filha)
      */

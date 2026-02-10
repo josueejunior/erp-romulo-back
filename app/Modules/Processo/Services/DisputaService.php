@@ -52,6 +52,22 @@ class DisputaService
     }
 
     /**
+     * Validar se o processo permite disputa baseado no status
+     */
+    public function validarProcessoPermiteDisputa(Processo $processo): void
+    {
+        // Status que permitem disputa
+        $statusPermitidos = ['participacao', 'em_disputa', 'julgamento_habilitacao'];
+        
+        if (!in_array($processo->status, $statusPermitidos)) {
+            throw new \Exception(
+                "Não é possível registrar disputa para processos com status '{$processo->status}'. " .
+                "Apenas processos em 'participacao', 'em_disputa' ou 'julgamento_habilitacao' permitem disputa."
+            );
+        }
+    }
+
+    /**
      * Registra resultados da disputa (valores finais e classificações)
      */
     public function registrarResultados(Processo $processo, array $resultadosItens): Processo

@@ -53,16 +53,17 @@ class FormacaoPrecoService
         );
 
         // Preparar dados para persistência
+        // 🔥 CORREÇÃO: A tabela formacao_precos não tem processo_id, apenas processo_item_id
         $dadosPersistencia = [
             'empresa_id' => $empresaId,
-            'processo_id' => $processo->id,
             'processo_item_id' => $item->id,
             'orcamento_id' => $orcamento?->id,
             'custo_produto' => $data['custo_produto'],
             'frete' => $data['frete'],
             'percentual_impostos' => $data['percentual_impostos'],
             'percentual_margem' => $data['percentual_margem'],
-            'preco_minimo' => $precoMinimo,
+            'preco_minimo' => $data['preco_minimo'] ?? $precoMinimo, // Usar o valor do frontend se fornecido, senão calcular
+            'preco_recomendado' => $data['preco_recomendado'] ?? null, // Campo opcional do frontend
             'observacoes' => $data['observacoes'] ?? null,
         ];
 
@@ -163,8 +164,17 @@ class FormacaoPrecoService
         }
 
         // Validar que orçamento pertence ao item
-        if ($orcamento->processo_item_id !== $item->id) {
-            throw new EntidadeNaoPertenceException('Orçamento', 'item informado');
+        // 🔥 CORREÇÃO: A estrutura mudou - orçamentos se relacionam com itens via orcamento_itens
+        // Verificar se existe um OrcamentoItem que conecta o orçamento ao item
+        $orcamentoItem = \App\Modules\Orcamento\Models\OrcamentoItem::where('orcamento_id', $orcamento->id)
+            ->where('processo_item_id', $item->id)
+            ->first();
+        
+        if (!$orcamentoItem) {
+            // Fallback: verificar se o orçamento tem processo_item_id diretamente (compatibilidade)
+            if ($orcamento->processo_item_id !== $item->id) {
+                throw new EntidadeNaoPertenceException('Orçamento', 'item informado');
+            }
         }
 
         // Validar que orçamento pertence à empresa

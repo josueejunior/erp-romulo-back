@@ -4,7 +4,7 @@ namespace App\Modules\AutorizacaoFornecimento\Models;
 
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use App\Models\BaseModel;
+use App\Models\TenantModel;
 use App\Models\Traits\HasSoftDeletesWithEmpresa;
 use App\Models\Traits\BelongsToEmpresaTrait;
 use App\Modules\Processo\Models\Processo;
@@ -12,7 +12,7 @@ use App\Modules\Contrato\Models\Contrato;
 use App\Modules\Empenho\Models\Empenho;
 use App\Modules\NotaFiscal\Models\NotaFiscal;
 
-class AutorizacaoFornecimento extends BaseModel
+class AutorizacaoFornecimento extends TenantModel
 {
     use HasSoftDeletesWithEmpresa, BelongsToEmpresaTrait;
 

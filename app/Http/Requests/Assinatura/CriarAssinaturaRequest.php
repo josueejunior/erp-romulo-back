@@ -14,7 +14,7 @@ class CriarAssinaturaRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'plano_id' => 'required|exists:planos,id',
+            'plano_id' => ['required', new \App\Rules\PlanoExists()],
             'data_inicio' => 'nullable|date',
             'data_fim' => 'required|date|after:data_inicio',
             'valor_pago' => 'nullable|numeric|min:0',

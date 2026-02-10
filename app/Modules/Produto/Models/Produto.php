@@ -2,13 +2,13 @@
 
 namespace App\Modules\Produto\Models;
 
-use App\Models\BaseModel;
+use App\Models\TenantModel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use App\Models\Traits\HasSoftDeletesWithEmpresa;
 use App\Models\Traits\HasTimestampsCustomizados;
 use App\Models\Traits\BelongsToEmpresaTrait;
 
-class Produto extends BaseModel
+class Produto extends TenantModel
 {
     use HasFactory, HasSoftDeletesWithEmpresa, HasTimestampsCustomizados, BelongsToEmpresaTrait;
     

@@ -15,6 +15,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class TenantEmpresa extends Model
 {
+    /**
+     * 🔥 IMPORTANTE: Sempre usar conexão central, mesmo quando no contexto do tenant
+     * Esta tabela está no banco central, não no banco do tenant
+     */
+    protected $connection = 'pgsql';
+    
     protected $table = 'tenant_empresas';
     
     // Tabela não tem colunas created_at/updated_at

@@ -23,7 +23,7 @@ class AtualizarAssinaturaAdminRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'plano_id' => 'sometimes|exists:planos,id',
+            'plano_id' => ['sometimes', new \App\Rules\PlanoExists()],
             'status' => 'sometimes|string|in:ativa,suspensa,expirada,cancelada',
             'data_inicio' => 'sometimes|date',
             'data_fim' => 'sometimes|date|after_or_equal:data_inicio',

@@ -94,8 +94,35 @@ class FormacaoPrecoController extends BaseApiController
      */
     public function store(FormacaoPrecoRequest $request): JsonResponse|FormacaoPrecoResource
     {
+        \Log::info('FormacaoPrecoController::store - MÉTODO CHAMADO', [
+            'url' => $request->fullUrl(),
+            'method' => $request->method(),
+            'route_name' => $request->route()?->getName(),
+            'route_parameters' => $request->route()?->parameters(),
+            'request_data' => $request->all(),
+        ]);
+        
         try {
-            [$processo, $item, $orcamento] = $this->resolveContext($request);
+            \Log::debug('FormacaoPrecoController::store - Iniciando', [
+                'request_data' => $request->all(),
+                'validated_data' => $request->validated(),
+            ]);
+            
+            try {
+                [$processo, $item, $orcamento] = $this->resolveContext($request);
+            } catch (NotFoundException $e) {
+                \Log::error('FormacaoPrecoController::store - Erro ao resolver contexto', [
+                    'error' => $e->getMessage(),
+                    'route_parameters' => $request->route()?->parameters(),
+                ]);
+                return response()->json(['message' => $e->getMessage()], 400);
+            }
+            
+            \Log::debug('FormacaoPrecoController::store - Contexto resolvido', [
+                'processo_id' => $processo->id,
+                'item_id' => $item->id,
+                'orcamento_id' => $orcamento->id,
+            ]);
             
             // ✅ Segurança: Validar permissão (mesma regra da Web)
             $this->authorize('create', $processo);
@@ -111,17 +138,43 @@ class FormacaoPrecoController extends BaseApiController
                 $empresaId
             );
 
+            \Log::debug('FormacaoPrecoController::store - Formação de preço criada', [
+                'formacao_preco_id' => $formacaoPreco->id,
+            ]);
+
             return new FormacaoPrecoResource($formacaoPreco);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            \Log::error('FormacaoPrecoController::store - Erro de validação', [
+                'errors' => $e->errors(),
+                'request_data' => $request->all(),
+            ]);
+            return response()->json([
+                'message' => 'Erro de validação',
+                'errors' => $e->errors(),
+            ], 422);
         } catch (ProcessoEmExecucaoException $e) {
             return response()->json(['message' => $e->getMessage()], 403);
         } catch (EntidadeNaoPertenceException $e) {
+            \Log::error('FormacaoPrecoController::store - Entidade não pertence', [
+                'message' => $e->getMessage(),
+            ]);
             return response()->json(['message' => $e->getMessage()], 400);
         } catch (NotFoundException $e) {
+            \Log::error('FormacaoPrecoController::store - Não encontrado', [
+                'message' => $e->getMessage(),
+            ]);
             return response()->json(['message' => $e->getMessage()], 404);
         } catch (\DomainException $e) {
+            \Log::error('FormacaoPrecoController::store - DomainException', [
+                'message' => $e->getMessage(),
+            ]);
             return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
-            \Log::error('Erro ao criar formação de preço: ' . $e->getMessage(), ['exception' => $e]);
+            \Log::error('FormacaoPrecoController::store - Erro inesperado', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'request_data' => $request->all(),
+            ]);
             return response()->json(['message' => 'Erro ao criar formação de preço'], 500);
         }
     }

@@ -17,6 +17,7 @@ class ProcessoItem
         public readonly ?int $fornecedorId = null,
         public readonly ?int $transportadoraId = null,
         public readonly ?string $numeroItem = null,
+        public readonly ?string $nome = null,
         public readonly ?string $codigoInterno = null,
         public readonly float $quantidade = 0.0,
         public readonly ?string $unidade = null,

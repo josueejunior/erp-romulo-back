@@ -82,9 +82,15 @@ class JulgamentoService
                 continue;
             }
 
+            // 🔥 CORREÇÃO: Tratar valor_negociado corretamente - permitir 0 como valor válido
+            $valorNegociado = null;
+            if (isset($itemData['valor_negociado']) && $itemData['valor_negociado'] !== '' && $itemData['valor_negociado'] !== null) {
+                $valorNegociado = (float) $itemData['valor_negociado'];
+            }
+            
             $item->update([
                 'status_item' => $itemData['status_item'],
-                'valor_negociado' => $itemData['valor_negociado'] ?? null,
+                'valor_negociado' => $valorNegociado,
                 'chance_arremate' => $itemData['chance_arremate'] ?? null,
                 'chance_percentual' => $itemData['chance_percentual'] ?? null,
                 'lembretes' => $itemData['lembretes'] ?? null,

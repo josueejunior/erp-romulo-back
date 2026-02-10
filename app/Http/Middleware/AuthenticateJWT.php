@@ -150,20 +150,61 @@ class AuthenticateJWT
     {
         $userId = $payload['sub'] ?? null;
         $isAdmin = $payload['is_admin'] ?? false;
+        $tenantId = $payload['tenant_id'] ?? null;
         
         if (!$userId) {
             return null;
         }
 
-        // Admin: buscar AdminUser (sem tenancy)
+        // Admin: buscar AdminUser (sem tenancy - banco central)
         if ($isAdmin) {
             if (tenancy()->initialized) {
                 tenancy()->end();
             }
+            // Garantir que está usando conexão central
+            $centralConnectionName = config('tenancy.database.central_connection', 'pgsql');
+            if (config('database.default') !== $centralConnectionName) {
+                config(['database.default' => $centralConnectionName]);
+                \Illuminate\Support\Facades\DB::purge($centralConnectionName);
+            }
             return \App\Modules\Auth\Models\AdminUser::find($userId);
         }
 
-        // Usuário comum: buscar User
+        // Usuário comum: buscar User (banco do tenant)
+        // 🔥 IMPORTANTE: Inicializar tenancy e trocar conexão antes de buscar usuário
+        if ($tenantId) {
+            try {
+                $tenant = \App\Models\Tenant::find($tenantId);
+                if ($tenant) {
+                    // Inicializar tenancy se ainda não estiver inicializado
+                    if (!tenancy()->initialized) {
+                        tenancy()->initialize($tenant);
+                    }
+                    
+                    // 🔥 MULTI-DATABASE: Trocar para o banco do tenant quando a conexão padrão ainda for a central
+                    $centralConnectionName = config('tenancy.database.central_connection', 'pgsql');
+                    $defaultConnectionName = config('database.default');
+                    $tenantDbName = $tenant->database()->getName();
+                    if ($defaultConnectionName === $centralConnectionName) {
+                        config(['database.connections.tenant.database' => $tenantDbName]);
+                        \Illuminate\Support\Facades\DB::purge('tenant');
+                        config(['database.default' => 'tenant']);
+                        Log::debug('AuthenticateJWT: Conexão trocada para banco do tenant', [
+                            'tenant_id' => $tenantId,
+                            'tenant_database' => $tenantDbName,
+                        ]);
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::warning('AuthenticateJWT: Erro ao inicializar tenancy', [
+                    'tenant_id' => $tenantId,
+                    'error' => $e->getMessage(),
+                ]);
+                // Continuar tentando buscar usuário mesmo se tenancy falhar
+            }
+        }
+
+        // Buscar usuário no banco do tenant
         return \App\Modules\Auth\Models\User::find($userId);
     }
 }

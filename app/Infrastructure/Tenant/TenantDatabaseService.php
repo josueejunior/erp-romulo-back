@@ -362,23 +362,72 @@ class TenantDatabaseService implements TenantDatabaseServiceInterface
     }
 
     /**
-     * Ordena paths para rodar permissions primeiro (tabelas de roles/permissions antes de seeders).
+     * Ordena paths para rodar migrations na ordem correta considerando dependências:
+     * 1. permissions (sem dependências)
+     * 2. usuarios (sem dependências, mas referenciado por outros)
+     * 3. empresas (sem dependências, mas referenciado por outros)
+     * 4. fornecedores (sem dependências, mas referenciado por transportadoras, orcamentos, processos)
+     * 5. orgaos (sem dependências, mas referenciado por processos)
+     * 6. documentos (sem dependências, mas referenciado por processo_documentos)
+     * 7. processos (depende de orgaos)
+     * 8. processo_itens (depende de processos)
+     * 9. contratos (depende de processos)
+     * 10. autorizacoes_fornecimento (depende de processos e contratos)
+     * 11. empenhos (depende de processos, contratos, autorizacoes_fornecimento)
+     * 12. processo_item_vinculos (depende de processo_itens, contratos, autorizacoes_fornecimento, empenhos)
+     * 13. orcamentos (depende de processos, processo_itens, fornecedores)
+     * 14. notas_fiscais (depende de processos, empenhos, contratos, autorizacoes_fornecimento, fornecedores, processo_itens)
+     * 15. assinaturas (depende de users e empresas)
+     * 16. resto em ordem alfabética
      */
     private function orderMigrationPaths(array $paths, string $basePath): array
     {
-        $permissionsDir = $basePath . DIRECTORY_SEPARATOR . 'permissions';
-        usort($paths, function ($a, $b) use ($permissionsDir) {
-            $aIsPermissions = $a === $permissionsDir || str_starts_with($a, $permissionsDir . DIRECTORY_SEPARATOR);
-            $bIsPermissions = $b === $permissionsDir || str_starts_with($b, $permissionsDir . DIRECTORY_SEPARATOR);
-            if ($aIsPermissions && !$bIsPermissions) {
-                return -1;
+        // Definir ordem de prioridade (menor número = maior prioridade)
+        // Nota: processos precisa vir depois de contratos/autorizacoes/empenhos porque
+        // processo_item_vinculos depende dessas tabelas, mas outras migrations de processos
+        // precisam vir antes. A verificação de segurança na migration resolve isso.
+        $priority = [
+            'permissions' => 1,
+            'usuarios' => 2,
+            'empresas' => 3,
+            'fornecedores' => 4,
+            'orgaos' => 5,
+            'documentos' => 6,
+            'processos' => 7, // Maioria das migrations de processos vem aqui
+            'contratos' => 8,
+            'autorizacoes_fornecimento' => 9,
+            'empenhos' => 10,
+            // processo_item_vinculos está em processos mas precisa vir depois
+            // A verificação de segurança na migration garante a ordem correta
+            'orcamentos' => 11,
+            'notas_fiscais' => 12,
+            'assinaturas' => 13,
+        ];
+        
+        usort($paths, function ($a, $b) use ($basePath, $priority) {
+            $aPriority = $this->getPathPriority($a, $basePath, $priority);
+            $bPriority = $this->getPathPriority($b, $basePath, $priority);
+            
+            if ($aPriority !== $bPriority) {
+                return $aPriority <=> $bPriority;
             }
-            if (!$aIsPermissions && $bIsPermissions) {
-                return 1;
-            }
+            
+            // Se mesma prioridade, ordem alfabética
             return strcmp($a, $b);
         });
+        
         return $paths;
+    }
+    
+    /**
+     * Obtém a prioridade de um path baseado no diretório
+     */
+    private function getPathPriority(string $path, string $basePath, array $priority): int
+    {
+        $relativePath = str_replace($basePath . DIRECTORY_SEPARATOR, '', $path);
+        $dirName = explode(DIRECTORY_SEPARATOR, $relativePath)[0];
+        
+        return $priority[$dirName] ?? 999; // Prioridade baixa para diretórios não listados
     }
 }
 

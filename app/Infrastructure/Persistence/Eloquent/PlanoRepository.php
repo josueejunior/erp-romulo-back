@@ -68,6 +68,24 @@ class PlanoRepository implements PlanoRepositoryInterface
             $query->where('ativo', $ativo);
         }
 
+        // 🔥 CORREÇÃO: Excluir planos gratuitos por padrão (exceto se explicitamente solicitado)
+        // Planos gratuitos não devem aparecer na listagem de assinaturas para renovar/trocar
+        $incluirGratuitos = $filtros['incluir_gratuitos'] ?? false;
+        if (!$incluirGratuitos) {
+            Log::info('🔍 PlanoRepository::listar - Excluindo planos gratuitos', [
+                'incluir_gratuitos' => $incluirGratuitos,
+            ]);
+            // Excluir planos onde preco_mensal é 0 ou null
+            $query->where(function($q) {
+                $q->where('preco_mensal', '>', 0)
+                  ->orWhere(function($q2) {
+                      // Se preco_mensal for null, verificar se preco_anual > 0
+                      $q2->whereNull('preco_mensal')
+                         ->where('preco_anual', '>', 0);
+                  });
+            });
+        }
+
         // Ordenar por ordem e depois por preço mensal
         $query->orderBy('ordem', 'asc')
               ->orderBy('preco_mensal', 'asc');

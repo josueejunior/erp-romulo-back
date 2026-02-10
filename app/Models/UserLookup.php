@@ -9,6 +9,12 @@ class UserLookup extends Model
 {
     use SoftDeletes;
     
+    /**
+     * 🔥 IMPORTANTE: Sempre usar conexão central, mesmo quando no contexto do tenant
+     * Esta tabela está no banco central, não no banco do tenant
+     */
+    protected $connection = 'pgsql';
+    
     protected $table = 'users_lookup';
     
     public $timestamps = true;

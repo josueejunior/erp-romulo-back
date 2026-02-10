@@ -29,7 +29,7 @@ class ProcessarAssinaturaRequest extends FormRequest
         $paymentMethod = $this->input('payment_method', 'credit_card');
         
         $rules = [
-            'plano_id' => 'required|integer|exists:planos,id',
+            'plano_id' => ['required', 'integer', new \App\Rules\PlanoExists()],
             'periodo' => 'required|string|in:mensal,anual',
             'payer_email' => 'required|email',
             'payer_cpf' => $paymentMethod === 'pix' 

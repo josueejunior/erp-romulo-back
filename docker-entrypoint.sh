@@ -87,11 +87,67 @@ else
     php artisan key:generate --force || true
 fi
 
-# Executar apenas migrations do banco central (não roda tabelas de tenant)
-echo "📦 Executando migrations do banco central (migrate:central)..."
-php artisan migrate:central --force || {
-    echo "⚠️  Aviso: Erro ao executar migrations do banco central (pode ser normal se já executado)"
-}
+# 🔥 GARANTIR: Executar migrations do banco central (master)
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "📦 EXECUTANDO MIGRATIONS DO BANCO CENTRAL (MASTER)"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# Verificar status antes
+echo "🔍 Verificando migrations pendentes do banco central..."
+php artisan migrate:central --status 2>&1 || echo "⚠️  Nenhuma migration encontrada ou erro ao verificar status"
+
+# Executar migrations com retry (incluindo seeds se RUN_SEEDS=true)
+echo ""
+echo "🚀 Executando migrations do banco central..."
+MIGRATION_SUCCESS=false
+SEED_OPTION=""
+if [ "${RUN_SEEDS:-true}" = "true" ]; then
+    SEED_OPTION="--seed"
+    echo "   🌱 Seeds serão executados após as migrations (RUN_SEEDS=true)"
+else
+    echo "   ⏭️  Seeds serão ignorados (RUN_SEEDS=false)"
+fi
+
+for i in 1 2 3 4 5; do
+    echo "   Tentativa $i de 5..."
+    if php artisan migrate:central --force $SEED_OPTION 2>&1; then
+        echo "   ✅ Migrations do central executadas com sucesso!"
+        MIGRATION_SUCCESS=true
+        break
+    else
+        if [ "$i" -eq 5 ]; then
+            echo "   ❌ Todas as tentativas falharam!"
+            echo ""
+            echo "⚠️  AÇÃO NECESSÁRIA: Execute manualmente:"
+            echo "   docker exec erp-licitacoes-app php artisan migrate:central --force $SEED_OPTION"
+            echo ""
+            echo "   Ou execute migrations individuais:"
+            echo "   docker exec erp-licitacoes-app php artisan migrate --path=database/migrations/central/tenancy --force"
+            echo "   docker exec erp-licitacoes-app php artisan migrate --path=database/migrations/central/usuarios --force"
+            echo "   docker exec erp-licitacoes-app php artisan migrate --path=database/migrations/central/planos --force"
+            echo "   docker exec erp-licitacoes-app php artisan migrate --path=database/migrations/central --force"
+            if [ "${RUN_SEEDS:-true}" = "true" ]; then
+                echo "   docker exec erp-licitacoes-app php artisan db:seed --force"
+            fi
+        else
+            echo "   ⏳ Aguardando 3 segundos antes da próxima tentativa..."
+            sleep 3
+        fi
+    fi
+done
+
+# Verificar status final
+echo ""
+echo "🔍 Verificando status final das migrations do banco central..."
+php artisan migrate:central --status 2>&1 || echo "⚠️  Erro ao verificar status final"
+
+if [ "$MIGRATION_SUCCESS" = true ]; then
+    echo "✅ Migrations do banco central concluídas com sucesso!"
+else
+    echo "⚠️  ATENÇÃO: Algumas migrations podem não ter sido executadas!"
+fi
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
 
 # Executar migrations dos tenants
 echo "📦 Executando migrations dos tenants..."
@@ -99,12 +155,10 @@ php artisan tenants:migrate --force || {
     echo "⚠️  Aviso: Erro ao executar migrations dos tenants (pode ser normal se já executado)"
 }
 
-# Executar seeds apenas se a variável RUN_SEEDS estiver definida
+# 🔥 NOTA: Seeds do banco central já foram executados pelo comando migrate:central --seed acima
+# Se precisar executar seeds adicionais ou específicos, adicione aqui
 if [ "${RUN_SEEDS:-true}" = "true" ]; then
-    echo "🌱 Executando seeds..."
-    php artisan db:seed --force --class=DatabaseSeeder || {
-        echo "⚠️  Aviso: Erro ao executar seeds (pode ser normal se já executado)"
-    }
+    echo "✅ Seeds do banco central já foram executados pelo migrate:central --seed"
 else
     echo "⏭️  Seeds ignorados (RUN_SEEDS=false)"
 fi

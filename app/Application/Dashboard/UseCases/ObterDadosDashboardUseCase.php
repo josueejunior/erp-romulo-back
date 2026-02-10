@@ -109,15 +109,54 @@ class ObterDadosDashboardUseCase
 
         $contadores = [];
         foreach ($statuses as $status) {
-            $contadores[$status] = $this->processoRepository->buscarComFiltros([
-                'empresa_id' => $empresaId,
-                'status' => $status,
-                'per_page' => 1,
-            ])->total();
+            try {
+                $total = $this->processoRepository->buscarComFiltros([
+                    'empresa_id' => $empresaId,
+                    'status' => $status,
+                    'per_page' => 1,
+                ])->total();
+                
+                $contadores[$status] = $total;
+                
+                Log::debug('ObterDadosDashboardUseCase::contarProcessosPorStatus - Status contado', [
+                    'empresa_id' => $empresaId,
+                    'status' => $status,
+                    'total' => $total,
+                ]);
+            } catch (\Exception $e) {
+                Log::error('ObterDadosDashboardUseCase::contarProcessosPorStatus - Erro ao contar status', [
+                    'empresa_id' => $empresaId,
+                    'status' => $status,
+                    'error' => $e->getMessage(),
+                ]);
+                $contadores[$status] = 0;
+            }
         }
 
-        // Adicionar alias 'julgamento' para compatibilidade
-        $contadores['julgamento'] = $contadores['julgamento_habilitacao'];
+        // Adicionar alias 'julgamento' para compatibilidade com frontend
+        $contadores['julgamento'] = $contadores['julgamento_habilitacao'] ?? 0;
+        
+        // 🔥 ADICIONAR: Campo 'com_alerta' para compatibilidade com frontend
+        // Contar processos com alertas (mesma lógica do resumo de processos)
+        try {
+            $comAlerta = $this->processoRepository->buscarComFiltros([
+                'empresa_id' => $empresaId,
+                'somente_alerta' => true,
+                'per_page' => 1,
+            ])->total();
+            $contadores['com_alerta'] = $comAlerta;
+        } catch (\Exception $e) {
+            Log::warning('Erro ao contar processos com alerta no dashboard', [
+                'empresa_id' => $empresaId,
+                'error' => $e->getMessage(),
+            ]);
+            $contadores['com_alerta'] = 0;
+        }
+        
+        Log::debug('ObterDadosDashboardUseCase::contarProcessosPorStatus - Resumo final', [
+            'empresa_id' => $empresaId,
+            'contadores' => $contadores,
+        ]);
 
         return $contadores;
     }

@@ -3,7 +3,7 @@
 namespace App\Modules\NotaFiscal\Models;
 
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Models\BaseModel;
+use App\Models\TenantModel;
 use App\Models\Traits\HasSoftDeletesWithEmpresa;
 use App\Models\Traits\BelongsToEmpresaTrait;
 use App\Modules\Processo\Models\Processo;
@@ -13,7 +13,7 @@ use App\Modules\Contrato\Models\Contrato;
 use App\Modules\AutorizacaoFornecimento\Models\AutorizacaoFornecimento;
 use App\Modules\Fornecedor\Models\Fornecedor;
 
-class NotaFiscal extends BaseModel
+class NotaFiscal extends TenantModel
 {
     use HasSoftDeletesWithEmpresa, BelongsToEmpresaTrait;
 

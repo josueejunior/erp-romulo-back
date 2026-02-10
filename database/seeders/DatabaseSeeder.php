@@ -24,6 +24,23 @@ class DatabaseSeeder extends Seeder
         // pois AdminUser é uma tabela central, não do tenant
         $this->call(AdminUserSeeder::class);
         
+        // 🔥 DETECÇÃO DE CONTEXTO: Verificar se estamos executando no banco central
+        // Quando executado via migrate:central --seed, não devemos criar dados do tenant
+        $centralConnectionName = config('tenancy.database.central_connection', 'pgsql');
+        $currentConnection = config('database.default');
+        $isCentralContext = ($currentConnection === $centralConnectionName) && !tenancy()->initialized;
+        
+        if ($isCentralContext) {
+            // Executando no banco central - apenas seeds do central
+            $this->command->info('🌱 Executando seeds do banco central...');
+            $this->call(PlanosSeeder::class);
+            $this->command->info('✅ Seeds do banco central concluídos.');
+            return; // Não executar seeds do tenant
+        }
+        
+        // Executando no contexto do tenant - executar seeds completos
+        $this->command->info('🌱 Executando seeds do tenant...');
+        
         // Verificar se já existe um tenant com este CNPJ
         $tenant = \App\Models\Tenant::where('cnpj', '12.345.678/0001-90')->first();
 

@@ -85,28 +85,37 @@ class RelatorioFinanceiroQuery
         
         $custos = $paginator->getCollection();
         
-        // Aplicar filtros de data manualmente se necessário
+        // 🔥 CORREÇÃO: Aplicar filtros de data manualmente se necessário
+        // Se não houver filtros de data, incluir TODOS os custos (mesmo sem data)
+        // Se houver filtros de data, incluir custos dentro do período OU sem data (para não perder custos importantes)
         if ($dataInicio || $dataFim) {
             $custos = $custos->filter(function($custo) use ($dataInicio, $dataFim) {
+                // Se não tem data, incluir sempre (custos sem data são considerados válidos)
                 if (!$custo->data) {
-                    return false;
+                    return true;
                 }
                 
-                $dataCusto = Carbon::parse($custo->data);
-                
-                if ($dataInicio && $dataCusto->lt(Carbon::parse($dataInicio))) {
-                    return false;
+                try {
+                    $dataCusto = Carbon::parse($custo->data);
+                    
+                    if ($dataInicio && $dataCusto->lt(Carbon::parse($dataInicio))) {
+                        return false;
+                    }
+                    
+                    if ($dataFim && $dataCusto->gt(Carbon::parse($dataFim))) {
+                        return false;
+                    }
+                    
+                    return true;
+                } catch (\Exception $e) {
+                    // Se não conseguir parsear a data, incluir o custo (melhor incluir do que excluir)
+                    return true;
                 }
-                
-                if ($dataFim && $dataCusto->gt(Carbon::parse($dataFim))) {
-                    return false;
-                }
-                
-                return true;
             });
         }
         
-        return $custos->sum(fn($custo) => $custo->valor);
+        // 🔥 CORREÇÃO: Garantir que o valor seja um número válido
+        return (float) $custos->sum(fn($custo) => (float) ($custo->valor ?? 0));
     }
 
     /**

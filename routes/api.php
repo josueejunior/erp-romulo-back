@@ -256,8 +256,11 @@ Route::prefix('v1')->group(function () {
                             ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy'])
                             ->children(function () {
                                 // Formação de Preços
+                                // 🔥 CORREÇÃO: Adicionar rota POST explícita sem parâmetro opcional para evitar problemas com Route Model Binding
+                                Route::post('/formacao-preco', [ApiFormacaoPrecoController::class, 'store'])->name('formacao-preco.store');
                                 Route::module('formacao-preco', ApiFormacaoPrecoController::class, 'formacaoPreco')
-                                    ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
+                                    ->methods(['list' => 'list', 'get' => 'get', 'update' => 'update', 'destroy' => 'destroy'])
+                                    ->except(['store']); // Excluir store do module para usar a rota explícita acima
                             });
                         
                         // Vínculos (Contrato/AF/Empenho)
@@ -309,6 +312,9 @@ Route::prefix('v1')->group(function () {
             
             // Cadastros
             Route::module('orgaos', ApiOrgaoController::class, 'orgao');
+            
+            // Consulta de CNPJ na Receita Federal para órgãos
+            Route::get('/orgaos/consultar-cnpj/{cnpj}', [ApiOrgaoController::class, 'consultarCnpj']);
             
             // Rotas para responsáveis de órgãos
             Route::prefix('orgaos/{orgao}')->group(function () {
