@@ -88,15 +88,22 @@ class PaymentController extends BaseApiController
                         
                         if ($cupomAfiliado && $cupomAfiliado['valido']) {
                             // Validar se CNPJ já usou cupom (uso único por CNPJ)
-                            $cnpjTenant = $tenant->cnpj;
-                            if ($cnpjTenant) {
-                                $jaUsouCupom = $this->rastrearReferenciaAfiliadoUseCase->cnpjJaUsouCupom($cnpjTenant);
-                                
-                                if ($jaUsouCupom) {
-                                    return response()->json([
-                                        'message' => 'Este CNPJ já utilizou um cupom de afiliado. O cupom é de uso único por CNPJ.',
-                                    ], 422);
-                                }
+                            $cnpjTenantRaw = $tenant->cnpj;
+                            $cnpjTenant = $cnpjTenantRaw ? preg_replace('/\D/', '', $cnpjTenantRaw) : null;
+
+                            // 🔥 REGRA: Para usar cupom de afiliado é obrigatório ter CNPJ cadastrado
+                            if (!$cnpjTenant) {
+                                return response()->json([
+                                    'message' => 'Para utilizar um cupom de afiliado, é necessário informar o CNPJ da empresa. Atualize o cadastro da empresa e tente novamente.',
+                                ], 422);
+                            }
+
+                            $jaUsouCupom = $this->rastrearReferenciaAfiliadoUseCase->cnpjJaUsouCupom($cnpjTenant);
+                            
+                            if ($jaUsouCupom) {
+                                return response()->json([
+                                    'message' => 'Este CNPJ já utilizou um cupom de afiliado. O cupom é de uso único por CNPJ.',
+                                ], 422);
                             }
                             
                             // Buscar referência do afiliado vinculada ao tenant

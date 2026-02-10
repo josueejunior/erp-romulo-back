@@ -32,6 +32,7 @@ class CheckOnboarding
     public function handle(Request $request, Closure $next)
     {
         $user = $request->user();
+        $isPlanoGratuito = null;
 
         if (!$user) {
             return response()->json([
@@ -69,7 +70,10 @@ class CheckOnboarding
             ]);
         }
 
-        // 🔥 NOVO: Verificar se tem assinatura ativa - se tiver, permitir acesso mesmo sem concluir tutorial
+        // 🔥 NOVO: Verificar se tem assinatura ativa
+        // IMPORTANTE:
+        // - Para planos pagos: permitir acesso mesmo sem concluir tutorial
+        // - Para planos gratuitos: ainda exigir conclusão do onboarding (não pular o tutorial)
         try {
             $empresaId = $user->empresa_ativa_id ?? null;
             if ($empresaId) {
@@ -78,12 +82,21 @@ class CheckOnboarding
                 if ($context->isInitialized()) {
                     $resultadoAssinatura = $context->validateAssinatura();
                     if ($resultadoAssinatura['pode_acessar'] ?? false) {
-                        Log::info('CheckOnboarding - Assinatura ativa encontrada, permitindo acesso mesmo sem tutorial concluído', [
+                        // Somente pular onboarding se NÃO for plano gratuito
+                        if ($isPlanoGratuito === false) {
+                            Log::info('CheckOnboarding - Assinatura ativa de plano pago encontrada, permitindo acesso mesmo sem tutorial concluído', [
+                                'user_id' => $user->id,
+                                'empresa_id' => $empresaId,
+                                'route' => $request->path(),
+                            ]);
+                            return $next($request);
+                        }
+
+                        Log::info('CheckOnboarding - Assinatura ativa em plano gratuito detectada, mantendo exigência de onboarding', [
                             'user_id' => $user->id,
                             'empresa_id' => $empresaId,
                             'route' => $request->path(),
                         ]);
-                        return $next($request);
                     }
                 }
             }

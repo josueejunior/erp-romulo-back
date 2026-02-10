@@ -201,17 +201,18 @@ final class FazerBackupTenantUseCase
             return [];
         }
 
-        $files = glob("{$backupPath}/backup_tenant_*.sql");
-        
-        Log::info('FazerBackupTenantUseCase::listarBackups - Arquivos encontrados', [
-            'path' => $backupPath,
-            'count' => count($files),
-            'files' => $files,
-        ]);
-        
         $backups = [];
 
-        foreach ($files as $file) {
+        // 🔍 Backups de TENANT (banco inteiro do tenant)
+        $filesTenant = glob("{$backupPath}/backup_tenant_*.sql") ?: [];
+
+        Log::info('FazerBackupTenantUseCase::listarBackups - Arquivos de tenant encontrados', [
+            'path' => $backupPath,
+            'count' => count($filesTenant),
+            'files' => $filesTenant,
+        ]);
+
+        foreach ($filesTenant as $file) {
             $filename = basename($file);
             $fileSize = filesize($file);
             $createdAt = filemtime($file);
@@ -228,12 +229,50 @@ final class FazerBackupTenantUseCase
                     'size' => $fileSize,
                     'size_human' => $this->formatBytes($fileSize),
                     'created_at' => Carbon::createFromTimestamp($createdAt)->toIso8601String(),
+                    'tipo' => 'tenant',
                     'tenant_id' => (int) $matches[1],
                     'database' => $matches[2],
                 ];
             } else {
                 // Log para debug se o padrão não corresponder
                 Log::warning('FazerBackupTenantUseCase::listarBackups - Arquivo não corresponde ao padrão esperado', [
+                    'filename' => $filename,
+                ]);
+            }
+        }
+
+        // 🔍 Backups de EMPRESA (dump filtrado por empresa_id)
+        $filesEmpresa = glob("{$backupPath}/backup_empresa_*.sql") ?: [];
+
+        Log::info('FazerBackupTenantUseCase::listarBackups - Arquivos de empresa encontrados', [
+            'path' => $backupPath,
+            'count' => count($filesEmpresa),
+            'files' => $filesEmpresa,
+        ]);
+
+        foreach ($filesEmpresa as $file) {
+            $filename = basename($file);
+            $fileSize = filesize($file);
+            $createdAt = filemtime($file);
+
+            // Padrão: backup_empresa_{empresaId}_{razaoSocialLimpa}_{timestamp}.sql
+            // Exemplo: backup_empresa_1_EMPRESA_X_Y_2026-02-10_12-02-44.sql
+            if (preg_match('/^backup_empresa_(\d+)_([A-Za-z0-9_]+)_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})\.sql$/', $filename, $matches)) {
+                $empresaId = (int) $matches[1];
+                $razaoSocialSanitizada = $matches[2];
+
+                $backups[] = [
+                    'filename' => $filename,
+                    'path' => $file,
+                    'size' => $fileSize,
+                    'size_human' => $this->formatBytes($fileSize),
+                    'created_at' => Carbon::createFromTimestamp($createdAt)->toIso8601String(),
+                    'tipo' => 'empresa',
+                    'empresa_id' => $empresaId,
+                    'empresa_razao_social_sanitizada' => $razaoSocialSanitizada,
+                ];
+            } else {
+                Log::warning('FazerBackupTenantUseCase::listarBackups - Arquivo de empresa não corresponde ao padrão esperado', [
                     'filename' => $filename,
                 ]);
             }

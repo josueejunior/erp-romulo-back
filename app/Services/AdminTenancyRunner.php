@@ -45,9 +45,6 @@ class AdminTenancyRunner
         $tenantModel = $this->tenantRepository->buscarModeloPorId($tenantDomain->id);
         
         if (!$tenantModel) {
-            Log::warning('AdminTenancyRunner::runForTenant() - Tenant não encontrado', [
-                'tenant_id' => $tenantDomain->id,
-            ]);
             throw new \RuntimeException("Tenant não encontrado: {$tenantDomain->id}");
         }
 

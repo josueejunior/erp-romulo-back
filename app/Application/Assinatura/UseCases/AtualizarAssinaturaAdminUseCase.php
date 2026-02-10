@@ -11,6 +11,7 @@ use App\Domain\Exceptions\NotFoundException;
 use App\Domain\Exceptions\DomainException;
 use App\Modules\Auth\Models\User;
 use Illuminate\Support\Facades\Log;
+use App\Services\AdminTenancyRunner;
 
 /**
  * Use Case: Atualizar Assinatura (Admin)
@@ -24,6 +25,7 @@ class AtualizarAssinaturaAdminUseCase
         private PlanoRepositoryInterface $planoRepository,
         private TenantRepositoryInterface $tenantRepository,
         private EventDispatcherInterface $eventDispatcher,
+        private AdminTenancyRunner $adminTenancyRunner,
     ) {}
 
     /**
@@ -42,8 +44,10 @@ class AtualizarAssinaturaAdminUseCase
             throw new NotFoundException("Tenant não encontrado.");
         }
 
-        // Buscar assinatura
-        $assinaturaDomain = $this->assinaturaRepository->buscarPorId($assinaturaId);
+        // Buscar assinatura dentro do contexto do tenant
+        $assinaturaDomain = $this->adminTenancyRunner->runForTenant($tenant, function () use ($assinaturaId) {
+            return $this->assinaturaRepository->buscarPorId($assinaturaId);
+        });
         if (!$assinaturaDomain) {
             throw new NotFoundException("Assinatura não encontrada.");
         }
@@ -53,8 +57,10 @@ class AtualizarAssinaturaAdminUseCase
             throw new DomainException("A assinatura não pertence a este tenant.");
         }
 
-        // Buscar modelo para atualização
-        $assinaturaModel = $this->assinaturaRepository->buscarModeloPorId($assinaturaId);
+        // Buscar modelo para atualização (também dentro do tenant)
+        $assinaturaModel = $this->adminTenancyRunner->runForTenant($tenant, function () use ($assinaturaId) {
+            return $this->assinaturaRepository->buscarModeloPorId($assinaturaId);
+        });
         if (!$assinaturaModel) {
             throw new NotFoundException("Assinatura não encontrada.");
         }
@@ -148,7 +154,7 @@ class AtualizarAssinaturaAdminUseCase
             $assinaturaModel->dias_grace_period = $dados['dias_grace_period'];
         }
 
-        // Salvar alterações
+        // Salvar alterações (a conexão já é do tenant, pois o modelo foi carregado lá)
         $assinaturaModel->save();
 
         // Se a assinatura foi marcada como ativa e é a assinatura atual do tenant, atualizar tenant
@@ -162,8 +168,10 @@ class AtualizarAssinaturaAdminUseCase
             }
         }
 
-        // Buscar entidade atualizada
-        $assinaturaAtualizada = $this->assinaturaRepository->buscarPorId($assinaturaId);
+        // Buscar entidade atualizada dentro do contexto do tenant
+        $assinaturaAtualizada = $this->adminTenancyRunner->runForTenant($tenant, function () use ($assinaturaId) {
+            return $this->assinaturaRepository->buscarPorId($assinaturaId);
+        });
 
         // Buscar email do usuário para notificação
         $emailDestino = null;

@@ -34,9 +34,11 @@ class BuscarAssinaturaAdminUseCase
             throw new NotFoundException('Tenant não encontrado.');
         }
 
-        // Buscar assinatura
-        $assinaturaDomain = $this->assinaturaRepository->buscarPorId($assinaturaId);
-        
+        // Buscar assinatura dentro do contexto do tenant
+        $assinaturaDomain = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($assinaturaId) {
+            return $this->assinaturaRepository->buscarPorId($assinaturaId);
+        });
+
         if (!$assinaturaDomain || $assinaturaDomain->tenantId !== $tenantId) {
             throw new NotFoundException('Assinatura não encontrada.');
         }

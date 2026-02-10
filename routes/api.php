@@ -37,6 +37,7 @@ use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\Admin\AdminBackupController;
 use App\Http\Controllers\Admin\AdminComissoesController;
 use App\Http\Controllers\Admin\AdminTenantsIncompletosController;
+use App\Http\Controllers\Admin\AdminDatabaseController;
 
 /*
 |--------------------------------------------------------------------------
@@ -119,26 +120,31 @@ Route::prefix('v1')->group(function () {
         // Trocar empresa ativa (precisa estar fora do CheckSubscription para permitir troca mesmo sem assinatura)
         Route::put('/users/empresa-ativa', [ApiUserController::class, 'switchEmpresaAtiva']);
         
-        // Assinaturas e Pagamentos (não precisam de verificação de assinatura)
-        Route::prefix('assinaturas')->group(function () {
-            Route::get('/atual', [ApiAssinaturaController::class, 'atual']);
-            Route::get('/status', [ApiAssinaturaController::class, 'status']);
-            Route::get('/historico-pagamentos', [ApiAssinaturaController::class, 'historicoPagamentos']);
-            Route::get('/', [ApiAssinaturaController::class, 'index']);
-            Route::post('/', [ApiAssinaturaController::class, 'store']);
-            Route::post('/trocar-plano', [ApiAssinaturaController::class, 'trocarPlano']);
-            Route::post('/simular-troca-plano', [ApiAssinaturaController::class, 'simularTrocaPlano']);
-            Route::post('/{assinatura}/renovar', [ApiAssinaturaController::class, 'renovar']);
-            Route::post('/{assinatura}/cancelar', [ApiAssinaturaController::class, 'cancelar']);
+        // Assinaturas e Pagamentos
+        // 🔥 IMPORTANTE:
+        // - Não exigem assinatura ativa (podem ser usados para contratar/renovar)
+        // - MAS exigem onboarding concluído para planos gratuitos (protegidos por CheckOnboarding)
+        Route::middleware([\App\Http\Middleware\CheckOnboarding::class])->group(function () {
+            Route::prefix('assinaturas')->group(function () {
+                Route::get('/atual', [ApiAssinaturaController::class, 'atual']);
+                Route::get('/status', [ApiAssinaturaController::class, 'status']);
+                Route::get('/historico-pagamentos', [ApiAssinaturaController::class, 'historicoPagamentos']);
+                Route::get('/', [ApiAssinaturaController::class, 'index']);
+                Route::post('/', [ApiAssinaturaController::class, 'store']);
+                Route::post('/trocar-plano', [ApiAssinaturaController::class, 'trocarPlano']);
+                Route::post('/simular-troca-plano', [ApiAssinaturaController::class, 'simularTrocaPlano']);
+                Route::post('/{assinatura}/renovar', [ApiAssinaturaController::class, 'renovar']);
+                Route::post('/{assinatura}/cancelar', [ApiAssinaturaController::class, 'cancelar']);
+            });
+
+            Route::prefix('payments')->group(function () {
+                Route::post('/processar-assinatura', [ApiPaymentController::class, 'processarAssinatura'])->middleware('throttle:10,1');
+                Route::get('/{externalId}/status', [ApiPaymentController::class, 'checkStatus'])->middleware('throttle:30,1');
+            });
         });
 
         // Cupons
         Route::get('/cupons/{codigo}/validar', [\App\Modules\Assinatura\Controllers\CupomController::class, 'validar']);
-
-        Route::prefix('payments')->group(function () {
-            Route::post('/processar-assinatura', [ApiPaymentController::class, 'processarAssinatura'])->middleware('throttle:10,1');
-            Route::get('/{externalId}/status', [ApiPaymentController::class, 'checkStatus'])->middleware('throttle:30,1');
-        });
         
         // Notificações (não precisa de assinatura ativa)
         Route::get('/notifications', [\App\Modules\Notification\Controllers\NotificationController::class, 'index']);
@@ -507,6 +513,13 @@ Route::prefix('admin')->group(function () {
             Route::post('/empresa/{empresaId}', [AdminBackupController::class, 'fazerBackupEmpresa'])->where('empresaId', '[0-9]+');
             Route::get('/download/{filename}', [AdminBackupController::class, 'baixarBackup'])->where('filename', '[a-zA-Z0-9_.-]+');
             Route::delete('/{filename}', [AdminBackupController::class, 'deletarBackup'])->where('filename', '[a-zA-Z0-9_.-]+');
+        });
+        
+        // 🔍 Exploração de banco de dados (estilo DBeaver - read-only)
+        Route::prefix('db')->group(function () {
+            Route::get('/tables', [AdminDatabaseController::class, 'listTables']);
+            Route::get('/tables/{table}/columns', [AdminDatabaseController::class, 'listColumns'])->where('table', '[A-Za-z0-9_]+');
+            Route::get('/tables/{table}/rows', [AdminDatabaseController::class, 'listRows'])->where('table', '[A-Za-z0-9_]+');
         });
         
         // 🔥 NOVO: Gestão de tenants incompletos/abandonados
