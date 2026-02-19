@@ -88,12 +88,15 @@ class UserReadRepository implements UserReadRepositoryInterface
         
         $tenantId = tenancy()->tenant?->id;
         $databaseName = DB::connection()->getDatabaseName();
+        $debug = (bool) config('app.debug');
         
-        Log::info('UserReadRepository::listarSemPaginacao - Iniciando', [
-            'tenant_id' => $tenantId,
-            'database' => $databaseName,
-            'filtros' => $filtros,
-        ]);
+        if ($debug) {
+            Log::info('UserReadRepository::listarSemPaginacao - Iniciando', [
+                'tenant_id' => $tenantId,
+                'database' => $databaseName,
+                'filtros' => $filtros,
+            ]);
+        }
 
         try {
             $query = $this->getIsolatedUserQuery()
@@ -110,47 +113,51 @@ class UserReadRepository implements UserReadRepositoryInterface
             $users = $query->orderBy('name')->get();
             
             // 🔥 DEBUG: Log detalhado dos usuários encontrados no banco
-            $usuariosDetalhes = $users->map(function ($user) {
-                return [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'email' => $user->email,
-                    'empresa_ativa_id' => $user->empresa_ativa_id,
-                    'deleted_at' => $user->deleted_at?->toDateTimeString(),
-                    'empresas_ids' => $user->empresas->pluck('id')->toArray(),
-                    'empresas_razao_social' => $user->empresas->pluck('razao_social')->toArray(),
-                    'roles' => $user->roles->pluck('name')->toArray(),
-                ];
-            })->toArray();
-            
-            Log::info('UserReadRepository::listarSemPaginacao - Usuários encontrados no banco', [
-                'total_usuarios' => $users->count(),
-                'tenant_id' => $tenantId,
-                'database' => $databaseName,
-                'usuarios_detalhes' => $usuariosDetalhes,
-            ]);
+            if ($debug) {
+                $usuariosDetalhes = $users->map(function ($user) {
+                    return [
+                        'id' => $user->id,
+                        'name' => $user->name,
+                        'email' => $user->email,
+                        'empresa_ativa_id' => $user->empresa_ativa_id,
+                        'deleted_at' => $user->deleted_at?->toDateTimeString(),
+                        'empresas_ids' => $user->empresas->pluck('id')->toArray(),
+                        'empresas_razao_social' => $user->empresas->pluck('razao_social')->toArray(),
+                        'roles' => $user->roles->pluck('name')->toArray(),
+                    ];
+                })->toArray();
+                
+                Log::info('UserReadRepository::listarSemPaginacao - Usuários encontrados no banco', [
+                    'total_usuarios' => $users->count(),
+                    'tenant_id' => $tenantId,
+                    'database' => $databaseName,
+                    'usuarios_detalhes' => $usuariosDetalhes,
+                ]);
+            }
 
             // Transforma os itens usando o método map que já criamos
             $result = $users->map(fn($user) => $this->mapUserToArray($user))->toArray();
             
             // 🔥 DEBUG: Log detalhado dos usuários após transformação
-            $usuariosTransformados = array_map(function ($userArray) {
-                return [
-                    'id' => $userArray['id'] ?? null,
-                    'name' => $userArray['name'] ?? null,
-                    'email' => $userArray['email'] ?? null,
-                    'empresa_ativa_id' => $userArray['empresa_ativa_id'] ?? null,
-                    'total_empresas' => $userArray['total_empresas'] ?? 0,
-                    'empresas_ids' => array_column($userArray['empresas'] ?? [], 'id'),
-                    'roles' => $userArray['roles'] ?? [],
-                ];
-            }, $result);
-            
-            Log::info('UserReadRepository::listarSemPaginacao - Concluído (após transformação)', [
-                'total_resultados' => count($result),
-                'tenant_id' => $tenantId,
-                'usuarios_transformados' => $usuariosTransformados,
-            ]);
+            if ($debug) {
+                $usuariosTransformados = array_map(function ($userArray) {
+                    return [
+                        'id' => $userArray['id'] ?? null,
+                        'name' => $userArray['name'] ?? null,
+                        'email' => $userArray['email'] ?? null,
+                        'empresa_ativa_id' => $userArray['empresa_ativa_id'] ?? null,
+                        'total_empresas' => $userArray['total_empresas'] ?? 0,
+                        'empresas_ids' => array_column($userArray['empresas'] ?? [], 'id'),
+                        'roles' => $userArray['roles'] ?? [],
+                    ];
+                }, $result);
+                
+                Log::info('UserReadRepository::listarSemPaginacao - Concluído (após transformação)', [
+                    'total_resultados' => count($result),
+                    'tenant_id' => $tenantId,
+                    'usuarios_transformados' => $usuariosTransformados,
+                ]);
+            }
             
             return $result;
 

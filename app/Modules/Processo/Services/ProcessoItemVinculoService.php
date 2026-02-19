@@ -11,6 +11,7 @@ use App\Domain\Empenho\Repositories\EmpenhoRepositoryInterface;
 use App\Domain\NotaFiscal\Repositories\NotaFiscalRepositoryInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Log;
 
 class ProcessoItemVinculoService
 {
@@ -78,8 +79,81 @@ class ProcessoItemVinculoService
         if (!empty($data['nota_fiscal_id'])) {
             $notaFiscal = $this->notaFiscalRepository->buscarPorId($data['nota_fiscal_id']);
             
-            if ($notaFiscal && strtolower($notaFiscal->tipo) === 'entrada') {
-                return; 
+            if ($notaFiscal) {
+                $tipoNota = strtolower((string) $notaFiscal->tipo);
+
+                // 2.a – NF de ENTRADA: nunca consome saldo do item
+                if ($tipoNota === 'entrada') {
+                    return; 
+                }
+
+                // 2.b – NF de SAÍDA: validar saldo considerando apenas NFs de SAÍDA já vinculadas
+                // IMPORTANTE: ignorar vínculos da PRÓPRIA NF atual (nota_fiscal_id = $notaFiscal->id)
+                if ($tipoNota === 'saida') {
+                    $query = $item->vinculos()
+                        ->whereNotNull('nota_fiscal_id')
+                        ->where('nota_fiscal_id', '!=', $notaFiscal->id)
+                        ->when($vinculoExcluir, function ($q) use ($vinculoExcluir) {
+                            return $q->where('id', '!=', $vinculoExcluir->id);
+                        })
+                        ->whereHas('notaFiscal', function ($nf) {
+                            $nf->where('tipo', 'saida');
+                        });
+
+                    // Se vierem amarras de documento (empenho/AF/contrato), restringir ao mesmo contexto
+                    if (!empty($data['empenho_id'])) {
+                        $query->where('empenho_id', $data['empenho_id']);
+                    }
+                    if (!empty($data['autorizacao_fornecimento_id'])) {
+                        $query->where('autorizacao_fornecimento_id', $data['autorizacao_fornecimento_id']);
+                    }
+                    if (!empty($data['contrato_id'])) {
+                        $query->where('contrato_id', $data['contrato_id']);
+                    }
+
+                    $quantidadeVinculada = $query->sum('quantidade');
+                    $disponivel = $item->quantidade - $quantidadeVinculada;
+
+                    if ($quantidade > $disponivel) {
+                        // Logar exatamente quais NFs de saída estão sendo consideradas
+                        $vinculosSaida = (clone $query)
+                            ->with('notaFiscal:id,numero,tipo')
+                            ->get()
+                            ->map(function ($v) {
+                                return [
+                                    'vinculo_id' => $v->id,
+                                    'processo_item_id' => $v->processo_item_id,
+                                    'nota_fiscal_id' => $v->nota_fiscal_id,
+                                    'nota_fiscal_numero' => $v->notaFiscal?->numero,
+                                    'nota_fiscal_tipo' => $v->notaFiscal?->tipo,
+                                    'quantidade' => (float) $v->quantidade,
+                                ];
+                            })
+                            ->toArray();
+
+                        Log::warning('ProcessoItemVinculoService::validateQuantidade - bloqueio em NF de saída', [
+                            'item_id' => $item->id,
+                            'processo_id' => $item->processo_id,
+                            'quantidade_solicitada' => $quantidade,
+                            'quantidade_disponivel' => $disponivel,
+                            'quantidade_vinculada_saida' => $quantidadeVinculada,
+                            'nota_fiscal_atual_id' => $notaFiscal->id,
+                            'nota_fiscal_atual_numero' => $notaFiscal->numero,
+                            'empenho_id' => $data['empenho_id'] ?? null,
+                            'autorizacao_fornecimento_id' => $data['autorizacao_fornecimento_id'] ?? null,
+                            'contrato_id' => $data['contrato_id'] ?? null,
+                            'vinculos_saida_considerados' => $vinculosSaida,
+                        ]);
+
+                        throw new \Exception(
+                            "Quantidade solicitada ({$quantidade}) excede a quantidade disponível para Nota Fiscal de Saída ({$disponivel}). " .
+                            "Quantidade total do item: {$item->quantidade}, já vinculada a Notas Fiscais de Saída: {$quantidadeVinculada}."
+                        );
+                    }
+
+                    // Já validamos o cenário específico de NF de saída; não seguir para a validação genérica
+                    return;
+                }
             }
 
             // FALLBACK ROBUSTO: Se o repository falhar (ex: escopo de tenant), tenta direto no banco.

@@ -9,6 +9,7 @@ use Illuminate\Validation\ValidationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
+use App\Services\DiscordErrorNotifier;
 
 /**
  * 🔥 CAMADA 2 - Error Boundary
@@ -60,6 +61,9 @@ class HandleApiErrors
                     'status' => $response->getStatusCode(),
                     'user_id' => auth()->id(),
                 ]);
+
+                // Disparar alerta para Discord
+                DiscordErrorNotifier::notifyHttpError($request, $response->getStatusCode());
             }
             
             // 🔥 DEBUG: Log respostas 400 para formacao-preco
@@ -176,6 +180,9 @@ class HandleApiErrors
                         ? $e->getMessage() 
                         : 'Erro interno do servidor',
                 ], 500);
+
+                // Disparar alerta para Discord para erros 500 internos
+                DiscordErrorNotifier::notifyHttpError($request, 500, $e);
             }
             
             // 🔥 ARQUITETURA LIMPA: Usar método centralizado do HandleCorsCustom

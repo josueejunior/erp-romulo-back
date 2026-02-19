@@ -102,11 +102,17 @@ class CriarAssinaturaAdminUseCase
             // Se não fornecido, buscar primeiro admin do tenant
             $userId = $this->adminTenancyRunner->runForTenant($tenantDomain, function () {
                 $user = User::role('Administrador')->first();
+                if (!$user) {
+                    \Log::info('CriarAssinaturaAdminUseCase - Nenhum admin encontrado, tentando primeiro usuário', [
+                        'tenant_id' => tenancy()->tenant->id
+                    ]);
+                    $user = User::first();
+                }
                 return $user?->id;
             });
 
             if (!$userId) {
-                throw new DomainException('Nenhum usuário administrador encontrado para este tenant. Crie um usuário primeiro.');
+                throw new DomainException('Nenhum usuário encontrado para este tenant. Crie um usuário primeiro.');
             }
         } else {
             // Validar que o usuário existe no tenant

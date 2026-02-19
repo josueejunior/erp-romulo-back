@@ -350,6 +350,23 @@ class UserRepository implements UserRepositoryInterface
      */
     public function atualizarRole(int $userId, string $role): void
     {
+        // 🔥 AUTO-REPAIR: Verificar se a role existe antes de tentar atribuir
+        if (\App\Modules\Permission\Models\Role::where('name', $role)->doesntExist()) {
+            \Log::warning("UserRepository::atualizarRole - Role '{$role}' não encontrada. Executando RolesPermissionsSeeder para corrigir.", [
+                'user_id' => $userId,
+                'role_missing' => $role,
+                'tenant_id' => tenancy()->tenant->id ?? 'unknown',
+            ]);
+            
+            try {
+                $seeder = new \Database\Seeders\RolesPermissionsSeeder();
+                $seeder->run();
+                \Log::info("UserRepository::atualizarRole - RolesPermissionsSeeder executado com sucesso.");
+            } catch (\Exception $e) {
+                \Log::error("UserRepository::atualizarRole - Falha ao executar RolesPermissionsSeeder: " . $e->getMessage());
+            }
+        }
+
         $model = UserModel::findOrFail($userId);
         $model->syncRoles([$role]);
     }

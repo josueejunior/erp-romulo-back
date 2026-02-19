@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Services\DiscordAuditNotifier;
+
 class AuditLog extends BaseModel
 {
     protected $table = 'audit_logs';
@@ -50,7 +52,7 @@ class AuditLog extends BaseModel
             }
         }
 
-        return self::create([
+        $log = self::create([
             'usuario_id' => auth()->id(), // Coluna é usuario_id, não user_id
             'action' => $action,
             'model_type' => get_class($model),
@@ -62,6 +64,29 @@ class AuditLog extends BaseModel
             'user_agent' => request()->userAgent(),
             'description' => $description,
         ]);
+
+        // Notificação opcional para Discord (canal de auditoria dos tenants)
+        try {
+            $tenantId = function_exists('tenancy') && tenancy()->initialized
+                ? (tenancy()->tenant?->id ?? null)
+                : null;
+
+            DiscordAuditNotifier::notifyAudit($action, [
+                'admin_id'      => auth()->id(),
+                'tenant_id'     => $tenantId,
+                'empresa_id'    => method_exists($model, 'empresa_id') ? $model->empresa_id : null,
+                'resource_type' => $log->model_type,
+                'resource_id'   => $log->model_id,
+                'context'       => [
+                    'description' => $description,
+                    'changes'     => $log->changes,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            // Não quebrar a aplicação caso o alerta falhe
+        }
+
+        return $log;
     }
 }
 

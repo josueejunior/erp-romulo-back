@@ -108,7 +108,43 @@ class LoginUseCase
             $isValidPassword = $senha->verificar($dto->password);
             
             if (!$isValidPassword) {
-                throw new CredenciaisInvalidasException();
+                // 🔥 CROSS-TENANT: Se o tenant_id foi fornecido explicitamente (seleção de tenant),
+                // a senha pode estar correta em outro tenant. Tentar sincronizar.
+                if ($dto->tenantId) {
+                    $hashCorreto = $this->tentarValidarSenhaEmOutroTenant($dto->email, $dto->password, $tenant->id);
+                    
+                    if ($hashCorreto) {
+                        // 🔥 CRÍTICO: Re-inicializar tenancy do tenant atual
+                        // O adminTenancyRunner finaliza o tenancy no finally block
+                        Log::info('LoginUseCase::executar - Re-inicializando tenancy após validação cross-tenant', [
+                            'tenant_id' => $tenant->id,
+                        ]);
+                        
+                        if (!tenancy()->initialized || tenancy()->tenant?->id !== $tenant->id) {
+                            tenancy()->initialize($tenant);
+                            $tenantDbName = $tenant->database()->getName();
+                            config(['database.connections.tenant.database' => $tenantDbName]);
+                            \Illuminate\Support\Facades\DB::purge('tenant');
+                            config(['database.default' => 'tenant']);
+                        }
+                        
+                        // Sincronizar hash da senha para este tenant
+                        Log::info('LoginUseCase::executar - Sincronizando senha cross-tenant', [
+                            'user_id' => $user->id,
+                            'tenant_id' => $tenant->id,
+                        ]);
+                        
+                        // Atualizar senha diretamente no banco do tenant atual
+                        \Illuminate\Support\Facades\DB::connection('tenant')
+                            ->table('users')
+                            ->where('id', $user->id)
+                            ->update(['password' => Hash::make($dto->password)]);
+                    } else {
+                        throw new CredenciaisInvalidasException();
+                    }
+                } else {
+                    throw new CredenciaisInvalidasException();
+                }
             }
 
             // 🛡️ CAMADA 3: Validação de Status (Políticas de Negócio)
@@ -376,6 +412,78 @@ class LoginUseCase
         // Validar se usuário está ativo (se houver campo de status)
         // Nota: A validação de status do usuário pode ser feita aqui se necessário
         // Por enquanto, assumimos que usuários deletados (soft delete) não são retornados pelo repository
+    }
+
+    /**
+     * 🔥 CROSS-TENANT: Tentar validar senha em outros tenants
+     * 
+     * Quando um usuário é vinculado a múltiplos tenants via cross-tenant,
+     * a senha pode estar correta no tenant original mas não no novo.
+     * Este método tenta validar a senha em outros tenants e retorna true se válida.
+     * 
+     * @param string $email
+     * @param string $password
+     * @param int $currentTenantId Tenant onde a senha falhou
+     * @return bool True se a senha é válida em algum outro tenant
+     */
+    private function tentarValidarSenhaEmOutroTenant(string $email, string $password, int $currentTenantId): bool
+    {
+        Log::debug('LoginUseCase::tentarValidarSenhaEmOutroTenant - Tentando validar em outros tenants', [
+            'email' => $email,
+            'current_tenant_id' => $currentTenantId,
+        ]);
+
+        // Buscar todos os tenants deste email via users_lookup
+        $lookups = $this->usersLookupService->encontrarPorEmail($email);
+        
+        if (empty($lookups)) {
+            return false;
+        }
+
+        foreach ($lookups as $lookup) {
+            // Pular o tenant atual (já sabemos que falhou)
+            if ($lookup->tenantId == $currentTenantId) {
+                continue;
+            }
+
+            try {
+                $tenantDomain = $this->tenantRepository->buscarPorId($lookup->tenantId);
+                if (!$tenantDomain) {
+                    continue;
+                }
+
+                // Verificar senha neste tenant
+                $senhaValida = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($email, $password) {
+                    $user = $this->userRepository->buscarPorEmail($email);
+                    
+                    if (!$user || !$user->senhaHash) {
+                        return false;
+                    }
+
+                    return Hash::check($password, $user->senhaHash);
+                });
+
+                if ($senhaValida) {
+                    Log::info('LoginUseCase::tentarValidarSenhaEmOutroTenant - Senha válida encontrada', [
+                        'email' => $email,
+                        'tenant_id_valido' => $lookup->tenantId,
+                        'current_tenant_id' => $currentTenantId,
+                    ]);
+                    return true;
+                }
+            } catch (\Exception $e) {
+                Log::warning('LoginUseCase::tentarValidarSenhaEmOutroTenant - Erro ao verificar tenant', [
+                    'tenant_id' => $lookup->tenantId,
+                    'error' => $e->getMessage(),
+                ]);
+                continue;
+            }
+        }
+
+        Log::debug('LoginUseCase::tentarValidarSenhaEmOutroTenant - Senha não válida em nenhum tenant', [
+            'email' => $email,
+        ]);
+        return false;
     }
 
     /**

@@ -38,6 +38,8 @@ use App\Http\Controllers\Admin\AdminBackupController;
 use App\Http\Controllers\Admin\AdminComissoesController;
 use App\Http\Controllers\Admin\AdminTenantsIncompletosController;
 use App\Http\Controllers\Admin\AdminDatabaseController;
+use App\Http\Controllers\Admin\AdminCrossTenantController;
+use App\Http\Controllers\Api\ConviteUsuarioController;
 
 /*
 |--------------------------------------------------------------------------
@@ -119,6 +121,11 @@ Route::prefix('v1')->group(function () {
         
         // Trocar empresa ativa (precisa estar fora do CheckSubscription para permitir troca mesmo sem assinatura)
         Route::put('/users/empresa-ativa', [ApiUserController::class, 'switchEmpresaAtiva']);
+        
+        // 🔥 CROSS-TENANT: Rotas para troca de tenant e convites (não precisa de assinatura)
+        Route::get('/users/meus-tenants', [ConviteUsuarioController::class, 'meusTenants']);
+        Route::post('/users/trocar-tenant', [ConviteUsuarioController::class, 'trocarTenant']);
+        Route::post('/users/convidar', [ConviteUsuarioController::class, 'convidar']);
         
         // Assinaturas e Pagamentos
         // 🔥 IMPORTANTE:
@@ -231,6 +238,11 @@ Route::prefix('v1')->group(function () {
                 Route::get('/confirmacoes-pagamento', [ApiProcessoController::class, 'historicoConfirmacoes']);
                 Route::get('/sugerir-status', [ApiProcessoController::class, 'sugerirStatus']);
                 Route::get('/ficha-export', [ApiProcessoController::class, 'fichaTecnicaExport']);
+                
+                // Notas rápidas do processo (anotações de execução)
+                Route::get('/notas', [\App\Modules\Processo\Controllers\ProcessoNotaController::class, 'index']);
+                Route::post('/notas', [\App\Modules\Processo\Controllers\ProcessoNotaController::class, 'store']);
+                Route::delete('/notas/{nota}', [\App\Modules\Processo\Controllers\ProcessoNotaController::class, 'destroy']);
                 Route::get('/download-edital', [ApiProcessoController::class, 'downloadEdital']);
                 
                 // Exportação
@@ -412,6 +424,8 @@ Route::prefix('admin')->group(function () {
         // Autenticação admin
         Route::post('/logout', [AdminAuthController::class, 'logout']);
         Route::get('/me', [AdminAuthController::class, 'me']);
+        Route::match(['post', 'put'], '/perfil', [AdminAuthController::class, 'atualizarPerfil']);
+        Route::put('/perfil/senha', [AdminAuthController::class, 'alterarSenha']);
         
         // Rotas globais para usuários (sem necessidade de especificar tenant)
         Route::prefix('usuarios')->group(function () {
@@ -498,6 +512,18 @@ Route::prefix('admin')->group(function () {
             Route::get('/pagamentos', [\App\Http\Controllers\Admin\AdminComissoesController::class, 'pagamentos']);
         });
 
+        // Logs de auditoria administrativa (central)
+        Route::get('/audit-logs', [\App\Http\Controllers\Admin\AdminAuditLogController::class, 'index']);
+
+        // Gerenciamento de usuários admin do painel (tabela admin_users no banco central)
+        Route::prefix('admin-users')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\AdminAdminUserController::class, 'index']);
+            Route::get('/{id}', [\App\Http\Controllers\Admin\AdminAdminUserController::class, 'show'])->where('id', '[0-9]+');
+            Route::post('/', [\App\Http\Controllers\Admin\AdminAdminUserController::class, 'store']);
+            Route::put('/{id}', [\App\Http\Controllers\Admin\AdminAdminUserController::class, 'update'])->where('id', '[0-9]+');
+            Route::delete('/{id}', [\App\Http\Controllers\Admin\AdminAdminUserController::class, 'destroy'])->where('id', '[0-9]+');
+        });
+
         // Upload de arquivos
         Route::prefix('upload')->group(function () {
             Route::post('/image', [\App\Http\Controllers\UploadController::class, 'uploadImage']);
@@ -520,6 +546,7 @@ Route::prefix('admin')->group(function () {
             Route::get('/tables', [AdminDatabaseController::class, 'listTables']);
             Route::get('/tables/{table}/columns', [AdminDatabaseController::class, 'listColumns'])->where('table', '[A-Za-z0-9_]+');
             Route::get('/tables/{table}/rows', [AdminDatabaseController::class, 'listRows'])->where('table', '[A-Za-z0-9_]+');
+            Route::post('/tenants/{tenantId}/repair', [AdminDatabaseController::class, 'repairTenantSchema'])->where('tenantId', '[0-9]+');
         });
         
         // 🔥 NOVO: Gestão de tenants incompletos/abandonados
@@ -528,6 +555,29 @@ Route::prefix('admin')->group(function () {
             Route::delete('/{tenantId}', [AdminTenantsIncompletosController::class, 'destroy'])->where('tenantId', '[0-9]+');
             Route::post('/deletar-lote', [AdminTenantsIncompletosController::class, 'deletarLote']);
         });
+
+        // 🔥 CROSS-TENANT: Gerenciamento de usuários em múltiplos tenants
+        Route::prefix('cross-tenant')->group(function () {
+            Route::post('/vincular', [AdminCrossTenantController::class, 'vincular']);
+            Route::post('/desvincular', [AdminCrossTenantController::class, 'desvincular']);
+            Route::get('/tenants-do-usuario', [AdminCrossTenantController::class, 'tenantsDoUsuario']);
+        });
+    });
+});
+
+// 🔁 Rotas de compatibilidade para bundles antigos do painel admin
+// Isso garante que URLs antigas como /api/audit-logs e /api/admin-users continuem funcionando.
+Route::middleware(['jwt.auth', 'auth.context', 'admin'])->group(function () {
+    // Compat: /api/audit-logs -> mesma action de /api/admin/audit-logs
+    Route::get('/audit-logs', [\App\Http\Controllers\Admin\AdminAuditLogController::class, 'index']);
+
+    // Compat: /api/admin-users -> mesma action de /api/admin/admin-users
+    Route::prefix('admin-users')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Admin\AdminAdminUserController::class, 'index']);
+        Route::get('/{id}', [\App\Http\Controllers\Admin\AdminAdminUserController::class, 'show'])->where('id', '[0-9]+');
+        Route::post('/', [\App\Http\Controllers\Admin\AdminAdminUserController::class, 'store']);
+        Route::put('/{id}', [\App\Http\Controllers\Admin\AdminAdminUserController::class, 'update'])->where('id', '[0-9]+');
+        Route::delete('/{id}', [\App\Http\Controllers\Admin\AdminAdminUserController::class, 'destroy'])->where('id', '[0-9]+');
     });
 });
 
@@ -549,7 +599,6 @@ Route::prefix('v1')->group(function () {
         Route::post('/iniciar', [\App\Http\Controllers\Public\OnboardingController::class, 'iniciar']);
         Route::post('/marcar-etapa', [\App\Http\Controllers\Public\OnboardingController::class, 'marcarEtapa']);
         Route::post('/marcar-checklist', [\App\Http\Controllers\Public\OnboardingController::class, 'marcarChecklistItem']);
-        Route::post('/concluir', [\App\Http\Controllers\Public\OnboardingController::class, 'concluir']);
         Route::get('/verificar-status', [\App\Http\Controllers\Public\OnboardingController::class, 'verificarStatus']);
         Route::get('/progresso', [\App\Http\Controllers\Public\OnboardingController::class, 'buscarProgresso']);
     });

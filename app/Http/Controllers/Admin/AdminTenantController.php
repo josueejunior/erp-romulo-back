@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Support\Logging\AdminLogger;
 use App\Application\Tenant\UseCases\CriarTenantUseCase;
 use App\Application\Tenant\UseCases\ListarTenantsAdminUseCase;
 use App\Application\Tenant\UseCases\BuscarTenantAdminUseCase;
@@ -34,6 +35,8 @@ use App\Domain\Exceptions\DomainException;
  */
 class AdminTenantController extends Controller
 {
+    use AdminLogger;
+
     public function __construct(
         private CriarTenantUseCase $criarTenantUseCase,
         private ListarTenantsAdminUseCase $listarTenantsAdminUseCase,
@@ -115,6 +118,17 @@ class AdminTenantController extends Controller
                 'status' => $result['status'],
             ]);
 
+            // Auditoria admin + Discord
+            $this->auditAdminAction('tenant.created', [
+                'resource_type' => 'tenant',
+                'resource_id'   => $result['tenant']->id,
+                'tenant_id'     => $result['tenant']->id,
+                'razao_social'  => $result['tenant']->razaoSocial,
+                'cnpj'          => $result['tenant']->cnpj,
+                'email'         => $result['tenant']->email,
+                'status'        => $result['tenant']->status,
+            ]);
+
             return ApiResponse::success(
                 'Empresa criada. Processamento em andamento...',
                 [
@@ -158,6 +172,16 @@ class AdminTenantController extends Controller
                 $request->validated()
             );
 
+            // Auditoria admin + Discord
+            $this->auditAdminAction('tenant.updated', [
+                'resource_type' => 'tenant',
+                'resource_id'   => $tenantAtualizado->id,
+                'tenant_id'     => $tenantAtualizado->id,
+                'razao_social'  => $tenantAtualizado->razaoSocial,
+                'cnpj'          => $tenantAtualizado->cnpj,
+                'status'        => $tenantAtualizado->status,
+            ]);
+
             return ApiResponse::success(
                 'Empresa atualizada com sucesso!',
                 [
@@ -184,6 +208,16 @@ class AdminTenantController extends Controller
     {
         try {
             $this->inativarTenantAdminUseCase->executar($tenant->id);
+
+            // Auditoria admin + Discord
+            $this->auditAdminAction('tenant.inactivated', [
+                'resource_type' => 'tenant',
+                'resource_id'   => $tenant->id,
+                'tenant_id'     => $tenant->id,
+                'razao_social'  => $tenant->razao_social ?? null,
+                'cnpj'          => $tenant->cnpj ?? null,
+            ]);
+
             return ApiResponse::success('Empresa inativada com sucesso!');
         } catch (DomainException $e) {
             return ApiResponse::error($e->getMessage(), 404);
@@ -201,6 +235,16 @@ class AdminTenantController extends Controller
     {
         try {
             $this->reativarTenantAdminUseCase->executar($tenant->id);
+
+            // Auditoria admin + Discord
+            $this->auditAdminAction('tenant.reativated', [
+                'resource_type' => 'tenant',
+                'resource_id'   => $tenant->id,
+                'tenant_id'     => $tenant->id,
+                'razao_social'  => $tenant->razao_social ?? null,
+                'cnpj'          => $tenant->cnpj ?? null,
+            ]);
+
             return ApiResponse::success('Empresa reativada com sucesso!');
         } catch (DomainException $e) {
             return ApiResponse::error($e->getMessage(), 404);

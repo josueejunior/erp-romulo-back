@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Responses\ApiResponse;
 use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
+use App\Domain\Tenant\Services\TenantDatabaseServiceInterface;
 use App\Services\AdminTenancyRunner;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use App\Support\Logging\AdminLogger;
 
 /**
  * AdminDatabaseController
@@ -27,9 +29,11 @@ use Illuminate\Support\Facades\Log;
  */
 class AdminDatabaseController extends Controller
 {
+    use AdminLogger;
     public function __construct(
         private readonly TenantRepositoryInterface $tenantRepository,
         private readonly AdminTenancyRunner $adminTenancyRunner,
+        private readonly TenantDatabaseServiceInterface $tenantDatabaseService,
     ) {}
 
     /**
@@ -210,7 +214,7 @@ class AdminDatabaseController extends Controller
                     return ApiResponse::error('Tenant não encontrado.', 404);
                 }
 
-                $result = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($table, $perPage, $offset) {
+                $result = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($table, $perPage, $offset, $page) {
                     $databaseName = DB::connection('tenant')->getDatabaseName();
 
                     // Contagem total
@@ -272,6 +276,74 @@ class AdminDatabaseController extends Controller
             ]);
 
             return ApiResponse::error('Erro ao listar linhas da tabela.', 500);
+        }
+    }
+
+    /**
+     * Corrige a estrutura do banco de um tenant específico:
+     * - Garante que o banco do tenant existe
+     * - Executa todas as migrations de tenant para criar tabelas/colunas faltando
+     *
+     * POST /api/admin/db/tenants/{tenantId}/repair
+     */
+    public function repairTenantSchema(int $tenantId)
+    {
+        try {
+            $tenantDomain = $this->tenantRepository->buscarPorId($tenantId);
+            if (!$tenantDomain) {
+                return ApiResponse::error('Tenant não encontrado.', 404);
+            }
+
+            Log::info('AdminDatabaseController::repairTenantSchema - Iniciando correção de estrutura', [
+                'tenant_id' => $tenantId,
+            ]);
+
+            // Garante que o banco do tenant existe
+            // IMPORTANTE: para o caso de "corrigir", se o banco já existe com dados
+            // não devemos falhar - apenas seguir para executar as migrations.
+            try {
+                $this->tenantDatabaseService->criarBancoDados($tenantDomain, true);
+            } catch (\Exception $e) {
+                $message = $e->getMessage() ?? '';
+
+                // Se o erro é apenas "banco já existe", registrar e continuar normalmente
+                if (str_contains($message, 'já existe') || str_contains(strtolower($message), 'already exists')) {
+                    Log::warning('AdminDatabaseController::repairTenantSchema - Banco já existia, seguindo para executar migrations', [
+                        'tenant_id' => $tenantId,
+                        'error' => $message,
+                    ]);
+                } else {
+                    // Qualquer outro erro ainda deve interromper o processo
+                    throw $e;
+                }
+            }
+
+            // Executa migrations do tenant (cria tabelas/colunas faltando)
+            $this->tenantDatabaseService->executarMigrations($tenantDomain, true);
+
+            Log::info('AdminDatabaseController::repairTenantSchema - Estrutura corrigida com sucesso', [
+                'tenant_id' => $tenantId,
+            ]);
+
+            // Auditoria de ação administrativa
+            $this->auditAdminAction('tenant.schema_repair', [
+                'resource_type' => 'tenant',
+                'resource_id'   => $tenantId,
+                'tenant_id'     => $tenantId,
+            ]);
+
+            return ApiResponse::success(
+                'Estrutura do banco do tenant corrigida com sucesso.',
+                ['tenant_id' => $tenantId],
+                201
+            );
+        } catch (\Exception $e) {
+            Log::error('AdminDatabaseController::repairTenantSchema - Erro ao corrigir estrutura', [
+                'tenant_id' => $tenantId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return ApiResponse::error('Erro ao corrigir estrutura do banco do tenant.', 500);
         }
     }
 }

@@ -14,6 +14,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class AfiliadoReferencia extends Model
 {
+    /**
+     * 🔥 IMPORTANTE: Sempre usar conexão central, mesmo quando no contexto do tenant
+     * Esta tabela está no banco central, não no banco do tenant
+     */
+    protected $connection = 'pgsql';
+
     protected $table = 'afiliado_referencias';
 
     protected $fillable = [

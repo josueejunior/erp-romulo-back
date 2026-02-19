@@ -40,9 +40,15 @@ class AdminPlanoController extends Controller
         try {
             $filtros = [];
             
+            // Filtro opcional de ativo/inativo (se não vier, lista todos)
             if ($request->has('ativo')) {
                 $filtros['ativo'] = $request->boolean('ativo');
+            } else {
+                $filtros['ativo'] = null; // não filtrar por ativo
             }
+
+            // No painel admin queremos ver TODOS os planos, inclusive gratuitos
+            $filtros['incluir_gratuitos'] = true;
 
             // UseCase já retorna dados formatados (evita N+1)
             $planos = $this->listarPlanosAdminUseCase->executar($filtros);

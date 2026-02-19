@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use App\Support\Logging\AdminLogger;
 
 /**
  * 🔥 DDD: Controller Admin para gerenciar backups de tenants
@@ -27,6 +28,7 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
  */
 class AdminBackupController extends Controller
 {
+    use AdminLogger;
     public function __construct(
         private readonly FazerBackupTenantUseCase $fazerBackupTenantUseCase,
         private readonly FazerBackupEmpresaUseCase $fazerBackupEmpresaUseCase,
@@ -155,6 +157,15 @@ class AdminBackupController extends Controller
         try {
             $result = $this->fazerBackupTenantUseCase->executar($tenantId);
 
+            // Auditoria
+            $this->auditAdminAction('backup.tenant_created', [
+                'resource_type' => 'backup_tenant',
+                'resource_id'   => $result['filename'] ?? null,
+                'tenant_id'     => $tenantId,
+                'database'      => $result['database'] ?? null,
+                'size'          => $result['size'] ?? null,
+            ]);
+
             return ApiResponse::success(
                 'Backup criado com sucesso!',
                 $result,
@@ -244,6 +255,15 @@ class AdminBackupController extends Controller
         try {
             $result = $this->fazerBackupEmpresaUseCase->executar($empresaId);
 
+            $this->auditAdminAction('backup.empresa_created', [
+                'resource_type' => 'backup_empresa',
+                'resource_id'   => $result['filename'] ?? null,
+                'empresa_id'    => $empresaId,
+                'tenant_id'     => $result['tenant_id'] ?? null,
+                'database'      => $result['database'] ?? null,
+                'size'          => $result['size'] ?? null,
+            ]);
+
             return ApiResponse::success(
                 'Backup da empresa criado com sucesso!',
                 $result,
@@ -288,9 +308,10 @@ class AdminBackupController extends Controller
             }
 
             unlink($fullPath);
-
-            Log::info('AdminBackupController::deletarBackup - Backup deletado', [
-                'filename' => $filename,
+            
+            $this->auditAdminAction('backup.deleted', [
+                'resource_type' => 'backup',
+                'resource_id'   => $filename,
             ]);
 
             return ApiResponse::success('Backup deletado com sucesso!');

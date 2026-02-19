@@ -28,6 +28,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use App\Domain\Exceptions\DomainException;
+use App\Support\Logging\AdminLogger;
 
 /**
  * 🔥 DDD: Controller Admin para gerenciar usuários das empresas
@@ -43,6 +44,7 @@ use App\Domain\Exceptions\DomainException;
  */
 class AdminUserController extends Controller
 {
+    use AdminLogger;
     public function __construct(
         private CriarUsuarioUseCase $criarUsuarioUseCase,
         private AtualizarUsuarioUseCase $atualizarUsuarioUseCase,
@@ -66,7 +68,11 @@ class AdminUserController extends Controller
     public function indexGlobal(Request $request)
     {
         try {
-            \Log::info('AdminUserController::indexGlobal - Listando usuários via users_lookup');
+            $debug = (bool) config('app.debug');
+
+            if ($debug) {
+                \Log::info('AdminUserController::indexGlobal - Listando usuários via users_lookup');
+            }
             
             // 1. Buscar na users_lookup (rápido, O(1))
             // ⚠️ CORREÇÃO: Não filtrar por status por padrão se não for especificado
@@ -79,15 +85,19 @@ class AdminUserController extends Controller
                 'page' => $request->input('page', 1),
             ];
             
-            \Log::info('AdminUserController::indexGlobal - Filtros aplicados', ['filtros' => $filtros]);
+            if ($debug) {
+                \Log::info('AdminUserController::indexGlobal - Filtros aplicados', ['filtros' => $filtros]);
+            }
             
             $lookupResult = $this->lookupRepository->buscarComFiltros($filtros);
             $lookups = $lookupResult['data'];
             
-            \Log::info('AdminUserController::indexGlobal - Resultado da busca', [
-                'total_lookups' => count($lookups),
-                'total_geral' => $lookupResult['total'] ?? 0,
-            ]);
+            if ($debug) {
+                \Log::info('AdminUserController::indexGlobal - Resultado da busca', [
+                    'total_lookups' => count($lookups),
+                    'total_geral' => $lookupResult['total'] ?? 0,
+                ]);
+            }
             
             if (empty($lookups)) {
                 \Log::warning('AdminUserController::indexGlobal - Nenhum lookup encontrado', [
@@ -132,27 +142,31 @@ class AdminUserController extends Controller
                     // Usar listarSemPaginacao e filtrar pelos IDs necessários
                     $userIds = array_map(fn($l) => $l->userId, $lookupsDoTenant);
                     
-                    Log::info('AdminUserController::indexGlobal - Buscando detalhes dos usuários', [
-                        'tenant_id' => $tenantId,
-                        'user_ids' => $userIds,
-                        'lookups_count' => count($lookupsDoTenant),
-                    ]);
+                    if ($debug) {
+                        Log::info('AdminUserController::indexGlobal - Buscando detalhes dos usuários', [
+                            'tenant_id' => $tenantId,
+                            'user_ids' => $userIds,
+                            'lookups_count' => count($lookupsDoTenant),
+                        ]);
+                    }
                     
-                    $detalhes = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($userIds, $tenantId) {
+                    $detalhes = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($userIds, $tenantId, $debug) {
                         // 🔥 DEBUG: Log antes de buscar
                         $databaseAtual = \DB::connection()->getDatabaseName();
                         $connectionName = \DB::connection()->getName();
                         
-                        Log::info('AdminUserController::indexGlobal - Iniciando busca de usuários', [
-                            'tenant_id' => $tenantId,
-                            'user_ids_procurados' => $userIds,
-                            'total_user_ids' => count($userIds),
-                            'database' => $databaseAtual,
-                            'connection_name' => $connectionName,
-                            'default_connection' => config('database.default'),
-                            'tenancy_initialized' => tenancy()->initialized,
-                            'tenant_atual_id' => tenancy()->tenant?->id,
-                        ]);
+                        if ($debug) {
+                            Log::info('AdminUserController::indexGlobal - Iniciando busca de usuários', [
+                                'tenant_id' => $tenantId,
+                                'user_ids_procurados' => $userIds,
+                                'total_user_ids' => count($userIds),
+                                'database' => $databaseAtual,
+                                'connection_name' => $connectionName,
+                                'default_connection' => config('database.default'),
+                                'tenancy_initialized' => tenancy()->initialized,
+                                'tenant_atual_id' => tenancy()->tenant?->id,
+                            ]);
+                        }
                         
                         // 🔥 VERIFICAÇÃO: Garantir que estamos no banco correto
                         $tenantDbEsperado = "tenant_{$tenantId}";
@@ -167,37 +181,41 @@ class AdminUserController extends Controller
                         // Buscar todos os usuários e filtrar pelos IDs necessários
                         $todosUsuarios = $this->userReadRepository->listarSemPaginacao([]);
                         
-                        Log::info('AdminUserController::indexGlobal - Usuários obtidos do repository', [
-                            'tenant_id' => $tenantId,
-                            'total_usuarios_encontrados' => count($todosUsuarios),
-                            'user_ids_encontrados' => array_column($todosUsuarios, 'id'),
-                            'user_ids_procurados' => $userIds,
-                        ]);
+                        if ($debug) {
+                            Log::info('AdminUserController::indexGlobal - Usuários obtidos do repository', [
+                                'tenant_id' => $tenantId,
+                                'total_usuarios_encontrados' => count($todosUsuarios),
+                                'user_ids_encontrados' => array_column($todosUsuarios, 'id'),
+                                'user_ids_procurados' => $userIds,
+                            ]);
+                        }
                         
                         // Filtrar pelos IDs necessários
                         $filtrados = array_filter($todosUsuarios, fn($user) => in_array($user['id'], $userIds));
                         
-                        // 🔥 DEBUG: Log detalhado dos usuários filtrados
-                        $usuariosFiltradosDetalhes = array_map(function ($user) {
-                            return [
-                                'id' => $user['id'] ?? null,
-                                'name' => $user['name'] ?? null,
-                                'email' => $user['email'] ?? null,
-                                'empresa_ativa_id' => $user['empresa_ativa_id'] ?? null,
-                                'total_empresas' => $user['total_empresas'] ?? 0,
-                                'empresas_ids' => array_column($user['empresas'] ?? [], 'id'),
-                                'roles' => $user['roles'] ?? [],
-                            ];
-                        }, $filtrados);
-                        
-                        Log::info('AdminUserController::indexGlobal - Usuários filtrados do tenant', [
-                            'tenant_id' => $tenantId,
-                            'total_antes_filtro' => count($todosUsuarios),
-                            'total_depois_filtro' => count($filtrados),
-                            'user_ids_procurados' => $userIds,
-                            'user_ids_encontrados' => array_map(fn($u) => $u['id'], $filtrados),
-                            'usuarios_detalhes' => $usuariosFiltradosDetalhes,
-                        ]);
+                        if ($debug) {
+                            // 🔥 DEBUG: Log detalhado dos usuários filtrados
+                            $usuariosFiltradosDetalhes = array_map(function ($user) {
+                                return [
+                                    'id' => $user['id'] ?? null,
+                                    'name' => $user['name'] ?? null,
+                                    'email' => $user['email'] ?? null,
+                                    'empresa_ativa_id' => $user['empresa_ativa_id'] ?? null,
+                                    'total_empresas' => $user['total_empresas'] ?? 0,
+                                    'empresas_ids' => array_column($user['empresas'] ?? [], 'id'),
+                                    'roles' => $user['roles'] ?? [],
+                                ];
+                            }, $filtrados);
+                            
+                            Log::info('AdminUserController::indexGlobal - Usuários filtrados do tenant', [
+                                'tenant_id' => $tenantId,
+                                'total_antes_filtro' => count($todosUsuarios),
+                                'total_depois_filtro' => count($filtrados),
+                                'user_ids_procurados' => $userIds,
+                                'user_ids_encontrados' => array_map(fn($u) => $u['id'], $filtrados),
+                                'usuarios_detalhes' => $usuariosFiltradosDetalhes,
+                            ]);
+                        }
                         
                         return $filtrados;
                     });
@@ -282,28 +300,30 @@ class AdminUserController extends Controller
                 return strcmp($a['name'] ?? '', $b['name'] ?? '');
             });
             
-            // 🔥 DEBUG: Log detalhado dos usuários consolidados
-            $usuariosConsolidadosDetalhes = array_map(function ($user) {
-                return [
-                    'id' => $user['id'] ?? null,
-                    'name' => $user['name'] ?? null,
-                    'email' => $user['email'] ?? null,
-                    'empresa_ativa_id' => $user['empresa_ativa_id'] ?? null,
-                    'total_empresas' => $user['total_empresas'] ?? 0,
-                    'empresas_ids' => array_column($user['empresas'] ?? [], 'id'),
-                    'tenants_ids' => array_column($user['tenants'] ?? [], 'tenant_id'),
-                    'roles' => $user['roles'] ?? [],
-                    'deleted_at' => $user['deleted_at'] ?? null,
-                ];
-            }, array_values($allUsers));
-            
-            \Log::info('AdminUserController::indexGlobal - Usuários consolidados via users_lookup', [
-                'total_users' => count($allUsers),
-                'tenants_processados' => $tenantsProcessados,
-                'tenants_com_erro' => $tenantsComErro,
-                'lookups_encontrados' => count($lookups),
-                'usuarios_detalhes' => $usuariosConsolidadosDetalhes,
-            ]);
+            if ($debug) {
+                // 🔥 DEBUG: Log detalhado dos usuários consolidados
+                $usuariosConsolidadosDetalhes = array_map(function ($user) {
+                    return [
+                        'id' => $user['id'] ?? null,
+                        'name' => $user['name'] ?? null,
+                        'email' => $user['email'] ?? null,
+                        'empresa_ativa_id' => $user['empresa_ativa_id'] ?? null,
+                        'total_empresas' => $user['total_empresas'] ?? 0,
+                        'empresas_ids' => array_column($user['empresas'] ?? [], 'id'),
+                        'tenants_ids' => array_column($user['tenants'] ?? [], 'tenant_id'),
+                        'roles' => $user['roles'] ?? [],
+                        'deleted_at' => $user['deleted_at'] ?? null,
+                    ];
+                }, array_values($allUsers));
+                
+                \Log::info('AdminUserController::indexGlobal - Usuários consolidados via users_lookup', [
+                    'total_users' => count($allUsers),
+                    'tenants_processados' => $tenantsProcessados,
+                    'tenants_com_erro' => $tenantsComErro,
+                    'lookups_encontrados' => count($lookups),
+                    'usuarios_detalhes' => $usuariosConsolidadosDetalhes,
+                ]);
+            }
             
             $result = [
                 'data' => $allUsers,
@@ -313,24 +333,26 @@ class AdminUserController extends Controller
                 'last_page' => $lookupResult['last_page'],
             ];
             
-            // 🔥 DEBUG: Log detalhado do resultado final
-            $resultadoFinalDetalhes = array_map(function ($user) {
-                return [
-                    'id' => $user['id'] ?? null,
-                    'name' => $user['name'] ?? null,
-                    'email' => $user['email'] ?? null,
-                    'empresa_ativa_id' => $user['empresa_ativa_id'] ?? null,
-                    'total_empresas' => $user['total_empresas'] ?? 0,
-                ];
-            }, $result['data'] ?? []);
-            
-            \Log::info('AdminUserController::indexGlobal - Resultado da listagem', [
-                'total_usuarios' => count($result['data'] ?? []),
-                'total' => $result['total'] ?? 0,
-                'per_page' => $result['per_page'] ?? 15,
-                'current_page' => $result['current_page'] ?? 1,
-                'usuarios_resultado_final' => $resultadoFinalDetalhes,
-            ]);
+            if ($debug) {
+                // 🔥 DEBUG: Log detalhado do resultado final
+                $resultadoFinalDetalhes = array_map(function ($user) {
+                    return [
+                        'id' => $user['id'] ?? null,
+                        'name' => $user['name'] ?? null,
+                        'email' => $user['email'] ?? null,
+                        'empresa_ativa_id' => $user['empresa_ativa_id'] ?? null,
+                        'total_empresas' => $user['total_empresas'] ?? 0,
+                    ];
+                }, $result['data'] ?? []);
+                
+                \Log::info('AdminUserController::indexGlobal - Resultado da listagem', [
+                    'total_usuarios' => count($result['data'] ?? []),
+                    'total' => $result['total'] ?? 0,
+                    'per_page' => $result['per_page'] ?? 15,
+                    'current_page' => $result['current_page'] ?? 1,
+                    'usuarios_resultado_final' => $resultadoFinalDetalhes,
+                ]);
+            }
             
             // Retornar com paginação
             return ApiResponse::collection($result['data'], [
@@ -340,12 +362,7 @@ class AdminUserController extends Controller
                 'last_page' => $result['last_page'],
             ]);
         } catch (\Exception $e) {
-            Log::error('Erro ao listar usuários globalmente', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-            
-            return ApiResponse::error('Erro ao listar usuários.', 500);
+            return $this->handleAdminException($e, 'Erro ao listar usuários globalmente.', 500);
         }
     }
 
@@ -754,13 +771,7 @@ class AdminUserController extends Controller
                 [$field => [$e->getMessage()]]
             );
         } catch (\Exception $e) {
-            Log::error('AdminUserController::store - Erro inesperado', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'email' => $request->input('email'),
-                'tenant_id' => $tenant->id,
-            ]);
-            return ApiResponse::error('Erro ao criar usuário.', 500);
+            return $this->handleAdminException($e, 'Erro ao criar usuário.', 500);
         }
     }
 
@@ -793,6 +804,14 @@ class AdminUserController extends Controller
                 'tenant_id' => $tenant->id,
             ]);
 
+            // Auditoria
+            $this->auditAdminAction('user.updated', [
+                'resource_type' => 'user',
+                'resource_id'   => $user->id,
+                'tenant_id'     => $tenant->id,
+                'email'         => $user->email,
+            ]);
+
             return ApiResponse::success(
                 'Usuário atualizado com sucesso!',
                 UserPresenter::fromDomain($user)
@@ -817,15 +836,7 @@ class AdminUserController extends Controller
                 [$field => [$e->getMessage()]]
             );
         } catch (\Exception $e) {
-            Log::error('AdminUserController::update - Erro inesperado', [
-                'user_id' => $userId,
-                'tenant_id' => $tenant->id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'database_name' => \DB::connection()->getDatabaseName(),
-                'tenancy_initialized' => tenancy()->initialized,
-            ]);
-            return ApiResponse::error('Erro ao atualizar usuário.', 500);
+            return $this->handleAdminException($e, 'Erro ao atualizar usuário.', 500);
         }
     }
 
@@ -907,6 +918,14 @@ class AdminUserController extends Controller
                 'tenants_com_erro' => $tenantsComErro,
                 'total_tenants' => count($tenantsComUsuario),
             ]);
+
+            // Auditoria
+            $this->auditAdminAction('user.deleted_global', [
+                'resource_type' => 'user',
+                'resource_id'   => $userId,
+                'tenants_sucesso' => $tenantsDeletados,
+                'tenants_erro'    => $tenantsComErro,
+            ]);
             
             $mensagem = $tenantsComErro > 0
                 ? "Usuário deletado em {$tenantsDeletados} tenant(s), mas houve erro em {$tenantsComErro} tenant(s)."
@@ -916,12 +935,7 @@ class AdminUserController extends Controller
         } catch (DomainException $e) {
             return ApiResponse::error($e->getMessage(), 404);
         } catch (\Exception $e) {
-            Log::error('AdminUserController::destroyGlobal - Erro geral', [
-                'userId' => $userId,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-            return ApiResponse::error('Erro ao deletar usuário globalmente.', 500);
+            return $this->handleAdminException($e, 'Erro ao deletar usuário globalmente.', 500);
         }
     }
 
@@ -933,6 +947,12 @@ class AdminUserController extends Controller
     {
         try {
             $this->deletarUsuarioAdminUseCase->executar($userId);
+
+            $this->auditAdminAction('user.deleted', [
+                'resource_type' => 'user',
+                'resource_id'   => $userId,
+                'tenant_id'     => $tenant->id,
+            ]);
 
             return ApiResponse::success('Usuário excluído com sucesso!');
         } catch (DomainException $e) {
@@ -1021,6 +1041,13 @@ class AdminUserController extends Controller
                 'tenants_com_erro' => $tenantsComErro,
                 'total_tenants' => count($tenantsComUsuario),
             ]);
+
+            $this->auditAdminAction('user.reativated_global', [
+                'resource_type' => 'user',
+                'resource_id'   => $userId,
+                'tenants_sucesso' => $tenantsReativados,
+                'tenants_erro'    => $tenantsComErro,
+            ]);
             
             $mensagem = $tenantsComErro > 0
                 ? "Usuário reativado em {$tenantsReativados} tenant(s), mas houve erro em {$tenantsComErro} tenant(s)."
@@ -1030,12 +1057,7 @@ class AdminUserController extends Controller
         } catch (DomainException $e) {
             return ApiResponse::error($e->getMessage(), 404);
         } catch (\Exception $e) {
-            Log::error('AdminUserController::reactivateGlobal - Erro geral', [
-                'userId' => $userId,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-            return ApiResponse::error('Erro ao reativar usuário globalmente.', 500);
+            return $this->handleAdminException($e, 'Erro ao reativar usuário globalmente.', 500);
         }
     }
 
@@ -1048,12 +1070,17 @@ class AdminUserController extends Controller
         try {
             $this->reativarUsuarioAdminUseCase->executar($userId);
 
+            $this->auditAdminAction('user.reativated', [
+                'resource_type' => 'user',
+                'resource_id'   => $userId,
+                'tenant_id'     => $tenant->id,
+            ]);
+
             return ApiResponse::success('Usuário reativado com sucesso!');
         } catch (DomainException $e) {
             return ApiResponse::error($e->getMessage(), 404);
         } catch (\Exception $e) {
-            Log::error('Erro ao reativar usuário', ['error' => $e->getMessage()]);
-            return ApiResponse::error('Erro ao reativar usuário.', 500);
+            return $this->handleAdminException($e, 'Erro ao reativar usuário.', 500);
         }
     }
 

@@ -7,6 +7,8 @@ use App\Http\Responses\ApiResponse;
 use App\Application\Auth\UseCases\LoginAdminUseCase;
 use App\Application\Auth\UseCases\LogoutAdminUseCase;
 use App\Application\Auth\UseCases\ObterDadosAdminUseCase;
+use App\Application\Auth\UseCases\AtualizarPerfilAdminUseCase;
+use App\Application\Auth\UseCases\AlterarSenhaAdminUseCase;
 use App\Application\Auth\DTOs\LoginAdminDTO;
 use App\Http\Requests\Admin\LoginAdminRequest;
 use App\Domain\Exceptions\DomainException;
@@ -17,15 +19,6 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * 🔥 DDD: Controller Admin para autenticação
- * 
- * Controller FINO - apenas recebe request e devolve response
- * Toda lógica está nos UseCases, Domain Services e FormRequests
- * 
- * Responsabilidades:
- * - Receber request HTTP
- * - Validar entrada (via FormRequest)
- * - Chamar UseCase apropriado
- * - Retornar response padronizado (ApiResponse)
  */
 class AdminAuthController extends Controller
 {
@@ -33,22 +26,18 @@ class AdminAuthController extends Controller
         private readonly LoginAdminUseCase $loginAdminUseCase,
         private readonly LogoutAdminUseCase $logoutAdminUseCase,
         private readonly ObterDadosAdminUseCase $obterDadosAdminUseCase,
+        private readonly AtualizarPerfilAdminUseCase $atualizarPerfilAdminUseCase,
+        private readonly AlterarSenhaAdminUseCase $alterarSenhaAdminUseCase,
     ) {}
 
     /**
      * Login do administrador
-     * 🔥 DDD: Controller fino - validação via FormRequest, delega para UseCase
      */
     public function login(LoginAdminRequest $request): JsonResponse
     {
         try {
-            // Request já está validado via Form Request
             $validated = $request->validated();
-
-            // Criar DTO
             $dto = LoginAdminDTO::fromRequest($validated);
-
-            // Executar Use Case
             $data = $this->loginAdminUseCase->executar($dto);
 
             return ApiResponse::success(
@@ -72,7 +61,6 @@ class AdminAuthController extends Controller
         } catch (\Exception $e) {
             Log::error('AdminAuthController::login - Erro inesperado', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
             ]);
             return ApiResponse::error('Erro ao fazer login.', 500);
         }
@@ -80,21 +68,16 @@ class AdminAuthController extends Controller
 
     /**
      * Logout do administrador
-     * 🔥 DDD: Controller fino - delega para UseCase
      */
     public function logout(Request $request): JsonResponse
     {
         try {
             $admin = $request->user();
-
-            // Executar Use Case
             $this->logoutAdminUseCase->executar($admin);
-
             return ApiResponse::success('Logout realizado com sucesso!');
         } catch (\Exception $e) {
             Log::error('AdminAuthController::logout - Erro', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
             ]);
             return ApiResponse::error('Erro ao fazer logout.', 500);
         }
@@ -102,27 +85,78 @@ class AdminAuthController extends Controller
 
     /**
      * Obter dados do administrador autenticado
-     * 🔥 DDD: Controller fino - delega para UseCase
      */
     public function me(Request $request): JsonResponse
     {
         try {
             $admin = $request->user();
-
-            // Executar Use Case
             $data = $this->obterDadosAdminUseCase->executar($admin);
-
-            return ApiResponse::item($data);
+            return ApiResponse::single($data);
         } catch (\Exception $e) {
             Log::error('AdminAuthController::me - Erro', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
             ]);
             return ApiResponse::error('Erro ao obter dados.', 500);
         }
     }
+
+    /**
+     * Atualizar perfil do administrador
+     */
+    public function atualizarPerfil(Request $request): JsonResponse
+    {
+        try {
+            $admin = $request->user();
+            
+            $validated = $request->validate([
+                'name' => 'required|string|max:255',
+                'email' => 'required|email|max:255',
+            ]);
+
+            $data = $this->atualizarPerfilAdminUseCase->executar($admin, $validated);
+
+            return ApiResponse::success('Perfil updated com sucesso!', $data);
+        } catch (DomainException $e) {
+            return ApiResponse::error($e->getMessage(), $e->getCode() ?: 422);
+        } catch (ValidationException $e) {
+            return ApiResponse::error('Dados inválidos.', 422, null, $e->errors());
+        } catch (\Exception $e) {
+            Log::error('AdminAuthController::atualizarPerfil - Erro', [
+                'error' => $e->getMessage(),
+            ]);
+            return ApiResponse::error('Erro ao atualizar perfil.', 500);
+        }
+    }
+
+    /**
+     * Alterar senha do administrador
+     */
+    public function alterarSenha(Request $request): JsonResponse
+    {
+        try {
+            $admin = $request->user();
+            
+            $validated = $request->validate([
+                'senha_atual' => 'required|string',
+                'senha_nova' => 'required|string|min:6',
+            ]);
+
+            $this->alterarSenhaAdminUseCase->executar(
+                $admin, 
+                $validated['senha_atual'], 
+                $validated['senha_nova']
+            );
+
+            return ApiResponse::success('Senha alterada com sucesso!');
+        } catch (DomainException $e) {
+            return ApiResponse::error($e->getMessage(), $e->getCode() ?: 422);
+        } catch (ValidationException $e) {
+            return ApiResponse::error('Dados inválidos.', 422, null, $e->errors());
+        } catch (\Exception $e) {
+            Log::error('AdminAuthController::alterarSenha - Erro', [
+                'error' => $e->getMessage(),
+            ]);
+            return ApiResponse::error('Erro ao alterar senha.', 500);
+        }
+    }
 }
-
-
-
-

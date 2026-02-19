@@ -352,7 +352,13 @@ class ProcessoItem extends TenantModel
         $this->lucro_bruto = round($this->valor_vencido - $custoTotal, 2);
         
         // Lucro realizado (sobre o faturado) seria outra métrica dinâmica
-        $lucroRealizado = round($this->valor_faturado - ($custoTotal * ($this->quantidade > 0 ? ($this->valor_faturado / ($this->valor_vencido ?: 1)) : 0)), 2);
+        // ⚠ Evitar divisões por zero em cenários onde ainda não há valor vencido ou faturado
+        $lucroRealizado = 0.0;
+        if ($custoTotal > 0 && $this->valor_vencido > 0 && $this->valor_faturado > 0) {
+            $proporcaoFaturada = $this->valor_faturado / $this->valor_vencido;
+            $custoProporcional = $custoTotal * $proporcaoFaturada;
+            $lucroRealizado = round($this->valor_faturado - $custoProporcional, 2);
+        }
         
         $this->lucro_liquido = $this->lucro_bruto;
 

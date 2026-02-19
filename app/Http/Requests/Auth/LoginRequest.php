@@ -30,6 +30,14 @@ class LoginRequest extends FormRequest
         \Log::debug('LoginRequest::prepareForValidation - Preparando para validação', [
             'input' => $this->all(),
         ]);
+
+        // 🔥 Converter tenant_id para string se veio como inteiro
+        // O frontend pode enviar como número (ex: da tela de seleção de tenant)
+        if ($this->has('tenant_id') && $this->tenant_id !== null) {
+            $this->merge([
+                'tenant_id' => (string) $this->tenant_id,
+            ]);
+        }
     }
     
     protected function failedValidation(\Illuminate\Contracts\Validation\Validator $validator): void

@@ -33,7 +33,11 @@ final class ListarTenantsIncompletosUseCase
      */
     public function executar(): array
     {
-        Log::info('ListarTenantsIncompletosUseCase::executar - Iniciando busca de tenants incompletos');
+        $debug = (bool) config('app.debug');
+
+        if ($debug) {
+            Log::info('ListarTenantsIncompletosUseCase::executar - Iniciando busca de tenants incompletos');
+        }
         
         $tenantsIncompletos = [];
         
@@ -42,9 +46,11 @@ final class ListarTenantsIncompletosUseCase
             $tenantsPaginator = $this->tenantRepository->buscarComFiltros(['per_page' => 10000]);
             $tenants = $tenantsPaginator->getCollection();
             
-            Log::debug('ListarTenantsIncompletosUseCase::executar - Total de tenants para analisar', [
-                'total' => $tenants->count(),
-            ]);
+            if ($debug) {
+                Log::debug('ListarTenantsIncompletosUseCase::executar - Total de tenants para analisar', [
+                    'total' => $tenants->count(),
+                ]);
+            }
             
             foreach ($tenants as $tenantDomain) {
                 try {
@@ -81,17 +87,21 @@ final class ListarTenantsIncompletosUseCase
                             'usuarios_ativos' => 0,
                         ],
                     ];
-                    Log::warning('ListarTenantsIncompletosUseCase::executar - Erro ao analisar tenant', [
-                        'tenant_id' => $tenantDomain->id,
-                        'error' => $e->getMessage(),
-                    ]);
+                    if ($debug) {
+                        Log::warning('ListarTenantsIncompletosUseCase::executar - Erro ao analisar tenant', [
+                            'tenant_id' => $tenantDomain->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
                 }
             }
             
-            Log::info('ListarTenantsIncompletosUseCase::executar - Análise concluída', [
-                'total_analisados' => $tenants->count(),
-                'total_incompletos' => count($tenantsIncompletos),
-            ]);
+            if ($debug) {
+                Log::info('ListarTenantsIncompletosUseCase::executar - Análise concluída', [
+                    'total_analisados' => $tenants->count(),
+                    'total_incompletos' => count($tenantsIncompletos),
+                ]);
+            }
             
             return $tenantsIncompletos;
             

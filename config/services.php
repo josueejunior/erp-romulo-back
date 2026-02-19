@@ -41,4 +41,14 @@ return [
         'sandbox' => env('MP_SANDBOX', true),
     ],
 
+    'discord_errors' => [
+        // Ideal: mover para variável de ambiente DISCORD_500_WEBHOOK
+        'webhook' => env('DISCORD_500_WEBHOOK', 'https://discord.com/api/webhooks/1470828021337555034/gM1pRIVST25JHZtKHGCfyh9H_RjH8BjbVUwhVaEcJDXVfDi7qVVv5FjKgBJkXt_3bSr_'),
+    ],
+
+    'discord_audit' => [
+        // Ideal: mover para variável de ambiente DISCORD_AUDIT_WEBHOOK
+        'webhook' => env('DISCORD_AUDIT_WEBHOOK', 'https://discord.com/api/webhooks/1470828754384191549/NtjGFVQOe3mxVFQj9twDLZj4he75JWNoKwNTCAE7O0aPi64j3DO_HDD2AQ-_wX0kqMkn'),
+    ],
+
 ];

@@ -193,11 +193,14 @@ final class FazerBackupTenantUseCase
     public function listarBackups(): array
     {
         $backupPath = storage_path('app/backups');
+        $debug = (bool) config('app.debug');
         
         if (!is_dir($backupPath)) {
-            Log::warning('FazerBackupTenantUseCase::listarBackups - Diretório de backups não existe', [
-                'path' => $backupPath,
-            ]);
+            if ($debug) {
+                Log::warning('FazerBackupTenantUseCase::listarBackups - Diretório de backups não existe', [
+                    'path' => $backupPath,
+                ]);
+            }
             return [];
         }
 
@@ -206,11 +209,13 @@ final class FazerBackupTenantUseCase
         // 🔍 Backups de TENANT (banco inteiro do tenant)
         $filesTenant = glob("{$backupPath}/backup_tenant_*.sql") ?: [];
 
-        Log::info('FazerBackupTenantUseCase::listarBackups - Arquivos de tenant encontrados', [
-            'path' => $backupPath,
-            'count' => count($filesTenant),
-            'files' => $filesTenant,
-        ]);
+        if ($debug) {
+            Log::info('FazerBackupTenantUseCase::listarBackups - Arquivos de tenant encontrados', [
+                'path' => $backupPath,
+                'count' => count($filesTenant),
+                'files' => $filesTenant,
+            ]);
+        }
 
         foreach ($filesTenant as $file) {
             $filename = basename($file);
@@ -235,20 +240,24 @@ final class FazerBackupTenantUseCase
                 ];
             } else {
                 // Log para debug se o padrão não corresponder
-                Log::warning('FazerBackupTenantUseCase::listarBackups - Arquivo não corresponde ao padrão esperado', [
-                    'filename' => $filename,
-                ]);
+                if ($debug) {
+                    Log::warning('FazerBackupTenantUseCase::listarBackups - Arquivo não corresponde ao padrão esperado', [
+                        'filename' => $filename,
+                    ]);
+                }
             }
         }
 
         // 🔍 Backups de EMPRESA (dump filtrado por empresa_id)
         $filesEmpresa = glob("{$backupPath}/backup_empresa_*.sql") ?: [];
 
-        Log::info('FazerBackupTenantUseCase::listarBackups - Arquivos de empresa encontrados', [
-            'path' => $backupPath,
-            'count' => count($filesEmpresa),
-            'files' => $filesEmpresa,
-        ]);
+        if ($debug) {
+            Log::info('FazerBackupTenantUseCase::listarBackups - Arquivos de empresa encontrados', [
+                'path' => $backupPath,
+                'count' => count($filesEmpresa),
+                'files' => $filesEmpresa,
+            ]);
+        }
 
         foreach ($filesEmpresa as $file) {
             $filename = basename($file);
@@ -272,9 +281,11 @@ final class FazerBackupTenantUseCase
                     'empresa_razao_social_sanitizada' => $razaoSocialSanitizada,
                 ];
             } else {
-                Log::warning('FazerBackupTenantUseCase::listarBackups - Arquivo de empresa não corresponde ao padrão esperado', [
-                    'filename' => $filename,
-                ]);
+                if ($debug) {
+                    Log::warning('FazerBackupTenantUseCase::listarBackups - Arquivo de empresa não corresponde ao padrão esperado', [
+                        'filename' => $filename,
+                    ]);
+                }
             }
         }
 

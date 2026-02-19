@@ -191,27 +191,116 @@ class OnboardingProgressRepository implements OnboardingProgressRepositoryInterf
     ): bool {
         $query = OnboardingProgressModel::query();
 
-        // 🔥 CORREÇÃO CRÍTICA: Sempre filtrar por tenant_id E user_id juntos quando ambos estiverem disponíveis
-        // Isso evita que um onboarding concluído em outro tenant seja considerado
+        // 🔥 CORREÇÃO: Para multi-tenant, verificar primeiro no tenant atual,
+        // depois em QUALQUER tenant do mesmo usuário
         if ($userId && $tenantId) {
-            // Buscar por user_id E tenant_id juntos (mais específico)
-            $query->where('user_id', $userId)
-                  ->where('tenant_id', $tenantId);
+            // 1. Verificar se existe concluído NESTE tenant
+            $existeNoTenant = OnboardingProgressModel::query()
+                ->where('user_id', $userId)
+                ->where('tenant_id', $tenantId)
+                ->where('onboarding_concluido', true)
+                ->exists();
+            
+            if ($existeNoTenant) {
+                Log::info('OnboardingProgressRepository::existeConcluidoPorCritérios - Concluído neste tenant', [
+                    'user_id' => $userId,
+                    'tenant_id' => $tenantId,
+                ]);
+                return true;
+            }
+            
+            // 2. Verificar se existe concluído em QUALQUER tenant do mesmo user
+            $existeEmOutroTenant = OnboardingProgressModel::query()
+                ->where('user_id', $userId)
+                ->where('onboarding_concluido', true)
+                ->exists();
+            
+            if ($existeEmOutroTenant) {
+                Log::info('OnboardingProgressRepository::existeConcluidoPorCritérios - Concluído em outro tenant, replicando', [
+                    'user_id' => $userId,
+                    'tenant_id' => $tenantId,
+                ]);
+                
+                // Auto-criar registro concluído para este tenant
+                try {
+                    OnboardingProgressModel::create([
+                        'tenant_id' => $tenantId,
+                        'user_id' => $userId,
+                        'email' => $email,
+                        'onboarding_concluido' => true,
+                        'etapas_concluidas' => [],
+                        'checklist' => [],
+                        'progresso_percentual' => 100,
+                        'iniciado_em' => now(),
+                        'concluido_em' => now(),
+                    ]);
+                } catch (\Exception $e) {
+                    // Se falhar ao criar (ex: duplicata), não impede fluxo
+                    Log::warning('OnboardingProgressRepository::existeConcluidoPorCritérios - Erro ao replicar', [
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+                
+                return true;
+            }
+            
+            Log::info('OnboardingProgressRepository::existeConcluidoPorCritérios - Não concluído em nenhum tenant', [
+                'user_id' => $userId,
+                'tenant_id' => $tenantId,
+            ]);
+            return false;
         } elseif ($userId) {
-            // Se só temos userId, buscar por userId (pode retornar de múltiplos tenants)
             $query->where('user_id', $userId);
         } elseif ($email && $tenantId) {
-            // Se temos email E tenant_id, buscar por ambos
-            $query->where('email', $email)
-                  ->where('tenant_id', $tenantId);
+            // Mesma lógica para email: verificar em qualquer tenant
+            $existeNoTenant = OnboardingProgressModel::query()
+                ->where('email', $email)
+                ->where('tenant_id', $tenantId)
+                ->where('onboarding_concluido', true)
+                ->exists();
+            
+            if ($existeNoTenant) {
+                return true;
+            }
+            
+            $existeEmOutroTenant = OnboardingProgressModel::query()
+                ->where('email', $email)
+                ->where('onboarding_concluido', true)
+                ->exists();
+            
+            if ($existeEmOutroTenant) {
+                Log::info('OnboardingProgressRepository::existeConcluidoPorCritérios - Concluído em outro tenant (por email), replicando', [
+                    'email' => $email,
+                    'tenant_id' => $tenantId,
+                ]);
+                
+                try {
+                    OnboardingProgressModel::create([
+                        'tenant_id' => $tenantId,
+                        'user_id' => $userId,
+                        'email' => $email,
+                        'onboarding_concluido' => true,
+                        'etapas_concluidas' => [],
+                        'checklist' => [],
+                        'progresso_percentual' => 100,
+                        'iniciado_em' => now(),
+                        'concluido_em' => now(),
+                    ]);
+                } catch (\Exception $e) {
+                    Log::warning('OnboardingProgressRepository::existeConcluidoPorCritérios - Erro ao replicar (email)', [
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+                
+                return true;
+            }
+            
+            return false;
         } elseif ($email) {
-            // Se só temos email, buscar por email
             $query->where('email', $email);
         } elseif ($tenantId) {
-            // Se só temos tenant_id, buscar por tenant_id
             $query->where('tenant_id', $tenantId);
         } elseif ($sessionId) {
-            // Se só temos sessionId, buscar por sessionId
             $query->where('session_id', $sessionId);
         } else {
             return false;
@@ -225,7 +314,6 @@ class OnboardingProgressRepository implements OnboardingProgressRepositoryInterf
             'email' => $email,
             'session_id' => $sessionId,
             'existe' => $existe,
-            'query_conditions' => $userId && $tenantId ? 'user_id + tenant_id' : ($userId ? 'user_id only' : ($email && $tenantId ? 'email + tenant_id' : ($email ? 'email only' : ($tenantId ? 'tenant_id only' : 'session_id only')))),
         ]);
         
         return $existe;

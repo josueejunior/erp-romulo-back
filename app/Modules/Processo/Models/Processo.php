@@ -16,6 +16,7 @@ use App\Modules\AutorizacaoFornecimento\Models\AutorizacaoFornecimento;
 use App\Modules\Empenho\Models\Empenho;
 use App\Modules\NotaFiscal\Models\NotaFiscal;
 use App\Modules\Orcamento\Models\Orcamento;
+use App\Modules\Processo\Models\ProcessoNota;
 
 class Processo extends TenantModel
 {
@@ -129,6 +130,11 @@ class Processo extends TenantModel
     public function orcamentos(): HasMany
     {
         return $this->hasMany(Orcamento::class);
+    }
+
+    public function notas(): HasMany
+    {
+        return $this->hasMany(ProcessoNota::class);
     }
 
     public function getIdentificadorAttribute(): string

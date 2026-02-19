@@ -22,6 +22,7 @@ final class ObterDadosAdminUseCase
             'id' => $admin->id,
             'name' => $admin->name,
             'email' => $admin->email,
+            'created_at' => $admin->created_at,
         ];
     }
 }
