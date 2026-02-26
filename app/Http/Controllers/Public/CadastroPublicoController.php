@@ -266,7 +266,7 @@ class CadastroPublicoController extends Controller
             'principais_produtos_servicos' => 'nullable|string',
             'marcas_trabalhadas' => 'nullable|string',
             'observacoes' => 'nullable|string',
-            'logo' => 'nullable|string|max:500',
+            'logo' => 'required|string|max:500',
             
             // Dados do usuário administrador
             'admin_name' => 'required|string|max:255',
