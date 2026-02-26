@@ -77,6 +77,9 @@ class ConfiguracoesController extends Controller
                     'cep' => $empresaModel->cep,
                     'telefone' => is_array($empresaModel->telefones) && !empty($empresaModel->telefones) ? $empresaModel->telefones[0] : ($empresaModel->telefone ?? null),
                     'telefones' => $empresaModel->telefones ?? [],
+                    'representante_legal_nome' => $empresaModel->representante_legal ?? null,
+                    'representante_legal_cargo' => $empresaModel->cargo_representante ?? null,
+                    'logo' => $empresaModel->logo ?? null,
                 ],
             ]);
         } catch (\Exception $e) {

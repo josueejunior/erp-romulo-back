@@ -80,6 +80,10 @@ Route::prefix('v1')->group(function () {
     
     // Upload público (para cadastro público)
     Route::post('/upload/image', [\App\Http\Controllers\UploadController::class, 'uploadImage']);
+    // Servir imagem de upload via URL assinada (evita 403 em /storage; usado por anexos de tickets)
+    Route::get('/serve-upload', [\App\Http\Controllers\UploadController::class, 'serveImage'])
+        ->middleware('signed')
+        ->name('serve-upload');
     
     // Cadastro público (cria tenant + assinatura + usuário)
     Route::post('/cadastro-publico', [\App\Http\Controllers\Public\CadastroPublicoController::class, 'store'])
@@ -172,6 +176,11 @@ Route::prefix('v1')->group(function () {
             Route::get('/notificacoes', [\App\Http\Controllers\Public\ConfiguracoesController::class, 'getNotificacoes']);
             Route::put('/notificacoes', [\App\Http\Controllers\Public\ConfiguracoesController::class, 'atualizarNotificacoes']);
         });
+
+        // Ticket de suporte (abertura e acompanhamento, sem exigir assinatura ativa)
+        Route::get('/tickets', [\App\Http\Controllers\Public\SupportTicketController::class, 'index']);
+        Route::get('/tickets/{id}', [\App\Http\Controllers\Public\SupportTicketController::class, 'show'])->where('id', '[0-9]+');
+        Route::post('/tickets', [\App\Http\Controllers\Public\SupportTicketController::class, 'store']);
         
         // Buscar cupom automático de afiliado (opcional - pode não existir)
         // 🔥 CORREÇÃO: Removido middleware onboarding.completo - rota é opcional e não deve bloquear
@@ -514,6 +523,12 @@ Route::prefix('admin')->group(function () {
 
         // Logs de auditoria administrativa (central)
         Route::get('/audit-logs', [\App\Http\Controllers\Admin\AdminAuditLogController::class, 'index']);
+
+        // Tickets de suporte (abertos pelos usuários do sistema)
+        Route::get('/tickets', [\App\Http\Controllers\Admin\AdminSupportTicketController::class, 'index']);
+        Route::get('/tickets/{id}', [\App\Http\Controllers\Admin\AdminSupportTicketController::class, 'show'])->where('id', '[0-9]+');
+        Route::patch('/tickets/{id}', [\App\Http\Controllers\Admin\AdminSupportTicketController::class, 'update'])->where('id', '[0-9]+');
+        Route::post('/tickets/{id}/responses', [\App\Http\Controllers\Admin\AdminSupportTicketController::class, 'storeResponse'])->where('id', '[0-9]+');
 
         // Gerenciamento de usuários admin do painel (tabela admin_users no banco central)
         Route::prefix('admin-users')->group(function () {

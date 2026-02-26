@@ -402,6 +402,7 @@ class TenantDatabaseService implements TenantDatabaseServiceInterface
             'orcamentos' => 11,
             'notas_fiscais' => 12,
             'assinaturas' => 13,
+            'suporte' => 14,
         ];
         
         usort($paths, function ($a, $b) use ($basePath, $priority) {

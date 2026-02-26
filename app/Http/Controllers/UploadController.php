@@ -6,6 +6,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\URL;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
  * Controller para upload de arquivos (imagens, documentos, etc.)
@@ -149,6 +152,51 @@ class UploadController extends Controller
                 'message' => 'Erro ao deletar imagem',
             ], 500);
         }
+    }
+
+    /**
+     * Gera URL assinada para visualizar uma imagem de upload (evita 403 em /storage).
+     * Aceita URL completa (https://.../storage/uploads/...) ou path (uploads/...).
+     * Retorna URL válida por 1 hora.
+     */
+    public static function signedUrlForAnexo(?string $anexoUrl): ?string
+    {
+        if (empty($anexoUrl)) {
+            return null;
+        }
+        $path = $anexoUrl;
+        if (preg_match('#/storage/(.+)$#', $anexoUrl, $m)) {
+            $path = $m[1];
+        }
+        $path = ltrim($path, '/');
+        if (strpos($path, '..') !== false || strpos($path, 'uploads/') !== 0) {
+            return null;
+        }
+        try {
+            return URL::temporarySignedRoute('serve-upload', now()->addHours(1), ['path' => $path], true);
+        } catch (\Throwable $e) {
+            Log::warning('UploadController::signedUrlForAnexo failed', ['url' => $anexoUrl, 'error' => $e->getMessage()]);
+            return null;
+        }
+    }
+
+    /**
+     * Serve uma imagem de upload via URL assinada (sem expor /storage diretamente).
+     * Rota: GET /api/v1/serve-upload?path=uploads/...&signature=...&expires=...
+     */
+    public function serveImage(Request $request): StreamedResponse|BinaryFileResponse|\Illuminate\Http\Response
+    {
+        $path = $request->query('path', '');
+        $path = ltrim($path, '/');
+        if ($path === '' || strpos($path, '..') !== false || strpos($path, 'uploads/') !== 0) {
+            abort(404);
+        }
+        $fullPath = Storage::disk('public')->path($path);
+        if (!file_exists($fullPath) || !is_file($fullPath)) {
+            abort(404);
+        }
+        $mime = mime_content_type($fullPath) ?: 'application/octet-stream';
+        return response()->file($fullPath, ['Content-Type' => $mime]);
     }
 }
 

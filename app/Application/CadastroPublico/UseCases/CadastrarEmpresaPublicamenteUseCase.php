@@ -545,6 +545,7 @@ final class CadastrarEmpresaPublicamenteUseCase
         $tenant = new \App\Domain\Tenant\Entities\Tenant(
             id: null,
             razaoSocial: $tenantDTO->razaoSocial,
+            nomeFantasia: $tenantDTO->nomeFantasia,
             cnpj: $tenantDTO->cnpj,
             email: $tenantDTO->email,
             status: 'processing', // Status inicial

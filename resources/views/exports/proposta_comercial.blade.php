@@ -35,8 +35,23 @@
             padding-bottom: 10px;
         }
 
-        h1 { font-size: 18px; margin: 0; text-transform: uppercase; }
-        h2 { font-size: 14px; margin: 5px 0; }
+        h1 {
+            font-size: 20px;
+            margin: 0;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        h2 {
+            font-size: 13px;
+            margin: 6px 0 2px;
+            font-weight: normal;
+        }
+
+        .header-info-text {
+            font-size: 11px;
+            color: #555;
+        }
 
         .info-section {
             margin-bottom: 20px;
@@ -83,8 +98,16 @@
         .footer-info {
             margin-top: 30px;
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1.3fr 1fr;
             gap: 20px;
+            font-size: 11px;
+        }
+
+        .footer-info > div {
+            background: #f9fafb;
+            padding: 10px 12px;
+            border-radius: 4px;
+            border: 1px solid #e5e7eb;
         }
 
         .signature-area {
@@ -92,10 +115,31 @@
             text-align: center;
         }
 
+        .signature-area p:first-child {
+            font-style: italic;
+            font-size: 11px;
+            margin-bottom: 20px;
+        }
+
         .signature-line {
             border-top: 1px solid #000;
             width: 300px;
             margin: 10px auto;
+        }
+
+        .logo-empresa {
+            max-width: 220px;
+            max-height: 90px;
+            margin-bottom: 14px;
+        }
+
+        td.text-right,
+        th.text-right {
+            white-space: nowrap;
+        }
+
+        tr {
+            page-break-inside: avoid;
         }
 
         .tech-spec {
@@ -118,9 +162,9 @@
 <div class="container">
     <header>
         @if(isset($logo_base64) && $logo_base64)
-            <img src="{{ $logo_base64 }}" alt="Logo da Empresa" style="max-width: 150px; max-height: 60px; margin-bottom: 10px;" />
+            <img src="{{ $logo_base64 }}" alt="Logo da Empresa" class="logo-empresa" />
         @elseif(isset($logo_url) && $logo_url)
-            <img src="{{ $logo_url }}" alt="Logo da Empresa" style="max-width: 150px; max-height: 60px; margin-bottom: 10px;" />
+            <img src="{{ $logo_url }}" alt="Logo da Empresa" class="logo-empresa" />
         @endif
         <h1>Proposta Comercial</h1>
         <h2>Dispensa Eletrônica nº. {{ $processo->numero_modalidade ?? 'N/A' }}/{{ date('Y') }}</h2>
@@ -129,7 +173,7 @@
             $orgaoRazao = is_array($processo->orgao->razao_social ?? null) ? implode(', ', $processo->orgao->razao_social) : (string)($processo->orgao->razao_social ?? 'N/A');
             $orgaoEstado = is_array($processo->orgao->estado ?? null) ? implode(', ', $processo->orgao->estado) : (string)($processo->orgao->estado ?? '');
         @endphp
-        <p><strong>UASG: {{ $uasg }}</strong> - {{ $orgaoRazao }}@if($orgaoEstado) - {{ $orgaoEstado }}@endif</p>
+        <p class="header-info-text"><strong>UASG: {{ $uasg }}</strong> - {{ $orgaoRazao }}@if($orgaoEstado) - {{ $orgaoEstado }}@endif</p>
     </header>
 
     <div class="info-section">

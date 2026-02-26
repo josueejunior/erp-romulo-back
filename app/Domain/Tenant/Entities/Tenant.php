@@ -13,7 +13,7 @@ class Tenant
     public function __construct(
         public readonly ?int $id,
         public readonly string $razaoSocial,
-        public readonly ?string $nomeFantasia,
+        public readonly ?string $nomeFantasia = null,
         public readonly ?string $cnpj,
         public readonly ?string $email,
         public readonly string $status = 'ativa',
