@@ -80,19 +80,13 @@ class ListarAssinaturasAdminUseCase
                     }
 
                     // Calcular dias restantes (apenas dias completos, sem horas)
+                    // A lógica de duração (trial 3 dias, ilimitado, etc.) já está
+                    // centralizada em AssinaturaDomainService::calcularDataFim via limite_dias.
                     $diasRestantes = 0;
                     if ($assinaturaDomain->dataFim) {
                         $hoje = now()->startOfDay();
                         $dataFim = $assinaturaDomain->dataFim->copy()->startOfDay();
                         $diasRestantes = (int) $hoje->diffInDays($dataFim, false);
-                        
-                        // 🔥 CORREÇÃO: Para planos gratuitos, limitar a 3 dias (período fixo de trial)
-                        if ($planoDomain && (!$planoDomain->precoMensal || $planoDomain->precoMensal == 0)) {
-                            // Para planos gratuitos, não permitir mais de 3 dias
-                            if ($diasRestantes > 3) {
-                                $diasRestantes = 3;
-                            }
-                        }
                     }
 
                     // Retornar dados da assinatura (filtros serão aplicados fora do callback)

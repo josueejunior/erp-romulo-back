@@ -42,9 +42,18 @@ class TenantService
 
         // Adicionar campos opcionais
         $optionalFields = [
-            'endereco', 'cidade', 'estado', 'cep', 'telefones', 'emails_adicionais',
+            'nome_fantasia',
+            'endereco', 'cidade', 'estado', 'cep',
+            'telefones', 'telefone_fixo', 'emails_adicionais',
+            'email_financeiro', 'email_licitacao', 'site',
             'banco', 'agencia', 'conta', 'tipo_conta', 'pix',
-            'representante_legal_nome', 'representante_legal_cpf', 'representante_legal_cargo', 'logo'
+            'favorecido_razao_social', 'favorecido_cnpj',
+            'inscricao_estadual', 'inscricao_municipal', 'cnae_principal', 'data_abertura',
+            'representante_legal_nome', 'representante_legal_cpf', 'representante_legal_rg',
+            'representante_legal_telefone', 'representante_legal_email', 'representante_legal_cargo',
+            'responsavel_comercial', 'responsavel_financeiro', 'responsavel_licitacoes',
+            'ramo_atuacao', 'principais_produtos_servicos', 'marcas_trabalhadas', 'observacoes',
+            'logo',
         ];
 
         foreach ($optionalFields as $field) {

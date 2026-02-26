@@ -13,6 +13,7 @@ class Tenant
     public function __construct(
         public readonly ?int $id,
         public readonly string $razaoSocial,
+        public readonly ?string $nomeFantasia,
         public readonly ?string $cnpj,
         public readonly ?string $email,
         public readonly string $status = 'ativa',
@@ -31,6 +32,26 @@ class Tenant
         public readonly ?string $representanteLegalCpf = null,
         public readonly ?string $representanteLegalCargo = null,
         public readonly ?string $logo = null,
+        public readonly ?string $telefoneFixo = null,
+        public readonly ?string $emailFinanceiro = null,
+        public readonly ?string $emailLicitacao = null,
+        public readonly ?string $inscricaoEstadual = null,
+        public readonly ?string $inscricaoMunicipal = null,
+        public readonly ?string $cnaePrincipal = null,
+        public readonly ?string $dataAbertura = null,
+        public readonly ?string $representanteLegalRg = null,
+        public readonly ?string $representanteLegalTelefone = null,
+        public readonly ?string $representanteLegalEmail = null,
+        public readonly ?string $favorecidoRazaoSocial = null,
+        public readonly ?string $favorecidoCnpj = null,
+        public readonly ?string $responsavelComercial = null,
+        public readonly ?string $responsavelFinanceiro = null,
+        public readonly ?string $responsavelLicitacoes = null,
+        public readonly ?string $ramoAtuacao = null,
+        public readonly ?string $principaisProdutosServicos = null,
+        public readonly ?string $marcasTrabalhadas = null,
+        public readonly ?string $observacoes = null,
+        public readonly ?string $site = null,
     ) {
         $this->validate();
     }
@@ -42,6 +63,10 @@ class Tenant
     {
         if (empty(trim($this->razaoSocial))) {
             throw new DomainException('A razão social é obrigatória.');
+        }
+
+        if ($this->nomeFantasia !== null && strlen($this->nomeFantasia) > 255) {
+            throw new DomainException('O nome fantasia não pode ter mais de 255 caracteres.');
         }
 
         if (strlen($this->razaoSocial) > 255) {
@@ -89,6 +114,7 @@ class Tenant
         return new self(
             id: $this->id,
             razaoSocial: $this->razaoSocial,
+            nomeFantasia: $this->nomeFantasia,
             cnpj: $this->cnpj,
             email: $this->email,
             status: 'inativa',
@@ -107,6 +133,26 @@ class Tenant
             representanteLegalCpf: $this->representanteLegalCpf,
             representanteLegalCargo: $this->representanteLegalCargo,
             logo: $this->logo,
+            telefoneFixo: $this->telefoneFixo,
+            emailFinanceiro: $this->emailFinanceiro,
+            emailLicitacao: $this->emailLicitacao,
+            inscricaoEstadual: $this->inscricaoEstadual,
+            inscricaoMunicipal: $this->inscricaoMunicipal,
+            cnaePrincipal: $this->cnaePrincipal,
+            dataAbertura: $this->dataAbertura,
+            representanteLegalRg: $this->representanteLegalRg,
+            representanteLegalTelefone: $this->representanteLegalTelefone,
+            representanteLegalEmail: $this->representanteLegalEmail,
+            favorecidoRazaoSocial: $this->favorecidoRazaoSocial,
+            favorecidoCnpj: $this->favorecidoCnpj,
+            responsavelComercial: $this->responsavelComercial,
+            responsavelFinanceiro: $this->responsavelFinanceiro,
+            responsavelLicitacoes: $this->responsavelLicitacoes,
+            ramoAtuacao: $this->ramoAtuacao,
+            principaisProdutosServicos: $this->principaisProdutosServicos,
+            marcasTrabalhadas: $this->marcasTrabalhadas,
+            observacoes: $this->observacoes,
+            site: $this->site,
         );
     }
 
@@ -118,6 +164,7 @@ class Tenant
         return new self(
             id: $this->id,
             razaoSocial: $this->razaoSocial,
+            nomeFantasia: $this->nomeFantasia,
             cnpj: $this->cnpj,
             email: $this->email,
             status: 'ativa',
@@ -136,6 +183,26 @@ class Tenant
             representanteLegalCpf: $this->representanteLegalCpf,
             representanteLegalCargo: $this->representanteLegalCargo,
             logo: $this->logo,
+            telefoneFixo: $this->telefoneFixo,
+            emailFinanceiro: $this->emailFinanceiro,
+            emailLicitacao: $this->emailLicitacao,
+            inscricaoEstadual: $this->inscricaoEstadual,
+            inscricaoMunicipal: $this->inscricaoMunicipal,
+            cnaePrincipal: $this->cnaePrincipal,
+            dataAbertura: $this->dataAbertura,
+            representanteLegalRg: $this->representanteLegalRg,
+            representanteLegalTelefone: $this->representanteLegalTelefone,
+            representanteLegalEmail: $this->representanteLegalEmail,
+            favorecidoRazaoSocial: $this->favorecidoRazaoSocial,
+            favorecidoCnpj: $this->favorecidoCnpj,
+            responsavelComercial: $this->responsavelComercial,
+            responsavelFinanceiro: $this->responsavelFinanceiro,
+            responsavelLicitacoes: $this->responsavelLicitacoes,
+            ramoAtuacao: $this->ramoAtuacao,
+            principaisProdutosServicos: $this->principaisProdutosServicos,
+            marcasTrabalhadas: $this->marcasTrabalhadas,
+            observacoes: $this->observacoes,
+            site: $this->site,
         );
     }
 
@@ -181,6 +248,7 @@ class Tenant
         return new self(
             id: $this->id,
             razaoSocial: $normalized['razaoSocial'] ?? $normalized['razao_social'] ?? $this->razaoSocial,
+            nomeFantasia: $normalized['nomeFantasia'] ?? $normalized['nome_fantasia'] ?? $this->nomeFantasia,
             cnpj: $normalized['cnpj'] ?? $this->cnpj,
             email: $normalized['email'] ?? $this->email,
             status: $normalized['status'] ?? $this->status,
@@ -199,6 +267,26 @@ class Tenant
             representanteLegalCpf: $normalized['representanteLegalCpf'] ?? $normalized['representante_legal_cpf'] ?? $this->representanteLegalCpf,
             representanteLegalCargo: $normalized['representanteLegalCargo'] ?? $normalized['representante_legal_cargo'] ?? $this->representanteLegalCargo,
             logo: $normalized['logo'] ?? $this->logo,
+            telefoneFixo: $normalized['telefoneFixo'] ?? $normalized['telefone_fixo'] ?? $this->telefoneFixo,
+            emailFinanceiro: $normalized['emailFinanceiro'] ?? $normalized['email_financeiro'] ?? $this->emailFinanceiro,
+            emailLicitacao: $normalized['emailLicitacao'] ?? $normalized['email_licitacao'] ?? $this->emailLicitacao,
+            inscricaoEstadual: $normalized['inscricaoEstadual'] ?? $normalized['inscricao_estadual'] ?? $this->inscricaoEstadual,
+            inscricaoMunicipal: $normalized['inscricaoMunicipal'] ?? $normalized['inscricao_municipal'] ?? $this->inscricaoMunicipal,
+            cnaePrincipal: $normalized['cnaePrincipal'] ?? $normalized['cnae_principal'] ?? $this->cnaePrincipal,
+            dataAbertura: $normalized['dataAbertura'] ?? $normalized['data_abertura'] ?? $this->dataAbertura,
+            representanteLegalRg: $normalized['representanteLegalRg'] ?? $normalized['representante_legal_rg'] ?? $this->representanteLegalRg,
+            representanteLegalTelefone: $normalized['representanteLegalTelefone'] ?? $normalized['representante_legal_telefone'] ?? $this->representanteLegalTelefone,
+            representanteLegalEmail: $normalized['representanteLegalEmail'] ?? $normalized['representante_legal_email'] ?? $this->representanteLegalEmail,
+            favorecidoRazaoSocial: $normalized['favorecidoRazaoSocial'] ?? $normalized['favorecido_razao_social'] ?? $this->favorecidoRazaoSocial,
+            favorecidoCnpj: $normalized['favorecidoCnpj'] ?? $normalized['favorecido_cnpj'] ?? $this->favorecidoCnpj,
+            responsavelComercial: $normalized['responsavelComercial'] ?? $normalized['responsavel_comercial'] ?? $this->responsavelComercial,
+            responsavelFinanceiro: $normalized['responsavelFinanceiro'] ?? $normalized['responsavel_financeiro'] ?? $this->responsavelFinanceiro,
+            responsavelLicitacoes: $normalized['responsavelLicitacoes'] ?? $normalized['responsavel_licitacoes'] ?? $this->responsavelLicitacoes,
+            ramoAtuacao: $normalized['ramoAtuacao'] ?? $normalized['ramo_atuacao'] ?? $this->ramoAtuacao,
+            principaisProdutosServicos: $normalized['principaisProdutosServicos'] ?? $normalized['principais_produtos_servicos'] ?? $this->principaisProdutosServicos,
+            marcasTrabalhadas: $normalized['marcasTrabalhadas'] ?? $normalized['marcas_trabalhadas'] ?? $this->marcasTrabalhadas,
+            observacoes: $normalized['observacoes'] ?? $this->observacoes,
+            site: $normalized['site'] ?? $this->site,
         );
     }
 }

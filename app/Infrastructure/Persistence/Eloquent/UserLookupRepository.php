@@ -67,11 +67,14 @@ class UserLookupRepository implements UserLookupRepositoryInterface
     
     public function buscarAtivosPorEmail(string $email): array
     {
-        $models = UserLookupModel::where('email', $email)
+        // Busca case-insensitive para garantir que e-mail cadastrado seja encontrado
+        // independente da capitalização (ex.: Login e Esqueci minha senha)
+        $emailNormalized = strtolower(trim($email));
+        $models = UserLookupModel::whereRaw('LOWER(TRIM(email)) = ?', [$emailNormalized])
             ->where('status', 'ativo')
             ->whereNull('deleted_at')
             ->get();
-            
+
         return $models->map(fn($model) => $this->toDomain($model))->toArray();
     }
     

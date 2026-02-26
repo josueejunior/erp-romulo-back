@@ -36,6 +36,7 @@ class Processo extends TenantModel
         'srp',
         'objeto_resumido',
         'data_hora_sessao_publica',
+        'data_hora_inicio_disputa',
         'horario_sessao_publica',
         'endereco_entrega',
         'local_entrega_detalhado',
@@ -62,6 +63,7 @@ class Processo extends TenantModel
         return [
             'srp' => 'boolean',
             'data_hora_sessao_publica' => 'datetime',
+            'data_hora_inicio_disputa' => 'datetime',
             'horario_sessao_publica' => 'datetime',
             'validade_proposta_inicio' => 'date',
             'validade_proposta_fim' => 'date',

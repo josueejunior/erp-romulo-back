@@ -12,20 +12,75 @@ class ProcessoStatusService
     public function __construct(
         private ProcessoRepositoryInterface $processoRepository,
     ) {}
+
+    /**
+     * Retorna a data/hora efetiva da sessão (fim do intervalo de disputa).
+     * Usa o horário informado no processo; se só a data (00:00), considera fim do mesmo dia (23:59).
+     */
+    public function getDataHoraSessaoEfetiva(Processo $processo): ?Carbon
+    {
+        if (!$processo->data_hora_sessao_publica) {
+            return null;
+        }
+        $dt = Carbon::parse($processo->data_hora_sessao_publica);
+        $h = (int) $dt->format('H');
+        $i = (int) $dt->format('i');
+        $s = (int) $dt->format('s');
+        if ($h === 0 && $i === 0 && $s === 0) {
+            return $dt->copy()->endOfDay();
+        }
+        return $dt;
+    }
+
+    /**
+     * Retorna a data/hora de início do intervalo de disputa (quando passa a ficar "em disputa").
+     */
+    public function getDataHoraInicioDisputa(Processo $processo): ?Carbon
+    {
+        if (!$processo->data_hora_inicio_disputa) {
+            return null;
+        }
+        return Carbon::parse($processo->data_hora_inicio_disputa);
+    }
+
+    /**
+     * Retorna o status sugerido pelo período: antes do início = participação (em preparação),
+     * entre início e fim = em disputa, após o fim = julgamento.
+     * Se não houver data da sessão (fim), retorna null (sem sugestão automática).
+     */
+    public function getStatusSugeridoPorPeriodo(Processo $processo): ?string
+    {
+        $fim = $this->getDataHoraSessaoEfetiva($processo);
+        if (!$fim) {
+            return null;
+        }
+
+        $agora = Carbon::now();
+        $inicio = $this->getDataHoraInicioDisputa($processo);
+
+        if ($inicio) {
+            if ($agora->isBefore($inicio)) {
+                return 'participacao'; // em preparação
+            }
+            if ($agora->isAfter($fim)) {
+                return 'julgamento_habilitacao'; // em julgamento
+            }
+            return 'em_disputa'; // no intervalo = em disputa
+        }
+
+        // Retrocompat: sem início definido → antes do fim = participação, depois = julgamento
+        return $agora->isAfter($fim) ? 'julgamento_habilitacao' : 'participacao';
+    }
+
     /**
      * Verifica se o processo deve sugerir mudança para julgamento_habilitacao
-     * (após data/hora da sessão pública)
+     * (após o fim do intervalo de disputa / data da sessão).
      */
     public function deveSugerirJulgamento(Processo $processo): bool
     {
-        if ($processo->status !== 'participacao') {
-            return false;
-        }
-
-        $dataHoraSessao = Carbon::parse($processo->data_hora_sessao_publica);
-        $agora = Carbon::now();
-
-        return $agora->isAfter($dataHoraSessao);
+        $statusSugerido = $this->getStatusSugeridoPorPeriodo($processo);
+        return $statusSugerido === 'julgamento_habilitacao'
+            && in_array($processo->status, ['participacao', 'em_disputa']);
     }
 
     /**
@@ -71,9 +126,10 @@ class ProcessoStatusService
         $pode = false;
         $motivo = '';
 
-        // Regras de transição alinhadas ao fluxo definido
+        // Regras de transição: participação → em disputa → julgamento → ...
         $transicoesPermitidas = [
-            'participacao' => ['julgamento_habilitacao', 'vencido', 'perdido'],
+            'participacao' => ['em_disputa', 'julgamento_habilitacao', 'vencido', 'perdido'],
+            'em_disputa' => ['julgamento_habilitacao', 'vencido', 'perdido'],
             'julgamento_habilitacao' => ['vencido', 'perdido', 'execucao'],
             'vencido' => ['execucao'],
             'execucao' => ['pagamento'],
@@ -196,16 +252,15 @@ class ProcessoStatusService
     }
 
     /**
-     * Sugere próximo status baseado nas regras de negócio
+     * Sugere próximo status baseado no período (preparação / disputa / julgamento) ou em regras de negócio
      */
     public function sugerirProximoStatus(Processo $processo): ?string
     {
-        // Se está em participação e já passou a data da sessão
-        if ($this->deveSugerirJulgamento($processo)) {
-            return 'julgamento_habilitacao';
+        $statusPorPeriodo = $this->getStatusSugeridoPorPeriodo($processo);
+        if ($statusPorPeriodo !== null && $statusPorPeriodo !== $processo->status) {
+            return $statusPorPeriodo;
         }
 
-        // Se está em julgamento e todos os itens estão perdidos
         if ($this->deveSugerirPerdido($processo)) {
             return 'perdido';
         }
@@ -214,9 +269,9 @@ class ProcessoStatusService
     }
 
     /**
-     * Verifica e atualiza automaticamente os status dos processos
-     * Deve ser executado periodicamente (via comando agendado)
-     * 
+     * Verifica e atualiza automaticamente os status dos processos pelo período
+     * (em preparação → em disputa → em julgamento). Deve ser executado periodicamente (comando agendado).
+     *
      * @param int|null $empresaId Se fornecido, processa apenas processos desta empresa
      */
     public function verificarEAtualizarStatusAutomaticos(?int $empresaId = null): array
@@ -224,23 +279,25 @@ class ProcessoStatusService
         $resultado = [
             'atualizados' => 0,
             'sugeridos' => 0,
-            'erros' => []
+            'erros' => [],
         ];
 
-        // Processos em participação que já passaram da sessão pública
-        // Usar ProcessoRepository para buscar processos
-        $filtrosParticipacao = [
-            'empresa_id' => $empresaId,
-            'status' => 'participacao',
-            'data_hora_sessao_publica_fim' => now(),
-        ];
-        
-        // Buscar modelos Eloquent (necessário para alterar status)
-        $processosParticipacao = $this->processoRepository->buscarModelosComFiltros($filtrosParticipacao);
+        $filtros = array_filter(['empresa_id' => $empresaId]);
+        $statusParaProcessar = ['participacao', 'em_disputa'];
+        $processos = $this->processoRepository->buscarModelosComFiltros(
+            array_merge($filtros, [
+                'status' => $statusParaProcessar,
+                'com_sessao_definida' => true,
+            ])
+        );
 
-        foreach ($processosParticipacao as $processo) {
+        foreach ($processos as $processo) {
+            $sugerido = $this->getStatusSugeridoPorPeriodo($processo);
+            if ($sugerido === null || $sugerido === $processo->status) {
+                continue;
+            }
             try {
-                $result = $this->alterarStatus($processo, 'julgamento_habilitacao', true);
+                $result = $this->alterarStatus($processo, $sugerido, true);
                 if ($result['pode']) {
                     $resultado['atualizados']++;
                 }
@@ -249,21 +306,11 @@ class ProcessoStatusService
             }
         }
 
-        // Processos em julgamento que devem ser marcados como perdidos
-        // Usar ProcessoRepository para buscar processos
-        $filtrosJulgamento = [
-            'empresa_id' => $empresaId,
-            'status' => 'julgamento_habilitacao',
-        ];
-        
-        // Buscar modelos Eloquent (necessário para alterar status)
+        $filtrosJulgamento = array_merge($filtros, ['status' => 'julgamento_habilitacao']);
         $processosJulgamento = $this->processoRepository->buscarModelosComFiltros($filtrosJulgamento);
-
         foreach ($processosJulgamento as $processo) {
             if ($this->deveSugerirPerdido($processo)) {
                 $resultado['sugeridos']++;
-                // Não atualiza automaticamente, apenas sugere
-                // O usuário deve confirmar a marcação como perdido
             }
         }
 

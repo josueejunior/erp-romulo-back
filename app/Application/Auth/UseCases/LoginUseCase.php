@@ -287,13 +287,53 @@ class LoginUseCase
         }
 
         // Caso 3: Múltiplos tenants encontrados
+        // SEGURANÇA: Só retornar lista de empresas se a senha for válida em pelo menos um tenant.
+        // Caso contrário, tratar como credenciais inválidas (evitar vazar que o email existe em várias empresas).
         if (count($lookups) > 1) {
-            Log::info('LoginUseCase::resolverTenant - Múltiplos tenants encontrados', [
+            Log::info('LoginUseCase::resolverTenant - Múltiplos tenants encontrados, validando senha antes de expor', [
                 'email' => $email,
                 'count' => count($lookups),
+            ]);
+
+            $senhaValidaEmAlgumTenant = false;
+            foreach ($lookups as $lookup) {
+                try {
+                    $tenantDomain = $this->tenantRepository->buscarPorId($lookup->tenantId);
+                    if (!$tenantDomain) {
+                        continue;
+                    }
+                    $valido = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($email, $dto) {
+                        $user = $this->userRepository->buscarPorEmail($email);
+                        if (!$user || !$user->senhaHash) {
+                            return false;
+                        }
+                        return Hash::check($dto->password, $user->senhaHash);
+                    });
+                    if ($valido) {
+                        $senhaValidaEmAlgumTenant = true;
+                        break;
+                    }
+                } catch (\Exception $e) {
+                    Log::debug('LoginUseCase::resolverTenant - Erro ao validar senha em tenant', [
+                        'tenant_id' => $lookup->tenantId,
+                        'error' => $e->getMessage(),
+                    ]);
+                    continue;
+                }
+            }
+
+            if (!$senhaValidaEmAlgumTenant) {
+                Log::debug('LoginUseCase::resolverTenant - Senha inválida em todos os tenants (múltiplos tenants)', [
+                    'email' => $email,
+                ]);
+                throw new CredenciaisInvalidasException();
+            }
+
+            Log::info('LoginUseCase::resolverTenant - Senha válida, retornando múltiplos tenants para seleção', [
+                'email' => $email,
                 'tenant_ids' => array_map(fn($l) => $l->tenantId, $lookups),
             ]);
-            
+
             // Buscar informações dos tenants para exibir ao usuário
             $tenantsInfo = [];
             foreach ($lookups as $lookup) {
@@ -307,7 +347,7 @@ class LoginUseCase
                     ];
                 }
             }
-            
+
             throw new MultiplosTenantsException(
                 'Este email está associado a múltiplas empresas. Selecione qual deseja acessar.',
                 $tenantsInfo

@@ -48,6 +48,9 @@ class ProcessoResource extends JsonResource
             'srp' => $this->srp,
             // Garantir que data_hora_sessao_publica está no formato correto (sobrescreve data_sessao_publica do ProcessoListResource)
             'data_hora_sessao_publica' => $dataHoraFormatada,
+            'data_hora_inicio_disputa' => $this->data_hora_inicio_disputa
+                ? $this->data_hora_inicio_disputa->format('Y-m-d\TH:i')
+                : null,
             'horario_sessao_publica' => $horarioFormatado,
             'endereco_entrega' => $this->endereco_entrega,
             'local_entrega_detalhado' => $this->local_entrega_detalhado,

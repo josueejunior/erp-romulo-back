@@ -22,10 +22,12 @@ class TenantEmpresa extends Model
     protected $connection = 'pgsql';
     
     protected $table = 'tenant_empresas';
-    
-    // Tabela não tem colunas created_at/updated_at
-    public $timestamps = false;
-    
+
+    public $timestamps = true;
+
+    const CREATED_AT = 'criado_em';
+    const UPDATED_AT = 'atualizado_em';
+
     protected $fillable = [
         'tenant_id',
         'empresa_id',

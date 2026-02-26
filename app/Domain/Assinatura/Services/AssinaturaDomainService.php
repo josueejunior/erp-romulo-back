@@ -54,9 +54,30 @@ final class AssinaturaDomainService
     public function calcularDataFim(Plano $plano, string $periodo = 'mensal', ?Carbon $dataInicio = null): Carbon
     {
         $dataInicio = $dataInicio ?? Carbon::now();
-        
+
+        // 🔥 NOVO: Respeitar campo de limitação de dias do plano, se existir
+        // Convenção:
+        // - > 0  => assinatura com duração fixa de N dias
+        // - = 0  => ilimitado (sem vencimento prático)
+        // - null => usa regra padrão (gratuito = 3 dias, pago = 30 dias)
+        $limiteDias = $plano->limite_dias ?? null;
+
+        if ($limiteDias !== null && $limiteDias !== '') {
+            $limiteDiasInt = (int) $limiteDias;
+
+            if ($limiteDiasInt > 0) {
+                return $dataInicio->copy()->addDays($limiteDiasInt);
+            }
+
+            if ($limiteDiasInt === 0) {
+                // Ilimitado: usamos uma data bem distante no futuro para representar
+                return $dataInicio->copy()->addYears(100);
+            }
+        }
+
+        // Fallback para planos gratuitos antigos (sem limite_dias configurado):
         if ($this->isPlanoGratuito($plano, $periodo)) {
-            // Plano gratuito: 3 dias de teste
+            // Plano gratuito padrão: 3 dias de teste
             return $dataInicio->copy()->addDays(3);
         }
 

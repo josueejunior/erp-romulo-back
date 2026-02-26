@@ -102,3 +102,4 @@ Modelos que devem **permanecer** usando `BaseModel` ou ter `protected $connectio
 3. **Segurança**: Garante que modelos de tenant sempre usam o banco correto
 4. **Simplicidade**: Não precisa definir `getConnectionName()` em cada modelo
 
+

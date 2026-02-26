@@ -32,6 +32,7 @@ class Plano extends BaseModel
         'restricao_diaria',
         'limite_usuarios',
         'limite_armazenamento_mb',
+        'limite_dias', // null = padrão (gratuito 3 dias, pago 30); 0 = ilimitado; >0 = N dias
         'recursos_disponiveis',
         'ativo',
         'ordem',
@@ -57,6 +58,7 @@ class Plano extends BaseModel
             'restricao_diaria' => 'boolean',
             'limite_usuarios' => 'integer',
             'limite_armazenamento_mb' => 'integer',
+            'limite_dias' => 'integer',
             'recursos_disponiveis' => 'array',
             'ativo' => 'boolean',
             'ordem' => 'integer',

@@ -21,3 +21,4 @@ SELECT nome, recursos_disponiveis
 FROM planos
 WHERE nome = 'Gratuito';
 
+

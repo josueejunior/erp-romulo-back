@@ -33,9 +33,10 @@ class ObterResumoProcessosUseCase
         // ✅ Mapear filtros da URL para o formato esperado pelo repository
         $filtrosMapeados = $this->mapearFiltros($filtros);
 
-        // Status possíveis
+        // Status possíveis (participação = em preparação; em_disputa = no intervalo; julgamento_habilitacao = em julgamento)
         $statuses = [
             'participacao',
+            'em_disputa',
             'julgamento_habilitacao',
             'execucao',
             'pagamento',

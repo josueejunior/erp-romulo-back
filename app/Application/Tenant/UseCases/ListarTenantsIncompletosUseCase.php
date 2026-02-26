@@ -57,11 +57,22 @@ final class ListarTenantsIncompletosUseCase
                     $diagnostico = $this->analisarTenant($tenantDomain);
                     
                     if (!$diagnostico['completo']) {
+                        $whatsapp = null;
+                        if ($tenantDomain->telefones && is_array($tenantDomain->telefones)) {
+                            foreach ($tenantDomain->telefones as $tel) {
+                                if (isset($tel['tipo']) && ($tel['tipo'] === 'whatsapp' || (isset($tel['whatsapp']) && $tel['whatsapp']))) {
+                                    $whatsapp = $tel['numero'] ?? $tel['whatsapp'] ?? null;
+                                    break;
+                                }
+                            }
+                        }
+
                         $tenantsIncompletos[] = [
                             'id' => $tenantDomain->id,
                             'razao_social' => $tenantDomain->razaoSocial,
                             'cnpj' => $tenantDomain->cnpj,
                             'email' => $tenantDomain->email,
+                            'whatsapp' => $whatsapp,
                             'status' => $tenantDomain->status,
                             'created_at' => $tenantDomain->createdAt ?? null,
                             'diagnostico' => $diagnostico,
@@ -69,11 +80,22 @@ final class ListarTenantsIncompletosUseCase
                     }
                 } catch (\Exception $e) {
                     // Tenants com erro de inicialização são considerados incompletos
+                    $whatsapp = null;
+                    if ($tenantDomain->telefones && is_array($tenantDomain->telefones)) {
+                        foreach ($tenantDomain->telefones as $tel) {
+                            if (isset($tel['tipo']) && ($tel['tipo'] === 'whatsapp' || (isset($tel['whatsapp']) && $tel['whatsapp']))) {
+                                $whatsapp = $tel['numero'] ?? $tel['whatsapp'] ?? null;
+                                break;
+                            }
+                        }
+                    }
+
                     $tenantsIncompletos[] = [
                         'id' => $tenantDomain->id,
                         'razao_social' => $tenantDomain->razaoSocial,
                         'cnpj' => $tenantDomain->cnpj,
                         'email' => $tenantDomain->email,
+                        'whatsapp' => $whatsapp,
                         'status' => $tenantDomain->status,
                         'created_at' => $tenantDomain->createdAt ?? null,
                         'diagnostico' => [

@@ -173,3 +173,4 @@ Se você encontrar erros de "relation does not exist":
 3. Use `addSafeForeignKeys()` para dependências opcionais
 4. Verifique os logs para ver quais tabelas estão faltando
 
+

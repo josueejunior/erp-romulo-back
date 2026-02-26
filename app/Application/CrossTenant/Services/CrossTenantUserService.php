@@ -61,14 +61,17 @@ final class CrossTenantUserService
             'role_input' => $role,
         ]);
 
-        // Mapear role para o nome correto no sistema
+        // Mapear role para o nome correto no sistema (Case-insensitive)
+        $roleInput = strtolower(trim($role));
         $roleMap = [
             'admin' => 'Administrador',
+            'administrador' => 'Administrador',
             'operador' => 'Operacional',
+            'operacional' => 'Operacional',
             'consulta' => 'Consulta',
         ];
 
-        $roleMapped = $roleMap[$role] ?? $role; // Fallback para o valor original se não estiver no mapa
+        $roleMapped = $roleMap[$roleInput] ?? 'Operacional'; // Default para Operacional se não encontrar
 
         // 1. Buscar o tenant de destino
         $targetTenant = Tenant::find($targetTenantId);
@@ -100,12 +103,26 @@ final class CrossTenantUserService
 
                 // 🔥 Garantir que a role esteja correta (mesmo para usuários existentes)
                 try {
-                    // Verificar se o seeder foi executado
-                    if (\App\Modules\Permission\Models\Role::where('name', $roleMapped)->doesntExist()) {
-                        Log::info("CrossTenantUserService - Role '{$roleMapped}' não encontrada. Executando seeder.");
+                    // Verificar se a role existe no tenant, se não, rodar o seeder
+                    $roleExists = DB::table('roles')->where('name', $roleMapped)->exists();
+                    if (!$roleExists) {
+                        Log::info("CrossTenantUserService - Role '{$roleMapped}' não encontrada no tenant {$targetTenantId}. Executando seeder.");
                         (new \Database\Seeders\RolesPermissionsSeeder())->run();
                     }
-                    $existingUser->syncRoles([$roleMapped]);
+
+                    // Sincronizar role - Usamos DB direto para garantir que persistiu no banco do tenant correto
+                    // às vezes o Spatie syncRoles tem problemas com cache/contexto de tenancy
+                    $roleId = DB::table('roles')->where('name', $roleMapped)->value('id');
+                    if ($roleId) {
+                        DB::table('model_has_roles')->updateOrInsert(
+                            [
+                                'model_id' => $existingUser->id,
+                                'model_type' => get_class($existingUser),
+                            ],
+                            ['role_id' => $roleId]
+                        );
+                        Log::info("CrossTenantUserService - Role '{$roleMapped}' (ID: {$roleId}) sincronizada para usuário {$existingUser->id}");
+                    }
                 } catch (\Exception $e) {
                     Log::warning('CrossTenantUserService - Erro ao sincronizar role para usuário existente', [
                         'user_id' => $existingUser->id,
@@ -147,12 +164,24 @@ final class CrossTenantUserService
             
             // Atribuir role
             try {
-                // Verificar se o seeder foi executado
-                if (\App\Modules\Permission\Models\Role::where('name', $roleMapped)->doesntExist()) {
-                    Log::info("CrossTenantUserService - Role '{$roleMapped}' não encontrada. Executando seeder.");
+                // Verificar se a role existe no tenant, se não, rodar o seeder
+                $roleExists = DB::table('roles')->where('name', $roleMapped)->exists();
+                if (!$roleExists) {
+                    Log::info("CrossTenantUserService - Role '{$roleMapped}' não encontrada no tenant {$targetTenantId}. Executando seeder.");
                     (new \Database\Seeders\RolesPermissionsSeeder())->run();
                 }
-                $newUser->assignRole($roleMapped);
+
+                $roleId = DB::table('roles')->where('name', $roleMapped)->value('id');
+                if ($roleId) {
+                    DB::table('model_has_roles')->updateOrInsert(
+                        [
+                            'model_id' => $newUser->id,
+                            'model_type' => get_class($newUser),
+                        ],
+                        ['role_id' => $roleId]
+                    );
+                    Log::info("CrossTenantUserService - Role '{$roleMapped}' (ID: {$roleId}) atribuída ao novo usuário {$newUser->id}");
+                }
             } catch (\Exception $e) {
                 Log::warning('CrossTenantUserService - Erro ao atribuir role', [
                     'user_id' => $newUser->id,
@@ -270,6 +299,22 @@ final class CrossTenantUserService
         } catch (\Exception $e) {
             Log::error('CrossTenantUserService - Erro ao inativar lookup', [
                 'email' => $email,
+                'tenant_id' => $tenantId,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        // 3. Soft delete do usuário no tenant para que não apareça mais nas telas de usuários
+        try {
+            $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($userId) {
+                $user = User::withoutGlobalScopes()->find($userId);
+                if ($user && !$user->trashed()) {
+                    $user->delete();
+                }
+            });
+        } catch (\Exception $e) {
+            Log::error('CrossTenantUserService - Erro ao soft-deletar usuário ao desvincular', [
+                'user_id' => $userId,
                 'tenant_id' => $tenantId,
                 'error' => $e->getMessage(),
             ]);

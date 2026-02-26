@@ -97,15 +97,9 @@ class ProcessoListResource extends JsonResource
         try {
             switch ($this->status) {
                 case 'participacao':
-                    $hoje = Carbon::now();
-                    $dataSessao = $this->data_hora_sessao_publica ? Carbon::parse($this->data_hora_sessao_publica) : null;
-                    
-                    if ($dataSessao && $hoje->isAfter($dataSessao)) {
-                        return 'Aguardando registro de disputa';
-                    }
-                    
+                    return 'Em preparação';
+                case 'em_disputa':
                     return 'Disputa';
-                    
                 case 'julgamento_habilitacao':
                     $itens = $this->relationLoaded('itens') ? ($this->itens ?? collect()) : collect();
                     $itensAceitos = $itens->whereIn('status_item', ['aceito', 'aceito_habilitado'])->count();
@@ -164,6 +158,7 @@ class ProcessoListResource extends JsonResource
             
             switch ($this->status) {
                 case 'participacao':
+                case 'em_disputa':
                     if ($this->data_hora_sessao_publica) {
                         $dataSessao = Carbon::parse($this->data_hora_sessao_publica);
                         return [
@@ -261,8 +256,8 @@ class ProcessoListResource extends JsonResource
             $alertas = [];
             $hoje = Carbon::now();
             
-            // Alerta: Sessão hoje
-            if ($this->status === 'participacao' && $this->data_hora_sessao_publica) {
+            // Alerta: Sessão hoje (em preparação ou em disputa)
+            if (in_array($this->status, ['participacao', 'em_disputa']) && $this->data_hora_sessao_publica) {
                 $dataSessao = Carbon::parse($this->data_hora_sessao_publica);
                 if ($dataSessao->isToday()) {
                     $alertas[] = [
@@ -270,7 +265,7 @@ class ProcessoListResource extends JsonResource
                         'prioridade' => 'alta',
                         'mensagem' => 'Sessão pública hoje',
                     ];
-                } elseif ($dataSessao->isPast() && $this->status === 'participacao') {
+                } elseif ($dataSessao->isPast()) {
                     $alertas[] = [
                         'tipo' => 'sessao_passou',
                         'prioridade' => 'alta',
@@ -438,8 +433,9 @@ class ProcessoListResource extends JsonResource
     protected function getStatusLabel(): string
     {
         $labels = [
-            'participacao' => 'Em Participação',
-            'julgamento_habilitacao' => 'Em Julgamento',
+            'participacao' => 'Em preparação',
+            'em_disputa' => 'Em disputa',
+            'julgamento_habilitacao' => 'Em julgamento',
             'execucao' => 'Em Execução',
             'vencido' => 'Vencido',
             'pagamento' => 'Em Pagamento',

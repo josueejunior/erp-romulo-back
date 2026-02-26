@@ -201,6 +201,11 @@ class OrgaoResponsavelController extends BaseApiController
 
             return response()->json(['message' => 'Responsável deletado com sucesso.'], 200);
         } catch (\DomainException $e) {
+            \Log::info('OrgaoResponsavelController::destroy - validação negada', [
+                'orgao_id' => $orgaoId,
+                'responsavel_id' => $id,
+                'message' => $e->getMessage(),
+            ]);
             return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
             return $this->handleException($e, 'Erro ao deletar responsável');

@@ -31,6 +31,7 @@ class ProcessoUpdateRequest extends FormRequest
             'srp' => [...DbTypeRule::boolean()],
             'objeto_resumido' => ['sometimes', ...DbTypeRule::text()],
             'data_hora_sessao_publica' => ['sometimes', ...DbTypeRule::datetime()],
+            'data_hora_inicio_disputa' => [DbTypeRule::nullable(), ...DbTypeRule::datetime()],
             'horario_sessao_publica' => [DbTypeRule::nullable(), ...DbTypeRule::time()],
             'endereco_entrega' => [DbTypeRule::nullable(), ...DbTypeRule::string(500)],
             'local_entrega_detalhado' => [DbTypeRule::nullable(), ...DbTypeRule::text()],

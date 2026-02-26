@@ -24,7 +24,8 @@ class ProcessoRepository implements ProcessoRepositoryInterface
     private function mapearStatus(string $statusAntigo): string
     {
         $mapeamento = [
-            'participacao' => 'em_disputa',
+            'participacao' => 'participacao',
+            'em_disputa' => 'em_disputa',
             'julgamento_habilitacao' => 'julgamento',
             'vencido' => 'vencido',
             'perdido' => 'vencido', // Processo perdido = vencido
@@ -53,7 +54,7 @@ class ProcessoRepository implements ProcessoRepositoryInterface
             // Status novos do domínio → status antigos do banco
             'rascunho' => 'participacao', // Rascunho vira participacao (será publicado depois)
             'publicado' => 'participacao', // Publicado vira participacao
-            'em_disputa' => 'participacao',
+            'em_disputa' => 'em_disputa',
             'julgamento' => 'julgamento_habilitacao',
             'execucao' => 'execucao',
             'vencido' => 'vencido',
@@ -443,6 +444,10 @@ class ProcessoRepository implements ProcessoRepositoryInterface
             } else {
                 $query->where('status', $filtros['status']);
             }
+        }
+
+        if (!empty($filtros['com_sessao_definida'])) {
+            $query->whereNotNull('data_hora_sessao_publica');
         }
 
         if (isset($filtros['data_hora_sessao_publica_inicio'])) {

@@ -96,6 +96,31 @@ class AdminPlanoController extends Controller
             // Buscar modelo para resposta
             $planoModel = $this->planoRepository->buscarModeloPorId($planoDomain->id);
 
+            // Atualizar campos adicionais diretamente no modelo, se enviados
+            if ($planoModel) {
+                $dirty = false;
+                if (array_key_exists('limite_dias', $validated)) {
+                    $v = $validated['limite_dias'];
+                    $planoModel->limite_dias = ($v === '' || $v === null) ? null : (int) $v;
+                    $dirty = true;
+                }
+                if (array_key_exists('percentual_comissao_afiliado', $validated)) {
+                    $v = $validated['percentual_comissao_afiliado'];
+                    $planoModel->percentual_comissao_afiliado = ($v === '' || $v === null) ? null : (float) $v;
+                    $dirty = true;
+                }
+                if ($dirty) {
+                    try {
+                        $planoModel->save();
+                    } catch (\Throwable $e) {
+                        \Log::warning('AdminPlanoController::store - Erro ao salvar campos extras do plano', [
+                            'plano_id' => $planoModel->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+            }
+
             return ApiResponse::success(
                 'Plano criado com sucesso',
                 $planoModel?->toArray(),
@@ -122,6 +147,32 @@ class AdminPlanoController extends Controller
 
             // Buscar modelo para resposta
             $planoModel = $this->planoRepository->buscarModeloPorId($planoDomain->id);
+
+            // Atualizar campos adicionais diretamente no modelo, se enviados
+            if ($planoModel) {
+                $dirty = false;
+                if (array_key_exists('limite_dias', $validated)) {
+                    $v = $validated['limite_dias'];
+                    $planoModel->limite_dias = ($v === '' || $v === null) ? null : (int) $v;
+                    $dirty = true;
+                }
+                if (array_key_exists('percentual_comissao_afiliado', $validated)) {
+                    $v = $validated['percentual_comissao_afiliado'];
+                    $planoModel->percentual_comissao_afiliado = ($v === '' || $v === null) ? null : (float) $v;
+                    $dirty = true;
+                }
+                if ($dirty) {
+                    try {
+                        $planoModel->save();
+                    } catch (\Throwable $e) {
+                        \Log::warning('AdminPlanoController::update - Erro ao salvar campos extras do plano', [
+                            'plano_id' => $planoModel->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                        // Não falha a requisição; o plano já foi atualizado pelo use case
+                    }
+                }
+            }
 
             return ApiResponse::success(
                 'Plano atualizado com sucesso',

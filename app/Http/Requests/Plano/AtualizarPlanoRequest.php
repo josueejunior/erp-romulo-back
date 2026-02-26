@@ -21,10 +21,12 @@ class AtualizarPlanoRequest extends FormRequest
             'descricao' => 'nullable|string|max:1000',
             'preco_mensal' => 'sometimes|required|numeric|min:0',
             'preco_anual' => 'nullable|numeric|min:0',
+            'percentual_comissao_afiliado' => 'nullable|numeric|min:0|max:100',
             'limite_processos' => 'nullable|integer|min:0',
             'restricao_diaria' => 'nullable|boolean',
             'limite_usuarios' => 'nullable|integer|min:0',
             'limite_armazenamento_mb' => 'nullable|integer|min:0',
+            'limite_dias' => 'nullable|integer|min:0',
             'recursos_disponiveis' => 'nullable|array',
             'recursos_disponiveis.*' => 'string',
             'ativo' => 'nullable|boolean',
@@ -45,6 +47,10 @@ class AtualizarPlanoRequest extends FormRequest
             'limite_processos.integer' => 'O limite de processos deve ser um número inteiro.',
             'limite_usuarios.integer' => 'O limite de usuários deve ser um número inteiro.',
             'limite_armazenamento_mb.integer' => 'O limite de armazenamento deve ser um número inteiro.',
+            'percentual_comissao_afiliado.numeric' => 'O percentual de comissão deve ser um número.',
+            'percentual_comissao_afiliado.min' => 'O percentual de comissão não pode ser negativo.',
+            'percentual_comissao_afiliado.max' => 'O percentual de comissão não pode ser maior que 100.',
+            'limite_dias.integer' => 'A limitação de dias deve ser um número inteiro.',
         ];
     }
 }

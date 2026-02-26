@@ -2,6 +2,7 @@
 
 namespace App\Application\Auth\UseCases;
 
+use App\Application\CadastroPublico\Services\UsersLookupService;
 use App\Domain\Auth\Repositories\UserRepositoryInterface;
 use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
 use App\Domain\Auth\Repositories\AdminUserRepositoryInterface;
@@ -20,10 +21,10 @@ use App\Notifications\ResetPasswordNotification;
  * 
  * Responsabilidades:
  * - Validar se email existe no sistema
- * - Buscar usuário em todos os tenants (multi-tenancy)
+ * - Buscar usuário via users_lookup (igual ao Login) e depois em todos os tenants (fallback)
  * - Gerar token de reset
  * - Enviar notificação via SMTP
- * 
+ *
  * 🔥 IMPORTANTE: Valida se email existe antes de enviar (segurança)
  */
 class SolicitarResetSenhaUseCase
@@ -32,6 +33,7 @@ class SolicitarResetSenhaUseCase
         private UserRepositoryInterface $userRepository,
         private TenantRepositoryInterface $tenantRepository,
         private AdminUserRepositoryInterface $adminUserRepository,
+        private UsersLookupService $usersLookupService,
     ) {}
 
     /**
@@ -110,18 +112,67 @@ class SolicitarResetSenhaUseCase
             ]);
         }
 
-        // 2. Buscar em todos os tenants (multi-tenancy)
-        try {
-            // Buscar todos os tenants (per_page alto)
-            $tenantsPaginator = $this->tenantRepository->buscarComFiltros(['per_page' => 10000]);
-            $tenants = $tenantsPaginator->getCollection();
-            
-            Log::info('SolicitarResetSenhaUseCase - Buscando em tenants', [
-                'email' => $email,
-                'total_tenants' => $tenants->count(),
-            ]);
-            
-            foreach ($tenants as $tenantDomain) {
+        // 2. Buscar via users_lookup (mesma estratégia do Login - O(1) e consistente)
+        if (!$userFound) {
+            try {
+                $lookups = $this->usersLookupService->encontrarPorEmail($email);
+                Log::info('SolicitarResetSenhaUseCase - Buscando via users_lookup', [
+                    'email' => $email,
+                    'lookups_count' => count($lookups),
+                ]);
+
+                foreach ($lookups as $lookup) {
+                    try {
+                        $tenant = $this->tenantRepository->buscarModeloPorId($lookup->tenantId);
+                        if (!$tenant) {
+                            continue;
+                        }
+                        tenancy()->initialize($tenant);
+                        $user = $this->userRepository->buscarPorEmail($email);
+                        if ($user) {
+                            $userFound = true;
+                            $tenantFound = $tenant;
+                            $userModel = \App\Modules\Auth\Models\User::where('email', $email)->first();
+                            Log::info('SolicitarResetSenhaUseCase - Usuário encontrado via users_lookup', [
+                                'email' => $email,
+                                'tenant_id' => $tenant->id,
+                                'user_id' => $userModel?->id,
+                            ]);
+                            tenancy()->end();
+                            break;
+                        }
+                        tenancy()->end();
+                    } catch (\Exception $e) {
+                        if (tenancy()->initialized) {
+                            tenancy()->end();
+                        }
+                        Log::warning('SolicitarResetSenhaUseCase - Erro ao buscar no tenant do lookup', [
+                            'tenant_id' => $lookup->tenantId,
+                            'email' => $email,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::warning('SolicitarResetSenhaUseCase - Erro ao buscar em users_lookup', [
+                    'email' => $email,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        // 3. Fallback: buscar em todos os tenants (dados legados sem registro em users_lookup)
+        if (!$userFound) {
+            try {
+                $tenantsPaginator = $this->tenantRepository->buscarComFiltros(['per_page' => 10000]);
+                $tenants = $tenantsPaginator->getCollection();
+
+                Log::info('SolicitarResetSenhaUseCase - Fallback: buscando em todos os tenants', [
+                    'email' => $email,
+                    'total_tenants' => $tenants->count(),
+                ]);
+
+                foreach ($tenants as $tenantDomain) {
                 try {
                     // Buscar modelo Eloquent para inicializar tenancy
                     $tenant = $this->tenantRepository->buscarModeloPorId($tenantDomain->id);
@@ -161,12 +212,13 @@ class SolicitarResetSenhaUseCase
                     ]);
                 }
             }
-        } catch (\Exception $e) {
-            Log::error('SolicitarResetSenhaUseCase - Erro ao buscar em tenants', [
-                'email' => $email,
-                'error' => $e->getMessage(),
-            ]);
-            throw new DomainException('Erro ao processar solicitação. Tente novamente mais tarde.', 500);
+            } catch (\Exception $e) {
+                Log::error('SolicitarResetSenhaUseCase - Erro ao buscar em tenants', [
+                    'email' => $email,
+                    'error' => $e->getMessage(),
+                ]);
+                throw new DomainException('Erro ao processar solicitação. Tente novamente mais tarde.', 500);
+            }
         }
 
         // Se não encontrou usuário, retornar erro

@@ -93,6 +93,16 @@ class OrgaoRepository implements OrgaoRepositoryInterface
             });
         }
 
+        if (isset($filtros['cidade']) && $filtros['cidade'] !== '') {
+            $cidade = $filtros['cidade'];
+            $query->where('cidade', 'ilike', "%{$cidade}%");
+        }
+
+        if (isset($filtros['estado']) && $filtros['estado'] !== '') {
+            $estado = strtoupper($filtros['estado']);
+            $query->where('estado', $estado);
+        }
+
         $perPage = $filtros['per_page'] ?? 15;
         $paginator = $query->orderBy('criado_em', 'desc')->paginate($perPage);
 

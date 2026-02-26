@@ -72,7 +72,18 @@ class ListarTenantsAdminUseCase
             'status' => $tenant->status,
             'cidade' => $tenant->cidade,
             'estado' => $tenant->estado,
+            'whatsapp' => null,
         ];
+
+        // Extrair WhatsApp dos telefones se disponível
+        if ($tenant->telefones && is_array($tenant->telefones)) {
+            foreach ($tenant->telefones as $tel) {
+                if (isset($tel['tipo']) && ($tel['tipo'] === 'whatsapp' || (isset($tel['whatsapp']) && $tel['whatsapp']))) {
+                    $data['whatsapp'] = $tel['numero'] ?? $tel['whatsapp'] ?? null;
+                    break;
+                }
+            }
+        }
 
         // Adicionar timestamps
         if ($tenantModel) {

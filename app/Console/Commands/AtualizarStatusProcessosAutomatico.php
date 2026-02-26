@@ -2,45 +2,41 @@
 
 namespace App\Console\Commands;
 
-use App\Modules\Processo\Models\Processo;
+use App\Modules\Processo\Services\ProcessoStatusService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
-use Carbon\Carbon;
 
 class AtualizarStatusProcessosAutomatico extends Command
 {
-    protected $signature = 'processos:atualizar-status-automatico';
-    protected $description = 'Atualiza automaticamente status de processos baseado em datas (ex: participacao -> julgamento_habilitacao após sessão)';
+    protected $signature = 'processos:atualizar-status-automatico {--empresa= : ID da empresa (opcional)}';
+    protected $description = 'Atualiza status de processos pelo período: em preparação → em disputa → em julgamento (intervalo início/fim da disputa)';
+
+    public function __construct(
+        private ProcessoStatusService $statusService,
+    ) {
+        parent::__construct();
+    }
 
     public function handle(): int
     {
         try {
-            $agora = Carbon::now();
-            
-            // Processos em participação cuja sessão pública já passou
-            $processosParaMudar = Processo::query()
-                ->where('status', 'participacao')
-                ->whereNotNull('data_hora_sessao_publica')
-                ->where('data_hora_sessao_publica', '<=', $agora)
-                ->get();
+            $empresaId = $this->option('empresa') ? (int) $this->option('empresa') : null;
+            $resultado = $this->statusService->verificarEAtualizarStatusAutomaticos($empresaId);
 
-            foreach ($processosParaMudar as $processo) {
-                $processo->status = 'julgamento_habilitacao';
-                $processo->save();
-
-                Log::info('processo:status-atualizado-automatico', [
-                    'processo_id' => $processo->id,
-                    'novo_status' => 'julgamento_habilitacao',
-                    'motivo' => 'Sessão pública passou',
-                    'data_sessao' => $processo->data_hora_sessao_publica,
-                    'data_atualizacao' => $agora,
-                ]);
-
-                $this->line("Processo #{$processo->id} movido para Julgamento e Habilitação");
+            foreach ($resultado['erros'] as $msg) {
+                $this->error($msg);
+            }
+            $this->info("Processos atualizados pelo período: {$resultado['atualizados']}");
+            if ($resultado['sugeridos'] > 0) {
+                $this->line("Sugestões de status perdido: {$resultado['sugeridos']}");
             }
 
-            $count = $processosParaMudar->count();
-            $this->info("Total de processos atualizados: {$count}");
+            Log::info('processos:atualizar-status-automatico', [
+                'atualizados' => $resultado['atualizados'],
+                'sugeridos' => $resultado['sugeridos'],
+                'erros' => count($resultado['erros']),
+                'empresa_id' => $empresaId,
+            ]);
 
             return self::SUCCESS;
         } catch (\Exception $e) {

@@ -4,6 +4,7 @@ namespace App\Infrastructure\Persistence\Eloquent;
 
 use App\Domain\OrgaoResponsavel\Entities\OrgaoResponsavel;
 use App\Domain\OrgaoResponsavel\Repositories\OrgaoResponsavelRepositoryInterface;
+use App\Domain\Shared\ValueObjects\TenantContext;
 use App\Modules\Orgao\Models\OrgaoResponsavel as OrgaoResponsavelModel;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use App\Infrastructure\Persistence\Eloquent\Traits\HasModelRetrieval;
@@ -14,9 +15,14 @@ class OrgaoResponsavelRepository implements OrgaoResponsavelRepositoryInterface
 
     private function toDomain(OrgaoResponsavelModel $model): OrgaoResponsavel
     {
+        $empresaId = $model->empresa_id ?? (TenantContext::has() ? TenantContext::get()->empresaId : null);
+        if ($empresaId === null) {
+            $empresaId = 0;
+        }
+
         return new OrgaoResponsavel(
             id: $model->id,
-            empresaId: $model->empresa_id,
+            empresaId: $empresaId,
             orgaoId: $model->orgao_id,
             nome: $model->nome,
             cargo: $model->cargo,
