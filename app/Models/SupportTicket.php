@@ -18,6 +18,7 @@ class SupportTicket extends Model
         'descricao',
         'anexo_url',
         'status',
+        'observacao_interna',
     ];
 
     protected function casts(): array

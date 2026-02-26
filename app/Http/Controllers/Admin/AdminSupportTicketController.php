@@ -93,11 +93,12 @@ class AdminSupportTicketController extends Controller
         }
 
         $validated = $request->validate([
-            'status' => 'required|in:aberto,em_atendimento,resolvido',
+            'status' => 'sometimes|in:aberto,em_atendimento,resolvido',
+            'observacao_interna' => 'nullable|string|max:5000',
         ]);
 
         try {
-            $data = $this->atualizarStatusTicketAdminUseCase->executar($id, $tenantId, $validated['status']);
+            $data = $this->atualizarStatusTicketAdminUseCase->executar($id, $tenantId, $validated);
         } catch (NotFoundException $e) {
             return ApiResponse::error($e->getMessage(), 404);
         } catch (\InvalidArgumentException $e) {
