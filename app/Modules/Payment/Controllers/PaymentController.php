@@ -17,6 +17,7 @@ use App\Modules\Afiliado\Models\Afiliado;
 use App\Application\Afiliado\UseCases\ValidarCupomAfiliadoUseCase;
 use App\Application\Afiliado\UseCases\RastrearReferenciaAfiliadoUseCase;
 use App\Application\Assinatura\UseCases\AtualizarAssinaturaViaWebhookUseCase;
+use App\Domain\Assinatura\Services\AssinaturaDomainService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -35,6 +36,7 @@ class PaymentController extends BaseApiController
         private ValidarCupomAfiliadoUseCase $validarCupomAfiliadoUseCase,
         private RastrearReferenciaAfiliadoUseCase $rastrearReferenciaAfiliadoUseCase,
         private AtualizarAssinaturaViaWebhookUseCase $atualizarAssinaturaUseCase,
+        private AssinaturaDomainService $assinaturaDomainService,
     ) {}
 
     /**
@@ -229,9 +231,9 @@ class PaymentController extends BaseApiController
                         ]);
                     }
 
-                    // Criar nova assinatura gratuita usando Use Case (garante tenancy correto)
+                    // Criar nova assinatura gratuita - duração conforme limite_dias do plano (ex.: 30 dias)
                     $dataInicio = Carbon::now();
-                    $dataFim = $dataInicio->copy()->addDays(3); // 🔥 CORRIGIDO: Trial reduzido para 3 dias conforme solicitado
+                    $dataFim = $this->assinaturaDomainService->calcularDataFim($plano, 'mensal', $dataInicio);
 
                     // 🔥 CRÍTICO: Obter usuário autenticado
                     $user = auth()->user();

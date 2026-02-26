@@ -19,6 +19,7 @@ use App\Application\Assinatura\UseCases\CriarAssinaturaUseCase;
 use App\Application\Assinatura\DTOs\CriarAssinaturaDTO;
 use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
 use App\Domain\Plano\Repositories\PlanoRepositoryInterface;
+use App\Domain\Assinatura\Services\AssinaturaDomainService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
@@ -45,6 +46,7 @@ class OnboardingController extends BaseApiController
         private readonly CriarAssinaturaUseCase $criarAssinaturaUseCase,
         private readonly AssinaturaRepositoryInterface $assinaturaRepository,
         private readonly PlanoRepositoryInterface $planoRepository,
+        private readonly AssinaturaDomainService $assinaturaDomainService,
     ) {}
 
     /**
@@ -435,8 +437,8 @@ class OnboardingController extends BaseApiController
             // Executar Use Case
             $onboardingDomain = $this->gerenciarOnboardingUseCase->concluir($dto);
 
-            // 🔥 NOVO: Criar plano gratuito de 3 dias após concluir tutorial
-            $this->criarPlanoGratuito3Dias($user, $tenantId);
+            // Criar trial gratuito após concluir tutorial (duração conforme plano, ex.: 30 dias)
+            $this->criarTrialGratuitoAposTutorial($user, $tenantId);
 
             // Buscar modelo para apresentação
             $onboardingModel = $this->repository->buscarModeloPorId($onboardingDomain->id);
@@ -489,13 +491,9 @@ class OnboardingController extends BaseApiController
     }
 
     /**
-     * Cria plano gratuito de 3 dias após tutorial concluído
-     * 
-     * @param \App\Models\User $user
-     * @param int|null $tenantId
-     * @return void
+     * Cria trial gratuito após tutorial concluído (duração conforme limite_dias do plano, ex.: 30 dias)
      */
-    private function criarPlanoGratuito3Dias($user, ?int $tenantId): void
+    private function criarTrialGratuitoAposTutorial($user, ?int $tenantId): void
     {
         try {
             $empresaId = $user->empresa_ativa_id ?? null;
@@ -508,11 +506,8 @@ class OnboardingController extends BaseApiController
                 return;
             }
 
-            // Buscar plano gratuito (preco_mensal = 0)
-            // 🔥 CORREÇÃO: Incluir planos gratuitos para encontrar o plano de trial
             $planosAtivos = $this->planoRepository->listar(['ativo' => true, 'incluir_gratuitos' => true]);
             $planoGratuito = null;
-            
             foreach ($planosAtivos as $plano) {
                 $precoMensal = $plano->precoMensal ?? 0;
                 if ($precoMensal == 0 || $precoMensal === null) {
@@ -525,11 +520,13 @@ class OnboardingController extends BaseApiController
                 return;
             }
 
-            // Calcular data fim (3 dias a partir de agora)
+            $planoModel = \App\Modules\Assinatura\Models\Plano::find($planoGratuito->id);
             $dataInicio = Carbon::now();
-            $dataFim = $dataInicio->copy()->addDays(3);
+            $dataFim = $planoModel
+                ? $this->assinaturaDomainService->calcularDataFim($planoModel, 'mensal', $dataInicio)
+                : $dataInicio->copy()->addDays(30);
+            $diasTrial = (int) $dataInicio->diffInDays($dataFim, false);
 
-            // Criar DTO de assinatura trial
             $assinaturaTrialDTO = new CriarAssinaturaDTO(
                 userId: $user->id,
                 planoId: $planoGratuito->id,
@@ -540,7 +537,7 @@ class OnboardingController extends BaseApiController
                 metodoPagamento: 'gratuito',
                 transacaoId: null,
                 diasGracePeriod: 0,
-                observacoes: 'Trial automático de 3 dias - criado após conclusão do tutorial',
+                observacoes: "Trial automático de {$diasTrial} dias - criado após conclusão do tutorial",
                 tenantId: $tenantId,
                 empresaId: $empresaId,
             );

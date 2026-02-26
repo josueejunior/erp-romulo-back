@@ -59,7 +59,7 @@ final class AssinaturaDomainService
         // Convenção:
         // - > 0  => assinatura com duração fixa de N dias
         // - = 0  => ilimitado (sem vencimento prático)
-        // - null => usa regra padrão (gratuito = 3 dias, pago = 30 dias)
+        // - null => usa regra padrão (gratuito = 30 dias, pago = 30 dias)
         $limiteDias = $plano->limite_dias ?? null;
 
         if ($limiteDias !== null && $limiteDias !== '') {
@@ -77,8 +77,8 @@ final class AssinaturaDomainService
 
         // Fallback para planos gratuitos antigos (sem limite_dias configurado):
         if ($this->isPlanoGratuito($plano, $periodo)) {
-            // Plano gratuito padrão: 3 dias de teste
-            return $dataInicio->copy()->addDays(3);
+            // Plano gratuito padrão: 30 dias de teste
+            return $dataInicio->copy()->addDays(30);
         }
 
         // ADDSIMP: Sempre 30 dias corridos a partir da data de contratação

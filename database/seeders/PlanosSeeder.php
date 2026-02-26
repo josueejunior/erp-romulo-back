@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\DB;
  * Seeder para criar planos de assinatura
  * 
  * Este seeder cria planos padrão para o sistema:
- * - Gratuito: R$ 0,00/mês - Trial de 3 dias para novos usuários
+ * - Gratuito: R$ 0,00/mês - Trial de 30 dias para novos usuários
  * - Essencial: R$ 277,14/mês - Operação completa, mas sem visão estratégica
  * - Profissional: R$ 342,86/mês - Visão estratégica e previsibilidade
  * - Master: R$ 457,14/mês - Controle total e escalabilidade
@@ -34,13 +34,14 @@ class PlanosSeeder extends Seeder
         $planos = [
             [
                 'nome' => 'Gratuito',
-                'descricao' => 'Plano gratuito de teste de 3 dias. Ideal para conhecer o sistema antes de contratar um plano pago.',
+                'descricao' => 'Plano gratuito de teste de 30 dias. Ideal para conhecer o sistema antes de contratar um plano pago.',
                 'preco_mensal' => 0,
                 'preco_anual' => null,
                 'limite_processos' => 3,
                 'restricao_diaria' => true, // 1 processo por dia
                 'limite_usuarios' => 1, // Apenas o administrador
                 'limite_armazenamento_mb' => 100, // 100MB de armazenamento
+                'limite_dias' => 30, // Trial de 30 dias
                 'recursos_disponiveis' => [
                     'cadastros_completos', // órgãos/setores, fornecedores/transportadoras
                     'processos_todas_etapas', // participação, disputa, julgamento e habilitação, execução
@@ -173,7 +174,7 @@ class PlanosSeeder extends Seeder
             foreach ($planos as $planoData) {
                 $precoMensal = $planoData['preco_mensal'] > 0 
                     ? 'R$ ' . number_format($planoData['preco_mensal'], 2, ',', '.') . '/mês'
-                    : 'Gratuito (Trial 3 dias)';
+                    : 'Gratuito (Trial 30 dias)';
                 $limiteProcessos = $planoData['limite_processos'] ?? 'Ilimitado';
                 $limiteUsuarios = $planoData['limite_usuarios'] ?? 'Ilimitado';
                 $restricaoDiaria = $planoData['restricao_diaria'] ? '1 por dia' : 'Sem restrição';

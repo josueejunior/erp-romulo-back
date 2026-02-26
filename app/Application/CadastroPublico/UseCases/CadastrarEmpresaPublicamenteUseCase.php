@@ -261,18 +261,15 @@ final class CadastrarEmpresaPublicamenteUseCase
                 }
             }
 
-            // 🔥 CRÍTICO: Criar trial automático de 3 dias (plano gratuito) - SEMPRE após cadastro
+            // 🔥 CRÍTICO: Criar trial automático (plano gratuito) - duração conforme limite_dias do plano
             $assinaturaTrial = null;
             $planoTrial = null;
             $dataFimTrial = null;
             
             try {
                 // Buscar plano gratuito (preco_mensal = 0)
-                // 🔥 CORREÇÃO: Incluir planos gratuitos para encontrar o plano de trial
                 $planosAtivos = $this->planoRepository->listar(['ativo' => true, 'incluir_gratuitos' => true]);
                 $planoGratuito = null;
-                
-                // Iterar sobre os planos para encontrar o gratuito
                 foreach ($planosAtivos as $plano) {
                     $precoMensal = $plano->precoMensal ?? 0;
                     if ($precoMensal == 0 || $precoMensal === null) {
@@ -282,11 +279,13 @@ final class CadastrarEmpresaPublicamenteUseCase
                 }
                 
                 if ($planoGratuito) {
-                    // Calcular data fim (3 dias a partir de agora)
                     $dataInicio = Carbon::now();
-                    $dataFimTrial = $dataInicio->copy()->addDays(3);
+                    $planoModel = \App\Modules\Assinatura\Models\Plano::find($planoGratuito->id);
+                    $dataFimTrial = $planoModel
+                        ? $this->assinaturaDomainService->calcularDataFim($planoModel, 'mensal', $dataInicio)
+                        : $dataInicio->copy()->addDays(30);
+                    $diasTrial = (int) $dataInicio->diffInDays($dataFimTrial, false);
                     
-                    // Criar DTO de assinatura trial
                     $assinaturaTrialDTO = new CriarAssinaturaDTO(
                         userId: $tenantResult['admin_user']->id,
                         planoId: $planoGratuito->id,
@@ -297,7 +296,7 @@ final class CadastrarEmpresaPublicamenteUseCase
                         metodoPagamento: 'gratuito',
                         transacaoId: null,
                         diasGracePeriod: 0,
-                        observacoes: 'Trial automático de 3 dias - criado no cadastro público',
+                        observacoes: "Trial automático de {$diasTrial} dias - criado no cadastro público",
                         tenantId: $tenantResult['tenant']->id,
                         empresaId: $tenantResult['empresa']->id,
                     );
@@ -441,7 +440,7 @@ final class CadastrarEmpresaPublicamenteUseCase
                 'onboarding' => $onboardingData, // 🔥 MELHORIA: Status do onboarding (Pre-fetching)
                 'assinatura' => $assinaturaTrial, // 🔥 MELHORIA: Trial automático criado
                 'plano' => $planoTrial, // Plano gratuito do trial
-                'data_fim' => $dataFimTrial, // Data fim do trial (3 dias)
+                'data_fim' => $dataFimTrial, // Data fim do trial (conforme limite_dias do plano)
                 'payment_result' => null,
             ];
 
@@ -819,7 +818,7 @@ final class CadastrarEmpresaPublicamenteUseCase
             metodoPagamento: $metodoPagamento,
             transacaoId: null,
             diasGracePeriod: $diasGracePeriod,
-            observacoes: 'Plano gratuito - teste de 3 dias',
+            observacoes: 'Plano gratuito - trial (duração conforme plano)',
             tenantId: $tenant->id,
             empresaId: $empresa->id, // 🔥 NOVO: Assinatura pertence à empresa
         );
