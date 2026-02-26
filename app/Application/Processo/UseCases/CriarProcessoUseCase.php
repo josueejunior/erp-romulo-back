@@ -57,7 +57,23 @@ class CriarProcessoUseCase
             throw new DomainException('Plano não encontrado. Verifique sua assinatura.');
         }
 
-        // Verificar se pode criar processo
+        // Restrição diária pela DATA DO PROCESSO (data da sessão): não permitir 2 processos na mesma data de sessão
+        if ($plano->temRestricaoDiaria() && $dto->dataHoraSessaoPublica !== null) {
+            $dataSessao = $dto->dataHoraSessaoPublica->format('Y-m-d');
+            $jaExisteNestaData = \App\Modules\Processo\Models\Processo::where('empresa_id', $empresaId)
+                ->whereDate('data_hora_sessao_publica', $dataSessao)
+                ->count();
+            if ($jaExisteNestaData >= 1) {
+                \Log::info('CriarProcessoUseCase::executar() - Bloqueado: já existe processo com essa data de sessão', [
+                    'tenant_id' => $tenant->id,
+                    'empresa_id' => $empresaId,
+                    'data_sessao' => $dataSessao,
+                ]);
+                throw new DomainException('Já existe um processo com a data de sessão ' . $dto->dataHoraSessaoPublica->format('d/m/Y') . '. Planos com restrição diária permitem apenas 1 processo por data de sessão.');
+            }
+        }
+
+        // Verificar se pode criar processo (limite por data de criação: 1 por dia; e limite mensal)
         if (!$tenant->podeCriarProcesso()) {
             \Log::info('CriarProcessoUseCase::executar() - Bloqueado por limite do plano', [
                 'tenant_id' => $tenant->id,

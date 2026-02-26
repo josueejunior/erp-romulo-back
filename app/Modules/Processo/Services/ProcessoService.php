@@ -384,21 +384,35 @@ class ProcessoService extends BaseService
         }
 
         // Verificar limites do plano
-        // Verificar restrição diária
+        // Restrição diária 1: pela DATA DO PROCESSO (data da sessão) - evita brecha de "mentir" a data
+        if ($plano->temRestricaoDiaria() && !empty($data['data_hora_sessao_publica'])) {
+            $dataSessao = \Carbon\Carbon::parse($data['data_hora_sessao_publica'])->format('Y-m-d');
+            $jaExisteNestaData = \App\Modules\Processo\Models\Processo::where('empresa_id', $empresaId)
+                ->whereDate('data_hora_sessao_publica', $dataSessao)
+                ->count();
+            if ($jaExisteNestaData >= 1) {
+                \Log::info('ProcessoService::store() - Bloqueado: já existe processo com essa data de sessão', [
+                    'empresa_id' => $empresaId,
+                    'plano_id' => $plano->id,
+                    'data_sessao' => $dataSessao,
+                ]);
+                throw new DomainException('Já existe um processo com a data de sessão ' . \Carbon\Carbon::parse($data['data_hora_sessao_publica'])->format('d/m/Y') . '. Planos com restrição diária permitem apenas 1 processo por data de sessão.');
+            }
+        }
+        // Restrição diária 2: pela data de CRIAÇÃO (1 processo criado por dia)
         if ($plano->temRestricaoDiaria()) {
             $hoje = now()->startOfDay();
             $amanha = now()->copy()->addDay()->startOfDay();
             $processosHoje = \App\Modules\Processo\Models\Processo::where('empresa_id', $empresaId)
                 ->whereBetween('criado_em', [$hoje, $amanha])
                 ->count();
-            
             if ($processosHoje > 0) {
-                \Log::info('ProcessoService::store() - Bloqueado por restrição diária', [
+                \Log::info('ProcessoService::store() - Bloqueado por restrição diária (criação)', [
                     'empresa_id' => $empresaId,
                     'plano_id' => $plano->id,
                     'processos_hoje' => $processosHoje,
                 ]);
-                throw new DomainException('Você já criou um processo hoje. Planos Essencial e Profissional permitem apenas 1 processo por dia.');
+                throw new DomainException('Você já criou um processo hoje. Planos com restrição diária permitem apenas 1 processo por dia.');
             }
         }
 
@@ -495,6 +509,23 @@ class ProcessoService extends BaseService
         if (isset($data['tipo_disputa']) && is_array($data['tipo_disputa'])) {
             // Se for um array/objeto, extrair o valor (assumindo que tem 'value' ou é o próprio valor)
             $data['tipo_disputa'] = $data['tipo_disputa']['value'] ?? $data['tipo_disputa']['id'] ?? (is_string($data['tipo_disputa']) ? $data['tipo_disputa'] : null);
+        }
+
+        // Restrição diária: ao alterar data da sessão, não permitir data já usada por outro processo
+        if (!empty($data['data_hora_sessao_publica'])) {
+            $empresaId = $this->getEmpresaId();
+            $assinatura = app(\App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface::class)->buscarAssinaturaAtualPorEmpresa($empresaId);
+            $plano = $assinatura ? \App\Modules\Assinatura\Models\Assinatura::find($assinatura->id)?->plano : null;
+            if ($plano && $plano->temRestricaoDiaria()) {
+                $dataSessao = \Carbon\Carbon::parse($data['data_hora_sessao_publica'])->format('Y-m-d');
+                $outroNaMesmaData = \App\Modules\Processo\Models\Processo::where('empresa_id', $empresaId)
+                    ->where('id', '!=', $id)
+                    ->whereDate('data_hora_sessao_publica', $dataSessao)
+                    ->exists();
+                if ($outroNaMesmaData) {
+                    throw new DomainException('Já existe outro processo com a data de sessão ' . \Carbon\Carbon::parse($data['data_hora_sessao_publica'])->format('d/m/Y') . '. Planos com restrição diária permitem apenas 1 processo por data de sessão.');
+                }
+            }
         }
 
         // BaseService já aplica filtro e protege empresa_id
