@@ -21,6 +21,7 @@ class ProcessoDocumento extends TenantModel
         'versao_documento_habilitacao_id',
         'documento_custom',
         'titulo_custom',
+        'tipo_documento_inicial',
         'exigido',
         'disponivel_envio',
         'status',

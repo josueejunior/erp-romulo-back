@@ -75,6 +75,7 @@ class ListarDocumentosProcessoUseCase
                 'status' => $processoDocumento->status,
                 'documento_custom' => $processoDocumento->documento_custom,
                 'titulo_custom' => $processoDocumento->titulo_custom,
+                'tipo_documento_inicial' => $processoDocumento->tipo_documento_inicial ?? null,
                 'arquivo' => [
                     'nome' => $processoDocumento->nome_arquivo,
                     'caminho' => $processoDocumento->caminho_arquivo,

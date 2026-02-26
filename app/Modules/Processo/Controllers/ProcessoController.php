@@ -582,7 +582,7 @@ class ProcessoController extends BaseApiController
             $processoDomain = $this->buscarProcessoUseCase->executar((int) $id, $empresa->id);
             
             // Buscar modelo Eloquent para serialização (com relacionamentos)
-            $with = $request->get('with', ['orgao', 'setor', 'itens', 'itens.formacoesPreco', 'documentos', 'documentos.documentoHabilitacao', 'empenhos']);
+            $with = $request->get('with', ['orgao', 'orgao.responsaveis', 'setor', 'itens', 'itens.fornecedor', 'itens.formacoesPreco', 'documentos', 'documentos.documentoHabilitacao', 'empenhos']);
             if (is_string($with)) {
                 $with = explode(',', $with);
             }
@@ -1079,12 +1079,17 @@ class ProcessoController extends BaseApiController
             $empresa = $this->getEmpresaAtivaOrFail();
 
             $validated = $request->validate([
-                'titulo_custom' => 'required|string|max:255',
+                'titulo_custom' => 'nullable|string|max:255',
+                'tipo_documento_inicial' => 'nullable|string|in:edital,termo_referencia,outro',
                 'exigido' => 'sometimes|boolean',
                 'disponivel_envio' => 'sometimes|boolean',
                 'status' => 'sometimes|string|in:pendente,possui,anexado',
                 'observacoes' => 'nullable|string',
             ]);
+            if (empty($validated['titulo_custom'])) {
+                $validated['titulo_custom'] = $validated['tipo_documento_inicial'] === 'edital' ? 'Edital'
+                    : ($validated['tipo_documento_inicial'] === 'termo_referencia' ? 'Termo de Referência' : 'Documento');
+            }
 
             $dto = \App\Application\ProcessoDocumento\DTOs\CriarDocumentoCustomDTO::fromArray($validated);
             $useCase = app(\App\Application\ProcessoDocumento\UseCases\CriarDocumentoCustomUseCase::class);

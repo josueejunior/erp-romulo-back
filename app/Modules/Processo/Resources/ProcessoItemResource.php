@@ -69,6 +69,11 @@ class ProcessoItemResource extends JsonResource
                     'id' => $this->fornecedor->id,
                     'razao_social' => $this->fornecedor->razao_social,
                     'cnpj' => $this->fornecedor->cnpj,
+                    'contato' => $this->fornecedor->contato ?? null,
+                    'email' => $this->fornecedor->email ?? null,
+                    'telefone' => $this->fornecedor->telefone ?? null,
+                    'emails' => $this->fornecedor->emails ?? [],
+                    'telefones' => $this->fornecedor->telefones ?? [],
                 ]
             ),
             'transportadora' => $this->when(

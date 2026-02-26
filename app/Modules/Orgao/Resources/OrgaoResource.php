@@ -29,6 +29,16 @@ class OrgaoResource extends JsonResource
             'estado' => $this->estado,
             'observacoes' => $this->observacoes,
             'setors' => $this->whenLoaded('setors'),
+            'responsaveis' => $this->whenLoaded('responsaveis', function () {
+                return $this->responsaveis->map(fn ($r) => [
+                    'id' => $r->id,
+                    'nome' => $r->nome,
+                    'cargo' => $r->cargo,
+                    'emails' => $r->emails ?? [],
+                    'telefones' => $r->telefones ?? [],
+                    'observacoes' => $r->observacoes,
+                ]);
+            }),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

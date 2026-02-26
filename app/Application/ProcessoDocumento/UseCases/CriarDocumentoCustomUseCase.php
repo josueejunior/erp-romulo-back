@@ -59,6 +59,7 @@ class CriarDocumentoCustomUseCase
             'documento_habilitacao_id' => null,
             'documento_custom' => true,
             'titulo_custom' => $dto->tituloCustom,
+            'tipo_documento_inicial' => $dto->tipoDocumentoInicial,
             'exigido' => $dto->exigido,
             'disponivel_envio' => $dto->disponivelEnvio,
             'status' => $dto->status,
