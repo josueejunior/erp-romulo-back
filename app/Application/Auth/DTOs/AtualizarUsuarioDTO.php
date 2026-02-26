@@ -14,6 +14,7 @@ class AtualizarUsuarioDTO
         public readonly ?string $nome = null,
         public readonly ?string $email = null,
         public readonly ?string $senha = null,
+        public readonly ?string $fotoPerfil = null,
         public readonly ?int $empresaId = null,
         public readonly ?array $empresas = null, // Array de IDs de empresas
         public readonly ?string $role = null,
@@ -61,6 +62,7 @@ class AtualizarUsuarioDTO
             nome: $request->input('name'),
             email: $request->input('email'),
             senha: $senha, // Pode ser null no update
+            fotoPerfil: $request->input('foto_perfil'),
             empresaId: $empresaId ? (int) $empresaId : null,
             empresas: $empresas, // Array de IDs de empresas
             role: $role,

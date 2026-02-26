@@ -29,6 +29,7 @@ class UserUpdateRequest extends FormRequest
             'name' => 'sometimes|string|max:255',
             'email' => 'sometimes|email|unique:users,email,' . $userId,
             'password' => 'sometimes|string|min:8',
+            'foto_perfil' => 'nullable|string|max:500',
             'empresa_id' => 'sometimes|integer|exists:empresas,id',
             'role' => 'sometimes|string',
             'empresas' => 'nullable|array',

@@ -28,6 +28,7 @@ class UserRepository implements UserRepositoryInterface
             email: $model->email,
             senhaHash: $model->password,
             empresaAtivaId: $model->empresa_ativa_id,
+            fotoPerfil: $model->foto_perfil ?? null,
         );
     }
 
@@ -41,6 +42,7 @@ class UserRepository implements UserRepositoryInterface
             'email' => $user->email,
             'password' => $user->senhaHash,
             'empresa_ativa_id' => $user->empresaAtivaId,
+            'foto_perfil' => $user->fotoPerfil,
         ];
     }
 

@@ -112,6 +112,7 @@ class AtualizarUsuarioUseCase
             email: $email ? $email->value : ($dto->email ?? $userExistente->email),
             senhaHash: $senhaHash,
             empresaAtivaId: $dto->empresaId ?? $userExistente->empresaAtivaId,
+            fotoPerfil: $dto->fotoPerfil ?? $userExistente->fotoPerfil,
         );
 
         // Atualizar (infraestrutura vai lidar com role se necessário)
@@ -174,6 +175,7 @@ class AtualizarUsuarioUseCase
                         email: $userAtualizado->email,
                         senhaHash: $userAtualizado->senhaHash,
                         empresaAtivaId: $empresaAtivaFinal,
+                        fotoPerfil: $userAtualizado->fotoPerfil,
                     );
                     $userAtualizado = $this->userRepository->atualizar($userAtualizado);
                     \Log::info('AtualizarUsuarioUseCase: Empresa ativa atualizada', [
@@ -197,6 +199,7 @@ class AtualizarUsuarioUseCase
                         email: $userAtualizado->email,
                         senhaHash: $userAtualizado->senhaHash,
                         empresaAtivaId: null,
+                        fotoPerfil: $userAtualizado->fotoPerfil,
                     );
                     $userAtualizado = $this->userRepository->atualizar($userAtualizado);
                 }

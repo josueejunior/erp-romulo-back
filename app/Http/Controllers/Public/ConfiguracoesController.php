@@ -297,6 +297,7 @@ class ConfiguracoesController extends Controller
                     'principais_produtos_servicos',
                     'marcas_trabalhadas',
                     'observacoes',
+                    'logo',
                 ] as $field) {
                     if (array_key_exists($field, $validated)) {
                         $tenantUpdates[$field] = $validated[$field];

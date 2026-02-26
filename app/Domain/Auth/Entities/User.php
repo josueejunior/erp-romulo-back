@@ -16,6 +16,7 @@ class User
         public readonly string $email,
         public readonly string $senhaHash,
         public readonly ?int $empresaAtivaId = null,
+        public readonly ?string $fotoPerfil = null,
     ) {
         $this->validate();
     }
