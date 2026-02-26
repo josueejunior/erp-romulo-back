@@ -105,23 +105,28 @@ class GetUserUseCase
         // Buscar modelo completo do usuário para garantir que temos todos os dados
         $userModel = $this->userRepository->buscarModeloPorId($user->id);
         
-        // Montar dados completos do tenant (usando modelo se disponível para ter todos os campos)
+        // Montar dados completos do tenant (usando modelo para ter todos os campos expostos no frontend)
         $tenantResponse = null;
         if ($tenantDomain && $tenantModel) {
-            $tenantResponse = [
-                'id' => $tenantModel->id,
-                'razao_social' => $tenantModel->razao_social ?? $tenantDomain->razaoSocial ?? '',
-                'cnpj' => $tenantModel->cnpj ?? $tenantDomain->cnpj ?? null,
-                'email' => $tenantModel->email ?? null,
-                'endereco' => $tenantModel->endereco ?? null,
-                'cidade' => $tenantModel->cidade ?? null,
-                'estado' => $tenantModel->estado ?? null,
-                'uf' => $tenantModel->estado ?? null, // Alias para compatibilidade
-                'cep' => $tenantModel->cep ?? null,
-                'telefones' => $tenantModel->telefones ?? null,
-                'telefone' => $tenantModel->telefones ?? null, // Alias para compatibilidade
-                'emails_adicionais' => $tenantModel->emails_adicionais ?? null,
-            ];
+            // Usar toArray() do modelo para garantir que todas as colunas customizadas estejam presentes
+            $tenantArray = $tenantModel->toArray();
+
+            // Garantir aliases de compatibilidade esperados pelo frontend
+            if (!array_key_exists('razao_social', $tenantArray)) {
+                $tenantArray['razao_social'] = $tenantModel->razao_social ?? $tenantDomain->razaoSocial ?? '';
+            }
+            if (!array_key_exists('cnpj', $tenantArray)) {
+                $tenantArray['cnpj'] = $tenantModel->cnpj ?? $tenantDomain->cnpj ?? null;
+            }
+            if (!array_key_exists('uf', $tenantArray)) {
+                $tenantArray['uf'] = $tenantModel->estado ?? null;
+            }
+            if (!array_key_exists('telefone', $tenantArray)) {
+                // Alias simples: o frontend espera um campo "telefone" além do array "telefones"
+                $tenantArray['telefone'] = $tenantModel->telefones ?? null;
+            }
+
+            $tenantResponse = $tenantArray;
         } elseif ($tenantDomain) {
             // Fallback: usar apenas dados do domain se não tiver modelo
             $tenantResponse = [

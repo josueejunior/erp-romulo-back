@@ -111,8 +111,11 @@ class ConfiguracoesController extends Controller
             // Validar dados
             $validated = $request->validate([
                 'razao_social' => 'nullable|string|max:255',
+                'nome_fantasia' => 'nullable|string|max:255',
                 'cnpj' => 'nullable|string|max:18',
                 'email' => 'nullable|email|max:255',
+                'email_financeiro' => 'nullable|email|max:255',
+                'email_licitacao' => 'nullable|email|max:255',
                 'endereco' => 'nullable|string|max:255',
                 'logradouro' => 'nullable|string|max:255',
                 'numero' => 'nullable|string|max:20',
@@ -123,6 +126,33 @@ class ConfiguracoesController extends Controller
                 'cep' => 'nullable|string|max:10',
                 'telefone' => 'nullable|string|max:20',
                 'telefones' => 'nullable|array',
+                'telefone_fixo' => 'nullable|string|max:20',
+                'site' => 'nullable|string|max:255',
+                'inscricao_estadual' => 'nullable|string|max:50',
+                'inscricao_municipal' => 'nullable|string|max:50',
+                'cnae_principal' => 'nullable|string|max:32',
+                'data_abertura' => 'nullable|date',
+                'banco' => 'nullable|string|max:255',
+                'agencia' => 'nullable|string|max:255',
+                'conta' => 'nullable|string|max:255',
+                'tipo_conta' => 'nullable|string|in:corrente,poupanca,pagamento',
+                'pix' => 'nullable|string|max:255',
+                'favorecido_razao_social' => 'nullable|string|max:255',
+                'favorecido_cnpj' => 'nullable|string|max:18',
+                'representante_legal_nome' => 'nullable|string|max:255',
+                'representante_legal_cpf' => ['nullable', 'string', 'max:14', new \App\Rules\CpfValido()],
+                'representante_legal_rg' => 'nullable|string|max:50',
+                'representante_legal_telefone' => 'nullable|string|max:20',
+                'representante_legal_email' => 'nullable|email|max:255',
+                'representante_legal_cargo' => 'nullable|string|max:255',
+                'responsavel_comercial' => 'nullable|string|max:255',
+                'responsavel_financeiro' => 'nullable|string|max:255',
+                'responsavel_licitacoes' => 'nullable|string|max:255',
+                'ramo_atuacao' => 'nullable|string|max:255',
+                'principais_produtos_servicos' => 'nullable|string',
+                'marcas_trabalhadas' => 'nullable|string',
+                'observacoes' => 'nullable|string',
+                'logo' => 'nullable|string|max:500',
             ]);
 
             // Obter empresa ativa do usuário através do relacionamento
@@ -149,11 +179,14 @@ class ConfiguracoesController extends Controller
                 }
             }
 
-            // Preparar dados para atualização
+            // Preparar dados para atualização da empresa (banco tenant)
             $dadosAtualizacao = [];
             
             if (isset($validated['razao_social'])) {
                 $dadosAtualizacao['razao_social'] = $validated['razao_social'];
+            }
+            if (isset($validated['nome_fantasia'])) {
+                $dadosAtualizacao['nome_fantasia'] = $validated['nome_fantasia'];
             }
             if (isset($validated['cnpj'])) {
                 $dadosAtualizacao['cnpj'] = $validated['cnpj'];
@@ -194,8 +227,98 @@ class ConfiguracoesController extends Controller
                 $dadosAtualizacao['telefones'] = $validated['telefones'];
             }
 
+            // Campos específicos da empresa (modelo Empresa)
+            if (isset($validated['telefone_fixo'])) {
+                $dadosAtualizacao['telefone'] = $validated['telefone_fixo'];
+            }
+            if (isset($validated['banco'])) {
+                $dadosAtualizacao['banco_nome'] = $validated['banco'];
+            }
+            if (isset($validated['agencia'])) {
+                $dadosAtualizacao['banco_agencia'] = $validated['agencia'];
+            }
+            if (isset($validated['conta'])) {
+                $dadosAtualizacao['banco_conta'] = $validated['conta'];
+            }
+            if (isset($validated['tipo_conta'])) {
+                $dadosAtualizacao['banco_tipo'] = $validated['tipo_conta'];
+            }
+            if (isset($validated['representante_legal_nome'])) {
+                $dadosAtualizacao['representante_legal'] = $validated['representante_legal_nome'];
+            }
+            if (isset($validated['representante_legal_cargo'])) {
+                $dadosAtualizacao['cargo_representante'] = $validated['representante_legal_cargo'];
+            }
+            if (isset($validated['logo'])) {
+                $dadosAtualizacao['logo'] = $validated['logo'];
+            }
+
             // Atualizar empresa
             $empresaModel->update($dadosAtualizacao);
+
+            // Também atualizar dados no modelo Tenant central, se disponível
+            $tenantModel = tenancy()->initialized && tenancy()->tenant ? tenancy()->tenant : null;
+            if ($tenantModel) {
+                $tenantUpdates = [];
+
+                foreach ([
+                    'razao_social',
+                    'nome_fantasia',
+                    'cnpj',
+                    'email',
+                    'email_financeiro',
+                    'email_licitacao',
+                    'endereco',
+                    'cidade',
+                    'estado',
+                    'cep',
+                    'site',
+                    'inscricao_estadual',
+                    'inscricao_municipal',
+                    'cnae_principal',
+                    'data_abertura',
+                    'banco',
+                    'agencia',
+                    'conta',
+                    'tipo_conta',
+                    'pix',
+                    'favorecido_razao_social',
+                    'favorecido_cnpj',
+                    'representante_legal_nome',
+                    'representante_legal_cpf',
+                    'representante_legal_rg',
+                    'representante_legal_telefone',
+                    'representante_legal_email',
+                    'representante_legal_cargo',
+                    'responsavel_comercial',
+                    'responsavel_financeiro',
+                    'responsavel_licitacoes',
+                    'ramo_atuacao',
+                    'principais_produtos_servicos',
+                    'marcas_trabalhadas',
+                    'observacoes',
+                ] as $field) {
+                    if (array_key_exists($field, $validated)) {
+                        $tenantUpdates[$field] = $validated[$field];
+                    }
+                }
+
+                // Telefones no tenant
+                if (isset($validated['telefone'])) {
+                    $tenantUpdates['telefones'] = [$validated['telefone']];
+                }
+                if (isset($validated['telefones'])) {
+                    $tenantUpdates['telefones'] = $validated['telefones'];
+                }
+                if (isset($validated['telefone_fixo'])) {
+                    $tenantUpdates['telefone_fixo'] = $validated['telefone_fixo'];
+                }
+
+                if (!empty($tenantUpdates)) {
+                    $tenantModel->fill($tenantUpdates);
+                    $tenantModel->save();
+                }
+            }
 
             Log::info('ConfiguracoesController::atualizarTenant - Empresa atualizada com sucesso', [
                 'user_id' => $user->id,
