@@ -22,6 +22,8 @@ class NotificationController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        $user = $request->user();
+
         $empresa = $this->getEmpresa();
         
         if (!$empresa) {
@@ -34,7 +36,8 @@ class NotificationController extends Controller
         
         $notificacoes = $this->notificationService->obterNotificacoes(
             $empresa->id,
-            $tenantId
+            $tenantId,
+            $user?->id
         );
 
         return response()->json($notificacoes);

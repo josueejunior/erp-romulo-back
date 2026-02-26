@@ -13,6 +13,7 @@ use App\Models\Empresa;
 use App\Modules\Assinatura\Models\Assinatura as AssinaturaModel;
 use App\Modules\Assinatura\Models\Plano;
 use App\Modules\Auth\Models\User;
+use App\Modules\Auth\Models\UserNotificationPreferences;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
@@ -102,6 +103,25 @@ class AssinaturaNotificacaoListener
                         'empresa_id' => $event->empresaId,
                     ]);
                     return;
+                }
+
+                // Verificar preferências de notificação por email do usuário (se disponível)
+                if ($event->userId) {
+                    try {
+                        $preferences = UserNotificationPreferences::buscarOuPadrao($event->userId);
+                        if (empty($preferences['email_notificacoes'])) {
+                            Log::info('AssinaturaNotificacaoListener - Email não enviado: preferências do usuário desativadas', [
+                                'user_id' => $event->userId,
+                                'assinatura_id' => $event->assinaturaId,
+                            ]);
+                            return;
+                        }
+                    } catch (\Throwable $prefException) {
+                        Log::warning('AssinaturaNotificacaoListener - Falha ao carregar preferências de notificação, prosseguindo com envio padrão', [
+                            'user_id' => $event->userId,
+                            'error' => $prefException->getMessage(),
+                        ]);
+                    }
                 }
 
                 // Buscar usuário para obter email (se não foi fornecido no evento)

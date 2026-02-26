@@ -7,6 +7,7 @@ use App\Domain\DocumentoHabilitacao\Repositories\DocumentoHabilitacaoRepositoryI
 use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
 use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
 use App\Services\AdminTenancyRunner;
+use App\Modules\Auth\Models\UserNotificationPreferences;
 use Carbon\Carbon;
 
 /**
@@ -25,15 +26,53 @@ class NotificationService
     /**
      * Obter todas as notificações para um usuário/empresa
      */
-    public function obterNotificacoes(int $empresaId, ?int $tenantId = null): array
+    public function obterNotificacoes(int $empresaId, ?int $tenantId = null, ?int $userId = null): array
     {
         $notificacoes = [];
 
+        // Preferências do usuário (se fornecido)
+        $preferences = [
+            'email_notificacoes' => true,
+            'push_notificacoes' => true,
+            'notificar_processos_novos' => true,
+            'notificar_documentos_vencendo' => true,
+            'notificar_prazos' => true,
+        ];
+
+        if ($userId) {
+            try {
+                $preferences = UserNotificationPreferences::buscarOuPadrao($userId);
+            } catch (\Throwable $e) {
+                // Em caso de erro, manter padrões e seguir sem bloquear notificações
+                \Log::warning('NotificationService::obterNotificacoes - Falha ao carregar preferências, usando padrões', [
+                    'user_id' => $userId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        // Se o usuário desativou notificações push, não retornar nada para o frontend
+        if (empty($preferences['push_notificacoes'])) {
+            return [
+                'notificacoes' => [],
+                'total' => 0,
+                'nao_lidas' => 0,
+                'alta_prioridade' => 0,
+            ];
+        }
+
         // Notificações de processos
-        $notificacoes = array_merge($notificacoes, $this->obterNotificacoesProcessos($empresaId));
+        if (!isset($preferences['notificar_processos_novos']) || $preferences['notificar_processos_novos']) {
+            $notificacoes = array_merge($notificacoes, $this->obterNotificacoesProcessos($empresaId));
+        }
 
         // Notificações de documentos
-        $notificacoes = array_merge($notificacoes, $this->obterNotificacoesDocumentos($empresaId));
+        if (
+            !isset($preferences['notificar_documentos_vencendo']) || $preferences['notificar_documentos_vencendo'] ||
+            !isset($preferences['notificar_prazos']) || $preferences['notificar_prazos']
+        ) {
+            $notificacoes = array_merge($notificacoes, $this->obterNotificacoesDocumentos($empresaId));
+        }
 
         // Notificações de assinatura (se tenantId fornecido)
         if ($tenantId) {
