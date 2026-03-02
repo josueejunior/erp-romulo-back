@@ -20,6 +20,10 @@ class FornecedorResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        if ($this->resource === null) {
+            return [];
+        }
+
         // Se for uma entidade de domínio, buscar modelo Eloquent para incluir relacionamentos
         if ($this->resource instanceof Fornecedor) {
             $fornecedorRepository = app(FornecedorRepositoryInterface::class);

@@ -64,7 +64,7 @@ class ProcessoItemResource extends JsonResource
             
             // Relacionamentos
             'fornecedor' => $this->when(
-                $this->relationLoaded('fornecedor'),
+                $this->relationLoaded('fornecedor') && $this->fornecedor,
                 fn() => [
                     'id' => $this->fornecedor->id,
                     'razao_social' => $this->fornecedor->razao_social,
@@ -77,7 +77,7 @@ class ProcessoItemResource extends JsonResource
                 ]
             ),
             'transportadora' => $this->when(
-                $this->relationLoaded('transportadora'),
+                $this->relationLoaded('transportadora') && $this->transportadora,
                 fn() => [
                     'id' => $this->transportadora->id,
                     'razao_social' => $this->transportadora->razao_social,
@@ -125,7 +125,7 @@ class ProcessoItemResource extends JsonResource
                 }
             ),
             'orcamento_escolhido' => $this->when(
-                $this->relationLoaded('orcamentos'),
+                $this->relationLoaded('orcamentos') && $this->orcamentoEscolhido,
                 fn() => new OrcamentoResource($this->orcamentoEscolhido)
             ),
             'formacoes_preco' => FormacaoPrecoResource::collection($this->whenLoaded('formacoesPreco')),
