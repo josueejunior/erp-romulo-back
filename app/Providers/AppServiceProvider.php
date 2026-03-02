@@ -6,6 +6,7 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\URL;
 use App\Database\Schema\Blueprint;
 use App\Http\Routing\ModuleRegistrar;
 use App\Modules\Processo\Models\Processo;
@@ -246,6 +247,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Mixed Content: forçar HTTPS em URLs geradas quando APP_URL usa HTTP mas o domínio é público
+        $appUrl = config('app.url', '');
+        if (str_starts_with($appUrl, 'http://') && (str_contains($appUrl, 'api.addsimp.com') || app()->environment('production'))) {
+            URL::forceScheme('https');
+            URL::forceRootUrl(str_replace('http://', 'https://', $appUrl));
+        }
+
         // Registrar macro Route::module
         Route::macro('module', function (string $prefix, string $controller, string $parameter): ModuleRegistrar {
             return new ModuleRegistrar(app('router'), $prefix, $controller, $parameter);

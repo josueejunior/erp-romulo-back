@@ -578,15 +578,16 @@ class ProcessoController extends BaseApiController
         try {
             $empresa = $this->getEmpresaAtivaOrFail();
             
-            // Executar Use Case (retorna entidade de domínio)
-            $processoDomain = $this->buscarProcessoUseCase->executar((int) $id, $empresa->id);
+            // Executar Use Case apenas para validar existência e empresa do processo
+            // (não dependemos mais do retorno para evitar erros de acesso a propriedades nulas)
+            $this->buscarProcessoUseCase->executar((int) $id, $empresa->id);
             
             // Buscar modelo Eloquent para serialização (com relacionamentos)
             $with = $request->get('with', ['orgao', 'orgao.responsaveis', 'setor', 'itens', 'itens.fornecedor', 'itens.formacoesPreco', 'documentos', 'documentos.documentoHabilitacao', 'empenhos']);
             if (is_string($with)) {
                 $with = explode(',', $with);
             }
-            $processoModel = $this->processoRepository->buscarModeloPorId($processoDomain->id, $with);
+            $processoModel = $this->processoRepository->buscarModeloPorId((int) $id, $with);
 
             if (!$processoModel) {
                 return response()->json(['message' => 'Processo não encontrado'], 404);

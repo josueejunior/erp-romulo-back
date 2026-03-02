@@ -31,6 +31,7 @@ use App\Modules\Assinatura\Controllers\PlanoController as ApiPlanoController;
 use App\Modules\Assinatura\Controllers\AssinaturaController as ApiAssinaturaController;
 use App\Modules\Payment\Controllers\PaymentController as ApiPaymentController;
 use App\Modules\Payment\Controllers\WebhookController as ApiWebhookController;
+use App\Modules\Oportunidade\Controllers\OportunidadeController as ApiOportunidadeController;
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Admin\AdminTenantController;
 use App\Http\Controllers\Admin\AdminUserController;
@@ -196,6 +197,12 @@ Route::prefix('v1')->group(function () {
         Route::middleware([\App\Http\Middleware\CheckSubscription::class])->group(function () {
             // Dashboard
             Route::get('/dashboard', [ApiDashboardController::class, 'index']);
+            
+            // Oportunidades (rascunhos de processos)
+            Route::get('/oportunidades', [ApiOportunidadeController::class, 'index']);
+            // Aceita tanto ID numérico quanto "numero" textual (sem restrição de regex)
+            Route::get('/oportunidades/{oportunidade}', [ApiOportunidadeController::class, 'show']);
+            Route::post('/oportunidades', [ApiOportunidadeController::class, 'store']);
             
             // Empenhos (listar todos - sem precisar de processo específico)
             Route::get('/empenhos', [ApiEmpenhoController::class, 'listAll']);
