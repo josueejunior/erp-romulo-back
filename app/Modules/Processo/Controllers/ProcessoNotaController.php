@@ -36,7 +36,8 @@ class ProcessoNotaController extends BaseApiController
             ->where('empresa_id', $empresa->id)
             ->where('processo_id', $processo->id)
             ->orderByDesc('data_referencia')
-            ->orderByDesc('created_at')
+            // Usar o campo de timestamp customizado (criado_em)
+            ->orderByDesc(ProcessoNota::CREATED_AT)
             ->get();
 
         return response()->json([
