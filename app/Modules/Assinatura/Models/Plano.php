@@ -9,7 +9,10 @@ use Illuminate\Support\Str;
 class Plano extends BaseModel
 {
     use HasTimestampsCustomizados;
-    
+
+    // planos é uma tabela central (não por tenant)
+    protected $connection = 'pgsql';
+
     public $timestamps = true;
 
     protected $fillable = [
