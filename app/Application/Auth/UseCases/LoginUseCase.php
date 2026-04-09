@@ -334,18 +334,11 @@ class LoginUseCase
         string $password
     ): bool {
         return $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($email, $password) {
-            // Buscar sem global scope — o scope tenant_filter filtra por empresa_ids
-            // quando o DB não começa com "tenant_", o que acontece em shared-database.
-            // Aqui já estamos dentro do contexto do tenant, basta buscar por email.
-            $userModel = \App\Modules\Auth\Models\User::withoutGlobalScope('tenant_filter')
-                ->where('email', strtolower($email))
-                ->first();
-
-            if (!$userModel || empty($userModel->password)) {
+            $user = $this->userRepository->buscarPorEmail($email);
+            if (!$user || empty($user->senhaHash)) {
                 return false;
             }
-
-            return Hash::check($password, $userModel->password);
+            return Hash::check($password, $user->senhaHash);
         }) ?? false;
     }
 

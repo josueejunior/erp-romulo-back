@@ -28,15 +28,11 @@ return [
      *
      * To configure their behavior, see the config keys below.
      * 
-     * 🔥 ARQUITETURA SINGLE DATABASE:
-     * - Removido DatabaseTenancyBootstrapper pois estamos usando Single Database Tenancy
-     * - Dados são isolados por empresa_id no banco central, não por banco separado
-     * - Para habilitar bancos separados, adicione DatabaseTenancyBootstrapper::class
-     *   e defina TENANCY_CREATE_DATABASES=true no .env
+     * Tenancy bootstrappers switch Laravel features to the tenant context.
+     * DatabaseTenancyBootstrapper switches the DB connection to tenant_{id}.
      */
     'bootstrappers' => [
-        // DatabaseTenancyBootstrapper removido - usando Single Database Tenancy
-        // Stancl\Tenancy\Bootstrappers\DatabaseTenancyBootstrapper::class,
+        Stancl\Tenancy\Bootstrappers\DatabaseTenancyBootstrapper::class,
         Stancl\Tenancy\Bootstrappers\CacheTenancyBootstrapper::class,
         Stancl\Tenancy\Bootstrappers\FilesystemTenancyBootstrapper::class,
         Stancl\Tenancy\Bootstrappers\QueueTenancyBootstrapper::class,
