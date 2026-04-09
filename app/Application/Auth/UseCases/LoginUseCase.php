@@ -80,8 +80,8 @@ class LoginUseCase
                     'acao_sre' => 'Verificar sincronização entre users_lookup e banco do tenant',
                 ]);
                 
-                // Prevenir timing attack verificando senha dummy
-                $dummyHash = '$2y$10$dummyhashforsecuritytimingattackprevention';
+                // Prevenir timing attack verificando senha dummy (hash bcrypt válido que nunca corresponde)
+                $dummyHash = '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi';
                 Hash::check($dto->password, $dummyHash);
                 
                 throw new CredenciaisInvalidasException();
@@ -156,15 +156,27 @@ class LoginUseCase
         } catch (CredenciaisInvalidasException | MultiplosTenantsException $e) {
             // Re-lançar exceções de domínio sem modificar
             throw $e;
-        } catch (\Exception $e) {
-            Log::error('LoginUseCase::executar - Erro capturado', [
+        } catch (\Illuminate\Database\QueryException $e) {
+            Log::error('LoginUseCase::executar - Erro de banco de dados', [
+                'message' => $e->getMessage(),
+                'code' => $e->getCode(),
+            ]);
+            throw $e;
+        } catch (\RuntimeException $e) {
+            Log::error('LoginUseCase::executar - Erro de infraestrutura', [
                 'message' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
                 'class' => get_class($e),
-                'trace' => config('app.debug') ? $e->getTraceAsString() : null,
             ]);
-            // Converter erros genéricos em CredenciaisInvalidasException para segurança
+            throw $e;
+        } catch (\Exception $e) {
+            Log::error('LoginUseCase::executar - Erro inesperado', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'class' => get_class($e),
+            ]);
             throw new CredenciaisInvalidasException();
         } finally {
             // Finalizar contexto do tenant

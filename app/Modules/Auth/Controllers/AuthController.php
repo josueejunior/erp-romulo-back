@@ -211,13 +211,26 @@ class AuthController extends Controller
                 'success' => false,
                 'error' => 'INVALID_CREDENTIALS',
             ], 401);
+        } catch (\Illuminate\Database\QueryException $e) {
+            \Log::error('AuthController::login - Erro de banco de dados', [
+                'error' => $e->getMessage(),
+                'code' => $e->getCode(),
+                'email' => $request->input('email'),
+            ]);
+
+            return response()->json([
+                'message' => 'Serviço temporariamente indisponível. Tente novamente em alguns instantes.',
+                'success' => false,
+                'error' => 'SERVICE_UNAVAILABLE',
+            ], 503);
         } catch (\Exception $e) {
             \Log::error('AuthController::login - Erro inesperado', [
                 'error' => $e->getMessage(),
+                'class' => get_class($e),
                 'trace' => config('app.debug') ? $e->getTraceAsString() : null,
                 'email' => $request->input('email'),
             ]);
-            
+
             return response()->json([
                 'message' => 'Erro ao processar login. Tente novamente.',
                 'success' => false,
