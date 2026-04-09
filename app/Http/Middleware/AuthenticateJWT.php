@@ -165,12 +165,15 @@ class AuthenticateJWT
         }
 
         // Usuário comum: o usuário existe no banco do tenant, não no banco central.
-        // Precisamos inicializar tenancy para buscar no banco correto.
+        // Inicializamos tenancy apenas para o lookup, depois encerramos para que
+        // ResolveTenantContext possa validar users_lookup no banco central.
         if ($tenantId) {
             $tenant = \App\Models\Tenant::find($tenantId);
             if ($tenant) {
                 tenancy()->initialize($tenant);
-                return \App\Modules\Auth\Models\User::find($userId);
+                $user = \App\Modules\Auth\Models\User::find($userId);
+                tenancy()->end(); // Reverter para banco central antes dos próximos middlewares
+                return $user;
             }
         }
 
