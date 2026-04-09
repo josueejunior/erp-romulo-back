@@ -333,8 +333,21 @@ class LoginUseCase
         string $email,
         string $password
     ): bool {
-        return $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($email, $password) {
+        return $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($email, $password, $tenantDomain) {
+            $dbName = \Illuminate\Support\Facades\DB::connection()->getDatabaseName();
+            $connName = \Illuminate\Support\Facades\DB::connection()->getName();
+            $defaultConn = config('database.default');
+
             $user = $this->userRepository->buscarPorEmail($email);
+
+            Log::debug('validarSenhaNoTenant - debug', [
+                'tenant_id' => $tenantDomain->id,
+                'db_name' => $dbName,
+                'conn_name' => $connName,
+                'default_conn' => $defaultConn,
+                'user_found' => $user !== null,
+            ]);
+
             if (!$user || empty($user->senhaHash)) {
                 return false;
             }

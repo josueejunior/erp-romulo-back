@@ -4,17 +4,40 @@ namespace App\Http\Requests\Processo;
 
 use App\Rules\DbTypeRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Str;
 
 /**
- * Form Request para criação de processo
- * 
- * ✅ DDD: Encapsula validação, removendo responsabilidade do Controller
+ * Form Request para criacao de processo.
  */
 class ProcessoCreateRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('modalidade')) {
+            $this->merge([
+                'modalidade' => $this->normalizarModalidade($this->input('modalidade')),
+            ]);
+        }
+    }
+
+    private function normalizarModalidade(?string $modalidade): ?string
+    {
+        if ($modalidade === null) {
+            return null;
+        }
+
+        $normalizada = Str::of($modalidade)->trim()->lower()->ascii()->toString();
+
+        return match ($normalizada) {
+            'dispensa', 'dispensa eletronica', 'dispensa eletronico' => 'dispensa',
+            'pregao', 'pregao eletronico', 'pregao eletronica' => 'pregao',
+            default => trim($modalidade),
+        };
+    }
+
     public function authorize(): bool
     {
-        return true; // A autorização será feita no Use Case
+        return true;
     }
 
     public function rules(): array
@@ -50,12 +73,4 @@ class ProcessoCreateRequest extends FormRequest
         ];
     }
 }
-
-
-
-
-
-
-
-
 

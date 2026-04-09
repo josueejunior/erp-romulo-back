@@ -202,6 +202,7 @@ Route::prefix('v1')->group(function () {
             // Processos
             Route::prefix('processos')->group(function () {
                 // Rotas customizadas (fora do Route::module)
+                Route::get('/modalidades', [ApiProcessoController::class, 'modalidades']);
                 Route::get('/resumo', [ApiProcessoController::class, 'resumo']);
                 Route::get('/exportar', [ApiProcessoController::class, 'exportar']);
             });
@@ -246,6 +247,11 @@ Route::prefix('v1')->group(function () {
                 // Julgamento
                 Route::get('/julgamento', [ApiJulgamentoController::class, 'show']);
                 Route::put('/julgamento', [ApiJulgamentoController::class, 'update']);
+
+                // Compatibilidade: alguns fluxos de oportunidade enviam IDs temporarios (ex: frem_opp_1)
+                // via PUT. Nesse caso, convertemos para criacao de item em vez de update.
+                Route::put('/itens/{itemAlias}', [ApiProcessoItemController::class, 'upsertFromOportunidade'])
+                    ->where('itemAlias', '[A-Za-z][A-Za-z0-9_-]*');
                 
                 // Itens do Processo
                 Route::module('itens', ApiProcessoItemController::class, 'item')

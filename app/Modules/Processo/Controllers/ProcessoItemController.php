@@ -22,6 +22,7 @@ use App\Domain\Exceptions\EntidadeNaoPertenceException;
 use App\Http\Requests\ProcessoItem\ProcessoItemCreateRequest;
 use App\Http\Requests\ProcessoItem\ProcessoItemUpdateRequest;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 
 class ProcessoItemController extends BaseApiController
 {
@@ -265,6 +266,90 @@ class ProcessoItemController extends BaseApiController
     }
 
     /**
+     * Compatibilidade para itens temporarios vindos de oportunidade.
+     * Alguns fluxos enviam PUT /processos/{processo}/itens/{alias_temporario}
+     * (ex: frem_opp_1). Nesse caso fazemos criacao do item.
+     */
+    public function upsertFromOportunidade(Request $request, $processo, string $itemAlias)
+    {
+        $empresaId = null;
+        $tenantId = tenancy()->tenant?->id;
+        $processoId = (int) $processo;
+
+        try {
+            if (!$processoId) {
+                return response()->json(['message' => 'Processo nao fornecido'], 400);
+            }
+
+            $empresa = $this->getEmpresaAtivaOrFail();
+            $empresaId = $empresa->id;
+
+            // Normalizar payload para o formato de criacao de item
+            $payload = [
+                'fornecedor_id' => $request->input('fornecedor_id'),
+                'transportadora_id' => $request->input('transportadora_id'),
+                'numero_item' => $request->input('numero_item', $request->input('numero')),
+                'codigo_interno' => $request->input('codigo_interno', $request->input('codigo')),
+                'quantidade' => $request->input('quantidade', $request->input('qtd')),
+                'unidade' => $request->input('unidade', $request->input('unidade_medida')),
+                'especificacao_tecnica' => $request->input(
+                    'especificacao_tecnica',
+                    $request->input('descricao_item', $request->input('descricao'))
+                ),
+                'marca_modelo_referencia' => $request->input('marca_modelo_referencia'),
+                'observacoes_edital' => $request->input('observacoes_edital'),
+                'exige_atestado' => $request->input('exige_atestado'),
+                'quantidade_minima_atestado' => $request->input('quantidade_minima_atestado'),
+                'quantidade_atestado_cap_tecnica' => $request->input('quantidade_atestado_cap_tecnica'),
+                'valor_estimado' => $request->input('valor_estimado'),
+                'observacoes' => $request->input('observacoes'),
+            ];
+
+            $validator = Validator::make($payload, (new ProcessoItemCreateRequest())->rules());
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'message' => 'Erro de validacao ao criar item temporario de oportunidade.',
+                    'errors' => $validator->errors(),
+                ], 422);
+            }
+
+            $dto = CriarProcessoItemDTO::fromArray($validator->validated(), $processoId, $empresa->id);
+            $itemDomain = $this->criarProcessoItemUseCase->executar($dto);
+            $itemModel = $this->processoItemRepository->buscarModeloPorId($itemDomain->id, ['fornecedor', 'transportadora']);
+
+            if (!$itemModel) {
+                return response()->json(['message' => 'Erro ao buscar item criado'], 500);
+            }
+
+            return response()->json([
+                'data' => $itemModel,
+                'meta' => [
+                    'item_temporario' => $itemAlias,
+                    'acao' => 'criado_via_put_compatibilidade',
+                ],
+            ]);
+        } catch (NotFoundException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (ProcessoEmExecucaoException $e) {
+            return response()->json(['message' => $e->getMessage()], 403);
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        } catch (\Exception $e) {
+            \Log::error('ProcessoItemController::upsertFromOportunidade() - Erro', [
+                'empresa_id' => $empresaId,
+                'tenant_id' => $tenantId,
+                'processo_id' => $processoId,
+                'item_alias' => $itemAlias,
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * API: Atualizar item
      * 
      * ✅ DDD: Usa FormRequest, Use Case e DTO
@@ -316,7 +401,7 @@ class ProcessoItemController extends BaseApiController
             \Log::error('Erro ao atualizar item de processo', [
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
-                'item_id' => $id,
+                'item_id' => $itemId ?? null,
             ]);
             return response()->json(['message' => $e->getMessage()], 500);
         }

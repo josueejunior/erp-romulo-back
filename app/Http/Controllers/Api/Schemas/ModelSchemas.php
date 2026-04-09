@@ -24,7 +24,7 @@ namespace App\Http\Controllers\Api\Schemas;
  *     @OA\Property(property="id", type="integer", example=1),
  *     @OA\Property(property="empresa_id", type="integer", example=1),
  *     @OA\Property(property="orgao_id", type="integer", example=1),
- *     @OA\Property(property="modalidade", type="string", enum={"pregão", "concorrência", "tomada_preco", "convite", "dispensa", "inexigibilidade"}, example="pregão"),
+ *     @OA\Property(property="modalidade", type="string", enum={"dispensa", "pregao"}, example="pregao"),
  *     @OA\Property(property="numero_modalidade", type="string", example="001/2026"),
  *     @OA\Property(property="objeto_resumido", type="string", example="Aquisição de materiais de escritório"),
  *     @OA\Property(property="status", type="string", enum={"rascunho", "participacao", "julgamento_habilitacao", "execucao", "pagamento", "encerramento"}, example="participacao"),
@@ -128,4 +128,3 @@ class ModelSchemas
 {
     // Esta classe serve apenas para anotações OpenAPI dos modelos
 }
-

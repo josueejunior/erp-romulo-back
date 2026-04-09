@@ -51,6 +51,11 @@ class ProcessoController extends BaseApiController
 {
     use HasAuthContext;
 
+    private const MODALIDADES = [
+        ['value' => 'dispensa', 'label' => 'Dispensa'],
+        ['value' => 'pregao', 'label' => 'Pregao'],
+    ];
+
     /**
      * Classe do modelo para casting de dados no store
      */
@@ -124,6 +129,17 @@ class ProcessoController extends BaseApiController
         }
         
         return null;
+    }
+
+    /**
+     * GET /processos/modalidades
+     * Retorna as opcoes de modalidade para a UI usar em select.
+     */
+    public function modalidades(): JsonResponse
+    {
+        return response()->json([
+            'data' => self::MODALIDADES,
+        ]);
     }
 
     /**

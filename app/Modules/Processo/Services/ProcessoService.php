@@ -383,46 +383,57 @@ class ProcessoService extends BaseService
             throw new DomainException('Você não tem uma assinatura ativa. Ative sua assinatura para criar processos.');
         }
 
-        // Verificar limites do plano
-        // Verificar restrição diária
+        $dataSessaoPublica = isset($data['data_hora_sessao_publica']) && $data['data_hora_sessao_publica']
+            ? \Carbon\Carbon::parse($data['data_hora_sessao_publica'])
+            : null;
+
+        if (!$dataSessaoPublica) {
+            throw new DomainException('Data da sessao publica e obrigatoria para validar os limites do plano.');
+        }
+
+        // Verificar limites do plano usando a data da sessao publica (nao data de criacao)
         if ($plano->temRestricaoDiaria()) {
-            $hoje = now()->startOfDay();
-            $amanha = now()->copy()->addDay()->startOfDay();
-            $processosHoje = \App\Modules\Processo\Models\Processo::where('empresa_id', $empresaId)
-                ->whereBetween('criado_em', [$hoje, $amanha])
+            $processosNoDiaDaSessao = \App\Modules\Processo\Models\Processo::where('empresa_id', $empresaId)
+                ->whereDate('data_hora_sessao_publica', $dataSessaoPublica->toDateString())
                 ->count();
-            
-            if ($processosHoje > 0) {
-                \Log::info('ProcessoService::store() - Bloqueado por restrição diária', [
+
+            if ($processosNoDiaDaSessao > 0) {
+                \Log::info('ProcessoService::store() - Bloqueado por restricao diaria na data da sessao', [
                     'empresa_id' => $empresaId,
                     'plano_id' => $plano->id,
-                    'processos_hoje' => $processosHoje,
+                    'plano_nome' => $plano->nome,
+                    'data_sessao_publica' => $dataSessaoPublica->toDateString(),
+                    'processos_no_dia' => $processosNoDiaDaSessao,
                 ]);
-                throw new DomainException('Você já criou um processo hoje. Planos Essencial e Profissional permitem apenas 1 processo por dia.');
+                throw new DomainException(sprintf(
+                    'Voce ja possui um processo para a data %s. Planos Essencial e Profissional permitem apenas 1 processo por dia de sessao.',
+                    $dataSessaoPublica->format('d/m/Y')
+                ));
             }
         }
 
-        // Verificar limite mensal (se não tem processos ilimitados)
+        // Verificar limite mensal (se nao tem processos ilimitados) no mes da sessao publica
         if (!$plano->temProcessosIlimitados()) {
-            $inicioMes = now()->startOfMonth();
-            $fimMes = now()->copy()->endOfMonth();
-            $processosMes = \App\Modules\Processo\Models\Processo::where('empresa_id', $empresaId)
-                ->whereBetween('criado_em', [$inicioMes, $fimMes])
+            $inicioMes = $dataSessaoPublica->copy()->startOfMonth();
+            $fimMes = $dataSessaoPublica->copy()->endOfMonth();
+            $processosNoMesDaSessao = \App\Modules\Processo\Models\Processo::where('empresa_id', $empresaId)
+                ->whereBetween('data_hora_sessao_publica', [$inicioMes, $fimMes])
                 ->count();
-            
-            if ($processosMes >= $plano->limite_processos) {
-                \Log::info('ProcessoService::store() - Bloqueado por limite mensal', [
+
+            if ($processosNoMesDaSessao >= $plano->limite_processos) {
+                \Log::info('ProcessoService::store() - Bloqueado por limite mensal (mes da sessao)', [
                     'empresa_id' => $empresaId,
                     'plano_id' => $plano->id,
                     'plano_nome' => $plano->nome,
                     'limite_processos' => $plano->limite_processos,
-                    'processos_mes' => $processosMes,
+                    'processos_no_mes' => $processosNoMesDaSessao,
+                    'referencia_mes' => $inicioMes->format('Y-m'),
                 ]);
-                throw new DomainException("Você atingiu o limite de {$plano->limite_processos} processos do seu plano. Faça upgrade para continuar criando processos.");
+                throw new DomainException("Voce atingiu o limite de {$plano->limite_processos} processos do seu plano. Faca upgrade para continuar criando processos.");
             }
         }
 
-        // Status padrão
+        // Status padrao
         if (!isset($data['status'])) {
             $data['status'] = 'participacao';
         }
@@ -787,4 +798,5 @@ class ProcessoService extends BaseService
         });
     }
 }
+
 

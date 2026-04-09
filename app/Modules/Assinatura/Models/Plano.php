@@ -4,6 +4,7 @@ namespace App\Modules\Assinatura\Models;
 
 use App\Models\BaseModel;
 use App\Models\Traits\HasTimestampsCustomizados;
+use Illuminate\Support\Str;
 
 class Plano extends BaseModel
 {
@@ -60,7 +61,13 @@ class Plano extends BaseModel
      */
     public function temProcessosIlimitados(): bool
     {
-        return $this->limite_processos === null;
+        if ($this->limite_processos === null) {
+            return true;
+        }
+
+        // Fallback para dados legados inconsistentes:
+        // se o nome do plano for "Ilimitado", tratar como ilimitado.
+        return Str::contains(Str::lower((string) $this->nome), 'ilimitado');
     }
 
     /**
@@ -68,7 +75,11 @@ class Plano extends BaseModel
      */
     public function temUsuariosIlimitados(): bool
     {
-        return $this->limite_usuarios === null;
+        if ($this->limite_usuarios === null) {
+            return true;
+        }
+
+        return Str::contains(Str::lower((string) $this->nome), 'ilimitado');
     }
 
     /**
@@ -76,6 +87,10 @@ class Plano extends BaseModel
      */
     public function temRestricaoDiaria(): bool
     {
+        if ($this->temProcessosIlimitados()) {
+            return false;
+        }
+
         return $this->restricao_diaria === true;
     }
     /**
@@ -98,4 +113,3 @@ class Plano extends BaseModel
         return round($this->preco_mensal * $descontoPromocional * $meses, 2);
     }
 }
-

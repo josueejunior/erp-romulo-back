@@ -22,7 +22,7 @@ jobs:
             git reset --hard origin/main
             
             # Atualizar container se necessário
-            CONTAINER_ID=$(docker ps -q --filter "name=erp-licitacoes-backend")
+            CONTAINER_ID=$(docker ps -q --filter "name=erp-licitacoes-app")
             if [ -n "$CONTAINER_ID" ]; then
               docker exec $CONTAINER_ID php artisan cache:clear
               docker exec $CONTAINER_ID php artisan config:clear
