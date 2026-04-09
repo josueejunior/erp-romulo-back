@@ -242,7 +242,7 @@ class LoginUseCase
                 'count' => count($lookups),
                 'tenant_ids' => array_map(fn($l) => $l->tenantId, $lookups),
             ]);
-            
+
             // Buscar informações dos tenants para exibir ao usuário
             $tenantsInfo = [];
             foreach ($lookups as $lookup) {
@@ -256,7 +256,7 @@ class LoginUseCase
                     ];
                 }
             }
-            
+
             throw new MultiplosTenantsException(
                 'Este email está associado a múltiplas empresas. Selecione qual deseja acessar.',
                 $tenantsInfo
