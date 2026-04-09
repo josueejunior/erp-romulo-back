@@ -56,7 +56,7 @@ class LoginUseCase
             // 🛡️ CAMADA 1: Resolver Tenant (Estratégia O(1))
             // Este método implementa toda a lógica de resolução de tenant,
             // incluindo busca em users_lookup e tratamento de múltiplos tenants
-            $tenant = $this->resolverTenant($dto, $email->value);
+            $tenant = $this->resolverTenant($dto, $email->value, $dto->password);
 
             // 🛡️ CAMADA 2: Inicializar Conexão
             // A partir daqui, as queries rodam no banco do cliente
@@ -201,7 +201,7 @@ class LoginUseCase
      * @throws CredenciaisInvalidasException
      * @throws MultiplosTenantsException
      */
-    private function resolverTenant(LoginDTO $dto, string $email): Tenant
+    private function resolverTenant(LoginDTO $dto, string $email, string $password): Tenant
     {
         // Caso 1: Tenant ID fornecido explicitamente
         if ($dto->tenantId) {
@@ -255,12 +255,19 @@ class LoginUseCase
                 'tenant_ids' => array_map(fn($l) => $l->tenantId, $lookups),
             ]);
 
-            // Buscar informações dos tenants para exibir ao usuário
-            $tenantsInfo = [];
+            // Validar senha em cada tenant ANTES de expor dados das empresas.
+            // Sem isso, qualquer pessoa com um email válido veria razão social e CNPJ.
+            $tenantsValidos = [];
             foreach ($lookups as $lookup) {
                 $tenantDomain = $this->tenantRepository->buscarPorId($lookup->tenantId);
-                if ($tenantDomain) {
-                    $tenantsInfo[] = [
+                if (!$tenantDomain) {
+                    continue;
+                }
+
+                $senhaValida = $this->validarSenhaNoTenant($tenantDomain, $email, $password);
+
+                if ($senhaValida) {
+                    $tenantsValidos[] = [
                         'tenant_id' => $tenantDomain->id,
                         'razao_social' => $tenantDomain->razaoSocial,
                         'cnpj' => $tenantDomain->cnpj,
@@ -269,9 +276,23 @@ class LoginUseCase
                 }
             }
 
+            if (empty($tenantsValidos)) {
+                throw new CredenciaisInvalidasException();
+            }
+
+            // Apenas 1 tenant com senha válida: retornar direto, sem pedir seleção
+            if (count($tenantsValidos) === 1) {
+                $tenantId = $tenantsValidos[0]['tenant_id'];
+                $tenant = $this->tenantRepository->buscarModeloPorId($tenantId);
+                if (!$tenant) {
+                    throw new CredenciaisInvalidasException();
+                }
+                return $tenant;
+            }
+
             throw new MultiplosTenantsException(
                 'Este email está associado a múltiplas empresas. Selecione qual deseja acessar.',
-                $tenantsInfo
+                $tenantsValidos
             );
         }
 
@@ -302,8 +323,33 @@ class LoginUseCase
     }
 
     /**
+     * Valida a senha do usuário dentro do contexto de um tenant específico.
+     * Retorna true se o usuário existe no tenant E a senha corresponde.
+     * Retorna false para dessincronia (usuário no lookup mas não no tenant) ou senha errada.
+     * Exceções de infraestrutura (DB fora, etc.) propagam normalmente.
+     */
+    private function validarSenhaNoTenant(
+        \App\Domain\Tenant\Entities\Tenant $tenantDomain,
+        string $email,
+        string $password
+    ): bool {
+        return $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($email, $password) {
+            $user = $this->userRepository->buscarPorEmail($email);
+            if (!$user) {
+                return false;
+            }
+
+            if (empty($user->senhaHash)) {
+                return false;
+            }
+
+            return Hash::check($password, $user->senhaHash);
+        }) ?? false;
+    }
+
+    /**
      * 🛡️ CAMADA 3: Resolver Empresa Ativa
-     * 
+     *
      * Busca e valida a empresa ativa do usuário, garantindo consistência com o tenant
      */
     private function resolverEmpresaAtiva($user, Tenant $tenant)
