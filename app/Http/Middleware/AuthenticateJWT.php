@@ -150,7 +150,8 @@ class AuthenticateJWT
     {
         $userId = $payload['sub'] ?? null;
         $isAdmin = $payload['is_admin'] ?? false;
-        
+        $tenantId = $payload['tenant_id'] ?? null;
+
         if (!$userId) {
             return null;
         }
@@ -163,7 +164,17 @@ class AuthenticateJWT
             return \App\Modules\Auth\Models\AdminUser::find($userId);
         }
 
-        // Usuário comum: buscar User
+        // Usuário comum: o usuário existe no banco do tenant, não no banco central.
+        // Precisamos inicializar tenancy para buscar no banco correto.
+        if ($tenantId) {
+            $tenant = \App\Models\Tenant::find($tenantId);
+            if ($tenant) {
+                tenancy()->initialize($tenant);
+                return \App\Modules\Auth\Models\User::find($userId);
+            }
+        }
+
+        // Fallback sem tenancy (não deve acontecer para tokens válidos)
         return \App\Modules\Auth\Models\User::find($userId);
     }
 }
