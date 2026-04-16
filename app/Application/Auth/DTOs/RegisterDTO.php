@@ -14,8 +14,8 @@ class RegisterDTO
         public readonly string $nome,
         public readonly string $email,
         public readonly string $senha,
-        public readonly string $tenantId,
-        public readonly int $empresaId,
+        public readonly ?string $tenantId,
+        public readonly ?int $empresaId,
         public readonly string $role = 'Consulta',
         public readonly ?array $empresas = null,
     ) {}
@@ -44,11 +44,7 @@ class RegisterDTO
             }
         }
         
-        if (!$empresaId) {
-            throw new \InvalidArgumentException('É necessário fornecer empresa_id, empresa_ativa_id ou empresas.');
-        }
-        
-        $empresaId = (int) $empresaId;
+        $empresaId = $empresaId ? (int) $empresaId : null;
 
         return new self(
             nome: $request->input('name'),

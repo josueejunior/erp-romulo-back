@@ -17,11 +17,11 @@ return new class extends Migration
             $table->id();
             // tenant_id deve ser bigInteger para corresponder ao id da tabela tenants
             $table->unsignedBigInteger('tenant_id');
-            $table->foreign('tenant_id')
-                ->references('id')
-                ->on('tenants')
-                ->onDelete('cascade');
-            $table->foreignId('plano_id')->constrained('planos')->onDelete('restrict');
+            // Em banco de tenant dedicado, a tabela central `tenants` não existe localmente.
+            // Mantemos tenant_id sem FK para evitar erro de migration.
+            // Em banco de tenant dedicado, `planos` existe no banco central.
+            // Mantemos apenas o ID referencial sem FK local.
+            $table->unsignedBigInteger('plano_id');
             $table->status(['ativa', 'cancelada', 'suspensa', 'expirada'], 'ativa');
             $table->date('data_inicio');
             $table->date('data_fim');
@@ -35,6 +35,7 @@ return new class extends Migration
             
             // ⚡ Índices para performance
             $table->index('tenant_id');
+            $table->index('plano_id');
             $table->index('status');
             $table->index('data_inicio');
             $table->index('data_fim');

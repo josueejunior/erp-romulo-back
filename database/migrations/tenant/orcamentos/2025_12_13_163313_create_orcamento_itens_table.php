@@ -13,6 +13,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('orcamento_itens')) {
+            return;
+        }
+
         Schema::create('orcamento_itens', function (Blueprint $table) {
             $table->id();
             $table->foreignEmpresa();

@@ -16,11 +16,11 @@ return new class extends Migration
         Schema::create('payment_logs', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('tenant_id');
-            $table->foreign('tenant_id')
-                ->references('id')
-                ->on('tenants')
-                ->onDelete('cascade');
-            $table->foreignId('plano_id')->nullable()->constrained('planos')->onDelete('restrict');
+            // Em banco de tenant dedicado, a tabela central `tenants` não existe localmente.
+            // Mantemos tenant_id sem FK para evitar erro de migration.
+            // Em banco de tenant dedicado, `planos` existe no banco central.
+            // Mantemos apenas o ID referencial sem FK local.
+            $table->unsignedBigInteger('plano_id')->nullable();
             $table->decimal('valor', 10, 2);
             $table->string('periodo', 20); // 'mensal' ou 'anual'
             $table->string('status', 50); // 'pending', 'approved', 'rejected', 'failed'

@@ -17,7 +17,8 @@ return new class extends Migration
             $table->id();
             $table->foreignUsuario(true);
             $table->unsignedBigInteger('tenant_id')->nullable();
-            $table->foreign('tenant_id')->references('id')->on('tenants')->onDelete('cascade');
+            // Em banco de tenant dedicado, a tabela central `tenants` não existe localmente.
+            // Mantemos tenant_id sem FK para evitar erro de migration.
             $table->string('action', Blueprint::VARCHAR_TINY); // created, updated, deleted, status_changed, payment_processed, etc
             $table->string('model_type', Blueprint::VARCHAR_DEFAULT); // App\Models\Processo
             $table->unsignedBigInteger('model_id');

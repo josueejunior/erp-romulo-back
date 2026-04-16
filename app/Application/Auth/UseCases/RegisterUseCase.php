@@ -8,6 +8,7 @@ use App\Application\Auth\DTOs\CriarUsuarioDTO;
 use App\Domain\Shared\ValueObjects\TenantContext;
 use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
 use App\Services\AdminTenancyRunner;
+use App\Services\TenantService;
 use DomainException;
 
 /**
@@ -22,6 +23,7 @@ class RegisterUseCase
         private CriarUsuarioUseCase $criarUsuarioUseCase,
         private TenantRepositoryInterface $tenantRepository,
         private AdminTenancyRunner $adminTenancyRunner,
+        private TenantService $tenantService,
     ) {}
 
     /**
@@ -30,8 +32,39 @@ class RegisterUseCase
      */
     public function executar(RegisterDTO $dto): array
     {
+        $tenantId = $dto->tenantId;
+        $empresaId = $dto->empresaId;
+
+        // Se não vier tenant/empresa, criar automaticamente.
+        if (!$tenantId || !$empresaId) {
+            $cnpjBase = str_pad((string) random_int(1, 99999999999999), 14, '0', STR_PAD_LEFT);
+            $cnpjMascara = substr($cnpjBase, 0, 2) . '.' .
+                substr($cnpjBase, 2, 3) . '.' .
+                substr($cnpjBase, 5, 3) . '/' .
+                substr($cnpjBase, 8, 4) . '-' .
+                substr($cnpjBase, 12, 2);
+
+            $autoTenantResult = $this->tenantService->createTenantWithEmpresa([
+                'razao_social' => "Empresa {$dto->nome}",
+                'cnpj' => $cnpjMascara,
+                'email' => $dto->email,
+                'telefone' => '(11) 99999-9999',
+                'status' => 'ativa',
+            ], false);
+
+            $tenantModelAuto = $autoTenantResult['tenant'] ?? null;
+            $empresaModelAuto = $autoTenantResult['empresa'] ?? null;
+
+            if (!$tenantModelAuto || !$empresaModelAuto) {
+                throw new DomainException('Falha ao criar tenant automaticamente para o usuário.');
+            }
+
+            $tenantId = (string) $tenantModelAuto->id;
+            $empresaId = (int) $empresaModelAuto->id;
+        }
+
         // Buscar tenant usando repository (Domain, não Eloquent)
-        $tenantDomain = $this->tenantRepository->buscarPorId($dto->tenantId);
+        $tenantDomain = $this->tenantRepository->buscarPorId((int) $tenantId);
         
         if (!$tenantDomain) {
             throw new DomainException('Tenant não encontrado.');
@@ -51,7 +84,7 @@ class RegisterUseCase
             nome: $dto->nome,
             email: $dto->email,
             senha: $dto->senha,
-            empresaId: $dto->empresaId,
+            empresaId: $empresaId,
             role: $dto->role,
             empresas: $dto->empresas,
         );

@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use App\Models\Tenant;
 use Illuminate\Support\Facades\File;
+use SplFileInfo;
 
 class TenantMigrate extends Command
 {
@@ -46,7 +47,7 @@ class TenantMigrate extends Command
         ];
         
         $statusParams = [];
-        $subdirs = [];
+        $migrationFiles = [];
         
         if ($pathOption) {
             // Se um path customizado foi fornecido, usar ele
@@ -58,7 +59,7 @@ class TenantMigrate extends Command
             $statusParams['--path'] = $path;
             $statusParams['--realpath'] = true;
         } else {
-            // Sem path customizado, buscar recursivamente todos os subdiretórios de tenant
+            // Sem path customizado, buscar recursivamente todos os arquivos de migration de tenant
             $tenantPath = database_path('migrations/tenant');
             
             if (!File::exists($tenantPath)) {
@@ -66,10 +67,10 @@ class TenantMigrate extends Command
                 return 1;
             }
             
-            // Buscar todos os subdiretórios que contêm migrations
-            $subdirs = $this->getMigrationSubdirectories($tenantPath);
-            
-            if (empty($subdirs)) {
+            // Buscar todos os arquivos de migration em ordem global (timestamp)
+            $migrationFiles = $this->getMigrationFilesOrdered($tenantPath);
+
+            if (empty($migrationFiles)) {
                 $this->warn("⚠️  Nenhuma migration encontrada em: {$tenantPath}");
                 return 1;
             }
@@ -90,10 +91,10 @@ class TenantMigrate extends Command
                             $this->line($output);
                         }
                     } else {
-                        // Para status, mostrar de cada subdiretório
-                        foreach ($subdirs as $subdir) {
+                        // Para status, mostrar de cada arquivo de migration
+                        foreach ($migrationFiles as $migrationFile) {
                             \Artisan::call('migrate:status', [
-                                '--path' => $subdir,
+                                '--path' => $migrationFile,
                                 '--realpath' => true,
                             ]);
                             $output = \Artisan::output();
@@ -112,13 +113,12 @@ class TenantMigrate extends Command
                             $this->line($output);
                         }
                     } else {
-                        // Sem path: executar migrations de todos os subdiretórios encontrados
-                        // Executar para cada subdiretório - o Laravel gerencia a tabela _migrations
-                        // para evitar executar migrations já executadas
-                        foreach ($subdirs as $subdir) {
+                        // Sem path: executar migrations em ordem global de timestamp
+                        foreach ($migrationFiles as $migrationFile) {
                             \Artisan::call('migrate', [
-                                '--path' => $subdir,
+                                '--path' => $migrationFile,
                                 '--realpath' => true,
+                                '--database' => 'tenant',
                                 '--force' => $this->option('force') ?: true,
                             ]);
                             $output = \Artisan::output();
@@ -152,29 +152,25 @@ class TenantMigrate extends Command
     }
 
     /**
-     * Get all subdirectories that contain migration files
-     * Returns absolute paths that can be used with --realpath
+     * Retorna arquivos de migration em ordem global (timestamp do nome).
      */
-    protected function getMigrationSubdirectories(string $basePath): array
+    protected function getMigrationFilesOrdered(string $basePath): array
     {
         if (!File::exists($basePath)) {
             return [];
         }
 
-        $subdirs = [];
-        $files = File::allFiles($basePath);
-        
-        foreach ($files as $file) {
-            if ($file->getExtension() === 'php') {
-                $path = $file->getPath();
-                // Usar caminho absoluto para funcionar com --realpath
-                if (!in_array($path, $subdirs)) {
-                    $subdirs[] = $path;
-                }
-            }
-        }
+        $files = array_filter(File::allFiles($basePath), function (SplFileInfo $file) {
+            return $file->getExtension() === 'php';
+        });
 
-        return $subdirs;
+        usort($files, function (SplFileInfo $a, SplFileInfo $b) {
+            return strcmp($a->getFilename(), $b->getFilename());
+        });
+
+        return array_map(function (SplFileInfo $file) {
+            return $file->getPathname();
+        }, $files);
     }
 
     /**

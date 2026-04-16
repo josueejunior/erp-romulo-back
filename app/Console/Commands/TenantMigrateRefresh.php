@@ -4,6 +4,8 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use App\Models\Tenant;
+use Illuminate\Support\Facades\File;
+use SplFileInfo;
 
 class TenantMigrateRefresh extends Command
 {
@@ -48,22 +50,38 @@ class TenantMigrateRefresh extends Command
             
             try {
                 tenancy()->initialize($tenant);
-                
-                $this->info("  ↳ Fazendo rollback...");
-                \Artisan::call('migrate:rollback', [
-                    '--path' => 'database/migrations/tenant',
+
+                $tenantPath = database_path('migrations/tenant');
+                $migrationFiles = $this->getMigrationFilesOrdered($tenantPath);
+
+                if (empty($migrationFiles)) {
+                    throw new \RuntimeException("Nenhuma migration de tenant encontrada em {$tenantPath}");
+                }
+
+                $this->info("  ↳ Limpando banco do tenant (db:wipe)...");
+                \Artisan::call('db:wipe', [
+                    '--database' => 'tenant',
                     '--force' => true,
                 ]);
-                
-                $this->info("  ↳ Executando migrations...");
-                \Artisan::call('migrate', [
-                    '--path' => 'database/migrations/tenant',
-                    '--force' => true,
-                ]);
+
+                $this->info("  ↳ Executando migrations em ordem global...");
+                foreach ($migrationFiles as $migrationFile) {
+                    \Artisan::call('migrate', [
+                        '--database' => 'tenant',
+                        '--path' => $migrationFile,
+                        '--realpath' => true,
+                        '--force' => true,
+                    ]);
+                    $output = \Artisan::output();
+                    if (!empty(trim($output)) && trim($output) !== 'Nothing to migrate.') {
+                        $this->line($output);
+                    }
+                }
                 
                 if ($this->option('seed')) {
                     $this->info("  ↳ Executando seeds...");
                     \Artisan::call('db:seed', [
+                        '--database' => 'tenant',
                         '--force' => true,
                     ]);
                 }
@@ -83,6 +101,28 @@ class TenantMigrateRefresh extends Command
 
         $this->info("\n✅ Refresh concluído para todos os tenants!");
         return 0;
+    }
+
+    /**
+     * Retorna arquivos de migration em ordem global (timestamp do nome).
+     */
+    protected function getMigrationFilesOrdered(string $basePath): array
+    {
+        if (!File::exists($basePath)) {
+            return [];
+        }
+
+        $files = array_filter(File::allFiles($basePath), function (SplFileInfo $file) {
+            return $file->getExtension() === 'php';
+        });
+
+        usort($files, function (SplFileInfo $a, SplFileInfo $b) {
+            return strcmp($a->getFilename(), $b->getFilename());
+        });
+
+        return array_map(function (SplFileInfo $file) {
+            return $file->getPathname();
+        }, $files);
     }
 
     /**
