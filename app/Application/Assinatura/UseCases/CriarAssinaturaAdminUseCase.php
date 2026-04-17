@@ -68,15 +68,20 @@ class CriarAssinaturaAdminUseCase
         }
 
         // Buscar empresa dentro do tenant
-        $empresaId = $dados['empresa_id'] ?? null;
+        $empresaId = isset($dados['empresa_id']) && $dados['empresa_id'] !== '' ? (int) $dados['empresa_id'] : null;
         if (!$empresaId) {
             // Se não fornecido, buscar primeira empresa do tenant
             $empresaId = $this->adminTenancyRunner->runForTenant($tenantDomain, function () {
-                $tenantEmpresa = TenantEmpresa::where('tenant_id', tenancy()->tenant->id)->first();
+                // Forçar uso do banco central para buscar mapeamento
+                $tenantEmpresa = \Illuminate\Support\Facades\DB::connection('pgsql')
+                    ->table('tenant_empresas')
+                    ->where('tenant_id', tenancy()->tenant->id)
+                    ->first();
+                
                 if ($tenantEmpresa) {
-                    $empresa = Empresa::find($tenantEmpresa->empresa_id);
-                    return $empresa?->id;
+                    return (int) $tenantEmpresa->empresa_id;
                 }
+                
                 // Fallback: primeira empresa do tenant
                 $empresa = Empresa::first();
                 return $empresa?->id;
@@ -97,7 +102,7 @@ class CriarAssinaturaAdminUseCase
         }
 
         // Buscar usuário dentro do tenant (opcional, mas recomendado)
-        $userId = $dados['user_id'] ?? null;
+        $userId = isset($dados['user_id']) && $dados['user_id'] !== '' ? (int) $dados['user_id'] : null;
         if (!$userId) {
             // Se não fornecido, buscar primeiro admin do tenant
             $userId = $this->adminTenancyRunner->runForTenant($tenantDomain, function () {
