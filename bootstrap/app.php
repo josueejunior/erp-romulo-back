@@ -179,6 +179,37 @@ return Application::configure(basePath: dirname(__DIR__))
         });
         
         // Exceções de Não Encontrado - Not Found (404)
+        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\NotFoundHttpException $e, $request) use ($addCorsToResponse) {
+            if ($request->expectsJson() || $request->is('api/*')) {
+                // Se a exceção anterior for ModelNotFoundException, é um model binding que falhou
+                $previous = $e->getPrevious();
+                $message = 'Recurso não encontrado.';
+                
+                if ($previous instanceof \Illuminate\Database\Eloquent\ModelNotFoundException) {
+                    $modelName = class_basename($previous->getModel());
+                    $message = "Recurso ({$modelName}) não encontrado.";
+                }
+
+                $response = response()->json([
+                    'message' => $message,
+                    'code' => 'NOT_FOUND',
+                ], 404);
+                return $addCorsToResponse($response, $request);
+            }
+        });
+
+        // Exceções de Não Encontrado de Modelos (404)
+        $exceptions->render(function (\Illuminate\Database\Eloquent\ModelNotFoundException $e, $request) use ($addCorsToResponse) {
+            if ($request->expectsJson() || $request->is('api/*')) {
+                $modelName = class_basename($e->getModel());
+                $response = response()->json([
+                    'message' => "Recurso ({$modelName}) não encontrado.",
+                    'code' => 'NOT_FOUND',
+                ], 404);
+                return $addCorsToResponse($response, $request);
+            }
+        });
+
         $exceptions->render(function (\App\Domain\Exceptions\NotFoundException $e, $request) use ($addCorsToResponse) {
             if ($request->expectsJson()) {
                 $response = response()->json([

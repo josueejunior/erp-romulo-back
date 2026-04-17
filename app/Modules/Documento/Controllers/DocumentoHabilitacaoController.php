@@ -305,11 +305,19 @@ class DocumentoHabilitacaoController extends BaseApiController
 
             $path = 'documentos-habilitacao/' . $documento->arquivo;
             
-            if (!Storage::exists($path)) {
-                return response()->json(['message' => 'Arquivo não encontrado no servidor.'], 404);
+            // 🔥 Tentar acessar também no disco central (public) para retrocompatibilidade
+            $existsInTenant = Storage::exists($path);
+            $existsInPublic = Storage::disk('public')->exists($path);
+
+            if (!$existsInTenant && !$existsInPublic) {
+                return response()->json(['message' => 'Arquivo não encontrado no servidor.', 'path' => $path], 404);
             }
 
-            return Storage::download($path);
+            if ($existsInTenant) {
+                return Storage::download($path);
+            } else {
+                return Storage::disk('public')->download($path);
+            }
         } catch (\Exception $e) {
             return response()->json(['message' => 'Erro ao baixar arquivo.'], 500);
         }
