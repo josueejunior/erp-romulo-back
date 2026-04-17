@@ -52,6 +52,31 @@ return Application::configure(basePath: dirname(__DIR__))
         // IMPORTANTE:
         // EnsureEmpresaAtivaContext NÃO deve rodar como middleware global.
         // Ele depende de auth/tenancy e deve ser aplicado apenas nas rotas autenticadas.
+        
+        // 🔥 ARQUITETURA RIGOROSA: Ordem dos Middlewares
+        // Devemos garantir que o Contexto (Tenancy, Auth) seja resolvido ANTES do SubstituteBindings.
+        // O SubstituteBindings faz o Implicit Route Binding e busca os models no banco.
+        // Se o tenancy não estiver inicializado antes dele, o Laravel tentará buscar no banco central e retornará 404.
+        $middleware->prependToPriorityList(
+            \Illuminate\Routing\Middleware\SubstituteBindings::class,
+            \App\Http\Middleware\BootstrapApplicationContext::class
+        );
+        $middleware->prependToPriorityList(
+            \Illuminate\Routing\Middleware\SubstituteBindings::class,
+            \App\Http\Middleware\CheckSubscription::class
+        );
+        $middleware->prependToPriorityList(
+            \App\Http\Middleware\BootstrapApplicationContext::class,
+            \App\Http\Middleware\ResolveTenantContext::class
+        );
+        $middleware->prependToPriorityList(
+            \App\Http\Middleware\ResolveTenantContext::class,
+            \App\Http\Middleware\BuildAuthContext::class
+        );
+        $middleware->prependToPriorityList(
+            \App\Http\Middleware\BuildAuthContext::class,
+            \App\Http\Middleware\AuthenticateJWT::class
+        );
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // ✅ Helper simples para CORS no Exception Handler
