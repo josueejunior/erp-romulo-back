@@ -23,18 +23,20 @@ class VerificarAssinaturaAtivaPorEmpresaUseCase
      * Executa o caso de uso
      * 
      * @param int $empresaId ID da empresa
+     * @param int|null $tenantId ID do tenant (para desambiguação)
      * @return array Array com informações sobre a assinatura e se pode acessar
      */
-    public function executar(int $empresaId): array
+    public function executar(int $empresaId, ?int $tenantId = null): array
     {
         try {
             \Log::info('VerificarAssinaturaAtivaPorEmpresaUseCase - Iniciando verificação', [
                 'empresa_id' => $empresaId,
+                'tenant_id' => $tenantId,
                 'tenancy_initialized' => tenancy()->initialized,
                 'tenancy_tenant_id' => tenancy()->tenant?->id,
             ]);
             
-            $assinaturaDomain = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($empresaId);
+            $assinaturaDomain = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($empresaId, $tenantId);
             
             \Log::info('VerificarAssinaturaAtivaPorEmpresaUseCase - Resultado da busca', [
                 'empresa_id' => $empresaId,

@@ -23,13 +23,14 @@ class ObterStatusAssinaturaUseCase
      * 
      * @param int $empresaId ID da empresa ativa (para buscar assinatura)
      * @param int $empresaIdParaContagem ID da empresa para contar usuários (geralmente o mesmo)
+     * @param int|null $tenantId ID do tenant (para desambiguação em multi-tenant)
      * @return array Dados do status da assinatura
      * @throws NotFoundException Se a assinatura não for encontrada
      */
-    public function executar(int $empresaId, int $empresaIdParaContagem): array
+    public function executar(int $empresaId, int $empresaIdParaContagem, ?int $tenantId = null): array
     {
-        // 🔥 CORRIGIDO: Buscar assinatura pela empresa, não pelo usuário
-        $assinatura = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($empresaId);
+        // 🔥 CORRIGIDO: Buscar assinatura pela empresa e tenant
+        $assinatura = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($empresaId, $tenantId);
 
         if (!$assinatura) {
             throw new NotFoundException("Nenhuma assinatura encontrada para esta empresa.");

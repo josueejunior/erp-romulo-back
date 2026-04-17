@@ -462,29 +462,39 @@ class OnboardingController extends BaseApiController
     }
 
     /**
-     * Cria plano gratuito de 3 dias após tutorial concluído
+     * Cria plano gratuito de 3 dias após tutorial concluído para TODAS as empresas do usuário
+     * 
+     * 🔥 ROBUSTEZ: Agora percorre todos os tenants e empresas vinculadas ao usuário
      * 
      * @param \App\Models\User $user
-     * @param int|null $tenantId
+     * @param int|null $tenantId Contexto atual (opcional)
      * @return void
      */
     private function criarPlanoGratuito3Dias($user, ?int $tenantId): void
     {
         try {
-            $empresaId = $user->empresa_ativa_id ?? null;
-            if (!$empresaId) {
-                return;
-            }
+            $email = $user->email;
+            Log::info('OnboardingController::criarPlanoGratuito3Dias - Iniciando criação de trial global', [
+                'email' => $email,
+                'user_id' => $user->id,
+            ]);
+
+            // 1. Buscar todos os tenants onde este usuário existe
+            $lookupRepository = app(\App\Domain\UsersLookup\Repositories\UserLookupRepositoryInterface::class);
+            $lookups = $lookupRepository->buscarAtivosPorEmail($email);
             
-            $assinaturaExistente = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($empresaId);
-            if ($assinaturaExistente) {
+            if (empty($lookups)) {
+                Log::warning('OnboardingController::criarPlanoGratuito3Dias - Nenhum tenant encontrado para o usuário');
+                // Fallback para o tenant atual se houver
+                if ($tenantId && $user->empresa_ativa_id) {
+                    $this->criarTrialParaEmpresa($user->id, $user->empresa_ativa_id, $tenantId);
+                }
                 return;
             }
 
-            // Buscar plano gratuito (preco_mensal = 0)
+            // 2. Buscar o plano gratuito uma única vez para usar em todos
             $planosAtivos = $this->planoRepository->listar(['ativo' => true]);
             $planoGratuito = null;
-            
             foreach ($planosAtivos as $plano) {
                 $precoMensal = $plano->precoMensal ?? 0;
                 if ($precoMensal == 0 || $precoMensal === null) {
@@ -494,16 +504,98 @@ class OnboardingController extends BaseApiController
             }
 
             if (!$planoGratuito) {
+                Log::error('OnboardingController::criarPlanoGratuito3Dias - Nenhum plano gratuito encontrado no sistema');
                 return;
             }
 
-            // Calcular data fim (3 dias a partir de agora)
+            // 3. Percorrer cada tenant e suas empresas
+            $tenantOriginal = tenancy()->tenant;
+            
+            foreach ($lookups as $lookup) {
+                try {
+                    $t = \App\Models\Tenant::find($lookup->tenantId);
+                    if (!$t) continue;
+
+                    tenancy()->initialize($t);
+                    
+                    // Buscar o usuário dentro deste tenant
+                    $userNoTenant = \App\Modules\Auth\Models\User::where('email', $email)->first();
+                    if (!$userNoTenant) continue;
+
+                    // Buscar todas as empresas vinculadas a este usuário neste tenant
+                    $empresas = $userNoTenant->empresas()->get();
+                    
+                    foreach ($empresas as $empresa) {
+                        $this->criarTrialParaEmpresa($userNoTenant->id, $empresa->id, (int)$t->id, $planoGratuito);
+                    }
+
+                } catch (\Exception $e) {
+                    Log::error('OnboardingController::criarPlanoGratuito3Dias - Erro ao processar tenant', [
+                        'tenant_id' => $lookup->tenantId,
+                        'error' => $e->getMessage(),
+                    ]);
+                } finally {
+                    // tenancy()->end() não é necessário aqui pois o initialize() sobrescreve
+                }
+            }
+
+            // Restaurar tenant original e limpar cache
+            if ($tenantOriginal) {
+                tenancy()->initialize($tenantOriginal);
+                
+                try {
+                    $context = app(\App\Contracts\ApplicationContextContract::class);
+                    if ($context->isInitialized()) {
+                        $context->limparCacheAssinatura();
+                    }
+                } catch (\Exception $e) {
+                    // Ignorar
+                }
+            } else {
+                tenancy()->end();
+            }
+
+        } catch (\Exception $e) {
+            Log::warning('OnboardingController::criarPlanoGratuito3Dias - Erro geral ao criar trial', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Helper: Cria assinatura trial para uma empresa específica se não houver
+     */
+    private function criarTrialParaEmpresa(int $userId, int $empresaId, int $tenantId, $planoGratuito = null): void
+    {
+        try {
+            // Verificar se já tem assinatura
+            $assinaturaExistente = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($empresaId, $tenantId);
+            if ($assinaturaExistente) {
+                return;
+            }
+
+            // Se não passou o plano, buscar agora
+            if (!$planoGratuito) {
+                $planosAtivos = $this->planoRepository->listar(['ativo' => true]);
+                foreach ($planosAtivos as $plano) {
+                    $precoMensal = $plano->precoMensal ?? 0;
+                    if ($precoMensal == 0 || $precoMensal === null) {
+                        $planoGratuito = $plano;
+                        break;
+                    }
+                }
+            }
+
+            if (!$planoGratuito) return;
+
+            // Calcular datas
             $dataInicio = Carbon::now();
             $dataFim = $dataInicio->copy()->addDays(3);
 
-            // Criar DTO de assinatura trial
+            // Criar DTO
             $assinaturaTrialDTO = new CriarAssinaturaDTO(
-                userId: $user->id,
+                userId: $userId,
                 planoId: $planoGratuito->id,
                 status: 'ativa',
                 dataInicio: $dataInicio,
@@ -512,28 +604,24 @@ class OnboardingController extends BaseApiController
                 metodoPagamento: 'gratuito',
                 transacaoId: null,
                 diasGracePeriod: 0,
-                observacoes: 'Trial automático de 3 dias - criado após conclusão do tutorial',
+                observacoes: 'Trial automático de 3 dias - criado via onboarding global',
                 tenantId: $tenantId,
                 empresaId: $empresaId,
             );
 
-            // Criar assinatura trial
+            // Criar
             $this->criarAssinaturaUseCase->executar($assinaturaTrialDTO);
             
-            // Limpar cache do ApplicationContext após criar assinatura
-            try {
-                $context = app(\App\Contracts\ApplicationContextContract::class);
-                if ($context->isInitialized()) {
-                    $context->limparCacheAssinatura();
-                }
-            } catch (\Exception $e) {
-                // Ignorar erro ao limpar cache
-            }
-            
+            Log::info('OnboardingController::criarTrialParaEmpresa - Trial criado com sucesso', [
+                'tenant_id' => $tenantId,
+                'empresa_id' => $empresaId,
+                'user_id' => $userId,
+            ]);
+
         } catch (\Exception $e) {
-            // Não falhar a conclusão do tutorial se houver erro ao criar trial
-            Log::warning('OnboardingController::criarPlanoGratuito3Dias - Erro ao criar trial', [
-                'user_id' => $user->id,
+            Log::warning('OnboardingController::criarTrialParaEmpresa - Erro', [
+                'tenant_id' => $tenantId,
+                'empresa_id' => $empresaId,
                 'error' => $e->getMessage(),
             ]);
         }

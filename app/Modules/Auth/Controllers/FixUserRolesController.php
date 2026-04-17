@@ -34,6 +34,7 @@ class FixUserRolesController extends Controller
             
             // Se for AdminUser, retornar array vazio (admin não tem roles no sistema de tenants)
             if ($user instanceof \App\Modules\Auth\Models\AdminUser) {
+                Log::info('FixUserRolesController - User is AdminUser, returning empty roles.', ['user_id' => $user->id]);
                 return response()->json([
                     'data' => [
                         'roles' => [],
@@ -42,6 +43,10 @@ class FixUserRolesController extends Controller
                 ]);
             }
             
+            Log::info('FixUserRolesController - Attempting to get roles for regular user.', ['user_id' => $user->id, 'user_email' => $user->email]);
+            Log::info('FixUserRolesController - User object type:', ['type' => get_class($user)]);
+            Log::info('FixUserRolesController - User getRoleNames() raw:', ['roles_raw' => method_exists($user, 'getRoleNames') ? $user->getRoleNames()->toArray() : 'Method not found']);
+
             // Executar Use Case para usuários comuns
             $data = $this->getUserRolesUseCase->executar($user);
 

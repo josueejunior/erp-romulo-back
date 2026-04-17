@@ -92,7 +92,7 @@ final class SubscriptionAccessService
 
         // Buscar assinatura se não foi fornecida
         if (!$assinatura) {
-            $assinatura = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($empresaId);
+            $assinatura = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($empresaId, tenancy()->tenant?->id);
         }
 
         // Se não tem assinatura, permitir acesso (para onboarding)
@@ -142,7 +142,7 @@ final class SubscriptionAccessService
 
         // Buscar assinatura se não foi fornecida
         if (!$assinatura) {
-            $assinatura = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($empresaId);
+            $assinatura = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($empresaId, tenancy()->tenant?->id);
         }
 
         // Se não tem assinatura ativa, não pode acessar

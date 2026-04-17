@@ -41,9 +41,12 @@ class OrcamentoPolicy
             $processo = $processo[0];
         }
 
-        // Pode criar orçamento se processo estiver em participação ou julgamento_habilitacao
-        // Permite criar orçamento mesmo após a sessão pública (julgamento_habilitacao)
-        return $processo && in_array($processo->status, ['participacao', 'julgamento_habilitacao']);
+        // Não pode criar orçamento de processo em execução ou arquivado
+        if ($processo && ($processo->isEmExecucao() || $processo->status === 'arquivado')) {
+            return false;
+        }
+
+        return true;
     }
 
     /**

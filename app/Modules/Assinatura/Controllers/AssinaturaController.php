@@ -95,7 +95,7 @@ class AssinaturaController extends BaseApiController
 
             // 🔥 CORRIGIDO: Buscar assinatura da EMPRESA ATIVA do usuário
             try {
-                $assinatura = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($user->empresa_ativa_id);
+                $assinatura = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($user->empresa_ativa_id, $tenant->id);
                 
                 if (!$assinatura) {
                     return response()->json([
@@ -109,7 +109,11 @@ class AssinaturaController extends BaseApiController
                 $usage = null;
                 $warning = null;
                 try {
-                    $statusData = $this->obterStatusAssinaturaUseCase->executar($user->empresa_ativa_id, $user->empresa_ativa_id);
+                    $statusData = $this->obterStatusAssinaturaUseCase->executar(
+                        $user->empresa_ativa_id, 
+                        $user->empresa_ativa_id,
+                        $tenant->id
+                    );
                     $usage = [
                         'processos_utilizados' => $statusData['processos_utilizados'] ?? 0,
                         'usuarios_utilizados' => $statusData['usuarios_utilizados'] ?? 0,
@@ -216,7 +220,11 @@ class AssinaturaController extends BaseApiController
             // 🔥 CORRIGIDO: Buscar status da assinatura da EMPRESA ATIVA, não do usuário
             // A assinatura pertence à empresa, não ao usuário
             try {
-                $statusData = $this->obterStatusAssinaturaUseCase->executar($user->empresa_ativa_id, $empresa->id);
+                $statusData = $this->obterStatusAssinaturaUseCase->executar(
+                    $user->empresa_ativa_id, 
+                    $empresa->id,
+                    $tenant->id
+                );
 
                 return response()->json([
                     'data' => $statusData

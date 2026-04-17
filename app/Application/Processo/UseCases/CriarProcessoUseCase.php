@@ -40,7 +40,7 @@ class CriarProcessoUseCase
             throw new DomainException('Tenant nao encontrado. Verifique sua assinatura.');
         }
 
-        $assinaturaDomain = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($empresaId);
+        $assinaturaDomain = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($empresaId, tenancy()->tenant?->id);
         if (!$assinaturaDomain) {
             // Compatibilidade com dados legados por tenant_id
             $assinaturaDomain = $this->assinaturaRepository->buscarAssinaturaAtual((int) $tenant->id);

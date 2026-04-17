@@ -269,7 +269,7 @@ class Tenant extends BaseTenant implements TenantWithDatabase
         // 🔥 CORREÇÃO: Buscar assinatura da EMPRESA/TENANT (fonte da verdade)
         // Não buscar por user_id primeiro, pois o usuário pode ter múltiplas empresas com assinaturas diferentes
         $assinaturaRepository = app(\App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface::class);
-        $assinaturaDomain = $assinaturaRepository->buscarAssinaturaAtualPorEmpresa($this->id);
+        $assinaturaDomain = $assinaturaRepository->buscarAssinaturaAtualPorEmpresa($this->id, $this->id);
 
         // Se não encontrou pela empresa, tentar pelo tenant_id (legado)
         if (!$assinaturaDomain) {

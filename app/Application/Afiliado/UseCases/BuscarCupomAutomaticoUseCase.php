@@ -28,7 +28,7 @@ final class BuscarCupomAutomaticoUseCase
         $referencia = AfiliadoReferencia::where('tenant_id', $tenantId)
             ->where('cadastro_concluido', true)
             ->with('afiliado')
-            ->orderBy('cadastro_concluido_em', 'desc')
+            ->latest()
             ->first();
 
         if (!$referencia || !$referencia->afiliado) {

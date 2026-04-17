@@ -12,8 +12,17 @@ use App\Models\Traits\BelongsToEmpresaTrait;
 class Assinatura extends BaseModel
 {
     use HasTimestampsCustomizados, HasEmpresaScope, BelongsToEmpresaTrait;
-    
+
     public $timestamps = true;
+
+    /**
+     * Assinaturas são dados centrais (billing), sempre ficam no banco central
+     * mesmo quando o contexto de tenancy está ativo
+     */
+    public function getConnectionName(): string
+    {
+        return config('tenancy.database.central_connection', config('database.default'));
+    }
 
     protected $fillable = [
         'user_id', // Mantido para compatibilidade

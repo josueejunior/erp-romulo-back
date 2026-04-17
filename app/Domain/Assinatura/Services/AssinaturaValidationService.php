@@ -92,7 +92,7 @@ final class AssinaturaValidationService
     public function validarSemConflitoAssinaturaAtiva(int $empresaId, ?int $excluirAssinaturaId = null): void
     {
         try {
-            $assinaturaAtual = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($empresaId);
+            $assinaturaAtual = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($empresaId, tenancy()->tenant?->id);
             
             // Se não há assinatura atual, não há conflito
             if (!$assinaturaAtual) {

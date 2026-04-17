@@ -66,25 +66,26 @@ class LoginUseCase
             // 🛡️ CAMADA 2: Validação Cruzada (Integridade)
             // Verificar se o usuário realmente existe no banco do tenant
             // Isso previne "usuário fantasma" (existe no lookup mas não no tenant)
-            Log::debug('LoginUseCase::executar - Buscando usuário no banco do tenant');
+            Log::debug('LoginUseCase::executar - Buscando usuário no banco do tenant', [
+                'email' => $email->value,
+                'tenant_id' => $tenant->id,
+            ]);
             $user = $this->userRepository->buscarPorEmail($email->value);
             
             if (!$user) {
                 // 🔥 FALHA DE INTEGRIDADE: Existe no lookup mas não no banco do tenant
                 // Tratar como credenciais inválidas (não revelar problema de sistema)
-                // Mas gerar log crítico para SRE/DevOps investigar dessincronização
                 Log::critical('LoginUseCase::executar - DESSINCRONIA_TENANT: Usuário não encontrado no banco do Tenant', [
                     'email' => $email->value,
                     'tenant_id' => $tenant->id,
                     'problema' => 'Usuário existe em users_lookup mas não no banco do tenant',
-                    'acao_sre' => 'Verificar sincronização entre users_lookup e banco do tenant',
                 ]);
                 
-                // Prevenir timing attack verificando senha dummy (hash bcrypt válido que nunca corresponde)
+                // Prevenir timing attack
                 $dummyHash = '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi';
                 Hash::check($dto->password, $dummyHash);
                 
-                throw new CredenciaisInvalidasException();
+                throw new CredenciaisInvalidasException('Usuário não encontrado nesta empresa.');
             }
 
             // 🛡️ CAMADA 3: Validação de Credenciais (Value Object Senha)
@@ -93,6 +94,11 @@ class LoginUseCase
             $isValidPassword = $senha->verificar($dto->password);
             
             if (!$isValidPassword) {
+                Log::warning('LoginUseCase::executar - Senha incorreta', [
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                    'tenant_id' => $tenant->id,
+                ]);
                 throw new CredenciaisInvalidasException();
             }
 
@@ -205,20 +211,24 @@ class LoginUseCase
     {
         // Caso 1: Tenant ID fornecido explicitamente
         if ($dto->tenantId) {
-            Log::debug('LoginUseCase::resolverTenant - Tenant ID fornecido', ['tenant_id' => $dto->tenantId]);
+            $tenantId = (int) $dto->tenantId;
+            Log::debug('LoginUseCase::resolverTenant - Tenant ID fornecido', ['tenant_id' => $tenantId]);
             
-            $tenantDomain = $this->tenantRepository->buscarPorId($dto->tenantId);
+            $tenantDomain = $this->tenantRepository->buscarPorId($tenantId);
             if (!$tenantDomain) {
                 Log::warning('LoginUseCase::resolverTenant - Tenant não encontrado', [
-                    'tenant_id' => $dto->tenantId,
+                    'tenant_id' => $tenantId,
                     'email' => $email,
                 ]);
-                throw new CredenciaisInvalidasException();
+                throw new CredenciaisInvalidasException('Empresa não encontrada.');
             }
             
-            $tenant = $this->tenantRepository->buscarModeloPorId($dto->tenantId);
+            $tenant = $this->tenantRepository->buscarModeloPorId($tenantId);
             if (!$tenant) {
-                throw new CredenciaisInvalidasException();
+                Log::error('LoginUseCase::resolverTenant - Modelo Tenant não pôde ser carregado', [
+                    'tenant_id' => $tenantId,
+                ]);
+                throw new CredenciaisInvalidasException('Erro ao acessar empresa.');
             }
             
             return $tenant;
@@ -233,15 +243,40 @@ class LoginUseCase
         if (empty($lookups)) {
             // Usuário não encontrado no mapa global
             // Tratar como credenciais inválidas (evitar enumeração)
-            Log::debug('LoginUseCase::resolverTenant - Usuário não encontrado em users_lookup', [
+            Log::debug('LoginUseCase::resolverTenant - Usuário não encontrado em users_lookup, tentando fallback', [
                 'email' => $email,
             ]);
             
             // Fallback: Tentar busca antiga (para dados legados)
-            // Mas ainda assim tratar como credenciais inválidas se não encontrar
             $tenant = $this->buscarTenantPorEmail($email);
             if (!$tenant) {
                 throw new CredenciaisInvalidasException();
+            }
+            
+            // 🔥 ROBUSTEZ: Se encontrou via fallback, registrar no lookup para a próxima vez
+            try {
+                tenancy()->initialize($tenant);
+                $user = $this->userRepository->buscarPorEmail($email);
+                if ($user) {
+                    $empresaAtiva = $this->userRepository->buscarEmpresaAtiva($user->id);
+                    $this->usersLookupService->registrar(
+                        $tenant->id,
+                        $user->id,
+                        $empresaAtiva?->id,
+                        $email,
+                        $tenant->cnpj ?? ''
+                    );
+                    Log::info('LoginUseCase::resolverTenant - Registro adicionado ao users_lookup via fallback', [
+                        'email' => $email,
+                        'tenant_id' => $tenant->id,
+                    ]);
+                }
+                tenancy()->end();
+            } catch (\Exception $e) {
+                Log::warning('LoginUseCase::resolverTenant - Erro ao registrar lookup via fallback', [
+                    'error' => $e->getMessage(),
+                ]);
+                if (tenancy()->initialized) tenancy()->end();
             }
             
             return $tenant;
@@ -259,20 +294,34 @@ class LoginUseCase
             // Sem isso, qualquer pessoa com um email válido veria razão social e CNPJ.
             $tenantsValidos = [];
             foreach ($lookups as $lookup) {
-                $tenantDomain = $this->tenantRepository->buscarPorId($lookup->tenantId);
-                if (!$tenantDomain) {
+                try {
+                    $tenantDomain = $this->tenantRepository->buscarPorId($lookup->tenantId);
+                    if (!$tenantDomain) {
+                        Log::warning('LoginUseCase::resolverTenant - Lookup aponta para tenant inexistente', [
+                            'lookup_id' => $lookup->id,
+                            'tenant_id' => $lookup->tenantId,
+                        ]);
+                        continue;
+                    }
+
+                    $senhaValida = $this->validarSenhaNoTenant($tenantDomain, $email, $password);
+
+                    if ($senhaValida) {
+                        $tenantsValidos[] = [
+                            'tenant_id' => $tenantDomain->id,
+                            'razao_social' => $tenantDomain->razaoSocial,
+                            'cnpj' => $tenantDomain->cnpj,
+                            'user_id' => $lookup->userId,
+                        ];
+                    }
+                } catch (\Exception $e) {
+                    Log::error('LoginUseCase::resolverTenant - Erro ao validar senha no tenant', [
+                        'tenant_id' => $lookup->tenantId,
+                        'email' => $email,
+                        'error' => $e->getMessage(),
+                    ]);
+                    // Continuar para os próximos tenants mesmo se um falhar
                     continue;
-                }
-
-                $senhaValida = $this->validarSenhaNoTenant($tenantDomain, $email, $password);
-
-                if ($senhaValida) {
-                    $tenantsValidos[] = [
-                        'tenant_id' => $tenantDomain->id,
-                        'razao_social' => $tenantDomain->razaoSocial,
-                        'cnpj' => $tenantDomain->cnpj,
-                        'user_id' => $lookup->userId,
-                    ];
                 }
             }
 

@@ -130,9 +130,10 @@ class AfiliadoReferenciaController extends Controller
         
         if (!$tenantId) {
             return response()->json([
-                'success' => false,
-                'message' => 'Tenant não encontrado.',
-            ], 404);
+                'success' => true,
+                'data' => null,
+                'message' => 'Tenant não identificado no contexto.',
+            ]);
         }
 
         try {
@@ -145,20 +146,22 @@ class AfiliadoReferenciaController extends Controller
 
         } catch (DomainException $e) {
             return response()->json([
-                'success' => false,
+                'success' => true,
+                'data' => null,
                 'message' => $e->getMessage(),
-            ], 404);
+            ]);
 
         } catch (\Exception $e) {
-            Log::error('Erro ao buscar cupom automático', [
+            Log::warning('Erro ao buscar cupom automático — tratado como ausência de cupom', [
                 'tenant_id' => $tenantId,
                 'error' => $e->getMessage(),
             ]);
 
             return response()->json([
-                'success' => false,
-                'message' => 'Erro ao buscar cupom.',
-            ], 500);
+                'success' => true,
+                'data' => null,
+                'message' => 'Nenhum cupom disponível.',
+            ]);
         }
     }
 }

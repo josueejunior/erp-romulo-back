@@ -580,11 +580,11 @@ class ProcessoItemController extends BaseApiController
             $this->itemService->validarItemPertenceProcesso($item, $processo);
 
             $request->validate([
-                'valor_final_pos_disputa' => 'required|numeric|min:0',
+                'valor_final_sessao' => 'required|numeric|min:0',
             ]);
 
             $item->update([
-                'valor_final_pos_disputa' => $request->valor_final_pos_disputa,
+                'valor_final_sessao' => $request->valor_final_sessao,
             ]);
 
             return response()->json([
@@ -612,11 +612,11 @@ class ProcessoItemController extends BaseApiController
             $this->itemService->validarItemPertenceProcesso($item, $processo);
 
             $request->validate([
-                'valor_negociado_pos_julgamento' => 'required|numeric|min:0',
+                'valor_negociado' => 'required|numeric|min:0',
             ]);
 
             $item->update([
-                'valor_negociado_pos_julgamento' => $request->valor_negociado_pos_julgamento,
+                'valor_negociado' => $request->valor_negociado,
             ]);
 
             return response()->json([

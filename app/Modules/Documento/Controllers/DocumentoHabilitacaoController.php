@@ -293,6 +293,29 @@ class DocumentoHabilitacaoController extends BaseApiController
     }
 
     /**
+     * GET /documentos-habilitacao/{id}/download - Download de documento
+     */
+    public function download(int|string $id)
+    {
+        try {
+            $documento = $this->service->findById($id);
+            if (!$documento || !$documento->arquivo) {
+                return response()->json(['message' => 'Arquivo não encontrado.'], 404);
+            }
+
+            $path = 'documentos-habilitacao/' . $documento->arquivo;
+            
+            if (!Storage::exists($path)) {
+                return response()->json(['message' => 'Arquivo não encontrado no servidor.'], 404);
+            }
+
+            return Storage::download($path);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Erro ao baixar arquivo.'], 500);
+        }
+    }
+
+    /**
      * GET /documentos-habilitacao/vencendo - Listar documentos vencendo
      */
     public function vencendo(Request $request): JsonResponse

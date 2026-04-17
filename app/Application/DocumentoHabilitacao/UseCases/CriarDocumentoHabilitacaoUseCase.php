@@ -114,7 +114,11 @@ class CriarDocumentoHabilitacaoUseCase
      */
     private function processarUploadArquivo($arquivo): array
     {
-        $nomeArquivo = time() . '_' . $arquivo->getClientOriginalName();
+        $originalName = $arquivo->getClientOriginalName();
+        // Sanitizar nome do arquivo: remover espaços e caracteres especiais
+        $sanitizedName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
+        $nomeArquivo = time() . '_' . $sanitizedName;
+        
         $caminho = $arquivo->storeAs('documentos-habilitacao', $nomeArquivo, 'public');
 
         return [

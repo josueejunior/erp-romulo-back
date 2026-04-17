@@ -45,6 +45,11 @@ class EmpresasClientesSeeder extends Seeder
         $this->criarEmpresaRosa();
 
         $this->command->info('');
+
+        // Empresa 3: Josue Junior da Cruz de Freitas (MEI)
+        $this->criarEmpresaJosue();
+
+        $this->command->info('');
         $this->command->info('═══════════════════════════════════════════════════════');
         $this->command->info('Cadastro de empresas concluído!');
         $this->command->info('═══════════════════════════════════════════════════════');
@@ -302,6 +307,84 @@ class EmpresasClientesSeeder extends Seeder
             $this->command->error("❌ Erro ao criar empresa Rosa Vendas Públicas:");
             $this->command->error("   {$e->getMessage()}");
             Log::error('Erro ao criar empresa Rosa Vendas Públicas', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+        }
+    }
+
+    /**
+     * Criar empresa: Josue Junior da Cruz de Freitas (MEI)
+     */
+    private function criarEmpresaJosue(): void
+    {
+        $this->command->info('📋 Criando empresa: Josue Junior da Cruz de Freitas...');
+
+        $cnpj = '64.051.697/0001-02';
+        $email = 'josueejunior99@gmail.com';
+
+        $tenant = Tenant::where('cnpj', $cnpj)->first();
+
+        if ($tenant) {
+            $this->command->warn("⚠️  Tenant já existe para CNPJ: {$cnpj}");
+            $this->command->info("   Tenant ID: {$tenant->id}");
+            $this->command->info("   Razão Social: {$tenant->razao_social}");
+
+            tenancy()->initialize($tenant);
+            $empresa = \App\Models\Empresa::where('cnpj', $cnpj)->first();
+            $adminUser = \App\Modules\Auth\Models\User::where('email', $email)->first();
+            tenancy()->end();
+
+            if ($empresa && $adminUser) {
+                $this->command->info("   ✅ Empresa e usuário já existem no tenant.");
+                return;
+            }
+
+            $this->command->info("   Criando empresa e usuário no tenant existente...");
+            $this->criarEmpresaEUsuarioNoTenant($tenant, [
+                'razao_social' => '64.051.697 Josue Junior da Cruz de Freitas',
+                'nome_fantasia' => 'Josue Junior da Cruz de Freitas',
+                'cnpj' => $cnpj,
+                'email' => $email,
+                'status' => 'ativa',
+                'admin_name' => 'Josue Junior da Cruz de Freitas',
+                'admin_email' => $email,
+                'admin_password' => '91246397',
+            ]);
+            return;
+        }
+
+        try {
+            $dados = [
+                'razao_social' => '64.051.697 Josue Junior da Cruz de Freitas',
+                'nome_fantasia' => 'Josue Junior da Cruz de Freitas',
+                'cnpj' => $cnpj,
+                'email' => $email,
+                'status' => 'ativa',
+                'admin_name' => 'Josue Junior da Cruz de Freitas',
+                'admin_email' => $email,
+                'admin_password' => '91246397',
+            ];
+
+            $this->command->info('   Criando tenant e banco de dados...');
+
+            $resultado = $this->criarTenantCompleto($dados);
+
+            $tenant = $resultado['tenant'];
+            $empresa = $resultado['empresa'];
+            $adminUser = $resultado['admin_user'];
+
+            $this->command->info("✅ Empresa criada com sucesso!");
+            $this->command->info("   Tenant ID: {$tenant->id}");
+            $this->command->info("   Empresa ID: {$empresa->id}");
+            $this->command->info("   Razão Social: {$empresa->razao_social}");
+            $this->command->info("   Email: {$email}");
+            $this->command->info("   Usuário Admin: {$adminUser->email}");
+
+        } catch (\Exception $e) {
+            $this->command->error("❌ Erro ao criar empresa Josue Junior da Cruz de Freitas:");
+            $this->command->error("   {$e->getMessage()}");
+            Log::error('Erro ao criar empresa Josue Junior da Cruz de Freitas', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);

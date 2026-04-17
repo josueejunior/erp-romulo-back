@@ -198,6 +198,39 @@ return Application::configure(basePath: dirname(__DIR__))
             }
         });
         
+        // Exceções HTTP do Laravel (404, 403, 405, etc)
+        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\HttpException $e, $request) use ($addCorsToResponse) {
+            if ($request->expectsJson() || $request->is('api/*')) {
+                $statusCode = $e->getStatusCode();
+                $message = $e->getMessage();
+                
+                if (empty($message)) {
+                    $message = match($statusCode) {
+                        404 => 'Recurso não encontrado.',
+                        403 => 'Acesso negado.',
+                        401 => 'Não autenticado.',
+                        405 => 'Método HTTP não permitido para esta rota.',
+                        default => 'Erro HTTP ' . $statusCode,
+                    };
+                }
+
+                $response = response()->json([
+                    'message' => $message,
+                ], $statusCode);
+                return $addCorsToResponse($response, $request);
+            }
+        });
+
+        // Exceção de Autenticação do Laravel (401)
+        $exceptions->render(function (\Illuminate\Auth\AuthenticationException $e, $request) use ($addCorsToResponse) {
+            if ($request->expectsJson() || $request->is('api/*')) {
+                $response = response()->json([
+                    'message' => 'Não autenticado.',
+                ], 401);
+                return $addCorsToResponse($response, $request);
+            }
+        });
+
         // Exceções genéricas não tratadas - Internal Server Error (500)
         $exceptions->render(function (\Throwable $e, $request) use ($addCorsToResponse) {
             // Logar TODAS as exceções não tratadas, mesmo que não sejam JSON

@@ -19,6 +19,7 @@ use App\Modules\Fornecedor\Controllers\FornecedorController as ApiFornecedorCont
 use App\Modules\Produto\Controllers\ProdutoController as ApiProdutoController;
 use App\Modules\Custo\Controllers\CustoIndiretoController as ApiCustoIndiretoController;
 use App\Modules\Documento\Controllers\DocumentoHabilitacaoController as ApiDocumentoHabilitacaoController;
+use App\Modules\Documento\Controllers\AtestadoCapacidadeTecnicaController as ApiAtestadoController;
 use App\Modules\Dashboard\Controllers\DashboardController as ApiDashboardController;
 use App\Modules\Relatorio\Controllers\RelatorioFinanceiroController as ApiRelatorioFinanceiroController;
 use App\Modules\Empresa\Controllers\TenantController;
@@ -118,6 +119,10 @@ Route::prefix('v1')->group(function () {
         
         // Trocar empresa ativa (precisa estar fora do CheckSubscription para permitir troca mesmo sem assinatura)
         Route::put('/users/empresa-ativa', [ApiUserController::class, 'switchEmpresaAtiva']);
+
+        // Listar todos os tenants do usuário atual (cross-tenant, fora do CheckSubscription)
+        Route::get('/users/meus-tenants', [ApiUserController::class, 'meusTenants']);
+        Route::post('/users/trocar-tenant', [ApiUserController::class, 'trocarTenant']);
         
         // Assinaturas e Pagamentos (não precisam de verificação de assinatura)
         Route::prefix('assinaturas')->group(function () {
@@ -141,9 +146,20 @@ Route::prefix('v1')->group(function () {
         });
         
         // Notificações (não precisa de assinatura ativa)
-        Route::get('/notifications', [\App\Modules\Notification\Controllers\NotificationController::class, 'index']);
-        Route::patch('/notifications/{id}/read', [\App\Modules\Notification\Controllers\NotificationController::class, 'markAsRead']);
-        Route::post('/notifications/read-all', [\App\Modules\Notification\Controllers\NotificationController::class, 'markAllAsRead']);
+        Route::prefix('notifications')->group(function () {
+            Route::get('/', [\App\Modules\Notification\Controllers\NotificationController::class, 'index']);
+            Route::patch('/{id}/read', [\App\Modules\Notification\Controllers\NotificationController::class, 'markAsRead']);
+            Route::post('/read-all', [\App\Modules\Notification\Controllers\NotificationController::class, 'markAllAsRead']);
+        });
+
+        // 🔥 ALIAS: Notificações (compatibilidade com frontend)
+        Route::prefix('notificacoes')->group(function () {
+            Route::get('/', [\App\Modules\Notification\Controllers\NotificationController::class, 'index']);
+            Route::get('/nao-lidas', [\App\Modules\Notification\Controllers\NotificationController::class, 'index']); // Fallback para index por enquanto
+            Route::get('/stats', [\App\Modules\Notification\Controllers\NotificationController::class, 'index']); // Fallback para index por enquanto
+            Route::patch('/{id}/read', [\App\Modules\Notification\Controllers\NotificationController::class, 'markAsRead']);
+            Route::post('/read-all', [\App\Modules\Notification\Controllers\NotificationController::class, 'markAllAsRead']);
+        });
         
         // Onboarding (usuários autenticados)
         Route::prefix('onboarding')->group(function () {
@@ -206,6 +222,22 @@ Route::prefix('v1')->group(function () {
                 Route::get('/resumo', [ApiProcessoController::class, 'resumo']);
                 Route::get('/exportar', [ApiProcessoController::class, 'exportar']);
             });
+
+            // 🔥 ALIAS: Resumo de processos (compatibilidade com frontend)
+            Route::get('/processos-resumo', [ApiProcessoController::class, 'resumo']);
+
+            // 🔥 NOVO: Oportunidades (stub para compatibilidade com frontend)
+            Route::prefix('oportunidades')->group(function () {
+                Route::get('/', function() {
+                    return response()->json(['success' => true, 'data' => []]);
+                });
+                Route::get('/{id}', function($id) {
+                    return response()->json(['success' => true, 'data' => null]);
+                });
+                Route::post('/', function() {
+                    return response()->json(['success' => true, 'data' => null]);
+                });
+            });
             
             Route::module('processos', ApiProcessoController::class, 'processo')
             ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy'])
@@ -227,6 +259,17 @@ Route::prefix('v1')->group(function () {
                 Route::get('/sugerir-status', [ApiProcessoController::class, 'sugerirStatus']);
                 Route::get('/ficha-export', [ApiProcessoController::class, 'fichaTecnicaExport']);
                 Route::get('/download-edital', [ApiProcessoController::class, 'downloadEdital']);
+                
+                // Notas (Mock/Stub para evitar 404 no frontend)
+                Route::get('/notas', function(\App\Modules\Processo\Models\Processo $processo) {
+                    return response()->json(['success' => true, 'data' => []]);
+                });
+                Route::post('/notas', function(\App\Modules\Processo\Models\Processo $processo) {
+                    return response()->json(['success' => true, 'data' => null]);
+                });
+                Route::delete('/notas/{nota}', function(\App\Modules\Processo\Models\Processo $processo, $nota) {
+                    return response()->json(['success' => true]);
+                });
                 
                 // Exportação
                 Route::get('/exportar/proposta-comercial', [ApiExportacaoController::class, 'propostaComercial']);
@@ -346,7 +389,10 @@ Route::prefix('v1')->group(function () {
             Route::get('/custos-indiretos-resumo', [ApiCustoIndiretoController::class, 'resumo']);
             
             Route::module('documentos-habilitacao', ApiDocumentoHabilitacaoController::class, 'documentoHabilitacao')
-                ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy']);
+                ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy'])
+                ->group(function () {
+                    Route::get('/{id}/download', [ApiDocumentoHabilitacaoController::class, 'download']);
+                });
             
             // Rotas adicionais para documentos de habilitação
             Route::prefix('documentos-habilitacao')->group(function () {
@@ -354,6 +400,16 @@ Route::prefix('v1')->group(function () {
                 Route::get('vencidos', [ApiDocumentoHabilitacaoController::class, 'vencidos']);
             });
             
+            // Atestados de Capacidade Técnica
+            Route::prefix('atestados')->group(function () {
+                Route::get('/', [ApiAtestadoController::class, 'list']);
+                Route::post('/', [ApiAtestadoController::class, 'store']);
+                Route::get('/{id}', [ApiAtestadoController::class, 'get']);
+                Route::post('/{id}', [ApiAtestadoController::class, 'update']);
+                Route::delete('/{id}', [ApiAtestadoController::class, 'destroy']);
+                Route::get('/{id}/download', [ApiAtestadoController::class, 'download']);
+            });
+
             // Usuários
             Route::module('users', ApiUserController::class, 'user')
                 ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy'])

@@ -6,6 +6,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\Traits\CentralConnection;
 
 /**
  * Model para rastrear progresso de onboarding
@@ -14,6 +15,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class OnboardingProgress extends Model
 {
+    use CentralConnection;
+
     protected $table = 'onboarding_progress';
 
     protected $fillable = [

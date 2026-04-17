@@ -77,6 +77,8 @@ class ConfiguracoesController extends Controller
                     'cep' => $empresaModel->cep,
                     'telefone' => is_array($empresaModel->telefones) && !empty($empresaModel->telefones) ? $empresaModel->telefones[0] : ($empresaModel->telefone ?? null),
                     'telefones' => $empresaModel->telefones ?? [],
+                    'representante_legal_nome' => $empresaModel->representante_legal,
+                    'representante_legal_cargo' => $empresaModel->cargo_representante,
                 ],
             ]);
         } catch (\Exception $e) {
@@ -111,6 +113,7 @@ class ConfiguracoesController extends Controller
             // Validar dados
             $validated = $request->validate([
                 'razao_social' => 'nullable|string|max:255',
+                'nome_fantasia' => 'nullable|string|max:255',
                 'cnpj' => 'nullable|string|max:18',
                 'email' => 'nullable|email|max:255',
                 'endereco' => 'nullable|string|max:255',
@@ -123,6 +126,8 @@ class ConfiguracoesController extends Controller
                 'cep' => 'nullable|string|max:10',
                 'telefone' => 'nullable|string|max:20',
                 'telefones' => 'nullable|array',
+                'representante_legal_nome' => 'nullable|string|max:255',
+                'representante_legal_cargo' => 'nullable|string|max:255',
             ]);
 
             // Obter empresa ativa do usuário através do relacionamento
@@ -154,6 +159,9 @@ class ConfiguracoesController extends Controller
             
             if (isset($validated['razao_social'])) {
                 $dadosAtualizacao['razao_social'] = $validated['razao_social'];
+            }
+            if (array_key_exists('nome_fantasia', $validated)) {
+                $dadosAtualizacao['nome_fantasia'] = $validated['nome_fantasia'];
             }
             if (isset($validated['cnpj'])) {
                 $dadosAtualizacao['cnpj'] = $validated['cnpj'];
@@ -192,6 +200,12 @@ class ConfiguracoesController extends Controller
             }
             if (isset($validated['telefones'])) {
                 $dadosAtualizacao['telefones'] = $validated['telefones'];
+            }
+            if (isset($validated['representante_legal_nome'])) {
+                $dadosAtualizacao['representante_legal'] = $validated['representante_legal_nome'];
+            }
+            if (isset($validated['representante_legal_cargo'])) {
+                $dadosAtualizacao['cargo_representante'] = $validated['representante_legal_cargo'];
             }
 
             // Atualizar empresa

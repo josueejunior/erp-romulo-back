@@ -1,6 +1,8 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Storage;
+use App\Models\Tenant;
 use App\Modules\Dashboard\Controllers\DashboardController;
 use App\Http\Controllers\EmpresaSelecaoController;
 use App\Modules\Processo\Controllers\ProcessoController;
@@ -20,6 +22,58 @@ use App\Modules\Orcamento\Controllers\OrcamentoController;
 use App\Modules\Orcamento\Controllers\FormacaoPrecoController;
 use App\Modules\Processo\Controllers\DisputaController;
 use App\Modules\Processo\Controllers\JulgamentoController;
+
+Route::get('/tenant-assets/{tenant}/{path}', function ($tenantId, $path) {
+    \Illuminate\Support\Facades\Log::debug('Tenant storage request', ['tenant' => $tenantId, 'path' => $path]);
+    $tenant = \App\Models\Tenant::find($tenantId);
+    if (!$tenant) {
+        \Illuminate\Support\Facades\Log::warning('Tenant not found', ['tenant' => $tenantId]);
+        abort(404);
+    }
+    
+    // Inicializar o tenant para que o storage aponte para o local correto
+    tenancy()->initialize($tenant);
+    
+    if (!Storage::disk('public')->exists($path)) {
+        \Illuminate\Support\Facades\Log::warning('File not found in tenant storage', [
+            'tenant' => $tenantId, 
+            'path' => $path,
+            'full_path' => Storage::disk('public')->path($path)
+        ]);
+        abort(404);
+    }
+    
+    return Storage::disk('public')->response($path);
+})->where('path', '.*')->name('tenant.storage');
+
+// Fallback para URLs antigas /storage/ que não informam o tenant
+Route::get('/storage/{folder}/{path}', function ($folder, $path) {
+    $relativePath = $folder . '/' . $path;
+    
+    // 1. Tentar storage global
+    if (Storage::disk('public')->exists($relativePath)) {
+        return Storage::disk('public')->response($relativePath);
+    }
+
+    // 2. Se não encontrar, buscar nos tenants (apenas para pastas conhecidas)
+    if (in_array($folder, ['documentos-habilitacao', 'contratos', 'uploads'])) {
+        $tenants = \App\Models\Tenant::all();
+        foreach ($tenants as $tenant) {
+            try {
+                if (tenancy()->initialized) tenancy()->end();
+                tenancy()->initialize($tenant);
+                
+                if (Storage::disk('public')->exists($relativePath)) {
+                    return Storage::disk('public')->response($relativePath);
+                }
+            } catch (\Exception $e) {
+                continue;
+            }
+        }
+    }
+
+    abort(404);
+})->where('path', '.*');
 
 Route::get('/', function () {
     return redirect()->route('dashboard');

@@ -80,10 +80,9 @@ class CriarAssinaturaUseCase
             $this->validationService->validarAntesDeCriar($empresaId, $dto->planoId);
         }
 
-        // 🔥 CRÍTICO: Garantir que valorPago sempre seja o valor do plano
-        // Se não foi fornecido ou é 0, usar o valor do plano
+        // Se valorPago não foi fornecido (null), usar o valor do plano como default
         $valorPago = $dto->valorPago;
-        if (!$valorPago || $valorPago == 0) {
+        if ($valorPago === null) {
             $valorPago = $plano->preco_mensal ?? 0;
             Log::info('CriarAssinaturaUseCase - Valor pago preenchido com valor do plano', [
                 'plano_id' => $plano->id,

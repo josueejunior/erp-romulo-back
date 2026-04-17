@@ -9,7 +9,7 @@ class ListarProcessosDTO
 {
     public function __construct(
         public readonly int $empresaId,
-        public readonly ?string $status = null,
+        public readonly string|array|null $status = null,
         public readonly ?string $modalidade = null,
         public readonly ?int $orgaoId = null,
         public readonly ?string $search = null,

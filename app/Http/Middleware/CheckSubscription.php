@@ -83,6 +83,7 @@ class CheckSubscription
                 'action' => $resultado['action'] ?? 'subscribe',
                 'data_vencimento' => $resultado['data_vencimento'] ?? null,
                 'dias_expirado' => $resultado['dias_expirado'] ?? null,
+                'metodo_pagamento' => $resultado['metodo_pagamento'] ?? null,
             ], 403);
         }
 

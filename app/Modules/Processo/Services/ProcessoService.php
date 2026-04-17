@@ -352,7 +352,7 @@ class ProcessoService extends BaseService
         // Verificar assinatura ativa da empresa
         $empresaId = $this->getEmpresaId();
         $assinaturaRepository = app(\App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface::class);
-        $assinatura = $assinaturaRepository->buscarAssinaturaAtualPorEmpresa($empresaId);
+        $assinatura = $assinaturaRepository->buscarAssinaturaAtualPorEmpresa($empresaId, tenancy()->tenant?->id);
         
         if (!$assinatura) {
             \Log::warning('ProcessoService::store() - Assinatura não encontrada', [

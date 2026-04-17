@@ -95,14 +95,14 @@ class OnboardingProgressRepository implements OnboardingProgressRepositoryInterf
     ): ?OnboardingProgress {
         $query = OnboardingProgressModel::query();
 
-        // 🔥 CORREÇÃO: Priorizar userId e email (mais estáveis que tenant_id)
-        // Se temos userId, buscar por userId (mais confiável)
-        if ($userId) {
-            $query->where('user_id', $userId);
-        } 
-        // Se temos email mas não userId, buscar por email
-        elseif ($email) {
+        // 🔥 CORREÇÃO: Priorizar email (global) sobre userId (tenant-specific)
+        // Se temos email, buscar por email (mais estável e global)
+        if ($email) {
             $query->where('email', $email);
+        }
+        // Se não temos email mas temos userId, buscar por userId
+        elseif ($userId) {
+            $query->where('user_id', $userId);
         }
         // Se temos tenant_id, buscar por tenant_id
         elseif ($tenantId) {
@@ -147,11 +147,11 @@ class OnboardingProgressRepository implements OnboardingProgressRepositoryInterf
     ): ?OnboardingProgress {
         $query = OnboardingProgressModel::query();
 
-        // 🔥 CORREÇÃO: Priorizar userId e email (mais estáveis que tenant_id)
-        if ($userId) {
-            $query->where('user_id', $userId);
-        } elseif ($email) {
+        // 🔥 CORREÇÃO: Priorizar email (global) sobre userId
+        if ($email) {
             $query->where('email', $email);
+        } elseif ($userId) {
+            $query->where('user_id', $userId);
         } elseif ($tenantId) {
             $query->where('tenant_id', $tenantId);
         } elseif ($sessionId) {
@@ -172,11 +172,11 @@ class OnboardingProgressRepository implements OnboardingProgressRepositoryInterf
     ): bool {
         $query = OnboardingProgressModel::query();
 
-        // 🔥 CORREÇÃO: Priorizar userId e email (mais estáveis que tenant_id)
-        if ($userId) {
-            $query->where('user_id', $userId);
-        } elseif ($email) {
+        // 🔥 CORREÇÃO: Priorizar email (global) sobre userId
+        if ($email) {
             $query->where('email', $email);
+        } elseif ($userId) {
+            $query->where('user_id', $userId);
         } elseif ($tenantId) {
             $query->where('tenant_id', $tenantId);
         } elseif ($sessionId) {

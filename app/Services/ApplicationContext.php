@@ -426,7 +426,7 @@ class ApplicationContext implements ApplicationContextContract
         // 🔥 NOVO: Buscar assinatura por empresa, não por usuário
         if ($this->assinaturaRepository && $this->empresaId) {
             try {
-                $this->assinatura = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($this->empresaId);
+                $this->assinatura = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($this->empresaId, $this->tenantId);
             } catch (\Exception $e) {
                 Log::warning('ApplicationContext::assinatura() - Erro ao buscar assinatura', [
                     'empresa_id' => $this->empresaId,
@@ -539,13 +539,24 @@ class ApplicationContext implements ApplicationContextContract
         }
 
         try {
-            // 🔥 NOVO: Buscar assinatura da empresa, não do usuário
-            $assinatura = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($this->empresaId);
-            
-            
+            $assinatura = $this->assinaturaRepository->buscarAssinaturaAtualPorEmpresa($this->empresaId, $this->tenantId);
+
+            // Fallback: assinaturas antigas criadas com tenant_id mas sem empresa_id
+            if (!$assinatura && $this->tenantId) {
+                $assinatura = $this->assinaturaRepository->buscarAssinaturaAtual($this->tenantId);
+
+                // Se encontrou via tenant, corrigir empresa_id para buscas futuras
+                if ($assinatura && $assinatura->id) {
+                    \App\Modules\Assinatura\Models\Assinatura::where('id', $assinatura->id)
+                        ->whereNull('empresa_id')
+                        ->update(['empresa_id' => $this->empresaId]);
+                }
+            }
+
             if (!$assinatura) {
                 Log::warning('ApplicationContext::validateAssinatura - Assinatura não encontrada', [
                     'empresa_id' => $this->empresaId,
+                    'tenant_id' => $this->tenantId,
                     'user_id' => $this->user?->id,
                 ]);
                 
@@ -615,6 +626,7 @@ class ApplicationContext implements ApplicationContextContract
                     'pode_acessar' => false,
                     'code' => 'PAYMENT_PENDING',
                     'message' => 'O pagamento da sua assinatura está pendente de confirmação. Assim que o pagamento for confirmado, seu acesso será liberado.',
+                    'action' => 'pay',
                     'metodo_pagamento' => $assinatura->metodoPagamento,
                 ];
                 return $this->assinaturaCache;

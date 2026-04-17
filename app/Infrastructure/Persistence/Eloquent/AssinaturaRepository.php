@@ -189,9 +189,9 @@ class AssinaturaRepository implements AssinaturaRepositoryInterface
      * 
      * 🔥 NOVO: Assinatura pertence à empresa
      */
-    public function buscarAssinaturaAtualPorEmpresa(int $empresaId): ?Assinatura
+    public function buscarAssinaturaAtualPorEmpresa(int $empresaId, ?int $tenantId = null): ?Assinatura
     {
-        $model = AssinaturaQueries::assinaturaAtualPorEmpresa($empresaId);
+        $model = AssinaturaQueries::assinaturaAtualPorEmpresa($empresaId, $tenantId);
         return $model ? $this->toDomain($model) : null;
     }
 

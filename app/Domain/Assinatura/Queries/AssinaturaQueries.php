@@ -32,17 +32,28 @@ final class AssinaturaQueries
      * Busca assinatura atual por empresa (mais recente válida)
      * 
      * 🔥 NOVO: Assinatura pertence à empresa, não ao usuário
-     * 🔥 CORREÇÃO: Busca por empresa_id OU tenant_id para compatibilidade
-     *    com assinaturas que foram criadas apenas com tenant_id
+     * 🔥 CORREÇÃO: Busca por empresa_id E tenant_id para ser único em multi-tenant
+     *    Fallback: Busca apenas por empresa_id ou apenas por tenant_id (legado)
      *    Retorna a assinatura mais recente (por data_fim e id)
      */
-    public static function assinaturaAtualPorEmpresa(int $empresaId): ?AssinaturaModel
+    public static function assinaturaAtualPorEmpresa(int $empresaId, ?int $tenantId = null): ?AssinaturaModel
     {
-        // Buscar por empresa_id OU tenant_id - a mais recente
+        // 🔥 MELHORIA: Tentar obter tenantId do contexto se não fornecido
+        if ($tenantId === null && tenancy()->initialized) {
+            $tenantId = (int) tenancy()->tenant->id;
+        }
+
         return self::baseQueryValida()
-            ->where(function($query) use ($empresaId) {
-                $query->where('empresa_id', $empresaId)
-                      ->orWhere('tenant_id', $empresaId);
+            ->where(function($query) use ($empresaId, $tenantId) {
+                if ($tenantId) {
+                    // Busca precisa: ambos devem bater
+                    $query->where('empresa_id', $empresaId)
+                          ->where('tenant_id', $tenantId);
+                } else {
+                    // Legado ou sem tenant: tenta um ou outro
+                    $query->where('empresa_id', $empresaId)
+                          ->orWhere('tenant_id', $empresaId);
+                }
             })
             // 🔥 PRIORIDADE: Ativa/Trial vence Aguardando Pagamento
             ->reorder()

@@ -83,9 +83,9 @@ class OrcamentoService
      */
     public function validarProcessoPermiteOrcamento(Processo $processo): void
     {
-        // Pode criar orçamento se processo estiver em participação ou julgamento_habilitacao
-        if (!in_array($processo->status, ['participacao', 'julgamento_habilitacao'])) {
-            throw new \Exception("Não é possível criar orçamento para processo com status '{$processo->status}'. Apenas processos em 'participação' ou 'julgamento e habilitação' permitem criação de orçamento.");
+        // Não pode criar orçamento de processo em execução ou arquivado
+        if ($processo->isEmExecucao() || $processo->status === 'arquivado') {
+            throw new \Exception("Não é possível criar orçamento para processo com status '{$processo->status}'. Processos em execução ou arquivados não permitem criação de orçamento.");
         }
     }
 

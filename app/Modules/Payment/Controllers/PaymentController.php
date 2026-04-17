@@ -195,26 +195,45 @@ class PaymentController extends BaseApiController
                     tenancy()->initialize($tenant);
                 }
 
+                // 🔥 CRÍTICO: Obter usuário autenticado antes de qualquer operação
+                $user = auth()->user();
+                if (!$user) {
+                    return response()->json(['message' => 'Usuário não autenticado'], 401);
+                }
+
+                $empresaId = $user->empresa_ativa_id;
+
                 // Buscar assinatura gratuita existente para o MESMO plano
                 $assinaturaModel = Assinatura::where('tenant_id', $tenant->id)
                     ->where('plano_id', $plano->id)
                     ->where('status', 'ativa')
                     ->first();
 
+                // Se assinatura existente tem empresa_id nulo, corrigir agora
+                if ($assinaturaModel && !$assinaturaModel->empresa_id && $empresaId) {
+                    $assinaturaModel->update(['empresa_id' => $empresaId]);
+                    $assinaturaModel->refresh();
+
+                    Log::info('PaymentController - empresa_id corrigido em assinatura existente', [
+                        'assinatura_id' => $assinaturaModel->id,
+                        'empresa_id' => $empresaId,
+                    ]);
+                }
+
                 if (!$assinaturaModel) {
                     // CRÍTICO: Cancelar assinaturas ativas antigas antes de criar a nova
                     $assinaturasAntigas = Assinatura::where('tenant_id', $tenant->id)
                         ->where('status', 'ativa')
                         ->get();
-                    
+
                     foreach ($assinaturasAntigas as $assinaturaAntiga) {
                         $assinaturaAntiga->update([
                             'status' => 'cancelada',
                             'data_cancelamento' => now(),
-                            'observacoes' => ($assinaturaAntiga->observacoes ?? '') . 
+                            'observacoes' => ($assinaturaAntiga->observacoes ?? '') .
                                 "\n\nCancelada automaticamente por troca de plano em " . now()->format('d/m/Y H:i:s'),
                         ]);
-                        
+
                         Log::info('Assinatura antiga cancelada por troca de plano gratuito', [
                             'assinatura_antiga_id' => $assinaturaAntiga->id,
                             'plano_antigo_id' => $assinaturaAntiga->plano_id,
@@ -224,16 +243,10 @@ class PaymentController extends BaseApiController
 
                     // Criar nova assinatura gratuita usando Use Case (garante tenancy correto)
                     $dataInicio = Carbon::now();
-                    $dataFim = $dataInicio->copy()->addDays(3); // 🔥 CORRIGIDO: Trial reduzido para 3 dias conforme solicitado
-
-                    // 🔥 CRÍTICO: Obter usuário autenticado
-                    $user = auth()->user();
-                    if (!$user) {
-                        return response()->json(['message' => 'Usuário não autenticado'], 401);
-                    }
+                    $dataFim = $dataInicio->copy()->addDays(3);
 
                     $assinaturaDTO = new CriarAssinaturaDTO(
-                        userId: $user->id, // 🔥 NOVO: Assinatura pertence ao usuário
+                        userId: $user->id,
                         planoId: $plano->id,
                         status: 'ativa',
                         dataInicio: $dataInicio,
@@ -243,7 +256,8 @@ class PaymentController extends BaseApiController
                         transacaoId: null,
                         diasGracePeriod: 0,
                         observacoes: 'Assinatura gratuita (Trial)',
-                        tenantId: $tenant->id, // Opcional para compatibilidade
+                        tenantId: $tenant->id,
+                        empresaId: $empresaId, // 🔥 CRÍTICO: vincular à empresa ativa do usuário
                     );
 
                     $assinaturaDomain = $this->criarAssinaturaUseCase->executar($assinaturaDTO);

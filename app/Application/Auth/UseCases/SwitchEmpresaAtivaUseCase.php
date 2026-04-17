@@ -62,7 +62,7 @@ class SwitchEmpresaAtivaUseCase
 
         // 🔥 NOVO: Verificar se a empresa tem assinatura ativa
         // Se não tiver, lançar exceção para que o controller retorne erro apropriado
-        $resultadoAssinatura = $this->verificarAssinaturaUseCase->executar($novaEmpresaId);
+        $resultadoAssinatura = $this->verificarAssinaturaUseCase->executar($novaEmpresaId, $context->tenantId);
         
         if (!$resultadoAssinatura['pode_acessar']) {
             // Armazenar resultado da verificação no usuário para o controller acessar

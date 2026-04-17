@@ -35,7 +35,7 @@ interface AssinaturaRepositoryInterface
      * 
      * 🔥 NOVO: Assinatura pertence à empresa
      */
-    public function buscarAssinaturaAtualPorEmpresa(int $empresaId): ?Assinatura;
+    public function buscarAssinaturaAtualPorEmpresa(int $empresaId, ?int $tenantId = null): ?Assinatura;
 
     /**
      * Listar assinaturas ativas do usuário

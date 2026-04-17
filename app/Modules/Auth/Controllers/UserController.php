@@ -382,5 +382,88 @@ class UserController extends BaseApiController
         
         return null;
     }
+
+    /**
+     * Listar todos os tenants onde o usuário atual está cadastrado
+     * Usa a tabela central users_lookup para o mapeamento
+     */
+    public function meusTenants(): JsonResponse
+    {
+        try {
+            $user = auth()->user();
+            if (!$user) {
+                return response()->json(['message' => 'Usuário não autenticado.'], 401);
+            }
+
+            $centralConnection = config('tenancy.database.central_connection', config('database.default'));
+
+            $lookups = \App\Models\UserLookup::on($centralConnection)
+                ->where('email', $user->email)
+                ->whereNotNull('tenant_id')
+                ->get();
+
+            if ($lookups->isEmpty()) {
+                return response()->json(['data' => []]);
+            }
+
+            $tenantIds = $lookups->pluck('tenant_id')->unique()->values();
+            $tenants = \App\Models\Tenant::on($centralConnection)
+                ->whereIn('id', $tenantIds)->get();
+
+            $data = $tenants->map(function ($tenant) use ($lookups) {
+                $lookup = $lookups->firstWhere('tenant_id', $tenant->id);
+                return [
+                    'id'            => $tenant->id,
+                    'razao_social'  => $tenant->razao_social,
+                    'cnpj'          => $tenant->cnpj,
+                    'empresa_id'    => $lookup?->empresa_id,
+                    'status'        => $lookup?->status ?? 'ativo',
+                ];
+            });
+
+            return response()->json(['data' => $data->values()->all()]);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao listar tenants');
+        }
+    }
+
+    /**
+     * Trocar o tenant ativo do usuário (redireciona para switchEmpresaAtiva com empresa do tenant)
+     */
+    public function trocarTenant(): JsonResponse
+    {
+        try {
+            $tenantId = request()->input('tenant_id');
+            if (!$tenantId) {
+                return response()->json(['message' => 'tenant_id é obrigatório.'], 422);
+            }
+
+            $user = auth()->user();
+            if (!$user) {
+                return response()->json(['message' => 'Usuário não autenticado.'], 401);
+            }
+
+            $centralConnection = config('tenancy.database.central_connection', config('database.default'));
+
+            $lookup = \App\Models\UserLookup::on($centralConnection)
+                ->where('email', $user->email)
+                ->where('tenant_id', $tenantId)
+                ->first();
+
+            if (!$lookup) {
+                return response()->json(['message' => 'Você não tem acesso a este tenant.'], 403);
+            }
+
+            return response()->json([
+                'message' => 'Use /users/empresa-ativa para trocar para a empresa deste tenant.',
+                'data' => [
+                    'tenant_id'  => $tenantId,
+                    'empresa_id' => $lookup->empresa_id,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao trocar tenant');
+        }
+    }
 }
 
