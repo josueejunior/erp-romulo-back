@@ -101,20 +101,15 @@ class CriarAssinaturaAdminUseCase
             }
         }
 
-        // Buscar usuário dentro do tenant (opcional, mas recomendado)
+        // Buscar usuário dentro do tenant (opcional, mas recomendado para contexto do tenant)
+        // 🔥 IMPORTANTE: O user_id na tabela assinaturas (central) refere-se ao banco central.
+        // Como os usuários estão nos tenants, mantemos user_id como null na tabela central
+        // para evitar violação de chave estrangeira, a menos que tenhamos um usuário central correspondente.
         $userId = isset($dados['user_id']) && $dados['user_id'] !== '' ? (int) $dados['user_id'] : null;
-        if (!$userId) {
-            // Se não fornecido, buscar primeiro admin do tenant
-            $userId = $this->adminTenancyRunner->runForTenant($tenantDomain, function () {
-                $user = User::role('Administrador')->first();
-                return $user?->id;
-            });
-
-            if (!$userId) {
-                throw new DomainException('Nenhum usuário administrador encontrado para este tenant. Crie um usuário primeiro.');
-            }
-        } else {
-            // Validar que o usuário existe no tenant
+        
+        // Se foi passado um user_id, vamos validar se ele existe NO TENANT apenas para fins de log/contexto,
+        // mas NÃO vamos salvar este ID na tabela central para evitar erro de FK.
+        if ($userId) {
             $userExiste = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($userId) {
                 return User::find($userId) !== null;
             });
@@ -122,6 +117,13 @@ class CriarAssinaturaAdminUseCase
             if (!$userExiste) {
                 throw new DomainException('Usuário não encontrado neste tenant.');
             }
+            
+            // 🔥 BUGFIX: O ID do usuário no tenant NÃO existe no banco central.
+            // Para evitar "Foreign key violation: Key (user_id)=(1) is not present in table \"users\"",
+            // forçamos userId como null para a persistência central.
+            $userIdParaPersistencia = null;
+        } else {
+            $userIdParaPersistencia = null;
         }
 
         // Calcular datas
@@ -162,7 +164,7 @@ class CriarAssinaturaAdminUseCase
 
         // Preparar DTO
         $dto = new CriarAssinaturaDTO(
-            userId: $userId,
+            userId: $userIdParaPersistencia, // null para evitar erro de FK central
             planoId: $planoId,
             status: $dados['status'] ?? 'ativa',
             dataInicio: $dataInicio,

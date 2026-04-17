@@ -41,10 +41,13 @@ class CriarAssinaturaUseCase
      */
     public function executar(CriarAssinaturaDTO $dto): Assinatura
     {
-        // 🔥 NOVO: Validar que o usuário existe
-        $user = User::find($dto->userId);
-        if (!$user) {
-            throw new DomainException('Usuário não encontrado.');
+        // 🔥 NOVO: Validar que o usuário existe (se fornecido)
+        $user = null;
+        if ($dto->userId) {
+            $user = User::find($dto->userId);
+            if (!$user) {
+                throw new DomainException('Usuário não encontrado.');
+            }
         }
 
         // Validar que o plano existe

@@ -10,7 +10,7 @@ use Carbon\Carbon;
 class CriarAssinaturaDTO
 {
     public function __construct(
-        public readonly int $userId, // Mantido para compatibilidade
+        public readonly ?int $userId, // Mantido para compatibilidade, agora opcional
         public readonly int $planoId,
         public readonly string $status = 'ativa',
         public readonly ?Carbon $dataInicio = null,

@@ -66,14 +66,7 @@ class Assinatura
             throw new DomainException('O empresa_id deve ser válido se fornecido.');
         }
         
-        // userId é OBRIGATÓRIO apenas para novas assinaturas (sem id)
-        // Assinaturas existentes podem ter userId null (compatibilidade com sistema legado)
-        // 🔥 NOVO: Assinatura pertence à empresa, não ao usuário, então userId pode ser null
-        if (!$this->id && (!$this->userId || $this->userId <= 0)) {
-            throw new DomainException('O usuário é obrigatório para criar uma assinatura.');
-        }
-        
-        // userId, se fornecido, deve ser válido
+        // 🔥 NOVO: Assinatura pertence à empresa, não ao usuário, então userId é OPCIONAL
         if ($this->userId !== null && $this->userId <= 0) {
             throw new DomainException('O user_id deve ser válido se fornecido.');
         }
