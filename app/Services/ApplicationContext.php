@@ -268,8 +268,25 @@ class ApplicationContext implements ApplicationContextContract
                 'empresa_id_header' => $empresaIdFromHeader
             ]);
         }
+
+        // Prioridade 2: empresa_id do JWT (fonte de verdade do login)
+        if ($empresaIdFromJwt) {
+            $empresa = Empresa::find($empresaIdFromJwt);
+            if ($empresa) {
+                Log::debug('ApplicationContext - empresaId do JWT', [
+                    'empresa_id' => $empresaIdFromJwt,
+                ]);
+
+                if ($this->user && $this->user->empresa_ativa_id !== $empresaIdFromJwt) {
+                    $this->user->empresa_ativa_id = $empresaIdFromJwt;
+                    $this->user->save();
+                }
+
+                return $empresaIdFromJwt;
+            }
+        }
         
-        // Prioridade 2: empresa_ativa_id do usuário
+        // Prioridade 3: empresa_ativa_id do usuário
         if ($this->user && $this->user->empresa_ativa_id) {
             // Verificar se a empresa existe
             $empresa = Empresa::find($this->user->empresa_ativa_id);
@@ -278,23 +295,6 @@ class ApplicationContext implements ApplicationContextContract
                     'empresa_id' => $this->user->empresa_ativa_id
                 ]);
                 return $this->user->empresa_ativa_id;
-            }
-        }
-
-        // Prioridade 3: empresa_id do JWT (com validação de existência)
-        if ($empresaIdFromJwt) {
-            $empresa = Empresa::find($empresaIdFromJwt);
-            if ($empresa) {
-                Log::debug('ApplicationContext - empresaId do JWT', [
-                    'empresa_id' => $empresaIdFromJwt,
-                ]);
-
-                if ($this->user->empresa_ativa_id !== $empresaIdFromJwt) {
-                    $this->user->empresa_ativa_id = $empresaIdFromJwt;
-                    $this->user->save();
-                }
-
-                return $empresaIdFromJwt;
             }
         }
         
