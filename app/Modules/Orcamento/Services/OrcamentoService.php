@@ -175,7 +175,7 @@ class OrcamentoService
             $fornecedorEscolhido = isset($data['fornecedor_escolhido']) && $data['fornecedor_escolhido'];
             
             if ($fornecedorEscolhido) {
-                $item->orcamentos()->where('id', '!=', $orcamento->id)->update(['fornecedor_escolhido' => false]);
+                $item->orcamentos()->where('orcamentos.id', '!=', $orcamento->id)->update(['fornecedor_escolhido' => false]);
             }
             
             $updateData['fornecedor_escolhido'] = $fornecedorEscolhido;

@@ -55,6 +55,14 @@ class CriarAutorizacaoFornecimentoDTO
         }
         $empresaId = (int) $empresaId;
 
+        // Validar campos obrigatórios
+        if (empty($data['numero'])) {
+            throw new InvalidArgumentException('numero é obrigatório.');
+        }
+        if (empty($data['data'])) {
+            throw new InvalidArgumentException('data é obrigatória.');
+        }
+
         // Parse seguro de datas
         $dataObj = self::parseDate($data['data'] ?? null);
         $dataAdjudicacao = self::parseDate($data['data_adjudicacao'] ?? $data['dataAdjudicacao'] ?? null);

@@ -179,13 +179,6 @@ class ProcessoStatusService
         }
 
         $processo->status = $novoStatus;
-        
-        // Se marcar como perdido, arquivar automaticamente
-        if ($novoStatus === 'perdido') {
-            $processo->status = 'arquivado';
-            $processo->data_arquivamento = now();
-        }
-        
         $processo->save();
 
         return [

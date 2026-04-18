@@ -21,6 +21,14 @@ class PagarNotaFiscalUseCase
             throw new DomainException('Nota fiscal não encontrada.');
         }
 
+        if ($notaFiscalModel->situacao === 'paga') {
+            throw new DomainException('Nota fiscal já foi paga anteriormente.');
+        }
+
+        if ($notaFiscalModel->situacao === 'cancelada') {
+            throw new DomainException('Nota fiscal cancelada não pode ser paga.');
+        }
+
         // Nota: Tanto notas de entrada quanto de saída podem ser pagas
         // - Entrada: Pagamento ao fornecedor
         // - Saída: Recebimento do órgão

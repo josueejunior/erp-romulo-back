@@ -314,6 +314,41 @@ class OrcamentoController extends BaseApiController
     /**
      * Web: Atualizar orçamento
      */
+    public function create(Processo $processo, \App\Modules\Processo\Models\ProcessoItem $item)
+    {
+        $empresa = $this->getEmpresaAtivaOrFail();
+
+        try {
+            $this->orcamentoService->validarProcessoEmpresa($processo, $empresa->id);
+            $this->orcamentoService->validarItemPertenceProcesso($item, $processo);
+            $this->orcamentoService->validarProcessoPermiteOrcamento($processo);
+        } catch (\Exception $e) {
+            return redirect()->route('processos.show', $processo)
+                ->with('error', $e->getMessage());
+        }
+
+        return redirect()->route('processos.show', $processo)
+            ->with('info', 'Use a aba de orçamentos no detalhe do processo.');
+    }
+
+    public function edit(Processo $processo, \App\Modules\Processo\Models\ProcessoItem $item, \App\Modules\Orcamento\Models\Orcamento $orcamento)
+    {
+        $empresa = $this->getEmpresaAtivaOrFail();
+
+        try {
+            $this->orcamentoService->validarProcessoEmpresa($processo, $empresa->id);
+            $this->orcamentoService->validarItemPertenceProcesso($item, $processo);
+            $this->orcamentoService->validarOrcamentoEmpresa($orcamento, $empresa->id);
+            $this->orcamentoService->validarOrcamentoPertenceItem($orcamento, $item, $processo);
+        } catch (\Exception $e) {
+            return redirect()->route('processos.show', $processo)
+                ->with('error', $e->getMessage());
+        }
+
+        return redirect()->route('processos.show', $processo)
+            ->with('info', 'Use a aba de orçamentos no detalhe do processo.');
+    }
+
     /**
      * Web: Atualizar orçamento
      * 

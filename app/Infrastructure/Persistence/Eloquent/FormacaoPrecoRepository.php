@@ -118,8 +118,7 @@ class FormacaoPrecoRepository implements FormacaoPrecoRepositoryInterface
      */
     public function buscarPorContexto(int $processoId, int $itemId, ?int $orcamentoId = null): ?FormacaoPrecoModel
     {
-        $query = FormacaoPrecoModel::where('processo_id', $processoId)
-            ->where('processo_item_id', $itemId);
+        $query = FormacaoPrecoModel::where('processo_item_id', $itemId);
 
         if ($orcamentoId !== null) {
             $query->where('orcamento_id', $orcamentoId);
@@ -139,7 +138,6 @@ class FormacaoPrecoRepository implements FormacaoPrecoRepositoryInterface
     {
         return FormacaoPrecoModel::firstOrCreate(
             [
-                'processo_id' => $dados['processo_id'],
                 'processo_item_id' => $dados['processo_item_id'],
                 'orcamento_id' => $dados['orcamento_id'] ?? null,
             ],

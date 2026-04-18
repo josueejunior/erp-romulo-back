@@ -7,7 +7,7 @@ use App\Domain\Empenho\Entities\Empenho;
 use App\Domain\Empenho\Repositories\EmpenhoRepositoryInterface;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\Shared\ValueObjects\TenantContext;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Application Service: CriarEmpenhoUseCase

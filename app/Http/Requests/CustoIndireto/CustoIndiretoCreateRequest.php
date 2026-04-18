@@ -21,7 +21,7 @@ class CustoIndiretoCreateRequest extends FormRequest
         return [
             'descricao' => ['required', 'string', 'max:255'],
             'data' => ['required', 'date'],
-            'valor' => ['required', 'numeric', 'min:0'],
+            'valor' => ['required', 'numeric', 'min:0', 'max:9999999999999.99'],
             'categoria' => ['nullable', 'string', 'max:255'],
             'observacoes' => ['nullable', 'string'],
         ];

@@ -51,6 +51,14 @@ class DisputaService
         }
     }
 
+    public function validarProcessoPermiteDisputa(Processo $processo): void
+    {
+        $statusPermitidos = ['participacao', 'em_disputa', 'julgamento', 'julgamento_habilitacao'];
+        if (!in_array($processo->status, $statusPermitidos)) {
+            throw new \Exception("O processo no status '{$processo->status}' não permite edição de disputa.");
+        }
+    }
+
     /**
      * Registra resultados da disputa (valores finais e classificações)
      */

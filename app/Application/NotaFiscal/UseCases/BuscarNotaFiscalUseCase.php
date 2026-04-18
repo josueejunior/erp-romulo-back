@@ -4,7 +4,7 @@ namespace App\Application\NotaFiscal\UseCases;
 
 use App\Domain\NotaFiscal\Entities\NotaFiscal;
 use App\Domain\NotaFiscal\Repositories\NotaFiscalRepositoryInterface;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Buscar Nota Fiscal por ID

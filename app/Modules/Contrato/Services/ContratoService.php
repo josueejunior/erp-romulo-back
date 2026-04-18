@@ -162,7 +162,7 @@ class ContratoService
 
         $valorTotalAnterior = $contrato->valor_total;
 
-        DB::transaction(function () use ($contrato, $validated, $request) {
+        DB::transaction(function () use ($contrato, $validated, $request, $valorTotalAnterior) {
             // Upload de arquivo
             if ($request->hasFile('arquivo_contrato')) {
                 if ($contrato->arquivo_contrato && Storage::disk('public')->exists($contrato->arquivo_contrato)) {
@@ -176,7 +176,7 @@ class ContratoService
 
             $contrato->update($validated);
 
-            if ($validated['valor_total'] != $valorTotalAnterior) {
+            if (isset($validated['valor_total']) && $validated['valor_total'] != $valorTotalAnterior) {
                 $contrato->atualizarSaldo();
             }
         });

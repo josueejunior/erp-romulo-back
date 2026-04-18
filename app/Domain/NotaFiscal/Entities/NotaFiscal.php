@@ -34,7 +34,7 @@ class NotaFiscal
         public readonly float $custoTotal = 0.0,
         public readonly ?string $comprovantePagamento = null,
         public readonly ?string $arquivo = null,
-        public readonly ?string $situacao = null,
+        public readonly ?string $situacao = 'pendente',
         public readonly ?Carbon $dataPagamento = null,
         public readonly ?string $observacoes = null,
     ) {

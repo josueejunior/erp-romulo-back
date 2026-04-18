@@ -295,10 +295,15 @@ class ConfiguracoesController extends Controller
             $user = $request->user();
             
             // Dados já validados pelo Form Request
-            $validated = $request->validated();
+            $validated = array_filter($request->validated(), fn($v) => $v !== null);
 
-            // Criar ou atualizar preferências
-            $preferences = UserNotificationPreferences::criarOuAtualizar($user->id, $validated);
+            if (empty($validated)) {
+                $preferences = UserNotificationPreferences::where('user_id', $user->id)->first()
+                    ?? new UserNotificationPreferences(['user_id' => $user->id]);
+            } else {
+                // Criar ou atualizar preferências
+                $preferences = UserNotificationPreferences::criarOuAtualizar($user->id, $validated);
+            }
 
             Log::info('ConfiguracoesController::atualizarNotificacoes - Preferências atualizadas com sucesso', [
                 'user_id' => $user->id,

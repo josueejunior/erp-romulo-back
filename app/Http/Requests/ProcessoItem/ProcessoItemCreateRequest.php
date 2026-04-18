@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\ProcessoItem;
 
+use App\Domain\ProcessoItem\Enums\UnidadeMedida;
 use App\Rules\DbTypeRule;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -25,7 +26,7 @@ class ProcessoItemCreateRequest extends FormRequest
             'numero_item' => [DbTypeRule::nullable(), ...DbTypeRule::integer(), 'min:1'],
             'codigo_interno' => [DbTypeRule::nullable(), ...DbTypeRule::string(DbTypeRule::VARCHAR_DEFAULT)],
             'quantidade' => ['required', 'numeric', 'min:0.01'],
-            'unidade' => ['required', ...DbTypeRule::string(50)],
+            'unidade' => ['required', 'string', 'in:' . implode(',', UnidadeMedida::values())],
             'especificacao_tecnica' => ['required', ...DbTypeRule::text()],
             'marca_modelo_referencia' => [DbTypeRule::nullable(), ...DbTypeRule::string(DbTypeRule::VARCHAR_DEFAULT)],
             'observacoes_edital' => [DbTypeRule::nullable(), ...DbTypeRule::text()],

@@ -7,6 +7,8 @@ use App\Http\Controllers\Traits\ResolvesContext;
 use App\Modules\Processo\Models\Processo;
 use App\Modules\AutorizacaoFornecimento\Models\AutorizacaoFornecimento;
 use App\Modules\AutorizacaoFornecimento\Services\AutorizacaoFornecimentoService;
+use App\Application\AutorizacaoFornecimento\UseCases\CriarAutorizacaoFornecimentoUseCase;
+use App\Application\AutorizacaoFornecimento\DTOs\CriarAutorizacaoFornecimentoDTO;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\AutorizacaoFornecimento\Repositories\AutorizacaoFornecimentoRepositoryInterface;
 use App\Domain\Exceptions\AutorizacaoFornecimentoNaoEncontradaException;
@@ -35,6 +37,7 @@ class AutorizacaoFornecimentoController extends BaseApiController
         AutorizacaoFornecimentoService $afService,
         private ProcessoRepositoryInterface $processoRepository,
         private AutorizacaoFornecimentoRepositoryInterface $autorizacaoFornecimentoRepository,
+        private CriarAutorizacaoFornecimentoUseCase $criarAfUseCase,
     ) {
         // BaseApiController não tem construtor, não precisa chamar parent::__construct()
         $this->afService = $afService;
@@ -125,27 +128,29 @@ class AutorizacaoFornecimentoController extends BaseApiController
     {
         try {
             $empresa = $this->getEmpresaAtivaOrFail();
-            
-            // Validar que o processo pertence à empresa (regra de segurança)
+
             if ($processo->empresa_id !== $empresa->id) {
                 throw new EntidadeNaoPertenceException('Processo', 'empresa ativa');
             }
-            
-            $af = $this->afService->store($processo, $request->all(), $empresa->id);
-            return response()->json($af, 201);
+
+            $dto = CriarAutorizacaoFornecimentoDTO::fromArray(array_merge(
+                $request->all(),
+                ['empresa_id' => $empresa->id, 'processo_id' => $processo->id]
+            ));
+
+            $af = $this->criarAfUseCase->executar($dto);
+
+            return response()->json(['message' => 'Autorização de fornecimento criada com sucesso', 'data' => $af], 201);
         } catch (ProcessoNaoEmExecucaoException $e) {
             return response()->json(['message' => $e->getMessage()], 403);
         } catch (EntidadeNaoPertenceException $e) {
             return response()->json(['message' => $e->getMessage()], 404);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
         } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json([
-                'message' => 'Dados inválidos',
-                'errors' => $e->errors()
-            ], 422);
+            return response()->json(['message' => 'Dados inválidos', 'errors' => $e->errors()], 422);
         } catch (\Exception $e) {
-            // Fallback para mensagens de string (será removido quando Service usar Domain Exceptions)
-            $statusCode = str_contains($e->getMessage(), 'em execução') ? 403 : 404;
-            return response()->json(['message' => $e->getMessage()], $statusCode);
+            return response()->json(['message' => $e->getMessage()], 500);
         }
     }
 

@@ -849,7 +849,14 @@ class AssinaturaController extends BaseApiController
                 ]);
             }
 
-            $tenantId = $empresa->tenant_id;
+            $tenantId = tenancy()->tenant?->id;
+
+            if (!$tenantId) {
+                return response()->json([
+                    'message' => 'Tenant não identificado',
+                    'data' => []
+                ]);
+            }
 
             // Buscar todas as assinaturas (histórico de pagamentos) do tenant
             $assinaturas = $this->assinaturaRepository->listarPorTenant($tenantId);
@@ -858,19 +865,14 @@ class AssinaturaController extends BaseApiController
             $historico = collect($assinaturas)->map(function ($assinatura) {
                 return [
                     'id' => $assinatura->id,
-                    'data' => $assinatura->data_inicio,
-                    'data_fim' => $assinatura->data_fim,
-                    'valor' => (float) $assinatura->valor_pago,
-                    'metodo' => $assinatura->metodo_pagamento,
+                    'data' => $assinatura->dataInicio?->toDateString(),
+                    'data_fim' => $assinatura->dataFim?->toDateString(),
+                    'valor' => (float) $assinatura->valorPago,
+                    'metodo' => $assinatura->metodoPagamento,
                     'status' => $assinatura->status,
-                    'transacao_id' => $assinatura->transacao_id,
-                    'descricao' => $assinatura->plano 
-                        ? "Plano {$assinatura->plano->nome}" 
-                        : "Assinatura #{$assinatura->id}",
-                    'plano' => $assinatura->plano ? [
-                        'id' => $assinatura->plano->id,
-                        'nome' => $assinatura->plano->nome,
-                    ] : null,
+                    'transacao_id' => $assinatura->transacaoId,
+                    'descricao' => "Assinatura #{$assinatura->id}",
+                    'plano' => null,
                 ];
             })->sortByDesc('data')->values()->toArray();
 

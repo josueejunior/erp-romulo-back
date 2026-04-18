@@ -7,19 +7,33 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class FormacaoPrecoResource extends JsonResource
 {
+    private function value(string $camelCase, ?string $snakeCase = null, mixed $default = null): mixed
+    {
+        $snakeCase ??= strtolower(preg_replace('/([a-z])([A-Z])/', '$1_$2', $camelCase) ?? $camelCase);
+
+        $value = data_get($this->resource, $camelCase);
+        if ($value !== null) {
+            return $value;
+        }
+
+        $value = data_get($this->resource, $snakeCase);
+
+        return $value ?? $default;
+    }
+
     public function toArray(Request $request): array
     {
         return [
-            'id' => $this->id,
-            'custo_produto' => (float) $this->custo_produto,
-            'frete' => (float) $this->frete,
-            'percentual_impostos' => (float) $this->percentual_impostos,
-            'valor_impostos' => (float) $this->valor_impostos,
-            'percentual_margem' => (float) $this->percentual_margem,
-            'valor_margem' => (float) $this->valor_margem,
-            'preco_minimo' => (float) $this->preco_minimo,
-            'preco_recomendado' => $this->preco_recomendado ? (float) $this->preco_recomendado : null,
-            'observacoes' => $this->observacoes,
+            'id' => $this->value('id'),
+            'custo_produto' => (float) $this->value('custoProduto', 'custo_produto', 0),
+            'frete' => (float) $this->value('frete', null, 0),
+            'percentual_impostos' => (float) $this->value('percentualImpostos', 'percentual_impostos', 0),
+            'valor_impostos' => (float) $this->value('valorImpostos', 'valor_impostos', 0),
+            'percentual_margem' => (float) $this->value('percentualMargem', 'percentual_margem', 0),
+            'valor_margem' => (float) $this->value('valorMargem', 'valor_margem', 0),
+            'preco_minimo' => (float) $this->value('precoMinimo', 'preco_minimo', 0),
+            'preco_recomendado' => $this->value('precoRecomendado', 'preco_recomendado') ? (float) $this->value('precoRecomendado', 'preco_recomendado') : null,
+            'observacoes' => $this->value('observacoes'),
         ];
     }
 }

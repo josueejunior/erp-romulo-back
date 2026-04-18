@@ -55,7 +55,6 @@ class FormacaoPrecoService
         // Preparar dados para persistência
         $dadosPersistencia = [
             'empresa_id' => $empresaId,
-            'processo_id' => $processo->id,
             'processo_item_id' => $item->id,
             'orcamento_id' => $orcamento?->id,
             'custo_produto' => $data['custo_produto'],
@@ -136,8 +135,7 @@ class FormacaoPrecoService
         $this->validarProcessoNaoEmExecucao($processo);
         
         // Validar que a formação pertence ao contexto
-        if ($formacaoPreco->processo_id !== $processo->id || 
-            $formacaoPreco->processo_item_id !== $item->id ||
+        if ($formacaoPreco->processo_item_id !== $item->id ||
             $formacaoPreco->orcamento_id !== $orcamento->id) {
             throw new EntidadeNaoPertenceException('Formação de preço', 'contexto informado');
         }

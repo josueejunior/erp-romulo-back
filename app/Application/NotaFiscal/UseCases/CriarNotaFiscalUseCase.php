@@ -92,7 +92,7 @@ class CriarNotaFiscalUseCase
             custoTotal: $custoTotal,
             comprovantePagamento: $dto->comprovantePagamento,
             arquivo: $dto->arquivo,
-            situacao: $dto->situacao,
+            situacao: $dto->situacao ?? 'pendente',
             dataPagamento: $dto->dataPagamento,
             observacoes: $dto->observacoes,
         );

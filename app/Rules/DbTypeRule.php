@@ -133,7 +133,7 @@ class DbTypeRule
      */
     public static function datetime(): array
     {
-        return ['date'];
+        return ['date_format:Y-m-d H:i:s'];
     }
 
     /**

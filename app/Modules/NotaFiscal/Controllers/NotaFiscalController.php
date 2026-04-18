@@ -539,9 +539,9 @@ class NotaFiscalController extends BaseApiController
             $this->excluirNotaFiscalUseCase->executar($notaFiscalId, $empresa->id);
             return response()->json(null, 204);
         } catch (\App\Domain\Exceptions\DomainException $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 404);
+            $message = $e->getMessage();
+            $statusCode = str_contains($message, 'não pode ser excluída') ? 422 : 404;
+            return response()->json(['message' => $message], $statusCode);
         } catch (\Exception $e) {
             return $this->handleException($e, 'Erro ao excluir nota fiscal');
         }
@@ -561,7 +561,7 @@ class NotaFiscalController extends BaseApiController
                 'message' => 'Nota fiscal marcada como paga com sucesso',
             ]);
         } catch (\App\Domain\Exceptions\DomainException $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
+            return response()->json(['message' => $e->getMessage()], 422);
         } catch (\Exception $e) {
             return $this->handleException($e, 'Erro ao marcar nota fiscal como paga');
         }

@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Contrato;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class ContratoCreateRequest extends FormRequest
 {
@@ -13,8 +14,17 @@ class ContratoCreateRequest extends FormRequest
 
     public function rules(): array
     {
+        $empresaId = app(\App\Services\ApplicationContext::class)->getEmpresaIdOrNull();
+
         return [
-            'numero' => 'nullable|string|max:255',
+            'numero' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('contratos', 'numero')
+                    ->where('empresa_id', $empresaId)
+                    ->whereNull('excluido_em'),
+            ],
             'data_inicio' => 'nullable|date',
             'data_fim' => 'nullable|date|after_or_equal:data_inicio',
             'data_assinatura' => 'nullable|date',

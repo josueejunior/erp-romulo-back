@@ -5,6 +5,8 @@ namespace App\Modules\AutorizacaoFornecimento\Services;
 use App\Modules\Processo\Models\Processo;
 use App\Modules\AutorizacaoFornecimento\Models\AutorizacaoFornecimento;
 use App\Domain\AutorizacaoFornecimento\Repositories\AutorizacaoFornecimentoRepositoryInterface;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Service para Autorização de Fornecimento
@@ -47,8 +49,26 @@ class AutorizacaoFornecimentoService
 
     public function update(Processo $processo, AutorizacaoFornecimento $autorizacao, array $data, int $empresaId): AutorizacaoFornecimento
     {
-        // TODO: Refatorar para usar Use Case
-        throw new \RuntimeException('Método update precisa ser implementado usando Use Case');
+        $validator = Validator::make($data, [
+            'numero' => 'sometimes|string|max:255',
+            'data' => 'sometimes|date',
+            'data_adjudicacao' => 'nullable|date',
+            'data_homologacao' => 'nullable|date',
+            'data_fim_vigencia' => 'nullable|date',
+            'valor' => 'sometimes|numeric|min:0',
+            'contrato_id' => 'nullable|exists:contratos,id',
+            'situacao' => 'sometimes|string|in:aguardando_empenho,atendendo,concluida,cancelada',
+            'vigente' => 'nullable|boolean',
+            'observacoes' => 'nullable|string',
+            'condicoes_af' => 'nullable|string',
+        ]);
+
+        if ($validator->fails()) {
+            throw new ValidationException($validator);
+        }
+
+        $autorizacao->update($validator->validated());
+        return $autorizacao->fresh();
     }
 
     public function delete(Processo $processo, AutorizacaoFornecimento $autorizacao, int $empresaId): void

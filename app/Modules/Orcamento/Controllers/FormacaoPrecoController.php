@@ -152,8 +152,7 @@ class FormacaoPrecoController extends BaseApiController
                 throw new FormacaoPrecoNaoEncontradaException();
             }
 
-            // ✅ Segurança: Validar permissão (mesma regra da Web)
-            $this->authorize('update', $formacaoPreco);
+            $this->authorize('update', $processo);
 
             // FormRequest já validou os dados
             $formacaoPreco = $this->formacaoPrecoService->update(
@@ -179,6 +178,62 @@ class FormacaoPrecoController extends BaseApiController
         } catch (\Exception $e) {
             \Log::error('Erro ao atualizar formação de preço: ' . $e->getMessage(), ['exception' => $e]);
             return response()->json(['message' => 'Erro ao atualizar formação de preço'], 500);
+        }
+    }
+
+    /**
+     * API: Listar formações de preço por contexto (Route::module)
+     */
+    public function list(Request $request): JsonResponse
+    {
+        try {
+            [$processo, $item, $orcamento] = $this->resolveContext($request);
+            $empresaId = $this->getEmpresaAtivaOrFail()->id;
+
+            $formacoes = $this->formacaoPrecoRepository->buscarComFiltros([
+                'processo_item_id' => $item->id,
+                'orcamento_id' => $orcamento->id,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'data' => FormacaoPrecoResource::collection($formacoes->getCollection()),
+            ]);
+        } catch (NotFoundException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Erro ao listar formações de preço'], 500);
+        }
+    }
+
+    /**
+     * API: Excluir formação de preço (Route::module)
+     */
+    public function destroy(Request $request): JsonResponse
+    {
+        try {
+            [$processo, $item, $orcamento] = $this->resolveContext($request);
+
+            $id = $request->route('formacaoPreco') ?? $request->route('id');
+            if (!$id) {
+                return response()->json(['message' => 'ID não fornecido'], 400);
+            }
+
+            $formacaoPreco = $this->formacaoPrecoRepository->buscarModeloPorId((int) $id);
+            if (!$formacaoPreco) {
+                throw new FormacaoPrecoNaoEncontradaException();
+            }
+
+            $this->authorize('delete', $processo);
+            $this->formacaoPrecoRepository->deletar((int) $id);
+
+            return response()->json(['success' => true, 'message' => 'Formação de preço excluída.']);
+        } catch (NotFoundException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (FormacaoPrecoNaoEncontradaException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Erro ao excluir formação de preço'], 500);
         }
     }
 

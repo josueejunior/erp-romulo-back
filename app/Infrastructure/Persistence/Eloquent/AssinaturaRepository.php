@@ -226,7 +226,7 @@ class AssinaturaRepository implements AssinaturaRepositoryInterface
             $query->where('status', $filtros['status']);
         }
 
-        return $query->orderByDesc('created_at')
+        return $query->orderByDesc('data_inicio')
             ->get()
             ->map(fn($model) => $this->toDomain($model));
     }
@@ -242,7 +242,7 @@ class AssinaturaRepository implements AssinaturaRepositoryInterface
             $query->where('status', $filtros['status']);
         }
 
-        return $query->orderByDesc('created_at')
+        return $query->orderByDesc('data_inicio')
             ->get()
             ->map(fn($model) => $this->toDomain($model));
     }

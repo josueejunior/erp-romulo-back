@@ -299,11 +299,9 @@ class EmpenhoController extends BaseApiController
                 ], 201);
             });
         } catch (\App\Domain\Exceptions\DomainException $e) {
-            $statusCode = $e->getMessage() === 'Empenhos só podem ser criados para processos em execução.' ? 403 : 
-                         ($e->getMessage() === 'Processo é obrigatório para criar empenho.' ? 400 : 400);
             return response()->json([
                 'message' => $e->getMessage(),
-            ], $statusCode);
+            ], 422);
         } catch (\Exception $e) {
             return $this->handleException($e, 'Erro ao criar empenho: ' . $e->getMessage());
         }
@@ -366,17 +364,21 @@ class EmpenhoController extends BaseApiController
             $processoId = (int) $request->route()->parameter('processo');
             $empenhoId = (int) $request->route()->parameter('empenho');
             
-            // Validar dados (Form Request - validação de formato)
-            $rules = (new EmpenhoCreateRequest())->rules();
-            $validator = \Illuminate\Support\Facades\Validator::make($request->all(), $rules);
-            
+            // Validar dados para update (campos opcionais)
+            $updateRules = array_merge((new EmpenhoCreateRequest())->rules(), [
+                'numero' => 'sometimes|string|max:255',
+                'data' => 'sometimes|date',
+                'valor' => 'sometimes|numeric|min:0.01',
+            ]);
+            $validator = \Illuminate\Support\Facades\Validator::make($request->all(), $updateRules);
+
             if ($validator->fails()) {
                 return response()->json([
                     'message' => 'Dados inválidos',
                     'errors' => $validator->errors()
                 ], 422);
             }
-            
+
             // Delegar para método Web (que usa Use Case - validação de regras de negócio)
             return $this->updateWeb($request, $processoId, $empenhoId);
         } catch (\App\Domain\Exceptions\DomainException $e) {
@@ -429,9 +431,13 @@ class EmpenhoController extends BaseApiController
         
         try {
             return \Illuminate\Support\Facades\DB::transaction(function () use ($request, $processoId, $empenhoId, $empresa) {
-                // Validar dados usando as mesmas regras do create
-                $rules = (new EmpenhoCreateRequest())->rules();
-                $validator = \Illuminate\Support\Facades\Validator::make($request->all(), $rules);
+                // Validar dados para update (campos opcionais)
+                $updateRules = array_merge((new EmpenhoCreateRequest())->rules(), [
+                    'numero' => 'sometimes|string|max:255',
+                    'data' => 'sometimes|date',
+                    'valor' => 'sometimes|numeric|min:0.01',
+                ]);
+                $validator = \Illuminate\Support\Facades\Validator::make($request->all(), $updateRules);
                 
                 if ($validator->fails()) {
                     return response()->json([
@@ -561,7 +567,7 @@ class EmpenhoController extends BaseApiController
                 'data' => $empenhoModel ? $empenhoModel->toArray() : null
             ]);
         } catch (\App\Domain\Exceptions\DomainException $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
+            return response()->json(['message' => $e->getMessage()], 422);
         } catch (\Exception $e) {
             Log::error('Erro ao concluir empenho', [
                 'processo_id' => $request->route()->parameter('processo'),

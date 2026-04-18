@@ -143,7 +143,7 @@ class Processo extends BaseModel
 
     public function isEmExecucao(): bool
     {
-        return in_array($this->status, ['execucao', 'vencido']);
+        return in_array($this->status, ['execucao', 'vencido', 'pagamento', 'encerramento']);
     }
 
     public function podeEditar(): bool

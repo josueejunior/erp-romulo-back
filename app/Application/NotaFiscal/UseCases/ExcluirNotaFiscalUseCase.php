@@ -3,7 +3,7 @@
 namespace App\Application\NotaFiscal\UseCases;
 
 use App\Domain\NotaFiscal\Repositories\NotaFiscalRepositoryInterface;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Application Service: ExcluirNotaFiscalUseCase
@@ -28,6 +28,11 @@ class ExcluirNotaFiscalUseCase
         // Validar se pertence à empresa (regra de domínio)
         if ($notaFiscal->empresaId !== $empresaId) {
             throw new DomainException('Nota fiscal não pertence à empresa ativa.');
+        }
+
+        // Regra de negócio: NF paga não pode ser excluída
+        if ($notaFiscal->situacao === 'paga') {
+            throw new DomainException('Nota fiscal paga não pode ser excluída.');
         }
 
         // Excluir (regra de domínio: apenas se pertencer à empresa)

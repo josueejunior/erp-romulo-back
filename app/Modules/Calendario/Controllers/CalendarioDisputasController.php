@@ -94,10 +94,10 @@ class CalendarioDisputasController extends BaseApiController
                     'uasg' => $processo->orgao->uasg,
                     'razao_social' => $processo->orgao->razao_social,
                 ],
-                'setor' => [
+                'setor' => $processo->setor ? [
                     'id' => $processo->setor->id,
                     'nome' => $processo->setor->nome,
-                ],
+                ] : null,
                 'objeto_resumido' => $processo->objeto_resumido,
                 'itens' => $itens,
                 'sugerir_julgamento' => $sugerirJulgamento,

@@ -4,7 +4,7 @@ namespace App\Application\Empenho\UseCases;
 
 use App\Domain\Empenho\Entities\Empenho;
 use App\Domain\Empenho\Repositories\EmpenhoRepositoryInterface;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Concluir Empenho
@@ -33,10 +33,9 @@ class ConcluirEmpenhoUseCase
             throw new DomainException('Empenho não pertence ao processo.');
         }
 
-        // Garantir idempotência: verificar se já está concluído
+        // Verificar se já está concluído
         if ($empenho->concluido) {
-            // Retornar o empenho já concluído (idempotente)
-            return $empenho;
+            throw new DomainException('Empenho já foi concluído anteriormente.');
         }
 
         // Concluir empenho (regra de domínio)

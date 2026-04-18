@@ -33,7 +33,12 @@ class AtualizarProcessoUseCase
         if ($processoExistente->empresaId !== $dto->empresaId) {
             throw new DomainException('Processo não pertence à empresa ativa.');
         }
-        
+
+        // Validar regra de negócio: processos arquivados e perdidos não podem ser editados
+        if (!$processoExistente->podeEditar()) {
+            throw new DomainException('Processo no status "' . $processoExistente->status . '" não pode ser editado.');
+        }
+
         // Criar nova instância com valores atualizados (imutabilidade)
         $processoAtualizado = new Processo(
             id: $dto->processoId,

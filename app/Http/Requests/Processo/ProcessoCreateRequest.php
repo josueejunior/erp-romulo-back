@@ -5,6 +5,7 @@ namespace App\Http\Requests\Processo;
 use App\Rules\DbTypeRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 /**
  * Form Request para criacao de processo.
@@ -42,11 +43,19 @@ class ProcessoCreateRequest extends FormRequest
 
     public function rules(): array
     {
+        $empresaId = app(\App\Services\ApplicationContext::class)->getEmpresaIdOrNull();
+
         return [
             'orgao_id' => ['required', 'exists:orgaos,id'],
             'setor_id' => [DbTypeRule::nullable(), 'exists:setors,id'],
             'modalidade' => ['required', ...DbTypeRule::enum(['dispensa', 'pregao'])],
-            'numero_modalidade' => ['required', ...DbTypeRule::string(DbTypeRule::VARCHAR_DEFAULT)],
+            'numero_modalidade' => [
+                'required',
+                ...DbTypeRule::string(DbTypeRule::VARCHAR_DEFAULT),
+                Rule::unique('processos', 'numero_modalidade')
+                    ->where('empresa_id', $empresaId)
+                    ->whereNull('excluido_em'),
+            ],
             'numero_processo_administrativo' => [DbTypeRule::nullable(), ...DbTypeRule::string(DbTypeRule::VARCHAR_DEFAULT)],
             'link_edital' => [DbTypeRule::nullable(), ...DbTypeRule::url(500)],
             'portal' => [DbTypeRule::nullable(), ...DbTypeRule::string(DbTypeRule::VARCHAR_DEFAULT)],
@@ -69,6 +78,7 @@ class ProcessoCreateRequest extends FormRequest
             'tipo_disputa' => [DbTypeRule::nullable(), ...DbTypeRule::string(DbTypeRule::VARCHAR_DEFAULT)],
             'status' => [DbTypeRule::nullable(), ...DbTypeRule::enum(['rascunho', 'publicado', 'participacao', 'em_disputa', 'julgamento', 'julgamento_habilitacao', 'vencido', 'perdido', 'execucao', 'pagamento', 'encerramento', 'arquivado'])],
             'status_participacao' => [DbTypeRule::nullable(), ...DbTypeRule::enum(['normal', 'adiado', 'suspenso', 'cancelado'])],
+            'data_recebimento_pagamento' => [DbTypeRule::nullable(), ...DbTypeRule::date()],
             'observacoes' => [DbTypeRule::nullable(), ...DbTypeRule::observacao()],
         ];
     }

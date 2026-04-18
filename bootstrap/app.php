@@ -126,7 +126,7 @@ return Application::configure(basePath: dirname(__DIR__))
         
         // Exceções de Validação de Domínio - Unprocessable Entity (422)
         $exceptions->render(function (\App\Domain\Exceptions\ValidationException $e, $request) use ($addCorsToResponse) {
-            if ($request->expectsJson()) {
+            if ($request->expectsJson() || $request->is('api/*')) {
                 $response = response()->json([
                     'message' => $e->getMessage(),
                     'errors' => $e->errors,
@@ -138,7 +138,7 @@ return Application::configure(basePath: dirname(__DIR__))
         
         // Exceções de Regra de Negócio - Bad Request com detalhes (400)
         $exceptions->render(function (\App\Domain\Exceptions\BusinessRuleException $e, $request) use ($addCorsToResponse) {
-            if ($request->expectsJson()) {
+            if ($request->expectsJson() || $request->is('api/*')) {
                 $response = response()->json([
                     'message' => $e->getMessage(),
                     'rule' => $e->rule,
@@ -211,7 +211,7 @@ return Application::configure(basePath: dirname(__DIR__))
         });
 
         $exceptions->render(function (\App\Domain\Exceptions\NotFoundException $e, $request) use ($addCorsToResponse) {
-            if ($request->expectsJson()) {
+            if ($request->expectsJson() || $request->is('api/*')) {
                 $response = response()->json([
                     'message' => $e->getMessage(),
                     'code' => 'NOT_FOUND',
@@ -222,7 +222,7 @@ return Application::configure(basePath: dirname(__DIR__))
         
         // Exceções de Não Autorizado - Forbidden (403)
         $exceptions->render(function (\App\Domain\Exceptions\UnauthorizedException $e, $request) use ($addCorsToResponse) {
-            if ($request->expectsJson()) {
+            if ($request->expectsJson() || $request->is('api/*')) {
                 $response = response()->json([
                     'message' => $e->getMessage(),
                     'code' => 'UNAUTHORIZED',
@@ -233,7 +233,7 @@ return Application::configure(basePath: dirname(__DIR__))
         
         // Exceções de Validação do Laravel - Unprocessable Entity (422)
         $exceptions->render(function (\Illuminate\Validation\ValidationException $e, $request) use ($addCorsToResponse) {
-            if ($request->expectsJson()) {
+            if ($request->expectsJson() || $request->is('api/*')) {
                 $errors = $e->errors();
                 
                 // Log detalhado dos erros de validação

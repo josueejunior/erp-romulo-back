@@ -1,4 +1,4 @@
-aqu<?php
+<?php
 
 namespace App\Http\Requests\CustoIndireto;
 
@@ -21,7 +21,7 @@ class CustoIndiretoUpdateRequest extends FormRequest
         return [
             'descricao' => ['sometimes', 'required', 'string', 'max:255'],
             'data' => ['sometimes', 'required', 'date'],
-            'valor' => ['sometimes', 'required', 'numeric', 'min:0'],
+            'valor' => ['sometimes', 'required', 'numeric', 'min:0', 'max:9999999999999.99'],
             'categoria' => ['nullable', 'string', 'max:255'],
             'observacoes' => ['nullable', 'string'],
         ];

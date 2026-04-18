@@ -141,6 +141,18 @@ class ProcessoItem extends BaseModel
         return $this->hasMany(OrcamentoItem::class);
     }
 
+    public function orcamentoEscolhido(): \Illuminate\Database\Eloquent\Relations\HasOneThrough
+    {
+        return $this->hasOneThrough(
+            Orcamento::class,
+            OrcamentoItem::class,
+            'processo_item_id',
+            'id',
+            'id',
+            'orcamento_id'
+        )->withoutGlobalScope('empresa')->latest('orcamentos.id');
+    }
+
     public function formacoesPreco(): HasMany
     {
         return $this->hasMany(FormacaoPreco::class);

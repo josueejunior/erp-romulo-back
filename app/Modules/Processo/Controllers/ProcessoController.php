@@ -793,9 +793,7 @@ class ProcessoController extends BaseApiController
             // Executar Use Case (valida propriedade e deleta)
             $this->excluirProcessoUseCase->executar((int) $id, $empresa->id);
 
-            return response()->json([
-                'message' => 'Processo excluído com sucesso'
-            ]);
+            return response()->json(null, 204);
         } catch (NotFoundException $e) {
             return response()->json([
                 'message' => $e->getMessage()

@@ -25,7 +25,7 @@ class AutorizacaoFornecimento
         public readonly float $valor = 0.0,
         public readonly float $saldo = 0.0,
         public readonly float $valorEmpenhado = 0.0,
-        public readonly ?string $situacao = null,
+        public readonly ?string $situacao = 'aguardando_empenho',
         public readonly ?string $situacaoDetalhada = null,
         public readonly bool $vigente = true,
         public readonly ?string $observacoes = null,

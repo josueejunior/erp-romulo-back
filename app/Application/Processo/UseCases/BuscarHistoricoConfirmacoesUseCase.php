@@ -77,7 +77,7 @@ class BuscarHistoricoConfirmacoesUseCase
             $historico[] = [
                 'id' => 1,
                 'data_recebimento' => $processoModel->data_recebimento_pagamento->format('Y-m-d'),
-                'data_confirmacao' => $processoModel->updated_at->format('Y-m-d H:i:s'),
+                'data_confirmacao' => $processoModel->updated_at?->format('Y-m-d H:i:s'),
                 'confirmado_por' => $processoModel->updated_by ?? null,
                 'receita_total' => round($receitaTotal, 2),
                 'custos_diretos' => round($custosDiretos, 2),

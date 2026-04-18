@@ -11,6 +11,7 @@ class FormacaoPreco extends BaseModel
     protected $table = 'formacao_precos';
 
     protected $fillable = [
+        'empresa_id',
         'processo_item_id',
         'orcamento_id', // Mantido para compatibilidade
         'orcamento_item_id', // Novo: para formações de preço vinculadas a itens de orçamento
