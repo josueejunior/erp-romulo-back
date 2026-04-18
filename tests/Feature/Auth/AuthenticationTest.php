@@ -41,7 +41,7 @@ class AuthenticationTest extends TestCase
             'Access-Control-Request-Method' => 'POST',
         ]);
 
-        $response->assertStatus(200)
+        $response->assertStatus(204)
                  ->assertHeader('Access-Control-Allow-Origin');
     }
 
