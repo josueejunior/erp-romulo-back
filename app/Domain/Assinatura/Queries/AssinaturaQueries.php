@@ -50,9 +50,8 @@ final class AssinaturaQueries
                     $query->where('empresa_id', $empresaId)
                           ->where('tenant_id', $tenantId);
                 } else {
-                    // Legado ou sem tenant: tenta um ou outro
-                    $query->where('empresa_id', $empresaId)
-                          ->orWhere('tenant_id', $empresaId);
+                    // Sem tenant no contexto: buscar apenas por empresa
+                    $query->where('empresa_id', $empresaId);
                 }
             })
             // 🔥 PRIORIDADE: Ativa/Trial vence Aguardando Pagamento

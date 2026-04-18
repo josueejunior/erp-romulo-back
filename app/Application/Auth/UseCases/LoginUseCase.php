@@ -12,6 +12,7 @@ use App\Domain\Exceptions\CredenciaisInvalidasException;
 use App\Domain\Exceptions\MultiplosTenantsException;
 use App\Services\AdminTenancyRunner;
 use App\Models\Tenant;
+use App\Models\UserLookup;
 use App\Modules\Auth\Models\AdminUser;
 use DomainException;
 use Illuminate\Support\Facades\Hash;
@@ -402,12 +403,51 @@ class LoginUseCase
         
         // Se não tem empresa ativa, buscar primeira empresa
         if (!$empresaAtiva) {
-            $empresas = $this->userRepository->buscarEmpresas($user->id);
-            $empresaAtiva = !empty($empresas) ? $empresas[0] : null;
+                $lookupEmpresaId = UserLookup::query()
+                    ->where('email', $user->email)
+                    ->where('tenant_id', $tenant->id)
+                    ->where('user_id', $user->id)
+                    ->where('status', 'ativo')
+                    ->whereNull('deleted_at')
+                    ->whereNotNull('empresa_id')
+                    ->value('empresa_id');
+
+                if ($lookupEmpresaId) {
+                    $empresaAtiva = Empresa::find((int) $lookupEmpresaId);
+
+                    if ($empresaAtiva) {
+                        Log::info('LoginUseCase::resolverEmpresaAtiva - Empresa resolvida via users_lookup', [
+                            'user_id' => $user->id,
+                            'tenant_id' => $tenant->id,
+                            'empresa_id' => $empresaAtiva->id,
+                        ]);
+
+                        return $empresaAtiva;
+                    }
+                }
+
+                if (!$empresaAtiva) {
+                    $empresas = $this->userRepository->buscarEmpresas($user->id);
+                    $empresaAtiva = !empty($empresas) ? $empresas[0] : null;
+                }
             
             if ($empresaAtiva) {
                 // Atualizar empresa ativa
                 $user = $this->userRepository->atualizarEmpresaAtiva($user->id, $empresaAtiva->id);
+                } elseif (!$empresaAtiva) {
+                    $assinaturaEmpresaId = $this->resolverEmpresaDaAssinaturaAtiva($tenant->id);
+
+                    if ($assinaturaEmpresaId) {
+                        $empresaAtiva = Empresa::find($assinaturaEmpresaId);
+
+                        if ($empresaAtiva) {
+                            Log::warning('LoginUseCase::resolverEmpresaAtiva - Empresa inferida pela assinatura ativa', [
+                                'user_id' => $user->id,
+                                'tenant_id' => $tenant->id,
+                                'empresa_id' => $empresaAtiva->id,
+                            ]);
+                        }
+                    }
             }
         }
 
@@ -625,4 +665,20 @@ class LoginUseCase
         }
     }
 }
+    
+    private function resolverEmpresaDaAssinaturaAtiva(int $tenantId): ?int
+    {
+        try {
+            $assinatura = \App\Domain\Assinatura\Queries\AssinaturaQueries::assinaturaAtualPorTenant($tenantId);
+
+            return $assinatura?->empresa_id ? (int) $assinatura->empresa_id : null;
+        } catch (\Exception $e) {
+            Log::warning('LoginUseCase::resolverEmpresaDaAssinaturaAtiva - Falha ao inferir empresa', [
+                'tenant_id' => $tenantId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
 

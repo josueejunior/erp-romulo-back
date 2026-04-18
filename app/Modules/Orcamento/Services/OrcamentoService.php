@@ -288,7 +288,7 @@ class OrcamentoService
                     if ($processoItemModel) {
                         // Desmarcar outros orçamentos do mesmo item
                         $processoItemModel->orcamentos()
-                            ->where('id', '!=', $orcamento->id)
+                            ->where('orcamentos.id', '!=', $orcamento->id)
                             ->update(['fornecedor_escolhido' => false]);
                     }
                     

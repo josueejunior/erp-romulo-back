@@ -8,6 +8,7 @@ use App\Modules\Auth\Models\User;
 use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
 use App\Domain\Assinatura\Entities\Assinatura;
 use App\Contracts\ApplicationContextContract;
+use App\Models\UserLookup;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Http\Request;
 
@@ -110,14 +111,29 @@ class ApplicationContext implements ApplicationContextContract
             return;
         }
         
-        // 2. Resolver empresa ativa
+        // 2. Resolver tenant_id antes da empresa para fallback seguro via users_lookup
+        if (!$this->tenantId) {
+            if (tenancy()->initialized && tenancy()->tenant) {
+                $this->tenantId = (int) tenancy()->tenant->id;
+            } elseif ($request->attributes->has('auth')) {
+                $payload = $request->attributes->get('auth');
+                $this->tenantId = isset($payload['tenant_id']) ? (int) $payload['tenant_id'] : null;
+            }
+        }
+
+        // 3. Resolver empresa ativa
         Log::debug('ApplicationContext::bootstrap() - Resolvendo empresa ativa');
-        $empresaIdFromHeader = $request->header('X-Empresa-ID') 
-            ? (int) $request->header('X-Empresa-ID') 
+        $empresaIdFromHeader = $request->header('X-Empresa-ID')
+            ? (int) $request->header('X-Empresa-ID')
             : null;
+        $empresaIdFromJwt = null;
+        if ($request->attributes->has('auth')) {
+            $payload = $request->attributes->get('auth');
+            $empresaIdFromJwt = isset($payload['empresa_id']) ? (int) $payload['empresa_id'] : null;
+        }
         
         $startTime = microtime(true);
-        $this->empresaId = $this->resolveEmpresaId($empresaIdFromHeader);
+        $this->empresaId = $this->resolveEmpresaId($empresaIdFromHeader, $empresaIdFromJwt);
         $elapsedTime = microtime(true) - $startTime;
         Log::debug('ApplicationContext::bootstrap() - resolveEmpresaId() concluído', [
             'elapsed_time' => round($elapsedTime, 3) . 's',
@@ -132,7 +148,7 @@ class ApplicationContext implements ApplicationContextContract
             return;
         }
         
-        // 3. Carregar empresa
+        // 4. Carregar empresa
         $this->empresa = Empresa::find($this->empresaId);
         
         // 🔥 CORREÇÃO: Capturar tenant_id do tenancy se já estiver inicializado
@@ -169,11 +185,11 @@ class ApplicationContext implements ApplicationContextContract
             }
         }
         
-        // 4. Disponibilizar no container (compatibilidade com código legado)
+        // 5. Disponibilizar no container (compatibilidade com código legado)
         app()->instance('current_empresa_id', $this->empresaId);
         $request->attributes->set('empresa_id', $this->empresaId);
         
-        // 5. Compartilhar contexto de logs
+        // 6. Compartilhar contexto de logs
         Log::shareContext([
             'empresa_id' => $this->empresaId,
             'user_id' => $this->user->id,
@@ -225,7 +241,7 @@ class ApplicationContext implements ApplicationContextContract
     /**
      * Resolver empresa_id baseado nas prioridades
      */
-    private function resolveEmpresaId(?int $empresaIdFromHeader): ?int
+    private function resolveEmpresaId(?int $empresaIdFromHeader, ?int $empresaIdFromJwt = null): ?int
     {
         // Prioridade 1: Header X-Empresa-ID (se usuário tem acesso)
         if ($empresaIdFromHeader && $this->user) {
@@ -264,8 +280,54 @@ class ApplicationContext implements ApplicationContextContract
                 return $this->user->empresa_ativa_id;
             }
         }
+
+        // Prioridade 3: empresa_id do JWT (com validação de existência)
+        if ($empresaIdFromJwt) {
+            $empresa = Empresa::find($empresaIdFromJwt);
+            if ($empresa) {
+                Log::debug('ApplicationContext - empresaId do JWT', [
+                    'empresa_id' => $empresaIdFromJwt,
+                ]);
+
+                if ($this->user->empresa_ativa_id !== $empresaIdFromJwt) {
+                    $this->user->empresa_ativa_id = $empresaIdFromJwt;
+                    $this->user->save();
+                }
+
+                return $empresaIdFromJwt;
+            }
+        }
         
-        // Prioridade 3: Primeira empresa do usuário
+        // Prioridade 4: users_lookup central (fallback para inconsistência de pivot em tenant)
+        if ($this->user && $this->tenantId) {
+            $lookup = UserLookup::query()
+                ->where('email', $this->user->email)
+                ->where('tenant_id', $this->tenantId)
+                ->where('user_id', $this->user->id)
+                ->where('status', 'ativo')
+                ->whereNull('deleted_at')
+                ->first();
+
+            if ($lookup && $lookup->empresa_id) {
+                $empresa = Empresa::find((int) $lookup->empresa_id);
+                if ($empresa) {
+                    if ($this->user->empresa_ativa_id !== (int) $lookup->empresa_id) {
+                        $this->user->empresa_ativa_id = (int) $lookup->empresa_id;
+                        $this->user->save();
+                    }
+
+                    Log::warning('ApplicationContext - empresaId recuperado via users_lookup', [
+                        'user_id' => $this->user->id,
+                        'tenant_id' => $this->tenantId,
+                        'empresa_id' => (int) $lookup->empresa_id,
+                    ]);
+
+                    return (int) $lookup->empresa_id;
+                }
+            }
+        }
+
+        // Prioridade 5: Primeira empresa do usuário
         if ($this->user) {
             $empresa = $this->user->empresas()->first();
             if ($empresa) {
