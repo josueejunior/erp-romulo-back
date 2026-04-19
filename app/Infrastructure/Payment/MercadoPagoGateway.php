@@ -36,13 +36,24 @@ class MercadoPagoGateway implements PaymentProviderInterface
             return;
         }
 
-        $accessToken = config('services.mercadopago.access_token');
-        $this->isSandbox = config('services.mercadopago.sandbox', true);
+        // Prioridade: SystemSetting (UI admin) → config/.env (fallback).
+        // Permite ao admin rotacionar credenciais sem redeploy.
+        $accessToken = \App\Models\SystemSetting::get(
+            'mercadopago.access_token',
+            config('services.mercadopago.access_token'),
+        );
+        $sandboxRaw = \App\Models\SystemSetting::get(
+            'mercadopago.sandbox',
+            config('services.mercadopago.sandbox', true),
+        );
+        $this->isSandbox = is_bool($sandboxRaw)
+            ? $sandboxRaw
+            : filter_var($sandboxRaw, FILTER_VALIDATE_BOOLEAN);
 
         if (empty($accessToken)) {
-            throw new DomainException('Mercado Pago access token não configurado. Configure MP_ACCESS_TOKEN no arquivo .env');
+            throw new DomainException('Mercado Pago access token não configurado. Configure via painel Admin → Configurações → Pagamentos ou defina MP_ACCESS_TOKEN no .env.');
         }
-        
+
         $this->accessToken = $accessToken;
 
         // Validar formato do token
@@ -373,6 +384,22 @@ class MercadoPagoGateway implements PaymentProviderInterface
 
                 } catch (NotFoundException $e) {
                     throw $e; // NotFoundException não conta como falha para circuit breaker
+                } catch (\MercadoPago\Exceptions\MPApiException $e) {
+                    // Qualquer 4xx do MP (404 ID inexistente, 400 ID inválido,
+                    // etc.) é comportamento esperado — não conta como falha
+                    // do circuit breaker, e o controller devolve 404 amigável
+                    // para o cliente.
+                    $apiResp = $e->getApiResponse();
+                    $status = $apiResp ? $apiResp->getStatusCode() : null;
+                    if ($status !== null && $status >= 400 && $status < 500) {
+                        throw new NotFoundException("Pagamento não encontrado: {$externalId}");
+                    }
+                    Log::error('Erro ao consultar status do pagamento no Mercado Pago', [
+                        'external_id' => $externalId,
+                        'exception' => $e->getMessage(),
+                        'status' => $status,
+                    ]);
+                    throw new DomainException("Erro ao consultar pagamento: {$e->getMessage()}");
                 } catch (\Exception $e) {
                     Log::error('Erro ao consultar status do pagamento no Mercado Pago', [
                         'external_id' => $externalId,
@@ -451,8 +478,11 @@ class MercadoPagoGateway implements PaymentProviderInterface
             return config('app.debug', false);
         }
 
-        // Obter chave secreta do webhook (configurar em .env)
-        $webhookSecret = config('services.mercadopago.webhook_secret');
+        // Obter chave secreta do webhook (prioriza painel admin, fallback .env)
+        $webhookSecret = \App\Models\SystemSetting::get(
+            'mercadopago.webhook_secret',
+            config('services.mercadopago.webhook_secret'),
+        );
         
         // ✅ SEGURANÇA: Em produção, sempre exigir webhook secret configurado
         if (empty($webhookSecret)) {
@@ -692,6 +722,9 @@ class MercadoPagoGateway implements PaymentProviderInterface
             // Pendências
             'pending_contingency' => 'Pagamento pendente: Estamos analisando sua transação. Você será notificado em breve.',
             'pending_review_manual' => 'Pagamento pendente: Sua transação está sendo revisada. Você será notificado em breve.',
+            'pending_waiting_transfer' => 'Aguardando pagamento do PIX. Finalize a transferência no seu app de banco usando o QR Code.',
+            'pending_waiting_payment' => 'Aguardando pagamento. Conclua o pagamento para aprovar a transação.',
+            'pending_capture' => 'Pagamento autorizado, aguardando captura.',
             
             // Erros gerais
             'cc_rejected' => 'Pagamento recusado pelo banco emissor. Verifique os dados do cartão ou tente outro método de pagamento.',
@@ -816,8 +849,63 @@ class MercadoPagoGateway implements PaymentProviderInterface
     }
 
     /**
+     * Gera um card_token novo a partir de um card_id já salvo no Customer.
+     *
+     * O MP exige essa regeneração a cada pagamento por razões de segurança
+     * (evita replay). Usa a public_key na query string — é a única operação
+     * do SDK que autentica por public_key em vez de access_token.
+     *
+     * @throws DomainException se o MP recusar.
+     */
+    private function generateCardTokenFromSavedCard(string $publicKey, string $cardId, ?string $cvv = null): string
+    {
+        $url = 'https://api.mercadopago.com/v1/card_tokens?public_key=' . urlencode($publicKey);
+        $payload = ['card_id' => $cardId];
+        if (!empty($cvv)) {
+            $payload['security_code'] = $cvv;
+        }
+        $body = json_encode($payload);
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => $body,
+            CURLOPT_TIMEOUT => 10,
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+            ],
+        ]);
+        $response = curl_exec($ch);
+        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err = curl_error($ch);
+        curl_close($ch);
+
+        if ($err) {
+            Log::error('generateCardTokenFromSavedCard: erro de rede', [
+                'card_id' => $cardId,
+                'error' => $err,
+            ]);
+            throw new DomainException('Erro de rede ao regenerar card token: ' . $err);
+        }
+
+        $decoded = json_decode((string) $response, true);
+        if ($status < 200 || $status >= 300 || !is_array($decoded) || empty($decoded['id'])) {
+            Log::error('generateCardTokenFromSavedCard: MP recusou', [
+                'card_id' => $cardId,
+                'http_status' => $status,
+                'response' => $decoded,
+            ]);
+            $msg = is_array($decoded) ? ($decoded['message'] ?? $decoded['error'] ?? 'resposta inválida') : 'resposta inválida';
+            throw new DomainException("Falha ao regenerar card token: {$msg}");
+        }
+
+        return (string) $decoded['id'];
+    }
+
+    /**
      * Processa um pagamento usando um card_id salvo (one-click buy)
-     * 
+     *
      * @param PaymentRequest $request Dados do pagamento (sem cardToken)
      * @param string $customerId ID do Customer no Mercado Pago
      * @param string $cardId ID do Cartão salvo no Mercado Pago
@@ -834,15 +922,36 @@ class MercadoPagoGateway implements PaymentProviderInterface
         $this->initialize();
 
         try {
-            // Preparar dados do pagamento usando card_id
+            // 🔥 MP exige regenerar um card_token a cada cobrança, mesmo com
+            // cartão salvo (Customer+Card). Passar o card_id direto como token
+            // devolve 404 "Card Token not found".
+            //
+            // Fluxo oficial (one-click): POST /v1/card_tokens { card_id }
+            // com a public_key → retorna novo token → usar no /v1/payments.
+            $publicKey = \App\Models\SystemSetting::get(
+                'mercadopago.public_key',
+                config('services.mercadopago.public_key'),
+            );
+
+            if (empty($publicKey)) {
+                throw new DomainException('Public Key do Mercado Pago não configurada — necessária para regenerar card token.');
+            }
+
+            // Se o request trouxer CVV (pagamento assistido), regeneramos com
+            // security_code — evita o erro "security_code_id can't be null"
+            // do MP em cobranças avulsas via /v1/payments.
+            $cvv = $request->metadata['security_code'] ?? null;
+            $freshToken = $this->generateCardTokenFromSavedCard($publicKey, $cardId, $cvv);
+
+            // Preparar dados do pagamento usando o token recém-gerado
             $paymentData = [
                 'transaction_amount' => (float) round($request->amount->toReais(), 2),
                 'description' => substr($request->description, 0, 255),
                 'payer' => [
-                    'id' => $customerId, // ID do Customer no MP
+                    'type' => 'customer',
+                    'id' => $customerId,
                 ],
-                'payment_method_id' => 'credit_card',
-                'token' => $cardId, // Usar card_id como token
+                'token' => $freshToken,
                 'installments' => (int) ($request->installments ?? 1),
             ];
 

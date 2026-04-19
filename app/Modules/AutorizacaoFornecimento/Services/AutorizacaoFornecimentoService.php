@@ -39,12 +39,12 @@ class AutorizacaoFornecimentoService
     public function find(Processo $processo, AutorizacaoFornecimento $autorizacao, int $empresaId): AutorizacaoFornecimento
     {
         $domainEntity = $this->repository->buscarPorId($autorizacao->id);
-        
+
         if (!$domainEntity || $domainEntity->empresaId !== $empresaId) {
             throw new \RuntimeException('Autorização de fornecimento não encontrada.');
         }
 
-        return $domainEntity;
+        return $autorizacao;
     }
 
     public function update(Processo $processo, AutorizacaoFornecimento $autorizacao, array $data, int $empresaId): AutorizacaoFornecimento

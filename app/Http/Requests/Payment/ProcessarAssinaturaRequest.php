@@ -28,8 +28,14 @@ class ProcessarAssinaturaRequest extends FormRequest
 
         $paymentMethod = $this->input('payment_method', 'credit_card');
         
+        // Planos vivem na conexão central (erp_licitacoes), não no schema do tenant.
+        // Sem qualificar a conexão, Laravel usa a default (que está apontando
+        // para o tenant após o middleware) e a validação quebra com
+        // "relation planos does not exist".
+        $centralConnection = config('tenancy.database.central_connection', 'pgsql');
+
         $rules = [
-            'plano_id' => 'required|integer|exists:planos,id',
+            'plano_id' => 'required|integer|exists:' . $centralConnection . '.planos,id',
             'periodo' => 'required|string|in:mensal,anual',
             'payer_email' => 'required|email',
             'payer_cpf' => $paymentMethod === 'pix' 

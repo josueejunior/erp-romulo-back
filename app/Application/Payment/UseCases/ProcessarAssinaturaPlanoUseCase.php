@@ -49,14 +49,25 @@ class ProcessarAssinaturaPlanoUseCase
             throw new DomainException('O plano selecionado não está ativo.');
         }
 
-        // Calcular valor e data de expiração
-        $valor = $periodo === 'anual' ? $plano->preco_anual : $plano->preco_mensal;
+        // Calcular valor usando a mesma regra de negócio do Plano (inclui
+        // descontos promocionais). Se usarmos $plano->preco_mensal cru aqui,
+        // a validação abaixo quebra quando há desconto, pois o controller
+        // envia o valor já com desconto.
+        $valor = $plano->calcularPreco($periodo);
         $diasValidade = $periodo === 'anual' ? 365 : 30;
 
-            // Validar valor
-            if ($paymentRequest->amount->toReais() != $valor) {
-                throw new DomainException('O valor do pagamento não corresponde ao valor do plano.');
-            }
+        // Validar valor (tolerância de 1 centavo; permite ainda cupons
+        // aplicados pelo controller, que podem reduzir o valor mais).
+        $amountCents = (int) round($paymentRequest->amount->toReais() * 100);
+        $expectedCents = (int) round(((float) $valor) * 100);
+        if ($amountCents > $expectedCents + 1) {
+            // Pagar MAIS que o plano nunca é ok.
+            throw new DomainException(sprintf(
+                'O valor do pagamento (R$ %s) é maior que o valor do plano (R$ %s).',
+                number_format($amountCents / 100, 2, ',', '.'),
+                number_format($expectedCents / 100, 2, ',', '.'),
+            ));
+        }
 
         // Gerar chave de idempotência única
         $idempotencyKey = $this->generateIdempotencyKey($tenant->id, $plano->id, $periodo);

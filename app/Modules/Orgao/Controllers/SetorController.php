@@ -105,9 +105,21 @@ class SetorController extends BaseApiController
     {
         $route = $request->route();
         $id = $this->getRouteId($route);
-        
+
         if (!$id) {
             return response()->json(['message' => 'ID não fornecido'], 400);
+        }
+
+        try {
+            $tenantId = $this->getTenantId();
+            if (!TenantContext::has() || TenantContext::get()->empresaId === null) {
+                $empresa = $this->getEmpresaAtivaOrFail();
+                if ($tenantId) {
+                    TenantContext::set($tenantId, $empresa->id);
+                }
+            }
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao determinar empresa ativa');
         }
 
         try {

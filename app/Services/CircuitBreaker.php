@@ -60,22 +60,45 @@ class CircuitBreaker
             return $result;
             
         } catch (\Exception $e) {
+            // Erros de "recurso não encontrado" são comportamento esperado,
+            // não falha de integração — não devem abrir o circuito nem
+            // ativar o fallback.
+            if ($e instanceof \App\Domain\Exceptions\NotFoundException) {
+                throw $e;
+            }
+
             $this->recordFailure();
-            
+
             // Se atingiu threshold, abrir circuito
             if ($this->getFailureCount() >= $this->failureThreshold) {
                 $this->setState('OPEN');
                 Log::error("Circuit breaker ABERTO para {$this->serviceName} após {$this->failureThreshold} falhas");
             }
-            
+
             // Se tem fallback, usar
             if ($fallback) {
                 Log::warning("Usando fallback para {$this->serviceName} devido a erro: " . $e->getMessage());
                 return $fallback();
             }
-            
+
             throw $e;
         }
+    }
+
+    /**
+     * Retorna o store de cache cross-tenant.
+     *
+     * Usamos Cache::store() (sem argumentos) para obter o Repository do driver
+     * default, evitando o wrapper do Stancl\Tenancy\CacheManager que adiciona
+     * tags automaticamente — as quais o driver `database` não suporta
+     * (BadMethodCallException: "This cache store does not support tagging.").
+     *
+     * O estado do circuit breaker é global por serviço externo (Mercado Pago,
+     * etc.), então não faz sentido estar isolado por tenant mesmo.
+     */
+    private function cache(): \Illuminate\Contracts\Cache\Repository
+    {
+        return Cache::store();
     }
 
     /**
@@ -84,9 +107,9 @@ class CircuitBreaker
     private function getState(): string
     {
         $stateKey = "circuit_breaker:{$this->serviceName}:state";
-        $state = Cache::get($stateKey, 'CLOSED');
+        $state = $this->cache()->get($stateKey, 'CLOSED');
         $stateTimeKey = "circuit_breaker:{$this->serviceName}:state_time";
-        $stateTime = Cache::get($stateTimeKey, 0);
+        $stateTime = $this->cache()->get($stateTimeKey, 0);
 
         // Se está OPEN há mais tempo que timeout, mudar para HALF_OPEN
         if ($state === 'OPEN' && (time() - $stateTime) >= $this->timeout) {
@@ -110,9 +133,9 @@ class CircuitBreaker
     {
         $stateKey = "circuit_breaker:{$this->serviceName}:state";
         $stateTimeKey = "circuit_breaker:{$this->serviceName}:state_time";
-        
-        Cache::put($stateKey, $state, 3600); // 1 hora
-        Cache::put($stateTimeKey, time(), 3600);
+
+        $this->cache()->put($stateKey, $state, 3600); // 1 hora
+        $this->cache()->put($stateTimeKey, time(), 3600);
     }
 
     /**
@@ -121,8 +144,8 @@ class CircuitBreaker
     private function recordFailure(): void
     {
         $key = "circuit_breaker:{$this->serviceName}:failures";
-        $failures = Cache::get($key, 0);
-        Cache::put($key, $failures + 1, 300); // 5 minutos
+        $failures = $this->cache()->get($key, 0);
+        $this->cache()->put($key, $failures + 1, 300); // 5 minutos
     }
 
     /**
@@ -131,7 +154,7 @@ class CircuitBreaker
     private function getFailureCount(): int
     {
         $key = "circuit_breaker:{$this->serviceName}:failures";
-        return Cache::get($key, 0);
+        return $this->cache()->get($key, 0);
     }
 
     /**
@@ -140,7 +163,7 @@ class CircuitBreaker
     private function resetFailureCount(): void
     {
         $key = "circuit_breaker:{$this->serviceName}:failures";
-        Cache::forget($key);
+        $this->cache()->forget($key);
     }
 
     /**

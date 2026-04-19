@@ -7,7 +7,7 @@ namespace App\Application\Assinatura\UseCases;
 use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
 use App\Domain\Payment\Repositories\PaymentProviderInterface;
 use App\Domain\Payment\ValueObjects\PaymentRequest;
-use App\Domain\Payment\UseCases\RenovarAssinaturaUseCase;
+use App\Application\Payment\UseCases\RenovarAssinaturaUseCase;
 use App\Domain\Payment\Events\PagamentoRecusado;
 use App\Domain\Shared\Events\EventDispatcherInterface;
 use App\Domain\Exceptions\DomainException;
@@ -39,12 +39,16 @@ class CobrarAssinaturaExpiradaUseCase
 
     /**
      * Executa o caso de uso
-     * 
+     *
      * @param int $tenantId ID do tenant
      * @param int $assinaturaId ID da assinatura expirada
+     * @param string|null $cvv CVV opcional — permite cobrança assistida com
+     *        cartão salvo via /v1/payments (o MP exige security_code nesse
+     *        fluxo). Para cobrança verdadeiramente automática sem CVV, usar
+     *        Subscriptions API (/preapproval).
      * @return array Resultado da tentativa de cobrança
      */
-    public function executar(int $tenantId, int $assinaturaId): array
+    public function executar(int $tenantId, int $assinaturaId, ?string $cvv = null): array
     {
         // 1. Raciocínio de Guarda: Verificar se tem cartão salvo
         $assinatura = $this->assinaturaRepository->buscarModeloPorId($assinaturaId);
@@ -144,6 +148,20 @@ class CobrarAssinaturaExpiradaUseCase
         $externalReference = substr($externalReference, 0, 256);
 
         // 3. Criar PaymentRequest usando card_id salvo (one-click buy)
+        $metadata = [
+            'tenant_id' => $tenantId,
+            'assinatura_id' => $assinaturaId,
+            'plano_id' => $plano->id,
+            'tipo' => 'renovacao_automatica',
+            'mes_referencia' => $mesReferencia,
+            'ano_referencia' => $anoReferencia,
+        ];
+        // CVV viaja dentro do metadata (lido pelo gateway ao regenerar token).
+        // Não é persistido — serve só como carona no request.
+        if (!empty($cvv)) {
+            $metadata['security_code'] = $cvv;
+        }
+
         $paymentRequest = PaymentRequest::fromArray([
             'amount' => $valor,
             'description' => "Renovação automática - Plano {$plano->nome} - {$mesReferencia}/{$anoReferencia}",
@@ -153,14 +171,7 @@ class CobrarAssinaturaExpiradaUseCase
             'installments' => 1,
             'payment_method_id' => 'credit_card',
             'external_reference' => $externalReference,
-            'metadata' => [
-                'tenant_id' => $tenantId,
-                'assinatura_id' => $assinaturaId,
-                'plano_id' => $plano->id,
-                'tipo' => 'renovacao_automatica',
-                'mes_referencia' => $mesReferencia,
-                'ano_referencia' => $anoReferencia,
-            ],
+            'metadata' => $metadata,
         ]);
 
         try {

@@ -2,19 +2,24 @@
 
 namespace App\Models;
 
+use App\Models\Traits\CentralConnection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * Model para mapeamento direto empresa → tenant
- * 
+ *
  * 🔥 PERFORMANCE: Esta tabela elimina o loop de tenants.
  * Permite busca direta: TenantEmpresa::where('empresa_id', $empresaId)->first()
- * 
- * Esta tabela fica no banco CENTRAL (não no tenant).
+ *
+ * Esta tabela fica no banco CENTRAL (não no tenant) — por isso usa
+ * CentralConnection; sem o trait, queries acabavam indo para a conexão
+ * `tenant` quando o middleware multi-tenant já havia mudado a default.
  */
 class TenantEmpresa extends Model
 {
+    use CentralConnection;
+
     protected $table = 'tenant_empresas';
     
     // Tabela não tem colunas created_at/updated_at

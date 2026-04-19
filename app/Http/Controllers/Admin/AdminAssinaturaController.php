@@ -8,6 +8,7 @@ use App\Application\Assinatura\UseCases\ListarAssinaturasAdminUseCase;
 use App\Application\Assinatura\UseCases\BuscarAssinaturaAdminUseCase;
 use App\Application\Assinatura\UseCases\AtualizarAssinaturaAdminUseCase;
 use App\Application\Assinatura\UseCases\CriarAssinaturaAdminUseCase;
+use App\Application\Assinatura\UseCases\CobrarAssinaturaExpiradaUseCase;
 use App\Application\Tenant\UseCases\ListarTenantsParaFiltroUseCase;
 use App\Http\Requests\Assinatura\AtualizarAssinaturaAdminRequest;
 use App\Http\Requests\Admin\TrocarPlanoAssinaturaAdminRequest;
@@ -34,6 +35,7 @@ class AdminAssinaturaController extends Controller
         private BuscarAssinaturaAdminUseCase $buscarAssinaturaAdminUseCase,
         private AtualizarAssinaturaAdminUseCase $atualizarAssinaturaAdminUseCase,
         private CriarAssinaturaAdminUseCase $criarAssinaturaAdminUseCase,
+        private CobrarAssinaturaExpiradaUseCase $cobrarAssinaturaExpiradaUseCase,
         private ListarTenantsParaFiltroUseCase $listarTenantsParaFiltroUseCase,
     ) {}
 
@@ -383,6 +385,59 @@ class AdminAssinaturaController extends Controller
                 'trace' => $e->getTraceAsString(),
             ]);
             return ApiResponse::error('Erro ao trocar plano.', 500);
+        }
+    }
+
+    /**
+     * POST /admin/assinaturas/{tenant}/{assinatura}/cobrar-agora
+     *
+     * Dispara manualmente a cobrança recorrente (One-Click com cartão salvo).
+     * Útil para ops/suporte forçar a renovação de uma assinatura expirada sem
+     * aguardar o cron, e para testes do fluxo de cartão salvo (Card Vault).
+     *
+     * Devolve a resposta padronizada do CobrarAssinaturaExpiradaUseCase:
+     *  - sucesso: true → renovação OK (payment_id do MP incluso)
+     *  - sucesso: false + motivo + acao_requerida (cartão não salvo, recusado,
+     *    limite de tentativas, pagamento pendente, etc.)
+     */
+    public function cobrarAgora(Request $request, Tenant $tenant, Assinatura $assinatura)
+    {
+        try {
+            if ($assinatura->tenant_id !== $tenant->id) {
+                return ApiResponse::error('Assinatura não pertence a este tenant.', 400);
+            }
+
+            // CVV opcional: o MP exige em cobranças avulsas via /v1/payments
+            // quando não há Subscription ativa. Aceita também `security_code`.
+            $cvv = $request->input('cvv', $request->input('security_code'));
+            if ($cvv) {
+                $cvv = preg_replace('/\D/', '', (string) $cvv);
+            }
+
+            $resultado = $this->cobrarAssinaturaExpiradaUseCase->executar(
+                $tenant->id,
+                $assinatura->id,
+                $cvv,
+            );
+
+            // resultado já traz "sucesso" boolean + mensagem + metadados
+            $httpStatus = $resultado['sucesso'] ?? false ? 200 : 400;
+
+            return response()->json($resultado, $httpStatus);
+        } catch (\App\Domain\Exceptions\NotFoundException $e) {
+            return ApiResponse::error($e->getMessage(), 404);
+        } catch (\App\Domain\Exceptions\BusinessRuleException $e) {
+            return ApiResponse::error($e->getMessage(), 400);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return ApiResponse::error($e->getMessage(), 400);
+        } catch (\Exception $e) {
+            Log::error('AdminAssinaturaController::cobrarAgora - Exception', [
+                'tenant_id' => $tenant->id,
+                'assinatura_id' => $assinatura->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return ApiResponse::error('Erro ao processar cobrança.', 500);
         }
     }
 }

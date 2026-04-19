@@ -32,6 +32,8 @@ use App\Modules\Assinatura\Controllers\PlanoController as ApiPlanoController;
 use App\Modules\Assinatura\Controllers\AssinaturaController as ApiAssinaturaController;
 use App\Modules\Payment\Controllers\PaymentController as ApiPaymentController;
 use App\Modules\Payment\Controllers\WebhookController as ApiWebhookController;
+use App\Modules\Suporte\Controllers\TicketController as ApiTicketController;
+use App\Http\Controllers\Api\OportunidadeController as ApiOportunidadeController;
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Admin\AdminTenantController;
 use App\Http\Controllers\Admin\AdminUserController;
@@ -167,6 +169,13 @@ Route::prefix('v1')->group(function () {
             Route::post('/marcar-etapa', [\App\Modules\Onboarding\Controllers\OnboardingController::class, 'marcarEtapa']);
             Route::post('/concluir', [\App\Modules\Onboarding\Controllers\OnboardingController::class, 'concluir']);
         });
+
+        // Suporte (disponível para usuários autenticados)
+        Route::prefix('tickets')->group(function () {
+            Route::get('/', [ApiTicketController::class, 'index']);
+            Route::post('/', [ApiTicketController::class, 'store']);
+            Route::get('/{id}', [ApiTicketController::class, 'show'])->where('id', '[0-9]+');
+        });
         
         // Configurações (usuários autenticados - não precisa de assinatura ativa)
         Route::prefix('configuracoes')->group(function () {
@@ -226,17 +235,14 @@ Route::prefix('v1')->group(function () {
             // 🔥 ALIAS: Resumo de processos (compatibilidade com frontend)
             Route::get('/processos-resumo', [ApiProcessoController::class, 'resumo']);
 
-            // 🔥 NOVO: Oportunidades (stub para compatibilidade com frontend)
+            // Oportunidades + consulta pública PNCP (proxy no backend)
             Route::prefix('oportunidades')->group(function () {
-                Route::get('/', function() {
-                    return response()->json(['success' => true, 'data' => []]);
-                });
-                Route::get('/{id}', function($id) {
-                    return response()->json(['success' => true, 'data' => null]);
-                });
-                Route::post('/', function() {
-                    return response()->json(['success' => true, 'data' => null]);
-                });
+                Route::get('/pncp/contratacoes-publicacao', [ApiOportunidadeController::class, 'pncpPublicacoes']);
+                Route::get('/pncp/compra-arquivos', [ApiOportunidadeController::class, 'pncpCompraArquivos']);
+                Route::get('/pncp/compra', [ApiOportunidadeController::class, 'pncpCompra']);
+                Route::get('/', [ApiOportunidadeController::class, 'index']);
+                Route::post('/', [ApiOportunidadeController::class, 'store']);
+                Route::get('/{id}', [ApiOportunidadeController::class, 'show'])->where('id', '[0-9]+');
             });
             
             Route::module('processos', ApiProcessoController::class, 'processo')
@@ -499,6 +505,13 @@ Route::prefix('admin')->group(function () {
                 ->middleware([\App\Http\Middleware\InitializeTenant::class]);
         });
 
+        // Configurações globais (credenciais de integrações)
+        Route::prefix('settings')->group(function () {
+            Route::get('/mercadopago', [\App\Http\Controllers\Admin\AdminSystemSettingsController::class, 'showMercadoPago']);
+            Route::put('/mercadopago', [\App\Http\Controllers\Admin\AdminSystemSettingsController::class, 'updateMercadoPago']);
+            Route::post('/mercadopago/test', [\App\Http\Controllers\Admin\AdminSystemSettingsController::class, 'testMercadoPago']);
+        });
+
         // Gerenciamento de planos
         Route::prefix('planos')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\AdminPlanoController::class, 'index']);
@@ -519,6 +532,9 @@ Route::prefix('admin')->group(function () {
                 ->where(['tenantId' => '[0-9]+', 'assinaturaId' => '[0-9]+']);
             Route::post('/{tenantId}/{assinaturaId}/trocar-plano', [\App\Http\Controllers\Admin\AdminAssinaturaController::class, 'trocarPlano'])
                 ->where(['tenantId' => '[0-9]+', 'assinaturaId' => '[0-9]+']);
+            // Força cobrança imediata usando cartão salvo (Card Vault / One-Click).
+            Route::post('/{tenant}/{assinatura}/cobrar-agora', [\App\Http\Controllers\Admin\AdminAssinaturaController::class, 'cobrarAgora'])
+                ->where(['tenant' => '[0-9]+', 'assinatura' => '[0-9]+']);
         });
 
         // Gerenciamento de cupons

@@ -9,6 +9,9 @@ class CupomUso extends Model
 {
     protected $table = 'cupons_uso';
 
+    const CREATED_AT = 'criado_em';
+    const UPDATED_AT = 'atualizado_em';
+
     protected $fillable = [
         'cupom_id',
         'tenant_id',

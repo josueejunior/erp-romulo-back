@@ -245,8 +245,14 @@ class PaymentController extends BaseApiController
                     $dataInicio = Carbon::now();
                     $dataFim = $dataInicio->copy()->addDays(3);
 
+                    // Nota: $user->id vem do schema do tenant, mas a tabela
+                    // `assinaturas` vive no DB central, cuja FK de user_id
+                    // aponta para `users` central. Para evitar violação, e
+                    // mantendo consistência com as demais assinaturas (que já
+                    // são salvas com user_id=null), não populamos user_id aqui.
+                    // A identidade relevante é tenant_id + empresa_id.
                     $assinaturaDTO = new CriarAssinaturaDTO(
-                        userId: $user->id,
+                        userId: null,
                         planoId: $plano->id,
                         status: 'ativa',
                         dataInicio: $dataInicio,
@@ -506,7 +512,11 @@ class PaymentController extends BaseApiController
         } catch (\Exception $e) {
             Log::error('Erro ao consultar status do pagamento', [
                 'external_id' => $externalId,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'exception_class' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return response()->json(['message' => 'Erro ao consultar status'], 500);

@@ -28,6 +28,18 @@ final class PagamentoRecusado implements DomainEvent
     {
         return $this->ocorridoEm;
     }
+
+    public function ocorreuEm(): \DateTimeImmutable
+    {
+        return $this->ocorridoEm instanceof \DateTimeImmutable
+            ? $this->ocorridoEm
+            : \DateTimeImmutable::createFromInterface($this->ocorridoEm);
+    }
+
+    public function agregadoId(): string
+    {
+        return (string) $this->assinaturaId;
+    }
 }
 
 

@@ -216,6 +216,11 @@ class AppServiceProvider extends ServiceProvider
             \App\Infrastructure\Persistence\Eloquent\UserLookupRepository::class
         );
 
+        $this->app->bind(
+            \App\Domain\Suporte\Repositories\TicketRepositoryInterface::class,
+            \App\Infrastructure\Persistence\Eloquent\TicketRepository::class
+        );
+
         // Domain Services
         $this->app->bind(
             \App\Domain\Auth\Services\UserRoleServiceInterface::class,

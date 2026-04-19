@@ -9,6 +9,9 @@ class Cupom extends Model
 {
     protected $table = 'cupons';
 
+    const CREATED_AT = 'criado_em';
+    const UPDATED_AT = 'atualizado_em';
+
     protected $fillable = [
         'codigo',
         'tipo',
