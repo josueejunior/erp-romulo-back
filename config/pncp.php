@@ -24,4 +24,12 @@ return [
 
     'timeout_seconds' => (int) env('PNCP_TIMEOUT', 45),
 
+    /*
+    | Explorar órgãos via publicações (deduplicação por CNPJ do órgão comprador).
+    */
+    'explorar_dias' => (int) env('PNCP_EXPLORAR_DIAS', 90),
+
+    /** Código de modalidade PNCP (ex.: 6 = pregão eletrônico). */
+    'explorar_codigo_modalidade' => (int) env('PNCP_EXPLORAR_MODALIDADE', 6),
+
 ];
