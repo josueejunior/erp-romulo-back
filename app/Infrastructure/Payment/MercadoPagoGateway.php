@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Log;
 use MercadoPago\MercadoPagoConfig;
 use MercadoPago\Client\Payment\PaymentClient;
 use MercadoPago\Client\Customer\CustomerCardClient;
+use MercadoPago\Client\Customer\CustomerClient;
+use MercadoPago\Net\MPSearchRequest;
 use MercadoPago\MercadoPagoClient;
 
 /**
@@ -742,52 +744,76 @@ class MercadoPagoGateway implements PaymentProviderInterface
      * @param string $email Email do cliente
      * @param string $cardToken Token do cartão (gerado pelo frontend)
      * @param string|null $cpf CPF do cliente (opcional)
+     * @param string|null $existingCustomerId Se informado, anexa o cartão a este customer (sem criar outro)
      * @return array ['customer_id' => string, 'card_id' => string]
      * @throws DomainException Em caso de erro
      */
-    public function createCustomerAndCard(string $email, string $cardToken, ?string $cpf = null): array
+    public function createCustomerAndCard(string $email, string $cardToken, ?string $cpf = null, ?string $existingCustomerId = null): array
     {
         $this->initialize();
 
         try {
-            // Criar Customer no Mercado Pago
-            $customerClient = new \MercadoPago\Client\Customer\CustomerClient();
-            
-            $customerData = [
-                'email' => $email,
-            ];
+            $email = strtolower(trim($email));
+            $customerClient = new CustomerClient();
+            $cardClient = new CustomerCardClient();
 
-            if ($cpf) {
-                $cpfLimpo = preg_replace('/\D/', '', $cpf);
-                if (strlen($cpfLimpo) === 11) {
-                    $customerData['identification'] = [
-                        'type' => 'CPF',
-                        'number' => $cpfLimpo,
-                    ];
+            $customerId = $existingCustomerId !== null ? trim($existingCustomerId) : '';
+            $customerId = $customerId !== '' ? $customerId : null;
+
+            if ($customerId === null) {
+                try {
+                    $searchResult = $customerClient->search(new MPSearchRequest(10, 0, ['email' => $email]));
+                    $results = $searchResult->results ?? null;
+                    if (is_array($results) && isset($results[0]) && is_object($results[0]) && !empty($results[0]->id)) {
+                        $customerId = (string) $results[0]->id;
+                        Log::info('Customer Mercado Pago reutilizado (busca por email)', [
+                            'customer_id' => $customerId,
+                            'email' => $email,
+                        ]);
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('Busca de Customer no Mercado Pago por email falhou; seguirá criação', [
+                        'email' => $email,
+                        'erro' => $e->getMessage(),
+                    ]);
                 }
             }
 
-            $customer = $customerClient->create($customerData);
+            if ($customerId === null) {
+                $customerData = [
+                    'email' => $email,
+                ];
 
-            // Converter para array se necessário
-            if (is_object($customer)) {
-                if (method_exists($customer, 'toArray')) {
-                    $customer = $customer->toArray();
-                } elseif (method_exists($customer, 'getContent')) {
-                    $customer = $customer->getContent();
-                } else {
-                    $customer = (array) $customer;
+                if ($cpf) {
+                    $cpfLimpo = preg_replace('/\D/', '', $cpf);
+                    if (strlen($cpfLimpo) === 11) {
+                        $customerData['identification'] = [
+                            'type' => 'CPF',
+                            'number' => $cpfLimpo,
+                        ];
+                    }
                 }
-            }
 
-            if (!is_array($customer) || !isset($customer['id'])) {
-                throw new DomainException('Erro ao criar Customer no Mercado Pago: resposta inválida.');
-            }
+                $customer = $customerClient->create($customerData);
 
-            $customerId = (string) $customer['id'];
+                if (is_object($customer)) {
+                    if (method_exists($customer, 'toArray')) {
+                        $customer = $customer->toArray();
+                    } elseif (method_exists($customer, 'getContent')) {
+                        $customer = $customer->getContent();
+                    } else {
+                        $customer = (array) $customer;
+                    }
+                }
+
+                if (!is_array($customer) || !isset($customer['id'])) {
+                    throw new DomainException('Erro ao criar Customer no Mercado Pago: resposta inválida.');
+                }
+
+                $customerId = (string) $customer['id'];
+            }
 
             // Salvar cartão no Customer (SDK dx-php: CustomerCardClient, não Card\CardClient)
-            $cardClient = new CustomerCardClient();
             
             $cardData = [
                 'token' => $cardToken,
@@ -812,7 +838,7 @@ class MercadoPagoGateway implements PaymentProviderInterface
 
             $cardId = (string) $card['id'];
 
-            Log::info('Customer e Card criados no Mercado Pago', [
+            Log::info('Cartão salvo no Mercado Pago (Customer + Card)', [
                 'customer_id' => $customerId,
                 'card_id' => $cardId,
                 'email' => $email,
@@ -826,10 +852,29 @@ class MercadoPagoGateway implements PaymentProviderInterface
         } catch (\MercadoPago\Exceptions\MPApiException $e) {
             $apiResponse = $e->getApiResponse();
             $content = $apiResponse ? $apiResponse->getContent() : null;
-            
+
             $errorMessage = 'Erro ao criar Customer/Card no Mercado Pago';
-            if ($content && isset($content['message'])) {
-                $errorMessage = $content['message'];
+            if (is_array($content)) {
+                if (isset($content['message']) && is_string($content['message'])) {
+                    $errorMessage = $content['message'];
+                }
+                if (isset($content['error']['message']) && is_string($content['error']['message'])) {
+                    $errorMessage = $content['error']['message'];
+                }
+                $causes = $content['cause'] ?? ($content['error']['cause'] ?? null);
+                if (is_array($causes) && $causes !== []) {
+                    $parts = array_map(static function ($cause) {
+                        if (!is_array($cause)) {
+                            return '';
+                        }
+
+                        return (string) ($cause['description'] ?? $cause['code'] ?? '');
+                    }, $causes);
+                    $parts = array_filter($parts);
+                    if ($parts !== []) {
+                        $errorMessage .= ' — ' . implode(', ', $parts);
+                    }
+                }
             }
 
             Log::error('Erro ao criar Customer/Card no Mercado Pago', [

@@ -56,10 +56,11 @@ interface PaymentProviderInterface
      * @param string $email Email do cliente
      * @param string $cardToken Token do cartão (gerado pelo frontend)
      * @param string|null $cpf CPF do cliente (opcional)
+     * @param string|null $existingCustomerId Customer já vinculado (ex.: assinatura) — só anexa o cartão
      * @return array ['customer_id' => string, 'card_id' => string]
      * @throws \App\Domain\Exceptions\DomainException Em caso de erro
      */
-    public function createCustomerAndCard(string $email, string $cardToken, ?string $cpf = null): array;
+    public function createCustomerAndCard(string $email, string $cardToken, ?string $cpf = null, ?string $existingCustomerId = null): array;
 
     /**
      * Processa um pagamento usando um card_id salvo (one-click buy)

@@ -39,10 +39,19 @@ class SalvarCartaoAssinaturaUseCase
             throw new DomainException('Nenhuma assinatura encontrada. Contrate um plano antes de cadastrar o cartão.');
         }
 
+        $model = $this->assinaturaRepository->buscarModeloPorId($assinatura->id);
+        $existingCustomerId = $model?->mercado_pago_customer_id
+            ? trim((string) $model->mercado_pago_customer_id)
+            : null;
+        if ($existingCustomerId === '') {
+            $existingCustomerId = null;
+        }
+
         $ids = $this->paymentProvider->createCustomerAndCard(
             email: strtolower(trim($payerEmail)),
             cardToken: $cardToken,
             cpf: $payerCpf,
+            existingCustomerId: $existingCustomerId,
         );
 
         $this->assinaturaRepository->atualizarMercadoPagoVault(
