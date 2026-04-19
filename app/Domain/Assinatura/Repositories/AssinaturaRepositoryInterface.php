@@ -62,6 +62,11 @@ interface AssinaturaRepositoryInterface
     // ==================== OPERAÇÕES DE ESCRITA ====================
 
     /**
+     * Atualiza apenas os IDs de cartão salvos no Mercado Pago (vault) e o método de pagamento.
+     */
+    public function atualizarMercadoPagoVault(int $assinaturaId, string $customerId, string $cardId, ?string $metodoPagamento = null): void;
+
+    /**
      * Salvar assinatura (criar ou atualizar)
      */
     public function salvar(Assinatura $assinatura): Assinatura;

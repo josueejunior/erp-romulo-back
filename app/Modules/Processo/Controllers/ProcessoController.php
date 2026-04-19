@@ -27,6 +27,7 @@ use App\Application\Processo\DTOs\AtualizarProcessoDTO;
 use App\Application\Processo\DTOs\ListarProcessosDTO;
 use App\Application\Processo\Presenters\ProcessoApiPresenter;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
+use App\Domain\Exceptions\DomainException;
 use App\Domain\Exceptions\NotFoundException;
 use App\Http\Requests\Processo\ProcessoCreateRequest;
 use App\Http\Requests\Processo\ProcessoUpdateRequest;
@@ -832,7 +833,7 @@ class ProcessoController extends BaseApiController
                 'message' => 'Erro de validação',
                 'errors' => $e->errors()
             ], 422);
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             // Erro de negócio (limites de plano, etc) - retornar 400
             \Log::warning('ProcessoController::store() - Erro de domínio', [
                 'empresa_id' => $empresaId,
@@ -893,7 +894,7 @@ class ProcessoController extends BaseApiController
             ]);
         } catch (NotFoundException $e) {
             return response()->json(['message' => $e->getMessage()], 404);
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             // Erro de negócio (regras de domínio)
             return response()->json([
                 'message' => $e->getMessage()
@@ -930,7 +931,7 @@ class ProcessoController extends BaseApiController
             return response()->json([
                 'message' => $e->getMessage()
             ], 404);
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             // Erro de negócio (regras de domínio)
             return response()->json([
                 'message' => $e->getMessage()
@@ -1007,7 +1008,7 @@ class ProcessoController extends BaseApiController
             return response()->json([
                 'message' => 'Documentos sincronizados com sucesso.',
             ]);
-        } catch (\App\Domain\Exceptions\DomainException $e) {
+        } catch (DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage()
             ], 400);
@@ -1169,7 +1170,7 @@ class ProcessoController extends BaseApiController
             );
 
             return response()->json(['data' => $procDoc]);
-        } catch (\App\Domain\Exceptions\DomainException $e) {
+        } catch (DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage()
             ], 400);
@@ -1226,7 +1227,7 @@ class ProcessoController extends BaseApiController
             );
 
             return response()->json(['data' => $procDoc], 201);
-        } catch (\App\Domain\Exceptions\DomainException $e) {
+        } catch (DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage()
             ], 400);

@@ -11,6 +11,7 @@ use App\Services\CircuitBreaker;
 use Illuminate\Support\Facades\Log;
 use MercadoPago\MercadoPagoConfig;
 use MercadoPago\Client\Payment\PaymentClient;
+use MercadoPago\Client\Customer\CustomerCardClient;
 use MercadoPago\MercadoPagoClient;
 
 /**
@@ -785,8 +786,8 @@ class MercadoPagoGateway implements PaymentProviderInterface
 
             $customerId = (string) $customer['id'];
 
-            // Salvar cartão no Customer
-            $cardClient = new \MercadoPago\Client\Card\CardClient();
+            // Salvar cartão no Customer (SDK dx-php: CustomerCardClient, não Card\CardClient)
+            $cardClient = new CustomerCardClient();
             
             $cardData = [
                 'token' => $cardToken,

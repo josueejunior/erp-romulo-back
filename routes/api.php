@@ -126,6 +126,7 @@ Route::prefix('v1')->group(function () {
         // Listar todos os tenants do usuário atual (cross-tenant, fora do CheckSubscription)
         Route::get('/users/meus-tenants', [ApiUserController::class, 'meusTenants']);
         Route::post('/users/trocar-tenant', [ApiUserController::class, 'trocarTenant']);
+        Route::put('/users/me', [ApiUserController::class, 'updateMe']);
         
         // Assinaturas e Pagamentos (não precisam de verificação de assinatura)
         Route::prefix('assinaturas')->group(function () {
@@ -134,6 +135,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/historico-pagamentos', [ApiAssinaturaController::class, 'historicoPagamentos']);
             Route::get('/', [ApiAssinaturaController::class, 'index']);
             Route::post('/', [ApiAssinaturaController::class, 'store']);
+            Route::post('/cartao', [ApiAssinaturaController::class, 'salvarCartao'])->middleware('throttle:20,1');
             Route::post('/trocar-plano', [ApiAssinaturaController::class, 'trocarPlano']);
             Route::post('/simular-troca-plano', [ApiAssinaturaController::class, 'simularTrocaPlano']);
             Route::post('/{assinatura}/renovar', [ApiAssinaturaController::class, 'renovar']);
@@ -418,7 +420,8 @@ Route::prefix('v1')->group(function () {
                 Route::get('/', [ApiAtestadoController::class, 'list']);
                 Route::post('/', [ApiAtestadoController::class, 'store']);
                 Route::get('/{id}', [ApiAtestadoController::class, 'get']);
-                Route::post('/{id}', [ApiAtestadoController::class, 'update']);
+                // POST (multipart) e PUT (ex.: _method=PUT no FormData) atualizam o mesmo registro
+                Route::match(['post', 'put'], '/{id}', [ApiAtestadoController::class, 'update']);
                 Route::delete('/{id}', [ApiAtestadoController::class, 'destroy']);
                 Route::get('/{id}/download', [ApiAtestadoController::class, 'download']);
             });

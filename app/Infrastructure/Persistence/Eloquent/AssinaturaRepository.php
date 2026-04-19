@@ -282,6 +282,18 @@ class AssinaturaRepository implements AssinaturaRepositoryInterface
             ->first();
     }
 
+    public function atualizarMercadoPagoVault(int $assinaturaId, string $customerId, string $cardId, ?string $metodoPagamento = null): void
+    {
+        $data = [
+            'mercado_pago_customer_id' => $customerId,
+            'mercado_pago_card_id' => $cardId,
+        ];
+        if ($metodoPagamento !== null) {
+            $data['metodo_pagamento'] = $metodoPagamento;
+        }
+        AssinaturaModel::whereKey($assinaturaId)->update($data);
+    }
+
     /**
      * Salvar assinatura (criar ou atualizar)
      * 

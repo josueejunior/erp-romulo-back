@@ -61,18 +61,14 @@ class RenovarAssinaturaUseCase
             throw new BusinessRuleException('Planos gratuitos têm duração limitada a 3 dias e não podem ser renovados. Escolha um plano pago para continuar usando o sistema.');
         }
 
-        // Calcular valor baseado no período
-        $valor = $meses === 12 ? $plano->preco_anual : $plano->preco_mensal;
-        
-        // Se renovação anual, multiplicar por 12 meses
-        if ($meses === 12 && $plano->preco_anual) {
-            $valor = $plano->preco_anual;
-        } else {
-            $valor = $plano->preco_mensal * $meses;
-        }
+        // Mesma regra de preço que AssinaturaController::renovar (Plano::calcularPreco — desconto promocional, etc.)
+        $periodo = $meses === 12 ? 'anual' : 'mensal';
+        $valor = $plano->calcularPreco($periodo, $meses);
 
-        // Validar valor do pagamento
-        if ($paymentRequest->amount->toReais() != $valor) {
+        // Validar valor do pagamento (com tolerância a float)
+        $esperado = round((float) $valor, 2);
+        $enviado = round((float) $paymentRequest->amount->toReais(), 2);
+        if (abs($esperado - $enviado) > 0.009) {
             throw new DomainException('O valor do pagamento não corresponde ao valor da renovação.');
         }
 

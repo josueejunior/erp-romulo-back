@@ -14,6 +14,8 @@ use App\Application\Assinatura\UseCases\BuscarTenantDoUsuarioUseCase;
 use App\Application\Assinatura\DTOs\CriarAssinaturaDTO;
 use App\Application\Assinatura\Resources\AssinaturaResource;
 use App\Application\Payment\UseCases\RenovarAssinaturaUseCase;
+use App\Application\Assinatura\UseCases\SalvarCartaoAssinaturaUseCase;
+use App\Http\Requests\Assinatura\SalvarCartaoAssinaturaRequest;
 use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
 use App\Domain\Payment\Repositories\PaymentProviderInterface;
 use App\Http\Requests\Assinatura\RenovarAssinaturaRequest;
@@ -48,6 +50,7 @@ class AssinaturaController extends BaseApiController
         private CriarAssinaturaUseCase $criarAssinaturaUseCase,
         private TrocarPlanoAssinaturaUseCase $trocarPlanoAssinaturaUseCase,
         private RenovarAssinaturaUseCase $renovarAssinaturaUseCase,
+        private SalvarCartaoAssinaturaUseCase $salvarCartaoAssinaturaUseCase,
         private BuscarTenantDoUsuarioUseCase $buscarTenantDoUsuarioUseCase,
         private PaymentProviderInterface $paymentProvider,
         private AssinaturaResource $assinaturaResource,
@@ -347,6 +350,33 @@ class AssinaturaController extends BaseApiController
             ], 422);
         } catch (\Exception $e) {
             return $this->handleException($e, 'Erro ao criar assinatura');
+        }
+    }
+
+    /**
+     * Cadastra ou atualiza o cartão (Mercado Pago) na assinatura atual da empresa ativa — sem cobrança.
+     */
+    public function salvarCartao(SalvarCartaoAssinaturaRequest $request): JsonResponse
+    {
+        try {
+            $user = $this->getUserOrFail();
+            $v = $request->validated();
+            $this->salvarCartaoAssinaturaUseCase->executar(
+                $user,
+                $v['card_token'],
+                $v['payer_email'],
+                isset($v['payer_cpf']) ? preg_replace('/\D/', '', (string) $v['payer_cpf']) : null,
+            );
+
+            return response()->json([
+                'message' => 'Cartão cadastrado com sucesso na sua assinatura.',
+            ]);
+        } catch (\App\Domain\Exceptions\DomainException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 400);
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao salvar cartão');
         }
     }
 

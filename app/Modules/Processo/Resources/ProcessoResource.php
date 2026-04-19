@@ -36,7 +36,12 @@ class ProcessoResource extends JsonResource
         return array_merge($listData, [
             'orgao' => new OrgaoResource($this->whenLoaded('orgao')),
             'setor' => new SetorResource($this->whenLoaded('setor')),
-            'itens' => ProcessoItemResource::collection($this->whenLoaded('itens')),
+            // Sempre lista array: vazio se a relação não veio no eager load (evita cliente assumir "sem itens" por chave ausente).
+            'itens' => $this->whenLoaded(
+                'itens',
+                fn () => ProcessoItemResource::collection($this->itens),
+                []
+            ),
             'documentos' => $this->whenLoaded('documentos'),
             // Incluir todos os campos do modelo
             'empresa_id' => $this->empresa_id,

@@ -28,7 +28,10 @@ class RenovarAssinaturaRequest extends FormRequest
         return [
             'meses.required' => 'O período de renovação é obrigatório.',
             'meses.in' => 'O período deve ser 1 ou 12 meses.',
+            'payment_method_id.required' => 'Informe a forma de pagamento (cartão ou PIX).',
+            'payment_method_id.in' => 'A forma de pagamento deve ser cartão de crédito ou PIX.',
             'card_token.required' => 'O token do cartão é obrigatório.',
+            'card_token.required_if' => 'O token do cartão é obrigatório para pagamento com cartão.',
             'payer_email.required' => 'O e-mail do pagador é obrigatório.',
             'payer_email.email' => 'O e-mail deve ser válido.',
         ];

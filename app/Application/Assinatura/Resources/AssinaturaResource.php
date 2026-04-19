@@ -48,6 +48,8 @@ class AssinaturaResource
         // Calcular dias restantes usando método do modelo (mantém compatibilidade)
         $diasRestantes = $model ? $model->diasRestantes() : $assinatura->diasRestantes();
 
+        $cartaoSalvo = $model ? $model->hasCardToken() : false;
+
         return new AssinaturaResponseDTO(
             id: $assinatura->id,
             planoId: $assinatura->planoId,
@@ -61,6 +63,7 @@ class AssinaturaResource
             plano: $planoDTO,
             usage: $usage,
             warning: $warning,
+            cartaoSalvo: $cartaoSalvo,
         );
     }
 }

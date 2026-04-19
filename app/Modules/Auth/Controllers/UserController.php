@@ -14,7 +14,11 @@ use App\Application\Auth\DTOs\AtualizarUsuarioDTO;
 use App\Domain\Shared\ValueObjects\TenantContext;
 use App\Http\Requests\Auth\UserCreateRequest;
 use App\Http\Requests\Auth\UserUpdateRequest;
+use App\Http\Requests\Auth\UpdateMeRequest;
 use App\Http\Requests\Auth\SwitchEmpresaRequest;
+use App\Modules\Auth\Models\User as UserModel;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 use App\Http\Resources\UserResource;
 use Illuminate\Http\JsonResponse;
 use DomainException;
@@ -128,6 +132,51 @@ class UserController extends BaseApiController
                 ->response();
         } catch (\Exception $e) {
             return $this->handleException($e, 'Erro ao atualizar usuário');
+        }
+    }
+
+    /**
+     * Atualiza o próprio usuário (perfil) sem exigir assinatura ativa — nome, e-mail, foto e senha.
+     */
+    public function updateMe(UpdateMeRequest $request): JsonResponse
+    {
+        try {
+            $auth = $request->user();
+            if (!$auth) {
+                return response()->json(['message' => 'Usuário não autenticado.'], 401);
+            }
+
+            $model = UserModel::findOrFail($auth->id);
+
+            if ($request->filled('password')) {
+                if (!Hash::check((string) $request->input('password_current'), (string) $model->password)) {
+                    throw ValidationException::withMessages([
+                        'password_current' => ['A senha atual está incorreta.'],
+                    ]);
+                }
+                $model->password = Hash::make((string) $request->input('password'));
+            }
+
+            if ($request->has('name')) {
+                $model->name = (string) $request->input('name');
+            }
+            if ($request->has('email')) {
+                $model->email = strtolower(trim((string) $request->input('email')));
+            }
+            if ($request->has('foto_perfil')) {
+                $model->foto_perfil = $request->input('foto_perfil');
+            }
+
+            $model->save();
+
+            $usuarioDomain = $this->buscarUsuarioUseCase->executar($model->id);
+
+            return (new UserResource($usuarioDomain))
+                ->response();
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'Erro ao atualizar perfil');
         }
     }
 

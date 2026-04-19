@@ -20,6 +20,7 @@ class AssinaturaResponseDTO
         public readonly ?PlanoResponseDTO $plano = null,
         public readonly ?array $usage = null,
         public readonly ?array $warning = null,
+        public readonly ?bool $cartaoSalvo = null,
     ) {}
 
     /**
@@ -40,6 +41,7 @@ class AssinaturaResponseDTO
             'plano' => $this->plano?->toArray(),
             'usage' => $this->usage,
             'warning' => $this->warning,
+            'cartao_salvo' => $this->cartaoSalvo ?? false,
         ];
     }
 }

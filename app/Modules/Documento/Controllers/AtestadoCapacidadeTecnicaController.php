@@ -9,6 +9,7 @@ use App\Http\Middleware\EnsureEmpresaAtivaContext;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Illuminate\Support\Facades\Log;
 
 class AtestadoCapacidadeTecnicaController extends BaseApiController
@@ -153,7 +154,7 @@ class AtestadoCapacidadeTecnicaController extends BaseApiController
         }
     }
 
-    public function download(Request $request, int $id): \Symfony\Component\HttpFoundation\BinaryFileResponse|JsonResponse
+    public function download(Request $request, int $id): BinaryFileResponse|JsonResponse
     {
         try {
             $empresa = $this->getEmpresaAtivaOrFail();
@@ -163,12 +164,24 @@ class AtestadoCapacidadeTecnicaController extends BaseApiController
                 return response()->json(['message' => 'Nenhum arquivo disponível.'], 404);
             }
 
-            $path = 'atestados-capacidade-tecnica/' . $atestado->arquivo;
-            if (!Storage::exists($path)) {
+            $relative = 'atestados-capacidade-tecnica/' . $atestado->arquivo;
+            $fullPath = null;
+
+            if (Storage::exists($relative)) {
+                $fullPath = Storage::path($relative);
+            } elseif (Storage::disk('public')->exists($relative)) {
+                $fullPath = Storage::disk('public')->path($relative);
+            }
+
+            if ($fullPath === null || !is_file($fullPath)) {
                 return response()->json(['message' => 'Arquivo não encontrado.'], 404);
             }
 
-            return Storage::download($path);
+            $downloadName = basename((string) $atestado->arquivo) ?: 'atestado';
+
+            return response()->download($fullPath, $downloadName, [
+                'Content-Type' => @mime_content_type($fullPath) ?: 'application/octet-stream',
+            ]);
         } catch (\Exception $e) {
             return response()->json(['message' => 'Erro ao baixar arquivo.'], 500);
         }
