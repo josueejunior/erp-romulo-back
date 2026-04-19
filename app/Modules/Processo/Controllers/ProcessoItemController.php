@@ -21,8 +21,14 @@ use App\Domain\Exceptions\ProcessoEmExecucaoException;
 use App\Domain\Exceptions\EntidadeNaoPertenceException;
 use App\Http\Requests\ProcessoItem\ProcessoItemCreateRequest;
 use App\Http\Requests\ProcessoItem\ProcessoItemUpdateRequest;
+use App\Helpers\PermissionHelper;
+use App\Services\Pncp\PncpCompraIdentificador;
+use App\Services\Pncp\PncpCompraParaProcessoMapper;
+use App\Services\Pncp\PncpConsultaService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Throwable;
 
 class ProcessoItemController extends BaseApiController
 {
@@ -660,5 +666,118 @@ class ProcessoItemController extends BaseApiController
                 'message' => $e->getMessage(),
             ], 400);
         }
+    }
+
+    /**
+     * GET /processos/{processo}/itens/{item}/pncp-referencia-formacao
+     *
+     * Cruza o {@code numero_item} local com a lista pública de itens da compra no PNCP
+     * (mesmos parâmetros de {@see ProcessoController::pncpCompraParaFormulario}: referência ou cnpj+ano+sequencial).
+     *
+     * @see https://pncp.gov.br/api/consulta/swagger-ui/index.html
+     */
+    public function pncpReferenciaFormacaoPreco(Request $request, Processo $processo, ProcessoItem $item): JsonResponse
+    {
+        if (! PermissionHelper::canCreateProcess() && ! PermissionHelper::canEditProcess()) {
+            return response()->json(['message' => 'Sem permissão para consultar o PNCP.'], 403);
+        }
+
+        $validator = Validator::make($request->query(), [
+            'referencia' => ['nullable', 'string', 'max:8192'],
+            'cnpj' => ['nullable', 'string', 'max:20'],
+            'ano' => ['nullable', 'integer', 'min:1990', 'max:2100'],
+            'sequencial' => ['nullable', 'integer', 'min:1', 'max:9999999'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Parâmetros inválidos.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $empresa = $this->getEmpresaAtivaOrFail();
+
+        try {
+            $this->itemService->validarProcessoEmpresa($processo, $empresa->id);
+            $this->itemService->validarItemEmpresa($item, $empresa->id);
+            $this->itemService->validarItemPertenceProcesso($item, $processo);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 400);
+        }
+
+        $ids = PncpCompraIdentificador::fromQueryParams($validator->validated());
+        if ($ids === null) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Informe o número de controle PNCP (ou link) ou CNPJ + ano + sequencial da compra.',
+            ], 422);
+        }
+
+        try {
+            $svc = PncpConsultaService::fromConfig();
+            $compra = $svc->recuperarCompra($ids['cnpj'], $ids['ano'], $ids['sequencial']);
+            $itensRows = $svc->listarItensCompra($ids['cnpj'], $ids['ano'], $ids['sequencial']);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 502);
+        }
+
+        if ($compra === []) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Compra não encontrada no PNCP.',
+            ], 404);
+        }
+
+        $numeroItemLocal = (int) $item->numero_item;
+        $row = PncpCompraParaProcessoMapper::encontrarItemPncpPorNumero($itensRows, $numeroItemLocal);
+        $ref = $row !== null ? PncpCompraParaProcessoMapper::mapearReferenciaFormacaoPreco($row) : null;
+
+        $numeroControle = isset($compra['numeroControlePNCP']) && is_string($compra['numeroControlePNCP'])
+            ? $compra['numeroControlePNCP']
+            : null;
+        $objetoCompra = isset($compra['objetoCompra']) ? trim((string) $compra['objetoCompra']) : '';
+        if (mb_strlen($objetoCompra) > 500) {
+            $objetoCompra = mb_substr($objetoCompra, 0, 497).'…';
+        }
+
+        $avisoQuantidade = null;
+        if ($ref !== null && $ref['quantidade'] !== null && (float) $item->quantidade > 0
+            && abs($ref['quantidade'] - (float) $item->quantidade) > 0.0001) {
+            $avisoQuantidade = 'A quantidade no PNCP difere da quantidade cadastrada no item do processo; o valor unitário estimado foi mantido como divulgado no PNCP.';
+        }
+
+        $sugestao = $ref !== null ? ($ref['valor_unitario_estimado'] ?? null) : null;
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'pncp_ids' => $ids,
+                'compra_resumo' => [
+                    'numero_controle_pncp' => $numeroControle,
+                    'objeto_compra' => $objetoCompra !== '' ? $objetoCompra : null,
+                ],
+                'processo_item' => [
+                    'id' => $item->id,
+                    'numero_item' => $item->numero_item,
+                    'quantidade' => (float) $item->quantidade,
+                    'unidade' => $item->unidade,
+                    'valor_estimado' => $item->valor_estimado !== null ? (float) $item->valor_estimado : null,
+                    'fonte_valor' => $item->fonte_valor,
+                ],
+                'pncp_item' => $ref !== null
+                    ? array_merge(['encontrado' => true], $ref)
+                    : [
+                        'encontrado' => false,
+                        'numeros_itens_pn_disponiveis' => PncpCompraParaProcessoMapper::listarNumerosItensPncp($itensRows),
+                    ],
+                'sugestao_custo_produto' => $sugestao,
+                'aviso' => $avisoQuantidade,
+            ],
+        ]);
     }
 }

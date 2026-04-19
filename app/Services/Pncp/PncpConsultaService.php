@@ -126,6 +126,9 @@ final class PncpConsultaService
     /**
      * GET /v1/orgaos/{cnpj}/compras/{ano}/{sequencial}/itens — itens da compra (API pública PNCP).
      *
+     * Tenta primeiro a base de integração ({@see $integracaoBaseUrl}) e, em 404,
+     * a API de consulta — o PNCP pode expor o recurso em bases distintas conforme o ambiente.
+     *
      * @return array<int,array<string,mixed>>
      */
     public function listarItensCompra(string $cnpj, int $ano, int $sequencial): array
@@ -135,26 +138,66 @@ final class PncpConsultaService
             throw new RuntimeException('CNPJ do órgão inválido.');
         }
 
-        $url = $this->integracaoBaseUrl.'/v1/orgaos/'.$cnpjLimpo.'/compras/'.$ano.'/'.$sequencial.'/itens';
+        $paths = [
+            $this->integracaoBaseUrl.'/v1/orgaos/'.$cnpjLimpo.'/compras/'.$ano.'/'.$sequencial.'/itens',
+            $this->baseUrl.'/v1/orgaos/'.$cnpjLimpo.'/compras/'.$ano.'/'.$sequencial.'/itens',
+        ];
 
-        $response = Http::timeout($this->timeoutSeconds)
-            ->acceptJson()
-            ->get($url);
+        $lastStatus = null;
+        foreach ($paths as $url) {
+            $response = Http::timeout($this->timeoutSeconds)
+                ->acceptJson()
+                ->get($url);
 
-        if (!$response->successful()) {
-            Log::warning('PNCP listar itens falhou', [
-                'status' => $response->status(),
-                'body' => $response->body(),
-            ]);
-            throw new RuntimeException(
-                $response->json('message')
-                ?? 'Não foi possível carregar os itens desta compra no PNCP.'
-            );
+            $lastStatus = $response->status();
+
+            if ($response->successful()) {
+                $json = $response->json();
+
+                return $this->normalizeItensCompraPayload($json);
+            }
+
+            if ($response->status() !== 404) {
+                Log::warning('PNCP listar itens falhou', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                    'url' => $url,
+                ]);
+                throw new RuntimeException(
+                    $response->json('message')
+                    ?? 'Não foi possível carregar os itens desta compra no PNCP.'
+                );
+            }
         }
 
-        $json = $response->json();
+        Log::warning('PNCP listar itens: 404 em todas as bases tentadas', [
+            'cnpj' => $cnpjLimpo,
+            'ano' => $ano,
+            'sequencial' => $sequencial,
+            'last_status' => $lastStatus,
+        ]);
+        throw new RuntimeException('Lista de itens não encontrada no PNCP para esta compra.');
+    }
 
-        return is_array($json) ? $json : [];
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function normalizeItensCompraPayload(mixed $json): array
+    {
+        if (! is_array($json)) {
+            return [];
+        }
+        if (isset($json['data']) && is_array($json['data'])) {
+            $rows = array_values(array_filter($json['data'], 'is_array'));
+
+            return $rows;
+        }
+
+        if ($json !== [] && array_is_list($json)) {
+            return array_values(array_filter($json, 'is_array'));
+        }
+
+        return [];
     }
 
     /**

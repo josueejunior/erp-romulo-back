@@ -179,4 +179,98 @@ final class PncpCompraParaProcessoMapper
 
         return null;
     }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $itensRows
+     * @return array<int>
+     */
+    public static function listarNumerosItensPncp(array $itensRows): array
+    {
+        $nums = [];
+        foreach ($itensRows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $n = (int) ($row['numeroItem'] ?? $row['numero_item'] ?? 0);
+            if ($n > 0) {
+                $nums[] = $n;
+            }
+        }
+        sort($nums);
+
+        return array_values(array_unique($nums));
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $itensRows
+     * @return array<string, mixed>|null
+     */
+    public static function encontrarItemPncpPorNumero(array $itensRows, int $numeroItem): ?array
+    {
+        foreach ($itensRows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $n = (int) ($row['numeroItem'] ?? $row['numero_item'] ?? 0);
+            if ($n === $numeroItem) {
+                return $row;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Extrai valores úteis para formação de preço / calculadora a partir de um item bruto do PNCP.
+     *
+     * @param  array<string, mixed>  $row
+     * @return array{
+     *   numero_item:int,
+     *   valor_unitario_estimado:float|null,
+     *   valor_total:float|null,
+     *   quantidade:float|null,
+     *   unidade_medida:?string,
+     *   descricao_resumo:?string
+     * }
+     */
+    public static function mapearReferenciaFormacaoPreco(array $row): array
+    {
+        $numero = (int) ($row['numeroItem'] ?? $row['numero_item'] ?? 0);
+
+        $vu = $row['valorUnitarioEstimado'] ?? $row['valorUnitario'] ?? null;
+        $vuF = is_numeric($vu) ? round((float) $vu, 4) : null;
+
+        $q = $row['quantidade'] ?? null;
+        $qF = is_numeric($q) ? (float) $q : null;
+
+        $vt = $row['valorTotal'] ?? null;
+        $vtF = is_numeric($vt) ? round((float) $vt, 4) : null;
+
+        if ($vuF === null && $vtF !== null && $qF !== null && $qF > 0) {
+            $vuF = round($vtF / $qF, 4);
+        }
+        if ($vtF === null && $vuF !== null && $qF !== null) {
+            $vtF = round($vuF * $qF, 4);
+        }
+
+        $desc = isset($row['descricao']) ? trim((string) $row['descricao']) : '';
+        if (mb_strlen($desc) > 400) {
+            $desc = mb_substr($desc, 0, 397).'…';
+        }
+
+        $un = $row['unidadeMedida'] ?? $row['unidade_medida'] ?? null;
+        $unStr = is_string($un) ? trim($un) : (is_scalar($un) ? trim((string) $un) : null);
+        if ($unStr === '') {
+            $unStr = null;
+        }
+
+        return [
+            'numero_item' => $numero,
+            'valor_unitario_estimado' => $vuF,
+            'valor_total' => $vtF,
+            'quantidade' => $qF,
+            'unidade_medida' => $unStr,
+            'descricao_resumo' => $desc !== '' ? $desc : null,
+        ];
+    }
 }

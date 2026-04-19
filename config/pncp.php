@@ -8,6 +8,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | Documentação: https://pncp.gov.br/api/consulta/swagger-ui/index.html
+    | Itens da compra (valor estimado): GET …/orgaos/{cnpj}/compras/{ano}/{sequencial}/itens
     | Endpoint usado: GET /v1/contratacoes/publicacao
     | Datas no formato AAAAMMDD. Parâmetro obrigatório: codigoModalidadeContratacao.
     | tamanhoPagina mínimo 10 (regra da API).

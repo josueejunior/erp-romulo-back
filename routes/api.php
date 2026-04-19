@@ -327,6 +327,7 @@ Route::prefix('v1')->group(function () {
                         Route::post('/vinculos', [\App\Modules\Processo\Controllers\ProcessoItemVinculoController::class, 'store']);
                         Route::put('/vinculos/{vinculo}', [\App\Modules\Processo\Controllers\ProcessoItemVinculoController::class, 'update']);
                         Route::delete('/vinculos/{vinculo}', [\App\Modules\Processo\Controllers\ProcessoItemVinculoController::class, 'destroy']);
+                        Route::get('/pncp-referencia-formacao', [ApiProcessoItemController::class, 'pncpReferenciaFormacaoPreco']);
                     });
                 Route::post('/itens/importar', [ApiProcessoItemController::class, 'importar']);
                 
