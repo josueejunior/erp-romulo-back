@@ -34,6 +34,7 @@ use App\Modules\Payment\Controllers\PaymentController as ApiPaymentController;
 use App\Modules\Payment\Controllers\WebhookController as ApiWebhookController;
 use App\Modules\Suporte\Controllers\TicketController as ApiTicketController;
 use App\Http\Controllers\Api\OportunidadeController as ApiOportunidadeController;
+use App\Http\Controllers\Api\PncpOrgaosExplorarController;
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Admin\AdminTenantController;
 use App\Http\Controllers\Admin\AdminUserController;
@@ -241,6 +242,8 @@ Route::prefix('v1')->group(function () {
                 Route::get('/pncp/contratacoes-publicacao', [ApiOportunidadeController::class, 'pncpPublicacoes']);
                 Route::get('/pncp/compra-arquivos', [ApiOportunidadeController::class, 'pncpCompraArquivos']);
                 Route::get('/pncp/compra', [ApiOportunidadeController::class, 'pncpCompra']);
+                // Explora órgãos (deduplicação PNCP) — controller invocável dedicado
+                Route::get('/pncp/explorar-orgaos', PncpOrgaosExplorarController::class);
                 Route::get('/', [ApiOportunidadeController::class, 'index']);
                 Route::post('/', [ApiOportunidadeController::class, 'store']);
                 Route::get('/{id}', [ApiOportunidadeController::class, 'show'])->where('id', '[0-9]+');
@@ -365,6 +368,7 @@ Route::prefix('v1')->group(function () {
             
             // Cadastros — rota PNCP antes do módulo REST (evita colisão com GET /orgaos/{orgao})
             Route::get('/orgaos/pncp/consolidado', [ApiOrgaoController::class, 'pncpConsolidado']);
+            Route::get('/orgaos/pncp/explorar', PncpOrgaosExplorarController::class);
 
             Route::module('orgaos', ApiOrgaoController::class, 'orgao');
             
