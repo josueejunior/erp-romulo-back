@@ -6,6 +6,7 @@ use App\Domain\Assinatura\Entities\Assinatura;
 use App\Application\Assinatura\DTOs\AssinaturaResponseDTO;
 use App\Application\Assinatura\DTOs\PlanoResponseDTO;
 use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
+use App\Domain\Payment\Repositories\PaymentProviderInterface;
 
 /**
  * Resource para transformar entidade Assinatura em DTO de resposta
@@ -16,6 +17,7 @@ class AssinaturaResource
 {
     public function __construct(
         private AssinaturaRepositoryInterface $assinaturaRepository,
+        private PaymentProviderInterface $paymentProvider,
     ) {}
 
     /**
@@ -50,6 +52,14 @@ class AssinaturaResource
 
         $cartaoSalvo = $model ? $model->hasCardToken() : false;
 
+        $cartaoResumo = null;
+        if ($model && $cartaoSalvo) {
+            $cartaoResumo = $this->paymentProvider->getSavedCardSummary(
+                $model->mercado_pago_customer_id,
+                $model->mercado_pago_card_id,
+            );
+        }
+
         return new AssinaturaResponseDTO(
             id: $assinatura->id,
             planoId: $assinatura->planoId,
@@ -64,6 +74,7 @@ class AssinaturaResource
             usage: $usage,
             warning: $warning,
             cartaoSalvo: $cartaoSalvo,
+            cartao: $cartaoResumo,
         );
     }
 }

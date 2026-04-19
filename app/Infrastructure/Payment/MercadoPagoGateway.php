@@ -895,6 +895,59 @@ class MercadoPagoGateway implements PaymentProviderInterface
     }
 
     /**
+     * {@inheritdoc}
+     *
+     * Consulta GET /v1/customers/{id}/cards/{id} no Mercado Pago.
+     */
+    public function getSavedCardSummary(?string $customerId, ?string $cardId): ?array
+    {
+        if ($customerId === null || $customerId === '' || $cardId === null || $cardId === '') {
+            return null;
+        }
+
+        try {
+            $this->initialize();
+            $cardClient = new CustomerCardClient();
+            $card = $cardClient->get(trim($customerId), trim($cardId));
+
+            $pm = $card->payment_method ?? null;
+            $methodId = null;
+            $methodName = null;
+            if (is_object($pm)) {
+                $methodId = $pm->id ?? null;
+                $methodName = $pm->name ?? null;
+            } elseif (is_array($pm)) {
+                $methodId = $pm['id'] ?? null;
+                $methodName = $pm['name'] ?? null;
+            }
+
+            return [
+                'ultimos_quatro' => $card->last_four_digits ?? null,
+                'payment_method_id' => $methodId,
+                'payment_method_name' => $methodName,
+                'expiration_month' => $card->expiration_month ?? null,
+                'expiration_year' => $card->expiration_year ?? null,
+            ];
+        } catch (\MercadoPago\Exceptions\MPApiException $e) {
+            Log::warning('MercadoPagoGateway::getSavedCardSummary — MP recusou', [
+                'customer_id' => $customerId,
+                'card_id' => $cardId,
+                'message' => $e->getMessage(),
+            ]);
+
+            return null;
+        } catch (\Throwable $e) {
+            Log::warning('MercadoPagoGateway::getSavedCardSummary — falha', [
+                'customer_id' => $customerId,
+                'card_id' => $cardId,
+                'message' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    /**
      * Gera um card_token novo a partir de um card_id já salvo no Customer.
      *
      * O MP exige essa regeneração a cada pagamento por razões de segurança

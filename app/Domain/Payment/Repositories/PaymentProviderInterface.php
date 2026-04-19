@@ -63,6 +63,19 @@ interface PaymentProviderInterface
     public function createCustomerAndCard(string $email, string $cardToken, ?string $cpf = null, ?string $existingCustomerId = null): array;
 
     /**
+     * Metadados não sensíveis do cartão salvo no gateway (últimos dígitos, bandeira) para exibição na UI.
+     *
+     * @return array{
+     *   ultimos_quatro?: string|null,
+     *   payment_method_id?: string|null,
+     *   payment_method_name?: string|null,
+     *   expiration_month?: int|null,
+     *   expiration_year?: int|null
+     * }|null
+     */
+    public function getSavedCardSummary(?string $customerId, ?string $cardId): ?array;
+
+    /**
      * Processa um pagamento usando um card_id salvo (one-click buy)
      * 
      * @param PaymentRequest $request Dados do pagamento (sem cardToken, usar card_id)

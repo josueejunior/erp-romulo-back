@@ -21,6 +21,8 @@ class AssinaturaResponseDTO
         public readonly ?array $usage = null,
         public readonly ?array $warning = null,
         public readonly ?bool $cartaoSalvo = null,
+        /** Resumo do cartão salvo no MP (últimos dígitos, bandeira); null se indisponível */
+        public readonly ?array $cartao = null,
     ) {}
 
     /**
@@ -42,6 +44,7 @@ class AssinaturaResponseDTO
             'usage' => $this->usage,
             'warning' => $this->warning,
             'cartao_salvo' => $this->cartaoSalvo ?? false,
+            'cartao' => $this->cartao,
         ];
     }
 }
