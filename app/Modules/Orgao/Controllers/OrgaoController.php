@@ -15,9 +15,13 @@ use App\Application\Orgao\DTOs\AtualizarOrgaoDTO;
 use App\Http\Requests\Orgao\OrgaoCreateRequest;
 use App\Http\Requests\Orgao\OrgaoUpdateRequest;
 use App\Helpers\PermissionHelper;
+use App\Services\Pncp\PncpCompraParaProcessoMapper;
+use App\Services\Pncp\PncpConsultaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 use DomainException;
+use Throwable;
 
 /**
  * Controller para gerenciamento de Órgãos
@@ -88,6 +92,63 @@ class OrgaoController extends BaseApiController
         } catch (\Exception $e) {
             return $this->handleException($e, 'Erro ao listar órgãos');
         }
+    }
+
+    /**
+     * GET /orgaos/pncp/consolidado?cnpj=...
+     *
+     * Dados cadastrais do órgão na API PNCP + lista de unidades + payload sugerido para POST /orgaos.
+     */
+    public function pncpConsolidado(Request $request): JsonResponse
+    {
+        if (! PermissionHelper::canCreateProcess()) {
+            return response()->json(['message' => 'Sem permissão para consultar o PNCP.'], 403);
+        }
+
+        $validator = Validator::make($request->query(), [
+            'cnpj' => ['required', 'string', 'max:20'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Informe o CNPJ do órgão.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $cnpjLimpo = preg_replace('/\D/', '', (string) $validator->validated()['cnpj']) ?? '';
+        if (strlen($cnpjLimpo) !== 14) {
+            return response()->json([
+                'success' => false,
+                'message' => 'CNPJ do órgão deve ter 14 dígitos.',
+            ], 422);
+        }
+
+        try {
+            $svc = PncpConsultaService::fromConfig();
+            $orgaoPncp = $svc->consultarOrgao($cnpjLimpo);
+            $unidades = $svc->listarUnidadesOrgao($cnpjLimpo);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 502);
+        }
+
+        $cadastroSugerido = PncpCompraParaProcessoMapper::mapCadastroOrgaoSugerido(
+            is_array($orgaoPncp) ? $orgaoPncp : [],
+            null
+        );
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'orgao_pncp' => $orgaoPncp,
+                'unidades' => $unidades,
+                'cadastro_sugerido' => $cadastroSugerido,
+            ],
+        ]);
     }
 
     /**

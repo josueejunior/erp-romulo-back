@@ -32,10 +32,16 @@ use App\Http\Requests\Processo\ProcessoCreateRequest;
 use App\Http\Requests\Processo\ProcessoUpdateRequest;
 use App\Http\Requests\Processo\ConfirmarPagamentoRequest;
 use App\Helpers\PermissionHelper;
+use App\Models\Orgao;
+use App\Services\Pncp\PncpCompraIdentificador;
+use App\Services\Pncp\PncpCompraParaProcessoMapper;
+use App\Services\Pncp\PncpConsultaService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 use Carbon\Carbon;
+use Throwable;
 
 /**
  * Controller para gerenciar processos licitatórios
@@ -139,6 +145,132 @@ class ProcessoController extends BaseApiController
     {
         return response()->json([
             'data' => self::MODALIDADES,
+        ]);
+    }
+
+    /**
+     * GET /processos/pncp/compra-dados
+     *
+     * Mesmos query params de {@see \App\Http\Controllers\Api\OportunidadeController::pncpCompra}:
+     * {@code referencia} (texto/URL com número de controle) ou {@code cnpj}+{@code ano}+{@code sequencial}.
+     *
+     * Retorna sugestões para o formulário de processo, itens, cadastro de órgão e matches locais por CNPJ.
+     */
+    public function pncpCompraParaFormulario(Request $request): JsonResponse
+    {
+        if (! PermissionHelper::canCreateProcess()) {
+            return response()->json(['message' => 'Sem permissão para consultar o PNCP.'], 403);
+        }
+
+        $validator = Validator::make($request->query(), [
+            'referencia' => ['nullable', 'string', 'max:8192'],
+            'cnpj' => ['nullable', 'string', 'max:20'],
+            'ano' => ['nullable', 'integer', 'min:1990', 'max:2100'],
+            'sequencial' => ['nullable', 'integer', 'min:1', 'max:9999999'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Parâmetros inválidos.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $q = $validator->validated();
+        $ids = PncpCompraIdentificador::fromQueryParams($q);
+
+        if ($ids === null) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Não foi possível identificar a compra. Informe o número de controle PNCP (formato 00000000000000-0-000000/AAAA) ou cole um texto/URL que contenha esse código, ou envie cnpj, ano e sequencial.',
+            ], 422);
+        }
+
+        $empresa = $this->getEmpresaAtivaOrFail();
+
+        try {
+            $svc = PncpConsultaService::fromConfig();
+            $compra = $svc->recuperarCompra($ids['cnpj'], $ids['ano'], $ids['sequencial']);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 502);
+        }
+
+        if ($compra === []) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Compra não encontrada no PNCP.',
+            ], 404);
+        }
+
+        $itensRaw = [];
+        try {
+            $itensRaw = $svc->listarItensCompra($ids['cnpj'], $ids['ano'], $ids['sequencial']);
+        } catch (Throwable $e) {
+            \Log::warning('PNCP itens (processo) não carregados', ['erro' => $e->getMessage(), 'ids' => $ids]);
+        }
+
+        $processoSugerido = PncpCompraParaProcessoMapper::mapProcessoSugerido($compra);
+        $itensSugeridos = PncpCompraParaProcessoMapper::mapItensParaFormulario($itensRaw);
+
+        $orgEnt = is_array($compra['orgaoEntidade'] ?? null) ? $compra['orgaoEntidade'] : [];
+        $uniEnt = is_array($compra['unidadeOrgao'] ?? null) ? $compra['unidadeOrgao'] : null;
+        $cadastroOrgaoSugerido = PncpCompraParaProcessoMapper::mapCadastroOrgaoSugerido($orgEnt, $uniEnt);
+
+        $cnpjOrgao = PncpCompraParaProcessoMapper::orgaoCnpjFromCompra($compra);
+        $orgaosLocaisMatch = [];
+        if ($cnpjOrgao !== null) {
+            $orgaosLocaisMatch = Orgao::query()
+                ->where('empresa_id', $empresa->id)
+                ->get()
+                ->filter(static function (Orgao $o) use ($cnpjOrgao): bool {
+                    $d = preg_replace('/\D/', '', (string) $o->cnpj) ?? '';
+
+                    return $d === $cnpjOrgao;
+                })
+                ->values()
+                ->map(static fn (Orgao $o) => [
+                    'id' => $o->id,
+                    'razao_social' => $o->razao_social,
+                    'cnpj' => $o->cnpj,
+                    'uasg' => $o->uasg,
+                ])
+                ->all();
+        }
+
+        $orgaoPncp = null;
+        $unidadesPncp = [];
+        if ($cnpjOrgao !== null) {
+            try {
+                $orgaoPncp = $svc->consultarOrgao($cnpjOrgao);
+            } catch (Throwable $e) {
+                \Log::warning('PNCP consultar órgão (processo)', ['erro' => $e->getMessage(), 'cnpj' => $cnpjOrgao]);
+            }
+            try {
+                $unidadesPncp = $svc->listarUnidadesOrgao($cnpjOrgao);
+            } catch (Throwable $e) {
+                \Log::warning('PNCP unidades órgão (processo)', ['erro' => $e->getMessage(), 'cnpj' => $cnpjOrgao]);
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'pncp_ids' => $ids,
+                'processo_sugerido' => $processoSugerido,
+                'itens_sugeridos' => $itensSugeridos,
+                'cadastro_orgao_sugerido' => $cadastroOrgaoSugerido,
+                'orgaos_locais_match' => $orgaosLocaisMatch,
+                'orgao_pncp' => $orgaoPncp,
+                'unidades_pncp' => $unidadesPncp,
+                'pncp_snapshot' => [
+                    'compra' => $compra,
+                    'itens' => $itensRaw,
+                ],
+            ],
         ]);
     }
 

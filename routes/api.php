@@ -230,6 +230,7 @@ Route::prefix('v1')->group(function () {
                 Route::get('/modalidades', [ApiProcessoController::class, 'modalidades']);
                 Route::get('/resumo', [ApiProcessoController::class, 'resumo']);
                 Route::get('/exportar', [ApiProcessoController::class, 'exportar']);
+                Route::get('/pncp/compra-dados', [ApiProcessoController::class, 'pncpCompraParaFormulario']);
             });
 
             // 🔥 ALIAS: Resumo de processos (compatibilidade com frontend)
@@ -362,7 +363,9 @@ Route::prefix('v1')->group(function () {
                 Route::get('/', [ApiContratoController::class, 'listarTodos']); // Lista todos os contratos
             });
             
-            // Cadastros
+            // Cadastros — rota PNCP antes do módulo REST (evita colisão com GET /orgaos/{orgao})
+            Route::get('/orgaos/pncp/consolidado', [ApiOrgaoController::class, 'pncpConsolidado']);
+
             Route::module('orgaos', ApiOrgaoController::class, 'orgao');
             
             // Rotas para responsáveis de órgãos

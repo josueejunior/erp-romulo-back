@@ -217,6 +217,90 @@ final class PncpConsultaService
         throw new RuntimeException('Lista de arquivos não encontrada no PNCP para esta compra.');
     }
 
+    /**
+     * Dados cadastrais do órgão no PNCP (API pública).
+     *
+     * @return array<string, mixed>
+     */
+    public function consultarOrgao(string $cnpj): array
+    {
+        $cnpjLimpo = preg_replace('/\D/', '', $cnpj) ?? '';
+        if (strlen($cnpjLimpo) !== 14) {
+            throw new RuntimeException('CNPJ do órgão inválido.');
+        }
+
+        return $this->getJsonFirstSuccessful([
+            $this->integracaoBaseUrl.'/v1/orgaos/'.$cnpjLimpo,
+            $this->baseUrl.'/v1/orgaos/'.$cnpjLimpo,
+        ], 'orgão');
+    }
+
+    /**
+     * Unidades vinculadas ao órgão (com endereço, UASG/código quando existir).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function listarUnidadesOrgao(string $cnpj): array
+    {
+        $cnpjLimpo = preg_replace('/\D/', '', $cnpj) ?? '';
+        if (strlen($cnpjLimpo) !== 14) {
+            throw new RuntimeException('CNPJ do órgão inválido.');
+        }
+
+        $json = $this->getJsonFirstSuccessful([
+            $this->integracaoBaseUrl.'/v1/orgaos/'.$cnpjLimpo.'/unidades',
+            $this->baseUrl.'/v1/orgaos/'.$cnpjLimpo.'/unidades',
+        ], 'unidades do órgão');
+
+        if ($json === []) {
+            return [];
+        }
+
+        if (isset($json['data']) && is_array($json['data'])) {
+            return $json['data'];
+        }
+
+        return is_array($json) && array_is_list($json) ? $json : [];
+    }
+
+    /**
+     * @param  array<int, string>  $urls
+     * @return array<string, mixed>
+     */
+    private function getJsonFirstSuccessful(array $urls, string $recurso): array
+    {
+        $lastStatus = null;
+        foreach ($urls as $url) {
+            $response = Http::timeout($this->timeoutSeconds)
+                ->acceptJson()
+                ->get($url);
+
+            $lastStatus = $response->status();
+
+            if ($response->successful()) {
+                $json = $response->json();
+
+                return is_array($json) ? $json : [];
+            }
+
+            if ($response->status() !== 404) {
+                Log::warning('PNCP consulta falhou', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                    'url' => $url,
+                    'recurso' => $recurso,
+                ]);
+                throw new RuntimeException(
+                    $response->json('message')
+                    ?? 'Não foi possível consultar '.$recurso.' no PNCP.'
+                );
+            }
+        }
+
+        Log::warning('PNCP: 404 em todas as bases', ['urls' => $urls, 'recurso' => $recurso, 'last_status' => $lastStatus]);
+        throw new RuntimeException('Recurso não encontrado no PNCP: '.$recurso.'.');
+    }
+
     private function toPncpDate(string $ymd): string
     {
         $digits = preg_replace('/\D/', '', $ymd) ?? '';

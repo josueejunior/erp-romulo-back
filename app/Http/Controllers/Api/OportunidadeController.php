@@ -370,21 +370,7 @@ class OportunidadeController extends BaseApiController
      */
     private function resolvePncpCompraIdsFromQuery(array $q): ?array
     {
-        $referencia = isset($q['referencia']) ? trim((string) $q['referencia']) : '';
-
-        $ids = PncpCompraIdentificador::fromText($referencia);
-        if ($ids === null && !empty($q['cnpj']) && isset($q['ano'], $q['sequencial'])) {
-            $cnpj = preg_replace('/\D/', '', (string) $q['cnpj']) ?? '';
-            if (strlen($cnpj) === 14) {
-                $ids = [
-                    'cnpj' => $cnpj,
-                    'ano' => (int) $q['ano'],
-                    'sequencial' => (int) $q['sequencial'],
-                ];
-            }
-        }
-
-        return $ids;
+        return PncpCompraIdentificador::fromQueryParams($q);
     }
 
     /**

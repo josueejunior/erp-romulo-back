@@ -33,4 +33,27 @@ final class PncpCompraIdentificador
             'ano' => (int) $m[4],
         ];
     }
+
+    /**
+     * @param  array<string, mixed>  $q  Query validada com referencia?, cnpj?, ano?, sequencial?
+     * @return array{cnpj:string,ano:int,sequencial:int}|null
+     */
+    public static function fromQueryParams(array $q): ?array
+    {
+        $referencia = isset($q['referencia']) ? trim((string) $q['referencia']) : '';
+
+        $ids = self::fromText($referencia);
+        if ($ids === null && ! empty($q['cnpj']) && isset($q['ano'], $q['sequencial'])) {
+            $cnpj = preg_replace('/\D/', '', (string) $q['cnpj']) ?? '';
+            if (strlen($cnpj) === 14) {
+                $ids = [
+                    'cnpj' => $cnpj,
+                    'ano' => (int) $q['ano'],
+                    'sequencial' => (int) $q['sequencial'],
+                ];
+            }
+        }
+
+        return $ids;
+    }
 }
