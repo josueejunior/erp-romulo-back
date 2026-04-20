@@ -240,6 +240,12 @@ class ProcessoRepository implements ProcessoRepositoryInterface
                 });
         }
 
+        if (! empty($filtros['somente_com_orcamento'])) {
+            $query->whereHas('itens.orcamentoItens', function ($q) {
+                // Basta existir cotação (orçamento) vinculada a algum item do processo.
+            });
+        }
+
         $perPage = $filtros['per_page'] ?? 15;
         
         // Ordenar por data_hora_sessao_publica se for para próximas disputas

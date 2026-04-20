@@ -72,6 +72,8 @@ class AtestadoCapacidadeTecnicaController extends BaseApiController
                 'observacoes'      => 'nullable|string',
             ]);
 
+            $this->normalizeCnpjContratante($validated);
+
             $arquivoPath = null;
             if ($request->hasFile('arquivo')) {
                 $arquivoPath = $request->file('arquivo')->store('atestados-capacidade-tecnica');
@@ -111,6 +113,8 @@ class AtestadoCapacidadeTecnicaController extends BaseApiController
                 'arquivo'          => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
                 'observacoes'      => 'nullable|string',
             ]);
+
+            $this->normalizeCnpjContratante($validated);
 
             if ($request->hasFile('arquivo')) {
                 if ($atestado->arquivo) {
@@ -185,5 +189,26 @@ class AtestadoCapacidadeTecnicaController extends BaseApiController
         } catch (\Exception $e) {
             return response()->json(['message' => 'Erro ao baixar arquivo.'], 500);
         }
+    }
+
+    /** Grava apenas dígitos do CNPJ do contratante (até 14) para busca e exibição consistentes. */
+    private function normalizeCnpjContratante(array &$validated): void
+    {
+        if (! array_key_exists('cnpj_contratante', $validated)) {
+            return;
+        }
+        $v = $validated['cnpj_contratante'];
+        if ($v === null || $v === '') {
+            $validated['cnpj_contratante'] = null;
+
+            return;
+        }
+        $digits = preg_replace('/\D/', '', (string) $v);
+        if ($digits === '') {
+            $validated['cnpj_contratante'] = null;
+
+            return;
+        }
+        $validated['cnpj_contratante'] = strlen($digits) > 14 ? substr($digits, 0, 14) : $digits;
     }
 }
