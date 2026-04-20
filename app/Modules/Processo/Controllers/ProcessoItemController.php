@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Processo\Controllers;
+use App\Domain\Exceptions\DomainException;
 
 use App\Http\Controllers\Api\BaseApiController;
 use App\Modules\Processo\Models\Processo;
@@ -87,7 +88,7 @@ class ProcessoItemController extends BaseApiController
             return response()->json(['data' => $models]);
         } catch (NotFoundException $e) {
             return response()->json(['message' => $e->getMessage()], 404);
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
             \Log::error('Erro ao listar itens de processo', [
@@ -131,7 +132,7 @@ class ProcessoItemController extends BaseApiController
             return response()->json(['message' => $e->getMessage()], 404);
         } catch (EntidadeNaoPertenceException $e) {
             return response()->json(['message' => $e->getMessage()], 400);
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
             \Log::error('Erro ao buscar item de processo', [
@@ -246,7 +247,7 @@ class ProcessoItemController extends BaseApiController
                 'message' => $e->getMessage(),
             ]);
             return response()->json(['message' => $e->getMessage()], 403);
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             \Log::warning('ProcessoItemController::store() - Erro de domínio', [
                 'empresa_id' => $empresaId,
                 'tenant_id' => $tenantId,
@@ -339,7 +340,7 @@ class ProcessoItemController extends BaseApiController
             return response()->json(['message' => $e->getMessage()], 404);
         } catch (ProcessoEmExecucaoException $e) {
             return response()->json(['message' => $e->getMessage()], 403);
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
             \Log::error('ProcessoItemController::upsertFromOportunidade() - Erro', [
@@ -401,7 +402,7 @@ class ProcessoItemController extends BaseApiController
             return response()->json(['message' => $e->getMessage()], 400);
         } catch (ProcessoEmExecucaoException $e) {
             return response()->json(['message' => $e->getMessage()], 403);
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
             \Log::error('Erro ao atualizar item de processo', [
@@ -441,7 +442,7 @@ class ProcessoItemController extends BaseApiController
             return response()->json(['message' => $e->getMessage()], 400);
         } catch (ProcessoEmExecucaoException $e) {
             return response()->json(['message' => $e->getMessage()], 403);
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
             \Log::error('Erro ao excluir item de processo', [
@@ -661,6 +662,11 @@ class ProcessoItemController extends BaseApiController
                 'message' => 'Status atualizado com sucesso',
                 'data' => $item,
             ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'message' => 'Dados inválidos',
+                'errors' => $e->errors(),
+            ], 422);
         } catch (\Exception $e) {
             return response()->json([
                 'message' => $e->getMessage(),

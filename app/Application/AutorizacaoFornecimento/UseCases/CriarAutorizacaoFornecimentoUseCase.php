@@ -6,7 +6,7 @@ use App\Application\AutorizacaoFornecimento\DTOs\CriarAutorizacaoFornecimentoDTO
 use App\Application\Shared\Traits\HasApplicationContext;
 use App\Domain\AutorizacaoFornecimento\Entities\AutorizacaoFornecimento;
 use App\Domain\AutorizacaoFornecimento\Repositories\AutorizacaoFornecimentoRepositoryInterface;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Criar Autorização de Fornecimento

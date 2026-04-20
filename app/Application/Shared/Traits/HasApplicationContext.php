@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Application\Shared\Traits;
+use App\Domain\Exceptions\DomainException;
 
 use App\Contracts\ApplicationContextContract;
 use App\Domain\Shared\ValueObjects\TenantContext;
@@ -63,7 +64,7 @@ trait HasApplicationContext
     {
         try {
             return $this->resolveEmpresaId($empresaIdFromDto);
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             return null;
         }
     }

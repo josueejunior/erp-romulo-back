@@ -5,7 +5,7 @@ namespace App\Application\Auth\UseCases;
 use App\Domain\Auth\Repositories\UserRepositoryInterface;
 use App\Domain\Auth\Services\UserRoleServiceInterface;
 use Illuminate\Contracts\Auth\Authenticatable;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Corrigir Role do Usuário Atual

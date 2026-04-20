@@ -3,7 +3,7 @@
 namespace App\Application\Empenho\UseCases;
 
 use App\Domain\Empenho\Repositories\EmpenhoRepositoryInterface;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Application Service: ExcluirEmpenhoUseCase

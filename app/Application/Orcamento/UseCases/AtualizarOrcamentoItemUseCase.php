@@ -4,7 +4,7 @@ namespace App\Application\Orcamento\UseCases;
 
 use App\Domain\Orcamento\Repositories\OrcamentoRepositoryInterface;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Application Service: AtualizarOrcamentoItemUseCase

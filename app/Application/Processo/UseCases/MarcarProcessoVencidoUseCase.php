@@ -5,7 +5,7 @@ namespace App\Application\Processo\UseCases;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Modules\Processo\Services\ProcessoStatusService;
 use App\Domain\Exceptions\NotFoundException;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Marcar Processo como Vencido

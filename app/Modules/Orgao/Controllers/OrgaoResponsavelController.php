@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Orgao\Controllers;
+use App\Domain\Exceptions\DomainException;
 
 use App\Http\Controllers\Api\BaseApiController;
 use App\Http\Controllers\Traits\HasAuthContext;
@@ -118,7 +119,7 @@ class OrgaoResponsavelController extends BaseApiController
                     'observacoes' => $responsavel->observacoes,
                 ],
             ], 201);
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
             return $this->handleException($e, 'Erro ao criar responsável');
@@ -180,7 +181,7 @@ class OrgaoResponsavelController extends BaseApiController
                     'observacoes' => $responsavel->observacoes,
                 ],
             ]);
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
             return $this->handleException($e, 'Erro ao atualizar responsável');
@@ -200,7 +201,7 @@ class OrgaoResponsavelController extends BaseApiController
             $this->deletarResponsavelUseCase->executar($id, $orgaoId);
 
             return response()->json(['message' => 'Responsável deletado com sucesso.'], 200);
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
             return $this->handleException($e, 'Erro ao deletar responsável');

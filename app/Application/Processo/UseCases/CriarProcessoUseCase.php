@@ -8,7 +8,7 @@ use App\Domain\Assinatura\Repositories\AssinaturaRepositoryInterface;
 use App\Domain\Processo\Entities\Processo;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Modules\Processo\Models\Processo as ProcessoModel;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Criar Processo

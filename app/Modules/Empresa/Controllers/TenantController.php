@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Empresa\Controllers;
+use App\Domain\Exceptions\DomainException;
 
 use App\Http\Controllers\Controller;
 use App\Application\Tenant\UseCases\CriarTenantUseCase;
@@ -68,7 +69,7 @@ class TenantController extends Controller
                 'errors' => $e->errors(),
                 'success' => false,
             ], 422);
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
                 'error' => $e->getMessage(),

@@ -35,6 +35,7 @@ use App\Modules\Payment\Controllers\WebhookController as ApiWebhookController;
 use App\Modules\Suporte\Controllers\TicketController as ApiTicketController;
 use App\Http\Controllers\Api\OportunidadeController as ApiOportunidadeController;
 use App\Http\Controllers\Api\PncpOrgaosExplorarController;
+use App\Http\Controllers\Api\GoogleIntegrationController;
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Admin\AdminTenantController;
 use App\Http\Controllers\Admin\AdminUserController;
@@ -95,6 +96,9 @@ Route::prefix('v1')->group(function () {
     // Cadastro público de afiliados (sem autenticação)
     Route::post('/afiliados/cadastro-publico', [\App\Http\Controllers\Public\CadastroAfiliadoController::class, 'store'])
         ->middleware(['sanitize.inputs']);
+
+    // OAuth callback Google Calendar (público por natureza do fluxo OAuth)
+    Route::get('/integrations/google/callback', [GoogleIntegrationController::class, 'callback']);
 
     // 🔥 NOVA ARQUITETURA: Pipeline previsível e testável
     // 
@@ -187,6 +191,13 @@ Route::prefix('v1')->group(function () {
             Route::get('/notificacoes', [\App\Http\Controllers\Public\ConfiguracoesController::class, 'getNotificacoes']);
             Route::put('/notificacoes', [\App\Http\Controllers\Public\ConfiguracoesController::class, 'atualizarNotificacoes']);
         });
+
+        // Integração Google Calendar (autenticado, sem exigir assinatura ativa)
+        Route::prefix('integrations/google')->group(function () {
+            Route::get('/authorize', [GoogleIntegrationController::class, 'authorize']);
+            Route::get('/status', [GoogleIntegrationController::class, 'status']);
+            Route::delete('/disconnect', [GoogleIntegrationController::class, 'disconnect']);
+        });
         
         // Buscar cupom automático de afiliado (opcional - pode não existir)
         // 🔥 CORREÇÃO: Removido middleware onboarding.completo - rota é opcional e não deve bloquear
@@ -254,6 +265,8 @@ Route::prefix('v1')->group(function () {
             Route::module('processos', ApiProcessoController::class, 'processo')
             ->methods(['list' => 'list', 'get' => 'get', 'store' => 'store', 'update' => 'update', 'destroy' => 'destroy'])
             ->children(function () {
+                Route::post('/enviar-google-calendar', [GoogleIntegrationController::class, 'enviarProcessoParaCalendario']);
+
                 // Rotas customizadas de processo
                 Route::post('/mover-julgamento', [ApiProcessoController::class, 'moverParaJulgamento']);
                 Route::post('/marcar-vencido', [ApiProcessoController::class, 'marcarVencido']);

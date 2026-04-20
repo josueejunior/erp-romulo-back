@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use App\Http\Resources\UserResource;
 use Illuminate\Http\JsonResponse;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Controller para gerenciamento de Usuários

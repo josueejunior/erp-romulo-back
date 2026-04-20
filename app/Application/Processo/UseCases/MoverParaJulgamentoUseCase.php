@@ -4,7 +4,7 @@ namespace App\Application\Processo\UseCases;
 
 use App\Domain\Processo\Entities\Processo;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Mover Processo para Julgamento

@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Documento\Controllers;
+use App\Domain\Exceptions\DomainException;
 
 use App\Http\Controllers\Api\BaseApiController;
 use App\Http\Controllers\Traits\HasAuthContext;
@@ -172,7 +173,7 @@ class DocumentoHabilitacaoController extends BaseApiController
                 'data' => $model,
             ], 201);
             
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             Log::warning('DocumentoHabilitacaoController::store - Erro de domínio', [
                 'error' => $e->getMessage(),
             ]);
@@ -249,7 +250,7 @@ class DocumentoHabilitacaoController extends BaseApiController
                 'data' => $model,
             ]);
             
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             Log::warning('DocumentoHabilitacaoController::update - Erro de domínio', [
                 'error' => $e->getMessage(),
             ]);

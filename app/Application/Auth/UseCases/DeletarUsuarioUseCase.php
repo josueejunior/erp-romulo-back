@@ -3,7 +3,7 @@
 namespace App\Application\Auth\UseCases;
 
 use App\Domain\Auth\Repositories\UserRepositoryInterface;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Deletar Usuário

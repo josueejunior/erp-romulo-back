@@ -3,8 +3,10 @@
 namespace App\Http\Requests\ProcessoItem;
 
 use App\Domain\ProcessoItem\Enums\UnidadeMedida;
+use App\Modules\Processo\Models\Processo;
 use App\Rules\DbTypeRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\Exceptions\HttpResponseException;
 
 /**
  * Form Request para criação de item de processo
@@ -15,7 +17,17 @@ class ProcessoItemCreateRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true; // A autorização será feita no Use Case
+        $processoId = (int) $this->route('processo');
+        if ($processoId < 1) {
+            throw new HttpResponseException(response()->json(['message' => 'Processo não encontrado'], 404));
+        }
+
+        // Antes das regras de validação: processo inexistente ou fora da empresa (escopo BelongsToEmpresa) → 404
+        if (! Processo::query()->whereKey($processoId)->exists()) {
+            throw new HttpResponseException(response()->json(['message' => 'Processo não encontrado'], 404));
+        }
+
+        return true;
     }
 
     public function rules(): array

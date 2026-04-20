@@ -6,7 +6,7 @@ use App\Application\Orgao\DTOs\CriarOrgaoDTO;
 use App\Application\Shared\Traits\HasApplicationContext;
 use App\Domain\Orgao\Entities\Orgao;
 use App\Domain\Orgao\Repositories\OrgaoRepositoryInterface;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Application Service: CriarOrgaoUseCase

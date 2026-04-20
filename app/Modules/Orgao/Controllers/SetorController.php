@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Orgao\Controllers;
+use App\Domain\Exceptions\DomainException;
 
 use App\Http\Controllers\Api\BaseApiController;
 use App\Http\Controllers\Traits\HasAuthContext;
@@ -78,7 +79,7 @@ class SetorController extends BaseApiController
             
             $response = SetorResource::collection($setors);
             return $response->response();
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage()
             ], 400);
@@ -134,7 +135,7 @@ class SetorController extends BaseApiController
             }
             
             return response()->json(['data' => new SetorResource($setorModel)]);
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage()
             ], 404);
@@ -190,7 +191,7 @@ class SetorController extends BaseApiController
             $this->clearSetorCache();
 
             return response()->json(['data' => new SetorResource($setorModel)], 201);
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage()
             ], 400);
@@ -237,7 +238,7 @@ class SetorController extends BaseApiController
             $this->clearSetorCache();
 
             return response()->json(['data' => new SetorResource($setorModel)]);
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage()
             ], 400);
@@ -269,7 +270,7 @@ class SetorController extends BaseApiController
             $this->clearSetorCache();
 
             return response()->json(null, 204);
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage()
             ], 400);

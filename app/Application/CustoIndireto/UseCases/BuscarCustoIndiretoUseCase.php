@@ -5,7 +5,7 @@ namespace App\Application\CustoIndireto\UseCases;
 use App\Domain\CustoIndireto\Entities\CustoIndireto;
 use App\Domain\CustoIndireto\Repositories\CustoIndiretoRepositoryInterface;
 use App\Domain\Exceptions\NotFoundException;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Buscar Custo Indireto por ID

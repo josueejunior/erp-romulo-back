@@ -9,7 +9,7 @@ use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\Exceptions\NotFoundException;
 use App\Domain\Exceptions\ProcessoEmExecucaoException;
 use App\Domain\Exceptions\EntidadeNaoPertenceException;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 use Illuminate\Support\Facades\DB;
 
 /**

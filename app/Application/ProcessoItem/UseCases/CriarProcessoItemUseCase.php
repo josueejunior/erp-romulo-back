@@ -9,7 +9,7 @@ use App\Domain\ProcessoItem\Repositories\ProcessoItemRepositoryInterface;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\Exceptions\NotFoundException;
 use App\Domain\Exceptions\ProcessoEmExecucaoException;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Criar Item de Processo

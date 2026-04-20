@@ -9,7 +9,7 @@ use App\Domain\Shared\ValueObjects\TenantContext;
 use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
 use App\Services\AdminTenancyRunner;
 use App\Services\TenantService;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Registro de Usuário

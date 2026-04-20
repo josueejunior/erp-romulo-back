@@ -7,7 +7,7 @@ use App\Domain\OrgaoResponsavel\Entities\OrgaoResponsavel;
 use App\Domain\OrgaoResponsavel\Repositories\OrgaoResponsavelRepositoryInterface;
 use App\Domain\Orgao\Repositories\OrgaoRepositoryInterface;
 use App\Domain\Shared\ValueObjects\TenantContext;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Atualizar Responsável de Órgão

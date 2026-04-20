@@ -8,7 +8,7 @@ use App\Domain\Tenant\Repositories\TenantRepositoryInterface;
 use App\Domain\Tenant\Services\TenantDatabaseServiceInterface;
 use App\Jobs\SetupTenantJob;
 use Illuminate\Support\Facades\Log;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Criar Tenant com Empresa e opcionalmente Usuário Admin

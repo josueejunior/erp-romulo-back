@@ -29,11 +29,10 @@ class SaldoController extends BaseApiController
         
         try {
             $this->saldoService->validarProcessoEmpresa($processo, $empresa->id);
-            $this->saldoService->validarProcessoEmExecucao($processo);
         } catch (\Exception $e) {
             return response()->json([
                 'message' => $e->getMessage()
-            ], $e->getMessage() === 'Apenas processos em execução possuem saldo.' ? 403 : 404);
+            ], 404);
         }
 
         $tenantId = $this->getTenantId();
@@ -135,11 +134,10 @@ class SaldoController extends BaseApiController
         
         try {
             $this->saldoService->validarProcessoEmpresa($processo, $empresa->id);
-            $this->saldoService->validarProcessoEmExecucao($processo);
         } catch (\Exception $e) {
             return response()->json([
                 'message' => $e->getMessage()
-            ], $e->getMessage() === 'Apenas processos em execução possuem saldo.' ? 403 : 404);
+            ], 404);
         }
 
         $comparativo = $this->saldoService->calcularComparativoCustos($processo);

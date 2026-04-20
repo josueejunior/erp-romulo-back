@@ -10,7 +10,7 @@ use App\Rules\DbTypeRule;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Validator;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Service para gerenciar processos

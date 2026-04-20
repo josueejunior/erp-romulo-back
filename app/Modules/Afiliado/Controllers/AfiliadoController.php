@@ -14,7 +14,7 @@ use App\Application\Afiliado\UseCases\BuscarDetalhesAfiliadoUseCase;
 use App\Application\Afiliado\UseCases\ValidarCupomAfiliadoUseCase;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Controller de Afiliados (Painel Administrativo)

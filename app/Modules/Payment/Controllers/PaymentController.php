@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Payment\Controllers;
+use App\Domain\Exceptions\DomainException;
 
 use App\Http\Controllers\Api\BaseApiController;
 use App\Application\Payment\UseCases\ProcessarAssinaturaPlanoUseCase;
@@ -146,7 +147,7 @@ class PaymentController extends BaseApiController
                                 'valor_final' => $valor,
                             ]);
                         }
-                    } catch (\DomainException $e) {
+                    } catch (DomainException $e) {
                         // Erro na validação do cupom de afiliado
                         return response()->json([
                             'message' => $e->getMessage(),

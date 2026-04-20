@@ -7,7 +7,7 @@ use App\Domain\Setor\Entities\Setor;
 use App\Domain\Setor\Repositories\SetorRepositoryInterface;
 use App\Domain\Orgao\Repositories\OrgaoRepositoryInterface;
 use App\Domain\Shared\ValueObjects\TenantContext;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Criar Setor

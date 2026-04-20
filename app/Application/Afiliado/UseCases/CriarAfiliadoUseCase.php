@@ -7,7 +7,7 @@ namespace App\Application\Afiliado\UseCases;
 use App\Application\Afiliado\DTOs\CriarAfiliadoDTO;
 use App\Modules\Afiliado\Models\Afiliado;
 use Illuminate\Support\Facades\Log;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case para criar Afiliado

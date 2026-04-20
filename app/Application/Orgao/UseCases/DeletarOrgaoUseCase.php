@@ -3,7 +3,7 @@
 namespace App\Application\Orgao\UseCases;
 
 use App\Domain\Orgao\Repositories\OrgaoRepositoryInterface;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Deletar Órgão

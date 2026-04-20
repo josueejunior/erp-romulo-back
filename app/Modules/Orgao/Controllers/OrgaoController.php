@@ -20,7 +20,7 @@ use App\Services\Pncp\PncpConsultaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 use Throwable;
 
 /**

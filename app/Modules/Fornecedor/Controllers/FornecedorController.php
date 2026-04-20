@@ -18,7 +18,7 @@ use App\Services\CnpjConsultaService;
 use App\Helpers\PermissionHelper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Controller para gerenciamento de Fornecedores

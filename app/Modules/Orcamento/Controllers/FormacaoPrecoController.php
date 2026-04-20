@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Orcamento\Controllers;
+use App\Domain\Exceptions\DomainException;
 
 use App\Http\Controllers\Api\BaseApiController;
 use App\Http\Resources\FormacaoPrecoResource;
@@ -118,7 +119,7 @@ class FormacaoPrecoController extends BaseApiController
             return response()->json(['message' => $e->getMessage()], 400);
         } catch (NotFoundException $e) {
             return response()->json(['message' => $e->getMessage()], 404);
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
             \Log::error('Erro ao criar formação de preço: ' . $e->getMessage(), ['exception' => $e]);
@@ -173,7 +174,7 @@ class FormacaoPrecoController extends BaseApiController
             return response()->json(['message' => $e->getMessage()], 400);
         } catch (NotFoundException $e) {
             return response()->json(['message' => $e->getMessage()], 404);
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
             \Log::error('Erro ao atualizar formação de preço: ' . $e->getMessage(), ['exception' => $e]);
@@ -255,7 +256,7 @@ class FormacaoPrecoController extends BaseApiController
             return response()->json(['message' => $e->getMessage()], 403);
         } catch (EntidadeNaoPertenceException $e) {
             return response()->json(['message' => $e->getMessage()], 400);
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
             \Log::error('Erro ao criar formação de preço: ' . $e->getMessage(), ['exception' => $e]);
@@ -283,7 +284,7 @@ class FormacaoPrecoController extends BaseApiController
             return response()->json(['message' => $e->getMessage()], 403);
         } catch (EntidadeNaoPertenceException $e) {
             return response()->json(['message' => $e->getMessage()], 400);
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
             \Log::error('Erro ao atualizar formação de preço: ' . $e->getMessage(), ['exception' => $e]);

@@ -4,7 +4,7 @@ namespace App\Application\Auth\UseCases;
 
 use App\Domain\Auth\Repositories\UserRepositoryInterface;
 use App\Domain\Auth\Entities\User;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Buscar Usuário

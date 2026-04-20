@@ -3,7 +3,7 @@
 namespace App\Application\Orcamento\UseCases;
 
 use App\Domain\Orcamento\Repositories\OrcamentoRepositoryInterface;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Application Service: ExcluirOrcamentoUseCase

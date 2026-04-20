@@ -6,7 +6,7 @@ use App\Application\NotaFiscal\DTOs\AtualizarNotaFiscalDTO;
 use App\Domain\NotaFiscal\Entities\NotaFiscal;
 use App\Domain\NotaFiscal\Repositories\NotaFiscalRepositoryInterface;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Application Service: AtualizarNotaFiscalUseCase

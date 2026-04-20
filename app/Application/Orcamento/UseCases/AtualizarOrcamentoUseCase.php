@@ -7,7 +7,7 @@ use App\Domain\Orcamento\Entities\Orcamento;
 use App\Domain\Orcamento\Repositories\OrcamentoRepositoryInterface;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\ProcessoItem\Repositories\ProcessoItemRepositoryInterface;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Application Service: AtualizarOrcamentoUseCase

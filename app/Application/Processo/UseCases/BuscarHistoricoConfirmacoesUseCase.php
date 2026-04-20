@@ -5,7 +5,7 @@ namespace App\Application\Processo\UseCases;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\NotaFiscal\Repositories\NotaFiscalRepositoryInterface;
 use App\Domain\Exceptions\NotFoundException;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Buscar Histórico de Confirmações de Pagamento

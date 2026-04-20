@@ -6,7 +6,7 @@ use App\Application\Fornecedor\DTOs\CriarFornecedorDTO;
 use App\Application\Shared\Traits\HasApplicationContext;
 use App\Domain\Fornecedor\Entities\Fornecedor;
 use App\Domain\Fornecedor\Repositories\FornecedorRepositoryInterface;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Application Service: CriarFornecedorUseCase

@@ -5,7 +5,7 @@ namespace App\Application\Setor\UseCases;
 use App\Domain\Setor\Repositories\SetorRepositoryInterface;
 use App\Domain\Shared\ValueObjects\TenantContext;
 use App\Modules\Orgao\Models\Setor as SetorModel;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Deletar Setor

@@ -4,7 +4,7 @@ namespace App\Application\Fornecedor\UseCases;
 
 use App\Domain\Fornecedor\Entities\Fornecedor;
 use App\Domain\Fornecedor\Repositories\FornecedorRepositoryInterface;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Buscar Fornecedor por ID

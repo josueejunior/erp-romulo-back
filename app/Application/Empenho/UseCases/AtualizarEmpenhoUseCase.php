@@ -6,7 +6,7 @@ use App\Application\Empenho\DTOs\AtualizarEmpenhoDTO;
 use App\Domain\Empenho\Entities\Empenho;
 use App\Domain\Empenho\Repositories\EmpenhoRepositoryInterface;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Application Service: AtualizarEmpenhoUseCase

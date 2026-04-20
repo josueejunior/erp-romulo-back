@@ -84,12 +84,23 @@ class OrgaoRepository implements OrgaoRepositoryInterface
         // Aplicar filtro de empresa_id com isolamento
         $query = $this->aplicarFiltroEmpresa(OrgaoModel::class, $filtros);
 
+        if (!empty($filtros['estado'])) {
+            $estado = mb_strtoupper(trim((string) $filtros['estado']));
+            $query->whereRaw('UPPER(estado) = ?', [$estado]);
+        }
+
+        if (!empty($filtros['cidade'])) {
+            $cidade = trim((string) $filtros['cidade']);
+            $query->where('cidade', 'ilike', "%{$cidade}%");
+        }
+
         if (isset($filtros['search']) && !empty($filtros['search'])) {
-            $search = $filtros['search'];
+            $search = trim((string) $filtros['search']);
             $query->where(function($q) use ($search) {
                 $q->where('razao_social', 'ilike', "%{$search}%")
                   ->orWhere('uasg', 'ilike', "%{$search}%")
-                  ->orWhere('cnpj', 'ilike', "%{$search}%");
+                  ->orWhere('cnpj', 'ilike', "%{$search}%")
+                  ->orWhere('cidade', 'ilike', "%{$search}%");
             });
         }
 

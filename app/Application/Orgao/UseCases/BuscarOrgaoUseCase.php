@@ -4,7 +4,7 @@ namespace App\Application\Orgao\UseCases;
 
 use App\Domain\Orgao\Entities\Orgao;
 use App\Domain\Orgao\Repositories\OrgaoRepositoryInterface;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Buscar Órgão por ID

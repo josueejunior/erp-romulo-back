@@ -4,7 +4,7 @@ namespace App\Application\Auth\UseCases;
 
 use App\Domain\Auth\Repositories\UserRepositoryInterface;
 use Illuminate\Contracts\Auth\Authenticatable;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Obter Roles do Usuário Atual

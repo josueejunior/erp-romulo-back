@@ -4,7 +4,7 @@ namespace App\Application\Contrato\UseCases;
 
 use App\Domain\Contrato\Entities\Contrato;
 use App\Domain\Contrato\Repositories\ContratoRepositoryInterface;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Buscar Contrato por ID

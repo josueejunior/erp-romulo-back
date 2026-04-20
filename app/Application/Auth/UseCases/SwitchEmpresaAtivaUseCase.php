@@ -8,7 +8,7 @@ use App\Domain\Auth\Events\EmpresaAtivaAlterada;
 use App\Domain\Shared\Events\EventDispatcherInterface;
 use App\Domain\Shared\ValueObjects\TenantContext;
 use App\Application\Assinatura\UseCases\VerificarAssinaturaAtivaPorEmpresaUseCase;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Trocar Empresa Ativa

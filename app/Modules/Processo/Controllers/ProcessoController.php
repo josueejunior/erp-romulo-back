@@ -336,7 +336,12 @@ class ProcessoController extends BaseApiController
                 'empresa_id' => $empresa->id,
             ]);
 
-            $formato = $request->get('formato', 'csv');
+            $formato = strtolower((string) $request->get('formato', 'csv'));
+            if (! in_array($formato, ['csv', 'json'], true)) {
+                return response()->json([
+                    'message' => 'Formato de exportação inválido. Use csv ou json.',
+                ], 422);
+            }
 
             // Executar Use Case
             return $this->exportarProcessosUseCase->executar($filtros, $formato);
@@ -834,17 +839,17 @@ class ProcessoController extends BaseApiController
                 'errors' => $e->errors()
             ], 422);
         } catch (DomainException $e) {
-            // Erro de negócio (limites de plano, etc) - retornar 400
+            // Regras de negócio (plano, duplicidade por data de sessão, etc.) — 422 alinhado à API de validação
             \Log::warning('ProcessoController::store() - Erro de domínio', [
                 'empresa_id' => $empresaId,
                 'tenant_id' => $tenantId,
                 'message' => $e->getMessage(),
                 'code' => $e->getCode(),
             ]);
-            
+
             return response()->json([
-                'message' => $e->getMessage()
-            ], 400);
+                'message' => $e->getMessage(),
+            ], 422);
         } catch (\Exception $e) {
             \Log::error('ProcessoController::store() - Erro ao criar processo', [
                 'empresa_id' => $empresaId,
@@ -991,7 +996,7 @@ class ProcessoController extends BaseApiController
 
         try {
             $request->validate([
-                'documentos' => 'required|array',
+                'documentos' => 'required|array|min:1',
                 'documentos.*.exigido' => 'boolean',
                 'documentos.*.disponivel_envio' => 'boolean',
                 'documentos.*.status' => 'nullable|string|in:pendente,possui,anexado',
@@ -1008,6 +1013,11 @@ class ProcessoController extends BaseApiController
             return response()->json([
                 'message' => 'Documentos sincronizados com sucesso.',
             ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'message' => 'Dados inválidos',
+                'errors' => $e->errors(),
+            ], 422);
         } catch (DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage()

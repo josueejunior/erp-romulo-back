@@ -5,7 +5,7 @@ namespace App\Application\CustoIndireto\UseCases;
 use App\Application\CustoIndireto\DTOs\CriarCustoIndiretoDTO;
 use App\Domain\CustoIndireto\Entities\CustoIndireto;
 use App\Domain\CustoIndireto\Repositories\CustoIndiretoRepositoryInterface;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Criar Custo Indireto

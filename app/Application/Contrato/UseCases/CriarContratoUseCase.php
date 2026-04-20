@@ -8,7 +8,7 @@ use App\Domain\Contrato\Entities\Contrato;
 use App\Domain\Contrato\Repositories\ContratoRepositoryInterface;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Application Service: CriarContratoUseCase

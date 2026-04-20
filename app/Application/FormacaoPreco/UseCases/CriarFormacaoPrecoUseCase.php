@@ -5,7 +5,7 @@ namespace App\Application\FormacaoPreco\UseCases;
 use App\Application\FormacaoPreco\DTOs\CriarFormacaoPrecoDTO;
 use App\Domain\FormacaoPreco\Entities\FormacaoPreco;
 use App\Domain\FormacaoPreco\Repositories\FormacaoPrecoRepositoryInterface;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Criar Formação de Preço

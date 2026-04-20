@@ -6,7 +6,7 @@ use App\Application\Processo\DTOs\AtualizarProcessoDTO;
 use App\Domain\Processo\Entities\Processo;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\Exceptions\NotFoundException;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Atualizar Processo

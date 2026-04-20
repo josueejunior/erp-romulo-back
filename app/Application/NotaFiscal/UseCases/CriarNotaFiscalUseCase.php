@@ -7,7 +7,7 @@ use App\Domain\NotaFiscal\Entities\NotaFiscal;
 use App\Domain\NotaFiscal\Repositories\NotaFiscalRepositoryInterface;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\Shared\ValueObjects\TenantContext;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Application Service: CriarNotaFiscalUseCase

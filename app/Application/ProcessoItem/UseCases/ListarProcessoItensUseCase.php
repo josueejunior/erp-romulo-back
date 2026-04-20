@@ -5,7 +5,7 @@ namespace App\Application\ProcessoItem\UseCases;
 use App\Domain\ProcessoItem\Repositories\ProcessoItemRepositoryInterface;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\Exceptions\NotFoundException;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Listar Itens de Processo

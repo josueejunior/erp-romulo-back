@@ -8,7 +8,7 @@ use App\Domain\Orcamento\Entities\Orcamento;
 use App\Domain\Orcamento\Repositories\OrcamentoRepositoryInterface;
 use App\Domain\OrcamentoItem\Entities\OrcamentoItem;
 use App\Domain\OrcamentoItem\Repositories\OrcamentoItemRepositoryInterface;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Criar Orçamento

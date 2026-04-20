@@ -15,7 +15,7 @@ use App\Models\Empresa;
 use App\Models\Tenant;
 use App\Models\UserLookup;
 use App\Modules\Auth\Models\AdminUser;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 

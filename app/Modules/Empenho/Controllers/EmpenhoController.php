@@ -18,6 +18,7 @@ use App\Application\Empenho\DTOs\AtualizarEmpenhoDTO;
 use App\Application\Empenho\DTOs\ListarEmpenhosDTO;
 use App\Application\Empenho\Presenters\EmpenhoApiPresenter;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
+use App\Modules\Processo\Models\Processo as ProcessoModel;
 use App\Domain\Empenho\Repositories\EmpenhoRepositoryInterface;
 use App\Http\Requests\Empenho\EmpenhoCreateRequest;
 use Illuminate\Http\Request;
@@ -137,7 +138,11 @@ class EmpenhoController extends BaseApiController
         try {
             $processoId = (int) $request->route()->parameter('processo');
             $empresa = $this->getEmpresaAtivaOrFail();
-            
+
+            if (! ProcessoModel::query()->whereKey($processoId)->exists()) {
+                return response()->json(['message' => 'Processo não encontrado'], 404);
+            }
+
             // Criar DTO com processo_id da rota
             $requestData = array_merge($request->all(), ['processo_id' => $processoId]);
             $dto = ListarEmpenhosDTO::fromRequest($requestData, $empresa->id);

@@ -5,7 +5,7 @@ namespace App\Application\Fornecedor\UseCases;
 use App\Application\Fornecedor\DTOs\AtualizarFornecedorDTO;
 use App\Domain\Fornecedor\Entities\Fornecedor;
 use App\Domain\Fornecedor\Repositories\FornecedorRepositoryInterface;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Atualizar Fornecedor

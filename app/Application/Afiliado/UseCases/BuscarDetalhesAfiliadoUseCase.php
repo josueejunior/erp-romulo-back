@@ -9,7 +9,7 @@ use App\Modules\Afiliado\Models\AfiliadoIndicacao;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case para buscar detalhes do Afiliado com estatísticas

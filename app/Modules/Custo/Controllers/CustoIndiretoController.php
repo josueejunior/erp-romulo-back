@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Modules\Custo\Controllers;
+use App\Domain\Exceptions\DomainException;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Custo\Models\CustoIndireto;
@@ -259,7 +260,7 @@ class CustoIndiretoController extends Controller
             return response()->json(['data' => $custoModel]);
         } catch (NotFoundException $e) {
             return response()->json(['message' => $e->getMessage()], 404);
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
             \Log::error('Erro ao buscar custo indireto', [
@@ -296,7 +297,7 @@ class CustoIndiretoController extends Controller
                 'message' => 'Custo indireto criado com sucesso',
                 'data' => $custoModel
             ], 201);
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
             \Log::error('Erro ao criar custo indireto', [
@@ -346,7 +347,7 @@ class CustoIndiretoController extends Controller
             ]);
         } catch (NotFoundException $e) {
             return response()->json(['message' => $e->getMessage()], 404);
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
             \Log::error('Erro ao atualizar custo indireto', [
@@ -375,7 +376,7 @@ class CustoIndiretoController extends Controller
             ]);
         } catch (NotFoundException $e) {
             return response()->json(['message' => $e->getMessage()], 404);
-        } catch (\DomainException $e) {
+        } catch (DomainException $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         } catch (\Exception $e) {
             \Log::error('Erro ao excluir custo indireto', [

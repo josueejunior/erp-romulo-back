@@ -10,7 +10,7 @@ use App\Modules\Documento\Models\DocumentoHabilitacaoVersao;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Criar Documento de Habilitação

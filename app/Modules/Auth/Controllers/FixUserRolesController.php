@@ -8,7 +8,7 @@ use App\Application\Auth\UseCases\FixUserRoleUseCase;
 use App\Http\Requests\Auth\FixUserRoleRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Controller fino para correção de roles de usuário

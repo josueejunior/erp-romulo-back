@@ -11,7 +11,7 @@ use App\Domain\Shared\ValueObjects\Senha;
 use App\Domain\Shared\ValueObjects\Email;
 use App\Domain\Shared\Events\EventDispatcherInterface;
 use App\Domain\Auth\Events\SenhaAlterada;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Atualizar Usuário

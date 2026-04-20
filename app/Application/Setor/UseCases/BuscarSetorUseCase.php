@@ -5,7 +5,7 @@ namespace App\Application\Setor\UseCases;
 use App\Domain\Setor\Entities\Setor;
 use App\Domain\Setor\Repositories\SetorRepositoryInterface;
 use App\Domain\Shared\ValueObjects\TenantContext;
-use DomainException;
+use App\Domain\Exceptions\DomainException;
 
 /**
  * Use Case: Buscar Setor por ID

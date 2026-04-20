@@ -47,7 +47,7 @@ final class LoginAdminUseCase
             Log::warning('LoginAdminUseCase::executar - Credenciais inválidas', [
                 'email' => $dto->email->value,
             ]);
-            throw new DomainException('Credenciais inválidas.', 401, 'INVALID_CREDENTIALS');
+            throw new DomainException('Credenciais inválidas.', 401, null, 'INVALID_CREDENTIALS');
         }
 
         // Gerar token JWT
