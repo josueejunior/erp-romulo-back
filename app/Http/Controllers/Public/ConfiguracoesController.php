@@ -11,6 +11,7 @@ use App\Modules\Auth\Models\UserNotificationPreferences;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Controller para configurações gerais do usuário/empresa
@@ -60,6 +61,18 @@ class ConfiguracoesController extends Controller
                 }
             }
 
+            $tenantModel = tenancy()->initialized ? tenancy()->tenant : null;
+            $tenantData = is_array($tenantModel?->data) ? $tenantModel->data : [];
+
+            $telefonesEmpresa = is_array($empresaModel->telefones) ? $empresaModel->telefones : [];
+            $telefonePrincipal = null;
+            if (!empty($telefonesEmpresa)) {
+                $primeiroTelefone = $telefonesEmpresa[0];
+                $telefonePrincipal = is_array($primeiroTelefone)
+                    ? ($primeiroTelefone['numero'] ?? null)
+                    : $primeiroTelefone;
+            }
+
             return response()->json([
                 'success' => true,
                 'data' => [
@@ -75,10 +88,39 @@ class ConfiguracoesController extends Controller
                     'cidade' => $empresaModel->cidade,
                     'estado' => $empresaModel->estado,
                     'cep' => $empresaModel->cep,
-                    'telefone' => is_array($empresaModel->telefones) && !empty($empresaModel->telefones) ? $empresaModel->telefones[0] : ($empresaModel->telefone ?? null),
-                    'telefones' => $empresaModel->telefones ?? [],
+                    'telefone' => $telefonePrincipal ?? $empresaModel->telefone ?? null,
+                    'telefones' => $telefonesEmpresa,
                     'representante_legal_nome' => $empresaModel->representante_legal,
                     'representante_legal_cargo' => $empresaModel->cargo_representante,
+                    // Campos complementares vindos do tenant central (evita abas vazias para qualquer usuário)
+                    'email_financeiro' => $tenantData['email_financeiro'] ?? null,
+                    'email_licitacao' => $tenantData['email_licitacao'] ?? null,
+                    'whatsapp' => $tenantData['whatsapp'] ?? null,
+                    'telefone_fixo' => $tenantData['telefone_fixo'] ?? null,
+                    'site' => $tenantData['site'] ?? null,
+                    'inscricao_estadual' => $tenantData['inscricao_estadual'] ?? null,
+                    'inscricao_municipal' => $tenantData['inscricao_municipal'] ?? null,
+                    'cnae_principal' => $tenantData['cnae_principal'] ?? null,
+                    'data_abertura' => $tenantData['data_abertura'] ?? null,
+                    'regime_tributario' => $tenantData['regime_tributario'] ?? null,
+                    'banco' => $tenantData['banco'] ?? $empresaModel->banco_nome ?? null,
+                    'agencia' => $tenantData['agencia'] ?? $empresaModel->banco_agencia ?? null,
+                    'conta' => $tenantData['conta'] ?? $empresaModel->banco_conta ?? null,
+                    'tipo_conta' => $tenantData['tipo_conta'] ?? $empresaModel->banco_tipo ?? null,
+                    'pix' => $tenantData['pix'] ?? null,
+                    'favorecido_razao_social' => $tenantData['favorecido_razao_social'] ?? null,
+                    'favorecido_cnpj' => $tenantData['favorecido_cnpj'] ?? null,
+                    'representante_legal_cpf' => $tenantData['representante_legal_cpf'] ?? null,
+                    'representante_legal_rg' => $tenantData['representante_legal_rg'] ?? null,
+                    'representante_legal_telefone' => $tenantData['representante_legal_telefone'] ?? null,
+                    'representante_legal_email' => $tenantData['representante_legal_email'] ?? null,
+                    'responsavel_comercial' => $tenantData['responsavel_comercial'] ?? null,
+                    'responsavel_financeiro' => $tenantData['responsavel_financeiro'] ?? null,
+                    'responsavel_licitacoes' => $tenantData['responsavel_licitacoes'] ?? null,
+                    'ramo_atuacao' => $tenantData['ramo_atuacao'] ?? null,
+                    'principais_produtos_servicos' => $tenantData['principais_produtos_servicos'] ?? null,
+                    'marcas_trabalhadas' => $tenantData['marcas_trabalhadas'] ?? null,
+                    'observacoes' => $tenantData['observacoes'] ?? null,
                 ],
             ]);
         } catch (\Exception $e) {
@@ -127,7 +169,35 @@ class ConfiguracoesController extends Controller
                 'telefone' => 'nullable|string|max:20',
                 'telefones' => 'nullable|array',
                 'representante_legal_nome' => 'nullable|string|max:255',
+                'representante_legal_cpf' => 'nullable|string|max:14',
+                'representante_legal_rg' => 'nullable|string|max:30',
+                'representante_legal_telefone' => 'nullable|string|max:20',
+                'representante_legal_email' => 'nullable|email|max:255',
                 'representante_legal_cargo' => 'nullable|string|max:255',
+                'email_financeiro' => 'nullable|email|max:255',
+                'email_licitacao' => 'nullable|email|max:255',
+                'whatsapp' => 'nullable|string|max:20',
+                'telefone_fixo' => 'nullable|string|max:20',
+                'site' => 'nullable|string|max:255',
+                'inscricao_estadual' => 'nullable|string|max:20',
+                'inscricao_municipal' => 'nullable|string|max:20',
+                'cnae_principal' => 'nullable|string|max:20',
+                'data_abertura' => 'nullable|date',
+                'regime_tributario' => 'nullable|string|max:100',
+                'banco' => 'nullable|string|max:255',
+                'agencia' => 'nullable|string|max:20',
+                'conta' => 'nullable|string|max:20',
+                'tipo_conta' => 'nullable|string|max:20',
+                'pix' => 'nullable|string|max:255',
+                'favorecido_razao_social' => 'nullable|string|max:255',
+                'favorecido_cnpj' => 'nullable|string|max:18',
+                'responsavel_comercial' => 'nullable|string|max:255',
+                'responsavel_financeiro' => 'nullable|string|max:255',
+                'responsavel_licitacoes' => 'nullable|string|max:255',
+                'ramo_atuacao' => 'nullable|string|max:255',
+                'principais_produtos_servicos' => 'nullable|string|max:500',
+                'marcas_trabalhadas' => 'nullable|string|max:500',
+                'observacoes' => 'nullable|string|max:1000',
             ]);
 
             // Obter empresa ativa do usuário através do relacionamento
@@ -151,6 +221,21 @@ class ConfiguracoesController extends Controller
                         'success' => false,
                         'message' => 'Empresa não encontrada.',
                     ], 404);
+                }
+            }
+
+            // Evitar erro 500 por CNPJ já existente em outra empresa do tenant
+            // (retorna erro de validação amigável no padrão da API).
+            if (isset($validated['cnpj']) && $validated['cnpj'] !== $empresaModel->cnpj) {
+                $cnpjEmUso = \App\Models\Empresa::query()
+                    ->where('cnpj', $validated['cnpj'])
+                    ->where('id', '!=', $empresaModel->id)
+                    ->exists();
+
+                if ($cnpjEmUso) {
+                    throw ValidationException::withMessages([
+                        'cnpj' => 'Este CNPJ já está cadastrado em outra empresa deste tenant.',
+                    ]);
                 }
             }
 
@@ -210,6 +295,54 @@ class ConfiguracoesController extends Controller
 
             // Atualizar empresa
             $empresaModel->update($dadosAtualizacao);
+
+            // Persistir também dados estendidos no tenant central (mesma fonte do /auth/user)
+            if (tenancy()->initialized && tenancy()->tenant) {
+                $tenant = tenancy()->tenant;
+                $tenantDataAtual = is_array($tenant->data) ? $tenant->data : [];
+
+                $camposData = [
+                    'email_financeiro',
+                    'email_licitacao',
+                    'whatsapp',
+                    'telefone_fixo',
+                    'site',
+                    'inscricao_estadual',
+                    'inscricao_municipal',
+                    'cnae_principal',
+                    'data_abertura',
+                    'regime_tributario',
+                    'favorecido_razao_social',
+                    'favorecido_cnpj',
+                    'representante_legal_cpf',
+                    'representante_legal_rg',
+                    'representante_legal_telefone',
+                    'representante_legal_email',
+                    'responsavel_comercial',
+                    'responsavel_financeiro',
+                    'responsavel_licitacoes',
+                    'ramo_atuacao',
+                    'principais_produtos_servicos',
+                    'marcas_trabalhadas',
+                    'observacoes',
+                    'banco',
+                    'agencia',
+                    'conta',
+                    'tipo_conta',
+                    'pix',
+                    'representante_legal_nome',
+                    'representante_legal_cargo',
+                ];
+
+                foreach ($camposData as $campo) {
+                    if (array_key_exists($campo, $validated)) {
+                        $tenantDataAtual[$campo] = $validated[$campo];
+                    }
+                }
+
+                $tenant->data = $tenantDataAtual;
+                $tenant->save();
+            }
 
             Log::info('ConfiguracoesController::atualizarTenant - Empresa atualizada com sucesso', [
                 'user_id' => $user->id,

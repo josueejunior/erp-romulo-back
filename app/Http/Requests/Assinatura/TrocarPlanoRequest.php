@@ -13,8 +13,13 @@ class TrocarPlanoRequest extends FormRequest
 
     public function rules(): array
     {
+        // Planos vivem na conexão central, não no tenant atual.
+        // Se não qualificar conexão, a validação "exists" tenta ler da base tenant
+        // e gera "relation planos does not exist".
+        $centralConnection = config('tenancy.database.central_connection', 'pgsql');
+
         return [
-            'plano_id' => 'required|integer|exists:planos,id',
+            'plano_id' => 'required|integer|exists:' . $centralConnection . '.planos,id',
             'periodo' => 'required|string|in:mensal,anual',
             'payment_data' => 'nullable|array',
             'payment_data.payment_method_id' => 'required_with:payment_data|string|in:credit_card,pix',

@@ -67,6 +67,13 @@ class CircuitBreaker
                 throw $e;
             }
 
+            // Erros de domínio (ex.: validação/regra de negócio/4xx do provedor)
+            // também não representam indisponibilidade do serviço e não devem
+            // disparar fallback genérico de "serviço indisponível".
+            if ($e instanceof \App\Domain\Exceptions\DomainException) {
+                throw $e;
+            }
+
             $this->recordFailure();
 
             // Se atingiu threshold, abrir circuito

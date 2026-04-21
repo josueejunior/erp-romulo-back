@@ -51,12 +51,12 @@ class TenantDatabaseService implements TenantDatabaseServiceInterface
             // 3. Combinar ambos os arrays (bancos e tenants)
             $numerosExistentes = array_unique(array_merge($numerosBancos, $tenantsExistentes));
             sort($numerosExistentes);
-            
-            // 4. Encontrar o próximo número disponível (que não está em nenhum dos dois)
-            $proximoNumero = 1;
-            while (in_array($proximoNumero, $numerosExistentes)) {
-                $proximoNumero++;
-            }
+
+            // 4. Sempre usar o topo (max + 1), sem reutilizar "buracos".
+            // Reutilizar IDs antigos pode colidir com resíduos de infraestrutura
+            // (cache, storage, permissões, conexões) e causar falhas intermitentes.
+            $maiorNumero = empty($numerosExistentes) ? 0 : max($numerosExistentes);
+            $proximoNumero = $maiorNumero + 1;
             
             Log::info('Próximo número de tenant disponível encontrado', [
                 'proximo_numero' => $proximoNumero,

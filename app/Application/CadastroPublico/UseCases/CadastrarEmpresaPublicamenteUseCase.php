@@ -32,11 +32,14 @@ use App\Domain\Payment\ValueObjects\PaymentRequest;
 use App\Domain\Shared\Events\EventDispatcherInterface;
 use App\Domain\Tenant\Events\EmpresaCriada;
 use App\Jobs\VerificarPagamentoPendenteJob;
+use App\Models\Tenant as TenantModel;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
+use Stancl\Tenancy\Jobs\CreateDatabase;
+use Stancl\Tenancy\Jobs\MigrateDatabase;
 
 /**
  * Use Case: Cadastrar Empresa Publicamente
@@ -617,6 +620,11 @@ final class CadastrarEmpresaPublicamenteUseCase
                 throw new \RuntimeException("Tenant model {$tenant->id} não encontrado após criar banco.");
             }
 
+            // Garantia defensiva: em alguns ambientes, o gate de Single/Multi database
+            // pode pular a criação do banco indevidamente. Se o banco do tenant não
+            // existir aqui, criamos e migramos antes de inicializar a tenancy.
+            $this->garantirBancoDoTenantPronto($tenantModel);
+
             // 7. Inicializar contexto do tenant
             tenancy()->initialize($tenantModel);
 
@@ -692,6 +700,27 @@ final class CadastrarEmpresaPublicamenteUseCase
             }
             throw $e;
         }
+    }
+
+    private function garantirBancoDoTenantPronto(TenantModel $tenantModel): void
+    {
+        $databaseName = $tenantModel->database()->getName();
+        $databaseExists = DB::connection()->select(
+            "SELECT datname FROM pg_database WHERE datname = ?",
+            [$databaseName]
+        );
+
+        if (!empty($databaseExists)) {
+            return;
+        }
+
+        Log::warning('Cadastro público detectou banco ausente; criando banco do tenant sob demanda', [
+            'tenant_id' => $tenantModel->id,
+            'database' => $databaseName,
+        ]);
+
+        CreateDatabase::dispatchSync($tenantModel);
+        MigrateDatabase::dispatchSync($tenantModel);
     }
 
     /**
