@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api;
 
 use App\Models\Oportunidade;
+use App\Modules\Processo\Models\Processo;
 use App\Services\Pncp\PncpCompraIdentificador;
 use App\Services\Pncp\PncpConsultaService;
 use Illuminate\Http\JsonResponse;
@@ -445,6 +446,7 @@ class OportunidadeController extends BaseApiController
     {
         $orgao = is_array($row['orgaoEntidade'] ?? null) ? $row['orgaoEntidade'] : [];
         $unidade = is_array($row['unidadeOrgao'] ?? null) ? $row['unidadeOrgao'] : [];
+        $processoInterno = $this->findProcessoInterno($row);
 
         return [
             'numero_controle_pncp' => $row['numeroControlePNCP'] ?? null,
@@ -462,6 +464,64 @@ class OportunidadeController extends BaseApiController
             'data_publicacao_pncp' => $row['dataPublicacaoPncp'] ?? null,
             'link' => $row['linkSistemaOrigem'] ?? null,
             'situacao' => $row['situacaoCompraNome'] ?? null,
+            'processo_interno' => $processoInterno,
+            'ja_cadastrado' => $processoInterno !== null,
+        ];
+    }
+
+    /**
+     * Tenta localizar processo já cadastrado para enriquecer o resultado PNCP.
+     *
+     * Estratégia de matching (ordem):
+     * 1) número da modalidade/compra
+     * 2) número do processo administrativo
+     * 3) link do edital
+     */
+    private function findProcessoInterno(array $row): ?array
+    {
+        $numeroCompra = isset($row['numeroCompra']) ? trim((string) $row['numeroCompra']) : '';
+        $numeroProcesso = isset($row['processo']) ? trim((string) $row['processo']) : '';
+        $linkSistema = isset($row['linkSistemaOrigem']) ? trim((string) $row['linkSistemaOrigem']) : '';
+
+        $query = Processo::query()
+            ->with('orgao:id,razao_social')
+            ->select([
+                'id',
+                'numero_modalidade',
+                'numero_processo_administrativo',
+                'modalidade',
+                'status',
+                'objeto_resumido',
+                'data_hora_sessao_publica',
+                'link_edital',
+                'orgao_id',
+            ]);
+
+        if ($numeroCompra !== '') {
+            $query->where('numero_modalidade', $numeroCompra);
+        } elseif ($numeroProcesso !== '') {
+            $query->where('numero_processo_administrativo', $numeroProcesso);
+        } elseif ($linkSistema !== '') {
+            $query->where('link_edital', $linkSistema);
+        } else {
+            return null;
+        }
+
+        $processo = $query->first();
+        if (!$processo) {
+            return null;
+        }
+
+        return [
+            'id' => $processo->id,
+            'modalidade' => $processo->modalidade,
+            'numero_modalidade' => $processo->numero_modalidade,
+            'numero_processo_administrativo' => $processo->numero_processo_administrativo,
+            'status' => $processo->status,
+            'objeto_resumido' => $processo->objeto_resumido,
+            'data_hora_sessao_publica' => $processo->data_hora_sessao_publica?->toIso8601String(),
+            'link_edital' => $processo->link_edital,
+            'orgao' => $processo->orgao?->razao_social,
         ];
     }
 }
