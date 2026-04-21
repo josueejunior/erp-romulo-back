@@ -10,6 +10,7 @@ use App\Http\Requests\Configuracoes\AtualizarNotificacoesRequest;
 use App\Modules\Auth\Models\UserNotificationPreferences;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
@@ -133,7 +134,8 @@ class ConfiguracoesController extends Controller
             }
 
             $tenantModel = tenancy()->initialized ? tenancy()->tenant : null;
-            $tenantData = is_array($tenantModel?->data) ? $tenantModel->data : [];
+            $tenantId = $tenantModel?->id ?? $empresaModel->tenant_id ?? null;
+            $tenantData = $this->loadTenantDataFromCentral($tenantId ? (int) $tenantId : null);
             $telefonesEmpresa = is_array($empresaModel->telefones) ? $empresaModel->telefones : [];
             $telefonePrincipal = $this->resolveTelefonePrincipal($empresaModel, $telefonesEmpresa);
 
@@ -507,7 +509,7 @@ class ConfiguracoesController extends Controller
         }
 
         $tenant = tenancy()->tenant;
-        $tenantDataAtual = is_array($tenant->data) ? $tenant->data : [];
+        $tenantDataAtual = $this->normalizeJsonData($tenant->data);
 
         foreach (self::TENANT_DATA_FIELDS as $campo) {
             if (array_key_exists($campo, $validated)) {
@@ -515,7 +517,46 @@ class ConfiguracoesController extends Controller
             }
         }
 
-        $tenant->data = $tenantDataAtual;
-        $tenant->save();
+        // Persistir explicitamente na conexão central para evitar inconsistência de conexão
+        // quando o contexto de tenancy está ativo.
+        DB::connection('pgsql')
+            ->table('tenants')
+            ->where('id', $tenant->id)
+            ->update([
+                'data' => json_encode($tenantDataAtual, JSON_UNESCAPED_UNICODE),
+                'atualizado_em' => now(),
+            ]);
+    }
+
+    private function normalizeJsonData(mixed $rawData): array
+    {
+        if (is_array($rawData)) {
+            return $rawData;
+        }
+
+        if (is_object($rawData)) {
+            return (array) $rawData;
+        }
+
+        if (is_string($rawData) && $rawData !== '') {
+            $decoded = json_decode($rawData, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+
+        return [];
+    }
+
+    private function loadTenantDataFromCentral(?int $tenantId): array
+    {
+        if (!$tenantId) {
+            return [];
+        }
+
+        $rawData = DB::connection('pgsql')
+            ->table('tenants')
+            ->where('id', $tenantId)
+            ->value('data');
+
+        return $this->normalizeJsonData($rawData);
     }
 }

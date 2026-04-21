@@ -108,7 +108,7 @@ class GetUserUseCase
         // Montar dados completos do tenant (usando modelo se disponível para ter todos os campos)
         $tenantResponse = null;
         if ($tenantDomain && $tenantModel) {
-            $tenantData = is_array($tenantModel->data) ? $tenantModel->data : [];
+            $tenantData = $this->normalizeJsonData($tenantModel->data);
             $tenantAttrs = method_exists($tenantModel, 'getAttributes') ? $tenantModel->getAttributes() : [];
             $tenantTelefones = $tenantModel->telefones ?? [];
             $telefonePrincipal = null;
@@ -180,6 +180,24 @@ class GetUserUseCase
                 'razao_social' => $empresaAtiva->razaoSocial ?? '',
             ] : null,
         ];
+    }
+
+    private function normalizeJsonData(mixed $rawData): array
+    {
+        if (is_array($rawData)) {
+            return $rawData;
+        }
+
+        if (is_object($rawData)) {
+            return (array) $rawData;
+        }
+
+        if (is_string($rawData) && $rawData !== '') {
+            $decoded = json_decode($rawData, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+
+        return [];
     }
 }
 
