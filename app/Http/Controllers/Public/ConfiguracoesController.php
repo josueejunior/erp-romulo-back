@@ -21,6 +21,7 @@ class ConfiguracoesController extends Controller
     private const TENANT_UPDATE_RULES = [
         'razao_social' => 'nullable|string|max:255',
         'nome_fantasia' => 'nullable|string|max:255',
+        'logo' => 'nullable|string|max:255',
         'cnpj' => 'nullable|string|max:18',
         'email' => 'nullable|email|max:255',
         'endereco' => 'nullable|string|max:255',
@@ -142,6 +143,7 @@ class ConfiguracoesController extends Controller
                     'id' => $empresaModel->id,
                     'razao_social' => $empresaModel->razao_social,
                     'nome_fantasia' => $empresaModel->nome_fantasia,
+                    'logo' => $empresaModel->logo,
                     'cnpj' => $empresaModel->cnpj,
                     'email' => $empresaModel->email,
                     'endereco' => $empresaModel->logradouro,
@@ -448,6 +450,9 @@ class ConfiguracoesController extends Controller
         }
         if (array_key_exists('nome_fantasia', $validated)) {
             $dadosAtualizacao['nome_fantasia'] = $validated['nome_fantasia'];
+        }
+        if (array_key_exists('logo', $validated)) {
+            $dadosAtualizacao['logo'] = $validated['logo'];
         }
         if (isset($validated['cnpj'])) {
             $dadosAtualizacao['cnpj'] = $validated['cnpj'];
