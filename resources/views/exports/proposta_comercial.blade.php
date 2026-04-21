@@ -256,7 +256,6 @@
     </div>
 
     <div class="signature-area">
-        <p>{{ $cidade_empresa ? strtoupper($cidade_empresa) : 'N/A' }}, {{ $data_formatada }}.</p>
         <div class="signature-line"></div>
         <p><strong>{{ $nome_empresa }}</strong><br>
         CNPJ: {{ $cnpj_empresa ?: 'N/A' }}</p>
