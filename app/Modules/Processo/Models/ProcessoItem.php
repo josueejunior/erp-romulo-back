@@ -400,15 +400,32 @@ class ProcessoItem extends BaseModel
      */
     public function getCustoTotal(): float
     {
-        $orcamento = $this->orcamentoEscolhido;
-        if (!$orcamento) {
-            return 0;
+        // Nova estrutura: custo vem do orcamento_item escolhido para este item.
+        $orcamentoItemEscolhido = $this->orcamentoItens()
+            ->where('fornecedor_escolhido', true)
+            ->latest('id')
+            ->first();
+
+        if ($orcamentoItemEscolhido) {
+            $custoProduto = (float) ($orcamentoItemEscolhido->custo_produto ?? 0);
+            $frete = (bool) ($orcamentoItemEscolhido->frete_incluido ?? false)
+                ? 0
+                : (float) ($orcamentoItemEscolhido->frete ?? 0);
+
+            return ($custoProduto + $frete) * ((float) $this->quantidade);
         }
 
-        $custoProduto = $orcamento->custo_produto ?? 0;
-        $frete = ($orcamento->frete_incluido ? 0 : ($orcamento->frete ?? 0));
-        
-        return ($custoProduto + $frete) * $this->quantidade;
+        // Fallback legado: orçamento escolhido na tabela antiga.
+        $orcamento = $this->orcamentoEscolhido;
+        if ($orcamento) {
+            $custoProduto = (float) ($orcamento->custo_produto ?? 0);
+            $frete = (bool) ($orcamento->frete_incluido ?? false)
+                ? 0
+                : (float) ($orcamento->frete ?? 0);
+            return ($custoProduto + $frete) * ((float) $this->quantidade);
+        }
+
+        return 0;
     }
 
     /**

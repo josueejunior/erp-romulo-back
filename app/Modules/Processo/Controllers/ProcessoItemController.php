@@ -149,6 +149,8 @@ class ProcessoItemController extends BaseApiController
                 }
             }
             $itemModel->setAttribute('formacao_preco_ativa', $formacaoPrecoAtiva);
+            $itemModel->setAttribute('custo_total', $itemModel->getCustoTotal());
+            $itemModel->setAttribute('historico_valores', $itemModel->historico_valores);
 
             return response()->json(['data' => $itemModel]);
         } catch (NotFoundException $e) {
