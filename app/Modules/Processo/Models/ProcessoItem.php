@@ -258,8 +258,21 @@ class ProcessoItem extends BaseModel
      */
     public function getFormacaoPrecoAtivaAttribute(): ?FormacaoPreco
     {
+        // Nova estrutura: formação vinculada ao orcamento_item escolhido.
+        $formacaoNova = $this->formacoesPreco()
+            ->whereHas('orcamentoItem', function ($q) {
+                $q->where('fornecedor_escolhido', true);
+            })
+            ->latest()
+            ->first();
+
+        if ($formacaoNova) {
+            return $formacaoNova;
+        }
+
+        // Legado: formação vinculada ao orçamento escolhido direto.
         return $this->formacoesPreco()
-            ->whereHas('orcamento', function($q) {
+            ->whereHas('orcamento', function ($q) {
                 $q->where('fornecedor_escolhido', true);
             })
             ->latest()

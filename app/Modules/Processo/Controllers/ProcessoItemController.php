@@ -129,11 +129,26 @@ class ProcessoItemController extends BaseApiController
                 'orcamentos.itens.formacaoPreco',
                 'orcamentos.itens.processoItem',
                 'orcamentoItens.formacaoPreco',
+                'formacoesPreco.orcamento',
+                'formacoesPreco.orcamentoItem',
             ]);
 
             if (!$itemModel) {
                 return response()->json(['message' => 'Erro ao buscar item'], 500);
             }
+
+            // Expor formação ativa explicitamente para a tela de formação de preço.
+            // Prioriza accessor do item e fallback para o orçamento_item escolhido carregado na relação.
+            $formacaoPrecoAtiva = $itemModel->formacaoPrecoAtiva;
+            if (!$formacaoPrecoAtiva) {
+                $orcamentoEscolhido = $itemModel->orcamentos
+                    ?->first(fn($orcamento) => collect($orcamento->itens)->contains('fornecedor_escolhido', true));
+                if ($orcamentoEscolhido) {
+                    $itemEscolhido = collect($orcamentoEscolhido->itens)->firstWhere('fornecedor_escolhido', true);
+                    $formacaoPrecoAtiva = $itemEscolhido?->formacaoPreco;
+                }
+            }
+            $itemModel->setAttribute('formacao_preco_ativa', $formacaoPrecoAtiva);
 
             return response()->json(['data' => $itemModel]);
         } catch (NotFoundException $e) {
