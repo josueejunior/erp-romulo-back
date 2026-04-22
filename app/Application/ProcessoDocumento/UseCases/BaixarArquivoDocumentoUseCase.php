@@ -40,15 +40,31 @@ class BaixarArquivoDocumentoUseCase
         }
 
         $path = $procDoc->caminho_arquivo;
-        if (!$path || !Storage::disk('public')->exists($path)) {
+        if (!$path) {
             return null;
         }
 
-        return [
-            'path' => $path,
-            'nome' => $procDoc->nome_arquivo ?? basename($path),
-            'mime' => $procDoc->mime ?? 'application/octet-stream',
-        ];
+        // Caminho padrão no disco tenant-aware atual.
+        if (Storage::disk('public')->exists($path)) {
+            return [
+                'path' => $path,
+                'nome' => $procDoc->nome_arquivo ?? basename($path),
+                'mime' => $procDoc->mime ?? 'application/octet-stream',
+            ];
+        }
+
+        // Compatibilidade legada: alguns arquivos antigos ficaram no storage
+        // global (não sufixado por tenant).
+        $legacyAbsolutePath = base_path('storage/app/public/' . ltrim($path, '/'));
+        if (is_file($legacyAbsolutePath)) {
+            return [
+                'path' => $path,
+                'nome' => $procDoc->nome_arquivo ?? basename($path),
+                'mime' => $procDoc->mime ?? 'application/octet-stream',
+                'legacy_absolute_path' => $legacyAbsolutePath,
+            ];
+        }
+        return null;
     }
 }
 

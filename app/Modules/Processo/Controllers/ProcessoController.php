@@ -1278,6 +1278,12 @@ class ProcessoController extends BaseApiController
                 return response()->json(['message' => 'Arquivo não encontrado para este documento.'], 404);
             }
 
+            if (!empty($info['legacy_absolute_path'])) {
+                return response()->download($info['legacy_absolute_path'], $info['nome'], [
+                    'Content-Type' => $info['mime'] ?? 'application/octet-stream',
+                ]);
+            }
+
             return Storage::disk('public')->download($info['path'], $info['nome'], [
                 'Content-Type' => $info['mime'] ?? 'application/octet-stream'
             ]);
