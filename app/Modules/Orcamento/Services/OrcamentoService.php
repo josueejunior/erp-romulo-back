@@ -89,6 +89,32 @@ class OrcamentoService
         }
     }
 
+    private function resolverValorMinimoFromOrcamento(Orcamento $orcamento): ?float
+    {
+        if ($orcamento->relationLoaded('formacaoPreco') && $orcamento->formacaoPreco?->preco_minimo !== null) {
+            return (float) $orcamento->formacaoPreco->preco_minimo;
+        }
+
+        $custoProduto = (float) ($orcamento->custo_produto ?? 0);
+        $frete = (float) ($orcamento->frete ?? 0);
+        $freteIncluido = (bool) ($orcamento->frete_incluido ?? false);
+
+        return $custoProduto + ($freteIncluido ? 0 : $frete);
+    }
+
+    private function resolverValorMinimoFromOrcamentoItem(OrcamentoItem $orcamentoItem): ?float
+    {
+        if ($orcamentoItem->relationLoaded('formacaoPreco') && $orcamentoItem->formacaoPreco?->preco_minimo !== null) {
+            return (float) $orcamentoItem->formacaoPreco->preco_minimo;
+        }
+
+        $custoProduto = (float) ($orcamentoItem->custo_produto ?? 0);
+        $frete = (float) ($orcamentoItem->frete ?? 0);
+        $freteIncluido = (bool) ($orcamentoItem->frete_incluido ?? false);
+
+        return $custoProduto + ($freteIncluido ? 0 : $frete);
+    }
+
     /**
      * Criar orçamento vinculado a item
      */
@@ -189,8 +215,8 @@ class OrcamentoService
         $orcamento->load(['fornecedor', 'transportadora', 'formacaoPreco']);
 
         // Atualizar valor mínimo no item se necessário
-        if (isset($updateData['fornecedor_escolhido']) && $updateData['fornecedor_escolhido'] && $orcamento->formacaoPreco) {
-            $item->valor_minimo_venda = $orcamento->formacaoPreco->preco_minimo;
+        if (isset($updateData['fornecedor_escolhido']) && $updateData['fornecedor_escolhido']) {
+            $item->valor_minimo_venda = $this->resolverValorMinimoFromOrcamento($orcamento);
             if (method_exists($item, 'calcularValorMinimoVenda')) {
                 $item->calcularValorMinimoVenda();
             }
@@ -352,10 +378,10 @@ class OrcamentoService
         // Buscar modelo Eloquent para acessar relacionamentos
         $orcamentoItemModel = $this->orcamentoItemRepository->buscarModeloPorId($orcamentoItemDomain->id, ['formacaoPreco', 'processoItem']);
         if ($orcamentoItemModel) {
-            if ($fornecedorEscolhido && $orcamentoItemModel->formacaoPreco) {
+            if ($fornecedorEscolhido) {
                 $processoItem = $orcamentoItemModel->processoItem;
                 if ($processoItem) {
-                    $processoItem->valor_minimo_venda = $orcamentoItemModel->formacaoPreco->preco_minimo;
+                    $processoItem->valor_minimo_venda = $this->resolverValorMinimoFromOrcamentoItem($orcamentoItemModel);
                     $processoItem->save();
                 }
             } elseif (!$fornecedorEscolhido) {

@@ -5,6 +5,7 @@ namespace App\Application\Orcamento\UseCases;
 use App\Domain\Orcamento\Repositories\OrcamentoRepositoryInterface;
 use App\Domain\Processo\Repositories\ProcessoRepositoryInterface;
 use App\Domain\Exceptions\DomainException;
+use App\Modules\Orcamento\Models\OrcamentoItem as OrcamentoItemModel;
 
 /**
  * Application Service: AtualizarOrcamentoItemUseCase
@@ -68,10 +69,41 @@ class AtualizarOrcamentoItemUseCase
         // Se marcou como escolhido, desmarcar outros do mesmo processo_item
         if ($fornecedorEscolhido) {
             $processoItemId = $orcamentoItem->processo_item_id;
-            $orcamentoModel->itens()
+            OrcamentoItemModel::query()
                 ->where('processo_item_id', $processoItemId)
                 ->where('id', '!=', $orcamentoItemId)
+                ->whereHas('orcamento', function ($q) use ($processoId, $empresaId) {
+                    $q->where('processo_id', $processoId)->where('empresa_id', $empresaId);
+                })
                 ->update(['fornecedor_escolhido' => false]);
+        }
+
+        // Sincronizar valor mínimo de venda do item com o orçamento escolhido (estrutura nova)
+        $processoItem = $orcamentoItem->processoItem;
+        if ($processoItem) {
+            $escolhido = OrcamentoItemModel::query()
+                ->where('processo_item_id', $processoItem->id)
+                ->where('fornecedor_escolhido', true)
+                ->whereHas('orcamento', function ($q) use ($processoId, $empresaId) {
+                    $q->where('processo_id', $processoId)->where('empresa_id', $empresaId);
+                })
+                ->with('formacaoPreco')
+                ->latest('id')
+                ->first();
+
+            if ($escolhido) {
+                $custoProduto = (float) ($escolhido->custo_produto ?? 0);
+                $frete = (float) ($escolhido->frete ?? 0);
+                $freteIncluido = (bool) ($escolhido->frete_incluido ?? false);
+                $valorMinimo = $escolhido->formacaoPreco?->preco_minimo;
+                if ($valorMinimo === null) {
+                    $valorMinimo = $custoProduto + ($freteIncluido ? 0 : $frete);
+                }
+                $processoItem->valor_minimo_venda = $valorMinimo;
+            } else {
+                $processoItem->valor_minimo_venda = null;
+            }
+            $processoItem->save();
         }
 
         // Recarregar relacionamentos

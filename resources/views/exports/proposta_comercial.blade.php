@@ -153,33 +153,51 @@
             @endphp
             @foreach($itens as $index => $item)
                 @php
-                    // Buscar orçamento item escolhido (fornecedor_escolhido = true)
+                    // Buscar orçamento item escolhido (formato novo)
                     $orcamentoItemEscolhido = $item->orcamentoItens->firstWhere('fornecedor_escolhido', true);
-                    $formacaoPreco = $orcamentoItemEscolhido?->formacaoPreco;
+                    $orcamentoItemFallback = $item->orcamentoItens->first();
+                    // Fallback legado: orçamento escolhido direto no orçamento
+                    $orcamentoEscolhidoLegacy = $item->orcamentos->firstWhere('fornecedor_escolhido', true);
+                    $orcamentoLegacyFallback = $item->orcamentos->first();
+
+                    $formacaoPreco = $orcamentoItemEscolhido?->formacaoPreco
+                        ?? $orcamentoItemFallback?->formacaoPreco
+                        ?? $orcamentoEscolhidoLegacy?->formacaoPreco
+                        ?? $orcamentoLegacyFallback?->formacaoPreco;
                     
-                    // Prioridade: valor arrematado > valor negociado > valor final sessão > preço mínimo formação > valor estimado
+                    // Prioridade:
+                    // valor arrematado > valor negociado > valor final sessão >
+                    // preço mínimo formação > custo produto escolhido > valor estimado
                     $valorUnitario = $item->valor_arrematado 
                         ?? $item->valor_negociado 
                         ?? $item->valor_final_sessao 
                         ?? $formacaoPreco?->preco_minimo 
+                        ?? $orcamentoItemEscolhido?->custo_produto
+                        ?? $orcamentoItemFallback?->custo_produto
+                        ?? $orcamentoEscolhidoLegacy?->custo_produto
+                        ?? $orcamentoLegacyFallback?->custo_produto
                         ?? $item->valor_estimado 
                         ?? 0;
                     
-                    $valorTotalItem = $valorUnitario * $item->quantidade;
+                    $quantidade = (float) ($item->quantidade ?? 0);
+                    $valorTotalItem = (float) $valorUnitario * $quantidade;
                     $valorTotalGeral += $valorTotalItem;
                     
-                    $marcaModelo = $orcamentoItemEscolhido?->marca_modelo 
+                    $marcaModelo = $orcamentoItemEscolhido?->marca_modelo
+                        ?? $orcamentoItemFallback?->marca_modelo
+                        ?? $orcamentoEscolhidoLegacy?->marca_modelo
+                        ?? $orcamentoLegacyFallback?->marca_modelo
                         ?? $item->marca_modelo_referencia 
                         ?? '';
                     
-                    $especificacaoCompleta = $item->especificacao_tecnica;
+                    $especificacaoCompleta = $item->especificacao_tecnica ?: 'Especificação não informada';
                     if ($marcaModelo) {
                         $especificacaoCompleta .= ' - ' . $marcaModelo;
                     }
                 @endphp
                 <tr>
                     <td class="text-center">{{ $item->numero_item ?? ($index + 1) }}</td>
-                    <td class="text-center">{{ number_format($item->quantidade, 2, ',', '.') }}</td>
+                    <td class="text-center">{{ number_format($quantidade, 2, ',', '.') }}</td>
                     <td class="text-center">{{ $item->unidade ?? 'UNID' }}</td>
                     <td>
                         <strong>{{ $especificacaoCompleta }}</strong>

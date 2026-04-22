@@ -126,11 +126,12 @@ class ExportacaoService
                     if (!empty($tenant->nome_fantasia) && trim($tenant->nome_fantasia) !== trim($nomeEmpresa)) {
                         $nomeFantasia = $tenant->nome_fantasia;
                     }
-                    $bancoEmpresa = $tenant->banco ?? '';
-                    $agenciaEmpresa = $tenant->agencia ?? '';
-                    $contaEmpresa = $tenant->conta ?? '';
+                    // Compatibilidade: diferentes nomes de coluna/campos
+                    $bancoEmpresa = $tenant->banco ?? $tenant->banco_nome ?? '';
+                    $agenciaEmpresa = $tenant->agencia ?? $tenant->banco_agencia ?? '';
+                    $contaEmpresa = $tenant->conta ?? $tenant->banco_conta ?? '';
                     $representanteLegal = $tenant->representante_legal_nome ?? '';
-                    $cargoRepresentante = $tenant->cargo_representante ?? '';
+                    $cargoRepresentante = $tenant->cargo_representante ?? $tenant->representante_legal_cargo ?? '';
                 }
             }
         } catch (\Exception $e) {
