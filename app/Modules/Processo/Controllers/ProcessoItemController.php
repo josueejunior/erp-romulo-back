@@ -120,8 +120,16 @@ class ProcessoItemController extends BaseApiController
             // Executar Use Case (retorna entidade de domínio)
             $itemDomain = $this->buscarProcessoItemUseCase->executar($itemId, $processoId, $empresa->id);
             
-            // Buscar modelo Eloquent para serialização
-            $itemModel = $this->processoItemRepository->buscarModeloPorId($itemDomain->id, ['fornecedor', 'transportadora']);
+            // Buscar modelo Eloquent para serialização com relacionamentos usados no detalhe do item.
+            $itemModel = $this->processoItemRepository->buscarModeloPorId($itemDomain->id, [
+                'fornecedor',
+                'transportadora',
+                'orcamentos.fornecedor',
+                'orcamentos.formacaoPreco',
+                'orcamentos.itens.formacaoPreco',
+                'orcamentos.itens.processoItem',
+                'orcamentoItens.formacaoPreco',
+            ]);
 
             if (!$itemModel) {
                 return response()->json(['message' => 'Erro ao buscar item'], 500);
