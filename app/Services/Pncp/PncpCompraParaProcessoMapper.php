@@ -277,13 +277,23 @@ final class PncpCompraParaProcessoMapper
     {
         $numero = (int) ($row['numeroItem'] ?? $row['numero_item'] ?? 0);
 
-        $vu = $row['valorUnitarioEstimado'] ?? $row['valorUnitario'] ?? null;
+        $vu = $row['valorUnitarioEstimado']
+            ?? $row['valorUnitario']
+            ?? $row['valorEstimadoUnitario']
+            ?? $row['valorUnitarioEstimadoCompra']
+            ?? $row['vlrUnitarioEstimado']
+            ?? null;
         $vuF = is_numeric($vu) ? round((float) $vu, 4) : null;
 
-        $q = $row['quantidade'] ?? null;
+        $q = $row['quantidade'] ?? $row['qtde'] ?? $row['quantidadeItens'] ?? null;
         $qF = is_numeric($q) ? (float) $q : null;
 
-        $vt = $row['valorTotal'] ?? null;
+        $vt = $row['valorTotal']
+            ?? $row['valorTotalEstimado']
+            ?? $row['valorEstimadoTotal']
+            ?? $row['valorTotalEstimadoCompra']
+            ?? $row['vlrTotal']
+            ?? null;
         $vtF = is_numeric($vt) ? round((float) $vt, 4) : null;
 
         if ($vuF === null && $vtF !== null && $qF !== null && $qF > 0) {

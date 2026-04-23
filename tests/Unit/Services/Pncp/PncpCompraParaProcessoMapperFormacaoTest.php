@@ -34,6 +34,19 @@ final class PncpCompraParaProcessoMapperFormacaoTest extends TestCase
         $this->assertSame(100.0, $ref['valor_total']);
     }
 
+    public function test_mapear_referencia_aceita_valor_total_estimado_como_alias(): void
+    {
+        $ref = PncpCompraParaProcessoMapper::mapearReferenciaFormacaoPreco([
+            'numeroItem' => 2,
+            'quantidade' => 5,
+            'valorTotalEstimado' => 50,
+            'descricao' => 'Item',
+        ]);
+        $this->assertSame(2, $ref['numero_item']);
+        $this->assertSame(10.0, $ref['valor_unitario_estimado']);
+        $this->assertSame(50.0, $ref['valor_total']);
+    }
+
     public function test_listar_numeros(): void
     {
         $nums = PncpCompraParaProcessoMapper::listarNumerosItensPncp([

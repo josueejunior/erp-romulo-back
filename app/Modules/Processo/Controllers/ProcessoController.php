@@ -283,6 +283,9 @@ class ProcessoController extends BaseApiController
      * e nos itens: valor estimado unitário, quantidade e especificação (quando o PNCP trouxer e o item estiver vazio).
      * Body JSON opcional: {@code referencia} (número de controle / URL) ou {@code cnpj}+{@code ano}+{@code sequencial};
      * se {@code referencia} for omitida, usa {@see Processo::$link_edital}.
+     *
+     * Query/body opcional: {@code atualizar_valores} (boolean, padrão true) — quando true, sobrescreve
+     * quantidade e valor unitário estimado dos itens com o que vier do PNCP (desde que identifique o item).
      */
     public function sincronizarPncpCabecalho(Request $request, Processo $processo): JsonResponse
     {
@@ -291,6 +294,8 @@ class ProcessoController extends BaseApiController
         if (! PermissionHelper::canEditProcess()) {
             return response()->json(['message' => 'Sem permissão.'], 403);
         }
+
+        $atualizarValores = $request->boolean('atualizar_valores', true);
 
         $validator = Validator::make($request->all(), [
             'referencia' => ['nullable', 'string', 'max:8192'],
@@ -353,7 +358,7 @@ class ProcessoController extends BaseApiController
         $sugerido = PncpCompraParaProcessoMapper::mapProcessoSugerido($compra);
 
         try {
-            DB::transaction(function () use ($processo, $sugerido, $cadastroOrgao, $itensRaw): void {
+            DB::transaction(function () use ($processo, $sugerido, $cadastroOrgao, $itensRaw, $atualizarValores): void {
                 $attrs = [];
                 if (! empty($sugerido['objeto_resumido'])) {
                     $attrs['objeto_resumido'] = $sugerido['objeto_resumido'];
@@ -400,21 +405,26 @@ class ProcessoController extends BaseApiController
                         continue;
                     }
                     $row = PncpCompraParaProcessoMapper::encontrarItemPncpPorNumero($itensRaw, $n);
+                    if ($row === null && count($itensRaw) === 1 && $processo->itens->count() === 1) {
+                        $solo = $itensRaw[0] ?? null;
+                        $row = is_array($solo) ? $solo : null;
+                    }
                     if ($row === null) {
                         continue;
                     }
                     $ref = PncpCompraParaProcessoMapper::mapearReferenciaFormacaoPreco($row);
                     $dirty = false;
-                    if ($ref['valor_unitario_estimado'] !== null && (float) ($item->valor_estimado ?? 0) <= 0) {
-                        $item->valor_estimado = $ref['valor_unitario_estimado'];
-                        $dirty = true;
-                    }
-                    if ($ref['quantidade'] !== null && (float) ($item->quantidade ?? 0) <= 0) {
+                    if ($ref['quantidade'] !== null && ($atualizarValores || (float) ($item->quantidade ?? 0) <= 0)) {
                         $item->quantidade = $ref['quantidade'];
                         $dirty = true;
                     }
+                    if ($ref['valor_unitario_estimado'] !== null && ($atualizarValores || (float) ($item->valor_estimado ?? 0) <= 0)) {
+                        $item->valor_estimado = $ref['valor_unitario_estimado'];
+                        $item->fonte_valor = 'edital';
+                        $dirty = true;
+                    }
                     $desc = $ref['descricao_resumo'] ?? null;
-                    if ($desc && empty(trim((string) ($item->especificacao_tecnica ?? '')))) {
+                    if ($desc && ($atualizarValores || empty(trim((string) ($item->especificacao_tecnica ?? ''))))) {
                         $item->especificacao_tecnica = $desc;
                         $dirty = true;
                     }
