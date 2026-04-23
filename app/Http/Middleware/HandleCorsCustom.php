@@ -66,7 +66,7 @@ class HandleCorsCustom
     private function headers(Request $request): array
     {
         $origin = $request->header('Origin');
-        $allowedOrigin = $this->resolveOrigin($origin);
+        $allowedOrigin = self::resolveAllowedOrigin($origin);
         
         if (!$allowedOrigin) {
             return [];
@@ -94,32 +94,33 @@ class HandleCorsCustom
     }
 
     /**
-     * Resolver origem permitida
+     * Origem que pode ser refletida em Access-Control-Allow-Origin (valor exato do header Origin).
+     * Usado também pelo Exception Handler em bootstrap/app.php.
      */
-    private function resolveOrigin(?string $origin): ?string
+    public static function resolveAllowedOrigin(?string $origin): ?string
     {
         if (!$origin) {
             return '*';
         }
 
         $allowed = config('cors.allowed_origins', ['*']);
-        
+
         // Wildcard permite tudo
-        if (in_array('*', $allowed)) {
+        if (in_array('*', $allowed, true)) {
             return $origin;
         }
 
-        // Verificar lista exata
+        // Verificar lista exata (case-insensitive)
         $originLower = strtolower($origin);
         foreach ($allowed as $allowedOrigin) {
-            if (strtolower($allowedOrigin) === $originLower) {
+            if (strtolower((string) $allowedOrigin) === $originLower) {
                 return $origin;
             }
         }
 
-        // Verificar patterns
+        // Verificar patterns (definir com modificador i em config/cors.php quando fizer sentido)
         foreach (config('cors.allowed_origins_patterns', []) as $pattern) {
-            if (preg_match($pattern, $origin)) {
+            if ($pattern !== '' && @preg_match($pattern, $origin) === 1) {
                 return $origin;
             }
         }

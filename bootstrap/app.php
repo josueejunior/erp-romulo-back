@@ -87,28 +87,23 @@ return Application::configure(basePath: dirname(__DIR__))
             }
             
             $origin = $request->headers->get('Origin');
-            if (!$origin) {
+            $allowedOrigin = \App\Http\Middleware\HandleCorsCustom::resolveAllowedOrigin($origin);
+            if ($allowedOrigin === null) {
                 return $response;
             }
-            
-            // Verificar origem permitida
-            $allowedOrigins = config('cors.allowed_origins', ['*']);
-            $allowAll = in_array('*', $allowedOrigins);
-            $isAllowed = $allowAll;
-            $allowedOrigin = $origin;
-            
-            if (!$allowAll && $origin) {
-                $allowedOriginsNormalized = array_map('strtolower', $allowedOrigins);
-                $originNormalized = strtolower($origin);
-                $isAllowed = in_array($originNormalized, $allowedOriginsNormalized);
+            if ($allowedOrigin === '*' && !$origin) {
+                return $response;
             }
-            
-            if ($isAllowed) {
-                $response->headers->set('Access-Control-Allow-Origin', $allowedOrigin);
+
+            $response->headers->set('Access-Control-Allow-Origin', $allowedOrigin);
+            if ($allowedOrigin !== '*' && config('cors.supports_credentials', false)) {
                 $response->headers->set('Access-Control-Allow-Credentials', 'true');
-                $response->headers->set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
-                $response->headers->set('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
             }
+            $response->headers->set(
+                'Access-Control-Allow-Headers',
+                'Content-Type, Authorization, X-Requested-With, X-Tenant-ID, X-Empresa-ID, Accept, Origin'
+            );
+            $response->headers->set('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
             
             return $response;
         };

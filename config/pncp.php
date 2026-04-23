@@ -23,7 +23,8 @@ return [
     */
     'integracao_base_url' => env('PNCP_INTEGRACAO_BASE_URL', 'https://pncp.gov.br/api/pncp'),
 
-    'timeout_seconds' => (int) env('PNCP_TIMEOUT', 45),
+    /* Tempo máximo por chamada HTTP ao PNCP (o governo pode responder devagar). Ajuste com PNCP_TIMEOUT no .env. */
+    'timeout_seconds' => (int) env('PNCP_TIMEOUT', 90),
 
     /*
     | Explorar órgãos via publicações (deduplicação por CNPJ do órgão comprador).

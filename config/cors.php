@@ -6,29 +6,32 @@ return [
 
     'allowed_methods' => ['*'],
 
-    // Origens permitidas
-    // Se CORS_ALLOWED_ORIGINS estiver definido no .env, usa ele
-    // Caso contrário, usa a lista abaixo
-    'allowed_origins' => array_filter(
-        array_map(
-            'trim',
-            env('CORS_ALLOWED_ORIGINS') 
-                ? explode(',', env('CORS_ALLOWED_ORIGINS'))
-                : [
-                    'https://gestor.addsimp.com',
-                    'https://www.gestor.addsimp.com',
-                    'https://gestor.addsimp.com.br',
-                    'https://www.gestor.addsimp.com.br',
-                    'http://localhost:3000',
-                    'http://localhost:5173',
-                ]
-        )
-    ),
+    /*
+    | Origens permitidas (lista explícita).
+    | CORS_ALLOWED_ORIGINS no .env é SOMADO à lista base — evita produção “substituir”
+    | o gestor e o browser acusar CORS sem Access-Control-Allow-Origin.
+    */
+    'allowed_origins' => array_values(array_unique(array_filter(array_map(
+        'trim',
+        array_merge(
+            [
+                'https://gestor.addsimp.com',
+                'https://www.gestor.addsimp.com',
+                'https://gestor.addsimp.com.br',
+                'https://www.gestor.addsimp.com.br',
+                'http://localhost:3000',
+                'http://localhost:5173',
+            ],
+            env('CORS_ALLOWED_ORIGINS')
+                ? explode(',', (string) env('CORS_ALLOWED_ORIGINS'))
+                : [],
+        ),
+    )))),
 
-    // Padrões regex para origens permitidas
+    // Padrões regex (case-insensitive) — cobre subdomínios *.addsimp.com
     'allowed_origins_patterns' => [
-        '#^https?://.*\.addsimp\.com$#',
-        '#^https?://.*\.addsimp\.com\.br$#',
+        '#^https?://.*\.addsimp\.com$#i',
+        '#^https?://.*\.addsimp\.com\.br$#i',
     ],
 
     'allowed_headers' => ['*'],

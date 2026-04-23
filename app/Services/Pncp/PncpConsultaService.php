@@ -26,7 +26,7 @@ final class PncpConsultaService
         $base = rtrim((string) config('pncp.consulta_base_url', 'https://pncp.gov.br/api/consulta'), '/');
         $integracao = rtrim((string) config('pncp.integracao_base_url', 'https://pncp.gov.br/api/pncp'), '/');
 
-        return new self($base, $integracao, (int) config('pncp.timeout_seconds', 45));
+        return new self($base, $integracao, (int) config('pncp.timeout_seconds', 90));
     }
 
     /**
