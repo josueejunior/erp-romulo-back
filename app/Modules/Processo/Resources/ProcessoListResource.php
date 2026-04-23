@@ -29,7 +29,8 @@ class ProcessoListResource extends JsonResource
         
         // Calcular valores
         $valores = $this->calcularValores();
-        
+        $valorEstimadoListagem = ($valores['estimado'] ?? 0) > 0 ? round((float) $valores['estimado'], 2) : null;
+
         // Calcular resultado
         $resultado = $this->calcularResultado();
 
@@ -39,6 +40,18 @@ class ProcessoListResource extends JsonResource
             'numero_modalidade' => $this->numero_modalidade,
             'modalidade' => $this->modalidade,
             'numero_processo_administrativo' => $this->numero_processo_administrativo,
+            'link_edital' => $this->link_edital,
+            'portal' => $this->portal,
+            /** Mesmo texto do objeto resumido — a UI de cards usa `objeto` no bloco expandido. */
+            'objeto' => $this->objeto_resumido,
+            /** UASG do órgão em campo plano para “Acesso rápido” na lista. */
+            'uasg' => $this->when(
+                $this->relationLoaded('orgao') && $this->orgao,
+                $this->orgao->uasg,
+                null
+            ),
+            /** Valor estimado global (soma dos itens: total ou qtd × unitário). */
+            'valor_estimado' => $valorEstimadoListagem,
             'orgao' => $this->when(
                 $this->relationLoaded('orgao') && $this->orgao,
                 [
@@ -366,7 +379,20 @@ class ProcessoListResource extends JsonResource
     {
         try {
             $itens = $this->relationLoaded('itens') ? ($this->itens ?? collect()) : collect();
-            $valorEstimado = $itens->sum('valor_estimado') ?? 0;
+            $valorEstimado = 0.0;
+            foreach ($itens as $item) {
+                $vt = (float) ($item->valor_estimado_total ?? 0);
+                if ($vt > 0) {
+                    $valorEstimado += $vt;
+
+                    continue;
+                }
+                $vu = (float) ($item->valor_estimado ?? 0);
+                $q = (float) ($item->quantidade ?? 0);
+                if ($vu > 0 && $q > 0) {
+                    $valorEstimado += $vu * $q;
+                }
+            }
             
             // Valor mínimo (menor preço mínimo das formações de preço)
             $valorMinimo = null;

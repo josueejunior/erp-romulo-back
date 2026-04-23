@@ -44,6 +44,8 @@ final class PncpCompraParaProcessoMapper
             $compra['linkProcessoEletronico'] ?? null,
         ]);
 
+        $portal = self::inferPortalNome($linkEdital);
+
         $dt = self::mapDatetimeLocal($compra['dataAberturaProposta'] ?? null)
             ?? self::mapDatetimeLocal($compra['dataEncerramentoProposta'] ?? null);
 
@@ -63,7 +65,7 @@ final class PncpCompraParaProcessoMapper
             'numero_modalidade' => $numero,
             'objeto_resumido' => $objeto !== '' ? $objeto : null,
             'link_edital' => $linkEdital,
-            'portal' => 'PNCP',
+            'portal' => $portal,
             'numero_processo_administrativo' => isset($compra['processo']) ? trim((string) $compra['processo']) : null,
             'numero_edital' => isset($compra['numeroCompra']) ? trim((string) $compra['numeroCompra']) : null,
             'data_hora_sessao_publica' => $dt,
@@ -147,6 +149,44 @@ final class PncpCompraParaProcessoMapper
             'telefone' => null,
             'observacoes' => 'Cadastro sugerido a partir do PNCP.',
         ];
+    }
+
+    /**
+     * Rótulo curto do portal de disputa a partir do link (mesma ideia do gestor em Oportunidades).
+     */
+    public static function inferPortalNome(?string $link): string
+    {
+        $bruto = strtolower(trim((string) $link));
+        if ($bruto === '') {
+            return 'PNCP';
+        }
+        $host = $bruto;
+        if (str_contains($bruto, '://')) {
+            $p = parse_url($bruto, PHP_URL_HOST);
+            if (is_string($p) && $p !== '') {
+                $host = strtolower($p);
+            }
+        }
+        if (str_contains($host, 'compras.gov') || str_contains($host, 'comprasnet')) {
+            return 'Compras.gov.br';
+        }
+        if (str_contains($host, 'licitanet')) {
+            return 'Licitanet';
+        }
+        if (str_contains($host, 'bll')) {
+            return 'BLL Compras';
+        }
+        if (str_contains($host, 'bbmnet')) {
+            return 'BBMNET';
+        }
+        if (str_contains($host, 'compraspublicas')) {
+            return 'Portal de Compras Públicas';
+        }
+        if (str_contains($host, 'pncp.gov.br')) {
+            return 'PNCP';
+        }
+
+        return 'Outro portal';
     }
 
     private static function mapDatetimeLocal(mixed $iso): ?string

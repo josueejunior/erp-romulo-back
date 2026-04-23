@@ -39,6 +39,7 @@ use App\Services\Pncp\PncpCompraParaProcessoMapper;
 use App\Services\Pncp\PncpConsultaService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Carbon\Carbon;
@@ -272,6 +273,171 @@ class ProcessoController extends BaseApiController
                     'itens' => $itensRaw,
                 ],
             ],
+        ]);
+    }
+
+    /**
+     * POST /processos/{processo}/pncp/sincronizar-cabecalho
+     *
+     * Busca a compra no PNCP e grava no processo: objeto, link/portal, números, data de sessão (quando houver)
+     * e nos itens: valor estimado unitário, quantidade e especificação (quando o PNCP trouxer e o item estiver vazio).
+     * Body JSON opcional: {@code referencia} (número de controle / URL) ou {@code cnpj}+{@code ano}+{@code sequencial};
+     * se {@code referencia} for omitida, usa {@see Processo::$link_edital}.
+     */
+    public function sincronizarPncpCabecalho(Request $request, Processo $processo): JsonResponse
+    {
+        $this->assertProcessoEmpresa($processo);
+
+        if (! PermissionHelper::canEditProcess()) {
+            return response()->json(['message' => 'Sem permissão.'], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'referencia' => ['nullable', 'string', 'max:8192'],
+            'cnpj' => ['nullable', 'string', 'max:20'],
+            'ano' => ['nullable', 'integer', 'min:1990', 'max:2100'],
+            'sequencial' => ['nullable', 'integer', 'min:1', 'max:9999999'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Parâmetros inválidos.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $q = $validator->validated();
+        $refBody = trim((string) ($request->input('referencia') ?? ''));
+        if ($refBody !== '') {
+            $q['referencia'] = $refBody;
+        } elseif (empty(trim((string) ($q['referencia'] ?? '')))) {
+            $q['referencia'] = trim((string) ($processo->link_edital ?? ''));
+        }
+
+        $ids = PncpCompraIdentificador::fromQueryParams($q);
+        if ($ids === null) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Não foi possível identificar a compra no PNCP. Informe "referencia" (número de controle ou URL) ou cadastre o link do edital no processo.',
+            ], 422);
+        }
+
+        try {
+            $svc = PncpConsultaService::fromConfig();
+            $compra = $svc->recuperarCompra($ids['cnpj'], $ids['ano'], $ids['sequencial']);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 502);
+        }
+
+        if ($compra === []) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Compra não encontrada no PNCP.',
+            ], 404);
+        }
+
+        $itensRaw = [];
+        try {
+            $itensRaw = $svc->listarItensCompra($ids['cnpj'], $ids['ano'], $ids['sequencial']);
+        } catch (Throwable $e) {
+            \Log::warning('PNCP itens (sincronizar cabeçalho)', ['erro' => $e->getMessage(), 'ids' => $ids]);
+        }
+
+        $orgEnt = is_array($compra['orgaoEntidade'] ?? null) ? $compra['orgaoEntidade'] : [];
+        $uniEnt = is_array($compra['unidadeOrgao'] ?? null) ? $compra['unidadeOrgao'] : null;
+        $cadastroOrgao = PncpCompraParaProcessoMapper::mapCadastroOrgaoSugerido($orgEnt, $uniEnt);
+        $sugerido = PncpCompraParaProcessoMapper::mapProcessoSugerido($compra);
+
+        try {
+            DB::transaction(function () use ($processo, $sugerido, $cadastroOrgao, $itensRaw): void {
+                $attrs = [];
+                if (! empty($sugerido['objeto_resumido'])) {
+                    $attrs['objeto_resumido'] = $sugerido['objeto_resumido'];
+                }
+                if (! empty($sugerido['link_edital'])) {
+                    $attrs['link_edital'] = $sugerido['link_edital'];
+                }
+                if (! empty($sugerido['portal'])) {
+                    $attrs['portal'] = $sugerido['portal'];
+                }
+                if (! empty($sugerido['numero_modalidade'])) {
+                    $attrs['numero_modalidade'] = $sugerido['numero_modalidade'];
+                }
+                if (! empty($sugerido['numero_processo_administrativo'])) {
+                    $attrs['numero_processo_administrativo'] = $sugerido['numero_processo_administrativo'];
+                }
+                if (! empty($sugerido['numero_edital'])) {
+                    $attrs['numero_edital'] = $sugerido['numero_edital'];
+                }
+                if (isset($sugerido['modalidade']) && $sugerido['modalidade'] !== '') {
+                    $attrs['modalidade'] = $sugerido['modalidade'];
+                }
+                if (array_key_exists('srp', $sugerido)) {
+                    $attrs['srp'] = (bool) $sugerido['srp'];
+                }
+                if (! empty($sugerido['data_hora_sessao_publica'])) {
+                    $attrs['data_hora_sessao_publica'] = Carbon::parse($sugerido['data_hora_sessao_publica']);
+                }
+                if ($attrs !== []) {
+                    $processo->fill($attrs);
+                    $processo->save();
+                }
+
+                $processo->load('orgao');
+                if ($processo->orgao && ! empty($cadastroOrgao['uasg']) && empty(trim((string) ($processo->orgao->uasg ?? '')))) {
+                    $processo->orgao->uasg = $cadastroOrgao['uasg'];
+                    $processo->orgao->save();
+                }
+
+                $processo->load('itens');
+                foreach ($processo->itens as $item) {
+                    $n = (int) ($item->numero_item ?? 0);
+                    if ($n < 1) {
+                        continue;
+                    }
+                    $row = PncpCompraParaProcessoMapper::encontrarItemPncpPorNumero($itensRaw, $n);
+                    if ($row === null) {
+                        continue;
+                    }
+                    $ref = PncpCompraParaProcessoMapper::mapearReferenciaFormacaoPreco($row);
+                    $dirty = false;
+                    if ($ref['valor_unitario_estimado'] !== null && (float) ($item->valor_estimado ?? 0) <= 0) {
+                        $item->valor_estimado = $ref['valor_unitario_estimado'];
+                        $dirty = true;
+                    }
+                    if ($ref['quantidade'] !== null && (float) ($item->quantidade ?? 0) <= 0) {
+                        $item->quantidade = $ref['quantidade'];
+                        $dirty = true;
+                    }
+                    $desc = $ref['descricao_resumo'] ?? null;
+                    if ($desc && empty(trim((string) ($item->especificacao_tecnica ?? '')))) {
+                        $item->especificacao_tecnica = $desc;
+                        $dirty = true;
+                    }
+                    if ($dirty) {
+                        $item->save();
+                    }
+                }
+            });
+        } catch (Throwable $e) {
+            \Log::error('sincronizarPncpCabecalho', ['erro' => $e->getMessage()]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao gravar dados: '.$e->getMessage(),
+            ], 500);
+        }
+
+        $fresh = $processo->fresh(['orgao', 'setor', 'itens']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Dados do PNCP aplicados ao processo.',
+            'data' => new ProcessoResource($fresh),
         ]);
     }
 

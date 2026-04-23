@@ -284,6 +284,7 @@ Route::prefix('v1')->group(function () {
                 Route::get('/sugerir-status', [ApiProcessoController::class, 'sugerirStatus']);
                 Route::get('/ficha-export', [ApiProcessoController::class, 'fichaTecnicaExport']);
                 Route::get('/download-edital', [ApiProcessoController::class, 'downloadEdital']);
+                Route::post('/pncp/sincronizar-cabecalho', [ApiProcessoController::class, 'sincronizarPncpCabecalho']);
                 
                 // Notas (Mock/Stub para evitar 404 no frontend)
                 Route::get('/notas', function(\App\Modules\Processo\Models\Processo $processo) {
