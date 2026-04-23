@@ -88,7 +88,8 @@
         }
 
         .signature-area {
-            margin-top: 50px;
+            margin-top: 120px;
+            min-height: 140px;
             text-align: center;
         }
 

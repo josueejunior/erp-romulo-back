@@ -8,6 +8,7 @@ use App\Models\Oportunidade;
 use App\Modules\Processo\Models\Processo;
 use App\Services\Pncp\PncpCompraIdentificador;
 use App\Services\Pncp\PncpConsultaService;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -16,6 +17,14 @@ use Throwable;
 
 class OportunidadeController extends BaseApiController
 {
+    private const PNCP_PUBLICACOES_MAX_RETORNO = 50;
+
+    /**
+     * Intervalo máximo entre data inicial e final (dias corridos, inclusive).
+     * O PNCP recomenda consultas em janelas curtas para estabilidade da API.
+     */
+    private const PNCP_PUBLICACAO_MAX_INTERVALO_DIAS = 3;
+
     public function index(): JsonResponse
     {
         $rows = Oportunidade::query()
@@ -88,14 +97,15 @@ class OportunidadeController extends BaseApiController
     /**
      * Proxy seguro para PNCP: contratações por data de publicação.
      *
-     * Query: data_inicial, data_final (Y-m-d), codigo_modalidade (1–14),
-     * pagina?, tamanho_pagina? (>=10), uf?, codigo_ibge?, cnpj?, texto? (filtro local)
+     * Query: data_inicial, data_final (Y-m-d; período é ajustado ao máximo de
+     * {@see PNCP_PUBLICACAO_MAX_INTERVALO_DIAS} dias corridos inclusive antes de chamar o PNCP),
+     * codigo_modalidade (1–14), pagina?, tamanho_pagina? (>=10), uf?, codigo_ibge?, cnpj?, texto? (filtro local)
      */
     public function pncpPublicacoes(Request $request): JsonResponse
     {
         $validator = Validator::make($request->query(), [
             'data_inicial' => ['required', 'date_format:Y-m-d'],
-            'data_final' => ['required', 'date_format:Y-m-d', 'after_or_equal:data_inicial'],
+            'data_final' => ['required', 'date_format:Y-m-d'],
             'codigo_modalidade' => ['required', 'integer', 'min:1', 'max:14'],
             'pagina' => ['nullable', 'integer', 'min:1'],
             'tamanho_pagina' => ['nullable', 'integer', 'min:10', 'max:100'],
@@ -114,6 +124,10 @@ class OportunidadeController extends BaseApiController
         }
 
         $q = $validator->validated();
+
+        $periodo = $this->clampPncpPublicacaoPeriodo($q['data_inicial'], $q['data_final']);
+        $q['data_inicial'] = $periodo['data_inicial'];
+        $q['data_final'] = $periodo['data_final'];
 
         try {
             $svc = PncpConsultaService::fromConfig();
@@ -149,6 +163,11 @@ class OportunidadeController extends BaseApiController
         }
 
         $mapped = array_map(fn ($row) => $this->mapPncpRow(is_array($row) ? $row : []), $lista);
+        $limited = false;
+        if (count($mapped) > self::PNCP_PUBLICACOES_MAX_RETORNO) {
+            $mapped = array_slice($mapped, 0, self::PNCP_PUBLICACOES_MAX_RETORNO);
+            $limited = true;
+        }
 
         return response()->json([
             'success' => true,
@@ -159,6 +178,16 @@ class OportunidadeController extends BaseApiController
                 'numeroPagina' => $raw['numeroPagina'] ?? null,
                 'paginasRestantes' => $raw['paginasRestantes'] ?? null,
                 'empty' => $raw['empty'] ?? null,
+                'limited' => $limited,
+                'maxRetorno' => self::PNCP_PUBLICACOES_MAX_RETORNO,
+                'maxIntervaloDiasCorridos' => self::PNCP_PUBLICACAO_MAX_INTERVALO_DIAS,
+                'periodoPncp' => [
+                    'ajustado' => $periodo['ajustado'],
+                    'data_inicial_efetiva' => $periodo['data_inicial'],
+                    'data_final_efetiva' => $periodo['data_final'],
+                    'data_inicial_solicitada' => $periodo['data_inicial_solicitada'],
+                    'data_final_solicitada' => $periodo['data_final_solicitada'],
+                ],
             ],
         ]);
     }
@@ -363,6 +392,48 @@ class OportunidadeController extends BaseApiController
                 'total' => count($normalizados),
             ],
         ]);
+    }
+
+    /**
+     * Garante intervalo válido para a consulta PNCP por data de publicação: ordem das datas
+     * e no máximo {@see PNCP_PUBLICACAO_MAX_INTERVALO_DIAS} dias corridos (inclusive).
+     * Ancora em {@code data_inicial} e limita {@code data_final}.
+     *
+     * @return array{
+     *     data_inicial: string,
+     *     data_final: string,
+     *     ajustado: bool,
+     *     data_inicial_solicitada: string,
+     *     data_final_solicitada: string
+     * }
+     */
+    private function clampPncpPublicacaoPeriodo(string $dataInicial, string $dataFinal): array
+    {
+        $iniSolic = $dataInicial;
+        $fimSolic = $dataFinal;
+
+        $ini = Carbon::createFromFormat('Y-m-d', $dataInicial)->startOfDay();
+        $fim = Carbon::createFromFormat('Y-m-d', $dataFinal)->startOfDay();
+
+        $ajustado = false;
+        if ($fim->lt($ini)) {
+            $fim = $ini->copy();
+            $ajustado = true;
+        }
+
+        $maxDiasEntreExtremos = self::PNCP_PUBLICACAO_MAX_INTERVALO_DIAS - 1;
+        if ((int) $ini->diffInDays($fim) > $maxDiasEntreExtremos) {
+            $fim = $ini->copy()->addDays($maxDiasEntreExtremos);
+            $ajustado = true;
+        }
+
+        return [
+            'data_inicial' => $ini->format('Y-m-d'),
+            'data_final' => $fim->format('Y-m-d'),
+            'ajustado' => $ajustado,
+            'data_inicial_solicitada' => $iniSolic,
+            'data_final_solicitada' => $fimSolic,
+        ];
     }
 
     /**
