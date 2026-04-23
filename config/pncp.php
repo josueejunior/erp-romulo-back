@@ -11,7 +11,20 @@ return [
     | Itens da compra (valor estimado): GET …/orgaos/{cnpj}/compras/{ano}/{sequencial}/itens
     | Endpoint usado: GET /v1/contratacoes/publicacao
     | Datas no formato AAAAMMDD. Parâmetro obrigatório: codigoModalidadeContratacao.
-    | tamanhoPagina mínimo 10 (regra da API).
+    | Paginação nativa do PNCP: query `pagina` (>=1, obrigatório) e `tamanhoPagina` (opcional;
+    | padrão no manual 50 registros, máx. 500 — o gestor usa 10–100 via backend).
+    |
+    | Exemplo cURL (mesmos nomes enviados por PncpConsultaService::contratacoesPublicacao):
+    | curl -sG 'https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao' \\
+    |   --data-urlencode 'dataInicial=20260422' \\
+    |   --data-urlencode 'dataFinal=20260423' \\
+    |   --data-urlencode 'codigoModalidadeContratacao=6' \\
+    |   --data-urlencode 'pagina=1' \\
+    |   --data-urlencode 'tamanhoPagina=10' \\
+    |   --data-urlencode 'uf=AL' \\
+    |   -H 'Accept: application/json'
+    |
+    | Opcional: codigoMunicipioIbge, cnpj, codigoUnidadeAdministrativa, codigoModoDisputa, idUsuario.
     |
     */
 

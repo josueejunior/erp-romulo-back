@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Pncp;
 
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -58,7 +59,8 @@ final class PncpConsultaService
             $query['uf'] = strtoupper(substr((string) $params['uf'], 0, 2));
         }
         if (!empty($params['codigo_ibge'])) {
-            $query['codigoIbge'] = preg_replace('/\D/', '', (string) $params['codigo_ibge']);
+            // Manual PNCP API Consultas v1: parâmetro GET é codigoMunicipioIbge (não codigoIbge).
+            $query['codigoMunicipioIbge'] = preg_replace('/\D/', '', (string) $params['codigo_ibge']);
         }
         if (!empty($params['cnpj'])) {
             $query['cnpj'] = preg_replace('/\D/', '', (string) $params['cnpj']);
@@ -66,23 +68,39 @@ final class PncpConsultaService
 
         $url = $this->baseUrl.'/v1/contratacoes/publicacao';
 
-        $response = Http::timeout($this->timeoutSeconds)
-            ->acceptJson()
-            ->get($url, $query);
+        $lastResponse = null;
+        for ($attempt = 1; $attempt <= 3; $attempt++) {
+            $lastResponse = Http::timeout($this->timeoutSeconds)
+                ->acceptJson()
+                ->get($url, $query);
 
-        if (!$response->successful()) {
+            if ($lastResponse->successful()) {
+                return $lastResponse->json() ?? ['data' => []];
+            }
+
+            $status = $lastResponse->status();
+            $retryable = in_array($status, [429, 502, 503], true) && $attempt < 3;
+
+            if ($retryable) {
+                Log::info('PNCP contratacoes/publicacao: retentativa após HTTP '.$status, [
+                    'attempt' => $attempt,
+                    'query' => $query,
+                ]);
+                usleep((int) (400000 * $attempt));
+
+                continue;
+            }
+
             Log::warning('PNCP consulta falhou', [
-                'status' => $response->status(),
-                'body' => $response->body(),
+                'status' => $status,
+                'body' => $lastResponse->body(),
                 'query' => $query,
             ]);
-            throw new RuntimeException(
-                $response->json('message')
-                ?? 'Falha ao consultar o PNCP. Tente outro intervalo ou modalidade.'
-            );
+            throw new RuntimeException($this->mensagemCorpoErroPncp(
+                $lastResponse,
+                'Tente outro intervalo, UF ou modalidade; o serviço do governo pode estar instável.'
+            ));
         }
-
-        return $response->json() ?? ['data' => []];
     }
 
     /**
@@ -112,10 +130,10 @@ final class PncpConsultaService
                 'status' => $response->status(),
                 'body' => $response->body(),
             ]);
-            throw new RuntimeException(
-                $response->json('message')
-                ?? 'Compra não encontrada no PNCP para o identificador informado.'
-            );
+            throw new RuntimeException($this->mensagemCorpoErroPncp(
+                $response,
+                'Compra não encontrada no PNCP para o identificador informado.'
+            ));
         }
 
         $json = $response->json();
@@ -163,10 +181,10 @@ final class PncpConsultaService
                     'body' => $response->body(),
                     'url' => $url,
                 ]);
-                throw new RuntimeException(
-                    $response->json('message')
-                    ?? 'Não foi possível carregar os itens desta compra no PNCP.'
-                );
+                throw new RuntimeException($this->mensagemCorpoErroPncp(
+                    $response,
+                    'Não foi possível carregar os itens desta compra no PNCP.'
+                ));
             }
         }
 
@@ -244,10 +262,10 @@ final class PncpConsultaService
                     'body' => $response->body(),
                     'url' => $url,
                 ]);
-                throw new RuntimeException(
-                    $response->json('message')
-                    ?? 'Não foi possível carregar os arquivos desta compra no PNCP.'
-                );
+                throw new RuntimeException($this->mensagemCorpoErroPncp(
+                    $response,
+                    'Não foi possível carregar os arquivos desta compra no PNCP.'
+                ));
             }
         }
 
@@ -333,15 +351,64 @@ final class PncpConsultaService
                     'url' => $url,
                     'recurso' => $recurso,
                 ]);
-                throw new RuntimeException(
-                    $response->json('message')
-                    ?? 'Não foi possível consultar '.$recurso.' no PNCP.'
-                );
+                throw new RuntimeException($this->mensagemCorpoErroPncp(
+                    $response,
+                    'Não foi possível consultar '.$recurso.' no PNCP.'
+                ));
             }
         }
 
         Log::warning('PNCP: 404 em todas as bases', ['urls' => $urls, 'recurso' => $recurso, 'last_status' => $lastStatus]);
         throw new RuntimeException('Recurso não encontrado no PNCP: '.$recurso.'.');
+    }
+
+    /**
+     * Texto legível a partir da resposta de erro do PNCP (campos variam conforme endpoint / versão da API).
+     */
+    private function mensagemCorpoErroPncp(Response $response, string $fallback): string
+    {
+        $status = $response->status();
+        $json = $response->json();
+
+        if (is_array($json)) {
+            foreach (['message', 'detail', 'title', 'error', 'mensagem'] as $key) {
+                $v = $json[$key] ?? null;
+                if (is_string($v)) {
+                    $t = trim($v);
+                    if ($t !== '') {
+                        return 'PNCP (HTTP '.$status.'): '.$t;
+                    }
+                }
+            }
+
+            if (isset($json['errors']) && is_array($json['errors'])) {
+                $partes = [];
+                foreach ($json['errors'] as $msgs) {
+                    if (is_array($msgs)) {
+                        foreach ($msgs as $m) {
+                            if (is_string($m) && trim($m) !== '') {
+                                $partes[] = trim($m);
+                            }
+                        }
+                    } elseif (is_string($msgs) && trim($msgs) !== '') {
+                        $partes[] = trim($msgs);
+                    }
+                }
+                if ($partes !== []) {
+                    return 'PNCP (HTTP '.$status.'): '.implode(' ', array_slice($partes, 0, 5));
+                }
+            }
+        }
+
+        $raw = (string) $response->body();
+        $snippet = mb_substr(preg_replace('/\s+/u', ' ', strip_tags($raw)), 0, 220);
+        $snippet = trim($snippet);
+
+        if ($snippet !== '') {
+            return 'PNCP (HTTP '.$status.'): '.$snippet;
+        }
+
+        return 'PNCP retornou HTTP '.$status.'. '.$fallback;
     }
 
     private function toPncpDate(string $ymd): string
