@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Pncp;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -28,6 +29,23 @@ final class PncpConsultaService
         $integracao = rtrim((string) config('pncp.integracao_base_url', 'https://pncp.gov.br/api/pncp'), '/');
 
         return new self($base, $integracao, (int) config('pncp.timeout_seconds', 90));
+    }
+
+    /**
+     * Cliente HTTP padronizado para o PNCP (timeout total + conexão + User-Agent).
+     *
+     * @param  int|null  $timeoutSeconds  null = usa {@see $this->timeoutSeconds}
+     */
+    private function pncpHttp(?int $timeoutSeconds = null): \Illuminate\Http\Client\PendingRequest
+    {
+        $t = $timeoutSeconds ?? $this->timeoutSeconds;
+
+        return Http::timeout($t)
+            ->connectTimeout((int) config('pncp.connect_timeout_seconds', 25))
+            ->withHeaders([
+                'User-Agent' => 'AddSimp/1.0 (+https://addsimp.com; consulta PNCP)',
+            ])
+            ->acceptJson();
     }
 
     /**
@@ -68,25 +86,56 @@ final class PncpConsultaService
 
         $url = $this->baseUrl.'/v1/contratacoes/publicacao';
 
+        $maxAttempts = (int) config('pncp.retry_attempts', 5);
+        $baseSleepMs = (int) config('pncp.retry_base_sleep_ms', 600);
+        $deadline = microtime(true) + (float) config('pncp.publicacao_max_total_seconds', 95);
+        $attemptTimeoutCfg = (int) config('pncp.publicacao_attempt_timeout_seconds', 42);
         $lastResponse = null;
-        for ($attempt = 1; $attempt <= 3; $attempt++) {
-            $lastResponse = Http::timeout($this->timeoutSeconds)
-                ->acceptJson()
-                ->get($url, $query);
+
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            $remainingSec = $deadline - microtime(true);
+            if ($remainingSec < 2.0) {
+                throw new RuntimeException(
+                    'Tempo máximo de consulta ao PNCP esgotado. Reduza o intervalo de datas, a UF ou tente novamente em instantes.'
+                );
+            }
+
+            $attemptTimeout = min($attemptTimeoutCfg, max(8, (int) floor($remainingSec) - 2));
+
+            try {
+                $lastResponse = $this->pncpHttp($attemptTimeout)->get($url, $query);
+            } catch (ConnectionException $e) {
+                Log::warning('PNCP contratacoes/publicacao: falha de conexão', [
+                    'attempt' => $attempt,
+                    'message' => $e->getMessage(),
+                ]);
+                if ($attempt >= $maxAttempts) {
+                    throw new RuntimeException(
+                        'Não foi possível conectar ao PNCP. Verifique a rede ou tente novamente em instantes.'
+                    );
+                }
+                $this->pncpSleepBackoff($attempt, $baseSleepMs, $deadline);
+
+                continue;
+            }
 
             if ($lastResponse->successful()) {
                 return $lastResponse->json() ?? ['data' => []];
             }
 
             $status = $lastResponse->status();
-            $retryable = in_array($status, [429, 502, 503], true) && $attempt < 3;
+            $retryableHttp = in_array($status, [408, 425, 429, 500, 502, 503, 504], true) && $attempt < $maxAttempts;
 
-            if ($retryable) {
+            if ($retryableHttp) {
                 Log::info('PNCP contratacoes/publicacao: retentativa após HTTP '.$status, [
                     'attempt' => $attempt,
                     'query' => $query,
                 ]);
-                usleep((int) (400000 * $attempt));
+                // Respostas grandes: reduzir página na metade a partir da 3ª tentativa (mín. 10).
+                if ($attempt >= 3 && ($status === 502 || $status === 504)) {
+                    $query['tamanhoPagina'] = max(10, (int) floor($query['tamanhoPagina'] / 2));
+                }
+                $this->pncpSleepBackoff($attempt, $baseSleepMs, $deadline);
 
                 continue;
             }
@@ -100,6 +149,22 @@ final class PncpConsultaService
                 $lastResponse,
                 'Tente outro intervalo, UF ou modalidade; o serviço do governo pode estar instável.'
             ));
+        }
+
+        throw new RuntimeException('PNCP: resposta inesperada ao consultar publicações.');
+    }
+
+    private function pncpSleepBackoff(int $attempt, int $baseSleepMs, float $deadline): void
+    {
+        $remainingUs = (int) (($deadline - microtime(true)) * 1_000_000);
+        if ($remainingUs < 50_000) {
+            return;
+        }
+        $jitter = random_int(0, (int) max(1, $baseSleepMs / 4));
+        $ms = ($baseSleepMs * $attempt) + $jitter;
+        $sleepUs = min($remainingUs - 40_000, min(3_000_000, $ms * 1000));
+        if ($sleepUs > 0) {
+            usleep($sleepUs);
         }
     }
 
@@ -117,9 +182,7 @@ final class PncpConsultaService
 
         $url = $this->baseUrl.'/v1/orgaos/'.$cnpjLimpo.'/compras/'.$ano.'/'.$sequencial;
 
-        $response = Http::timeout($this->timeoutSeconds)
-            ->acceptJson()
-            ->get($url);
+        $response = $this->pncpHttp()->get($url);
 
         if ($response->status() === 204) {
             return [];
@@ -163,9 +226,7 @@ final class PncpConsultaService
 
         $lastStatus = null;
         foreach ($paths as $url) {
-            $response = Http::timeout($this->timeoutSeconds)
-                ->acceptJson()
-                ->get($url);
+            $response = $this->pncpHttp()->get($url);
 
             $lastStatus = $response->status();
 
@@ -244,9 +305,7 @@ final class PncpConsultaService
 
         $lastStatus = null;
         foreach ($paths as $url) {
-            $response = Http::timeout($this->timeoutSeconds)
-                ->acceptJson()
-                ->get($url);
+            $response = $this->pncpHttp()->get($url);
 
             $lastStatus = $response->status();
 
@@ -332,9 +391,7 @@ final class PncpConsultaService
     {
         $lastStatus = null;
         foreach ($urls as $url) {
-            $response = Http::timeout($this->timeoutSeconds)
-                ->acceptJson()
-                ->get($url);
+            $response = $this->pncpHttp()->get($url);
 
             $lastStatus = $response->status();
 

@@ -300,6 +300,9 @@ Route::prefix('v1')->group(function () {
                 // Exportação
                 Route::get('/exportar/proposta-comercial', [ApiExportacaoController::class, 'propostaComercial']);
                 Route::get('/exportar/catalogo-ficha-tecnica', [ApiExportacaoController::class, 'catalogoFichaTecnica']);
+                // Catálogo assistido: URL dedicada evita 405 em proxies que só mapeiam GET no path legado.
+                Route::post('/exportar/catalogo-ficha-tecnica-assistido', [ApiExportacaoController::class, 'catalogoFichaTecnicaPersonalizado']);
+                Route::post('/exportar/catalogo-ficha-tecnica', [ApiExportacaoController::class, 'catalogoFichaTecnicaPersonalizado']);
                 
                 // Saldo
                 Route::get('/saldo', [ApiSaldoController::class, 'show']);

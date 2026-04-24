@@ -289,7 +289,7 @@ class ExportacaoService
     /**
      * Gera catálogo/ficha técnica em PDF
      */
-    public function gerarCatalogoFichaTecnica(Processo $processo): string
+    public function gerarCatalogoFichaTecnica(Processo $processo, array $customizacoes = []): string
     {
         $processo->load([
             'orgao',
@@ -318,14 +318,65 @@ class ExportacaoService
             // Se houver erro, manter valor padrão
         }
 
+        $itensCustomizados = $this->montarItensCatalogoCustomizados($processo, $customizacoes);
+
         $dados = [
             'processo' => $processo,
             'data_elaboracao' => Carbon::now()->format('d/m/Y H:i'),
             'itens' => $processo->itens,
+            'itens_catalogo' => $itensCustomizados,
+            'observacoes_gerais' => $customizacoes['observacoes_gerais'] ?? null,
             'nome_empresa' => $nomeEmpresa,
         ];
 
         return View::make('exports.catalogo_ficha_tecnica', $dados)->render();
+    }
+
+    /**
+     * Monta payload de itens do catálogo com complementos vindos da UI.
+     */
+    protected function montarItensCatalogoCustomizados(Processo $processo, array $customizacoes): array
+    {
+        $itensPayload = $customizacoes['itens'] ?? [];
+        $customPorItem = [];
+
+        foreach ($itensPayload as $itemCustom) {
+            $itemId = isset($itemCustom['processo_item_id']) ? (int)$itemCustom['processo_item_id'] : null;
+            if (!$itemId) {
+                continue;
+            }
+
+            $imagens = array_values(array_filter(
+                (array)($itemCustom['imagens'] ?? []),
+                fn ($url) => is_string($url) && trim($url) !== ''
+            ));
+
+            $customPorItem[$itemId] = [
+                'especificacao_detalhada' => isset($itemCustom['especificacao_detalhada'])
+                    ? trim((string)$itemCustom['especificacao_detalhada'])
+                    : '',
+                'imagens' => $imagens,
+            ];
+        }
+
+        return $processo->itens->map(function ($item) use ($customPorItem) {
+            $custom = $customPorItem[$item->id] ?? ['especificacao_detalhada' => '', 'imagens' => []];
+
+            return [
+                'id' => $item->id,
+                'numero_item' => $item->numero_item,
+                'quantidade' => $item->quantidade,
+                'unidade' => $item->unidade,
+                'especificacao_tecnica' => $item->especificacao_tecnica,
+                'especificacao_detalhada' => $custom['especificacao_detalhada'],
+                'imagens' => $custom['imagens'],
+                'marca_modelo_referencia' => $item->marca_modelo_referencia,
+                'observacoes' => $item->observacoes,
+                'exige_atestado' => $item->exige_atestado,
+                'quantidade_atestado_cap_tecnica' => $item->quantidade_atestado_cap_tecnica,
+                'orcamentos' => $item->orcamentos,
+            ];
+        })->values()->all();
     }
 
     /**

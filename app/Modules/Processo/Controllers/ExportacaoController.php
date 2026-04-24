@@ -79,5 +79,37 @@ class ExportacaoController extends BaseApiController
             ->header('Content-Type', 'text/html; charset=utf-8')
             ->header('Content-Disposition', 'inline; filename="catalogo_ficha_tecnica_' . $processo->id . '.html"');
     }
+
+    /**
+     * Exporta catálogo/ficha técnica com complementos manuais (imagens e detalhamento).
+     */
+    public function catalogoFichaTecnicaPersonalizado(Processo $processo, Request $request)
+    {
+        $empresa = $this->getEmpresaAtivaOrFail();
+
+        try {
+            $this->exportacaoService->validarProcessoEmpresa($processo, $empresa->id);
+            $this->exportacaoService->validarProcessoPodeExportar($processo);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => $e->getMessage()
+            ], $e->getMessage() === 'Não é possível exportar para processos arquivados ou perdidos.' ? 403 : 404);
+        }
+
+        $payload = $request->validate([
+            'observacoes_gerais' => ['nullable', 'string'],
+            'itens' => ['required', 'array'],
+            'itens.*.processo_item_id' => ['required', 'integer'],
+            'itens.*.especificacao_detalhada' => ['nullable', 'string'],
+            'itens.*.imagens' => ['nullable', 'array'],
+            'itens.*.imagens.*' => ['nullable', 'string'],
+        ]);
+
+        $html = $this->exportacaoService->gerarCatalogoFichaTecnica($processo, $payload);
+
+        return response($html)
+            ->header('Content-Type', 'text/html; charset=utf-8')
+            ->header('Content-Disposition', 'inline; filename="catalogo_ficha_tecnica_' . $processo->id . '.html"');
+    }
 }
 

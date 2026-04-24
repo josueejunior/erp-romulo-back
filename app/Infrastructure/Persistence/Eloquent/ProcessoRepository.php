@@ -168,9 +168,11 @@ class ProcessoRepository implements ProcessoRepositoryInterface
         // Aplicar filtro de empresa_id com isolamento
         $query = $this->aplicarFiltroEmpresa(ProcessoModel::class, $filtros);
 
-        if (isset($filtros['status'])) {
+        if (isset($filtros['status']) && $filtros['status'] !== '' && $filtros['status'] !== null) {
             if (is_array($filtros['status'])) {
-                $query->whereIn('status', $filtros['status']);
+                if (count($filtros['status']) > 0) {
+                    $query->whereIn('status', $filtros['status']);
+                }
             } else {
                 $query->where('status', $filtros['status']);
             }
@@ -375,9 +377,11 @@ class ProcessoRepository implements ProcessoRepositoryInterface
     {
         $query = $this->aplicarFiltroEmpresa(ProcessoModel::class, $filtros);
 
-        if (isset($filtros['status'])) {
+        if (isset($filtros['status']) && $filtros['status'] !== '' && $filtros['status'] !== null) {
             if (is_array($filtros['status'])) {
-                $query->whereIn('status', $filtros['status']);
+                if (count($filtros['status']) > 0) {
+                    $query->whereIn('status', $filtros['status']);
+                }
             } else {
                 $query->where('status', $filtros['status']);
             }

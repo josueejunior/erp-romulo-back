@@ -39,6 +39,25 @@ return [
     /* Tempo máximo por chamada HTTP ao PNCP (o governo pode responder devagar). Ajuste com PNCP_TIMEOUT no .env. */
     'timeout_seconds' => (int) env('PNCP_TIMEOUT', 90),
 
+    /* Timeout só de conexão TCP/TLS (evita pendurar o PHP-FPM se o PNCP não aceitar conexão). */
+    'connect_timeout_seconds' => (int) env('PNCP_CONNECT_TIMEOUT', 25),
+
+    /*
+    | Retentativas para contratações/publicação (502/503/504/429/500 e falhas de rede).
+    | Backoff: base_sleep_ms * tentativa + jitter leve no código.
+    */
+    'retry_attempts' => max(1, (int) env('PNCP_RETRY_ATTEMPTS', 5)),
+    'retry_base_sleep_ms' => max(50, (int) env('PNCP_RETRY_BASE_SLEEP_MS', 600)),
+
+    /*
+    | Teto de duração da consulta "contratações/publicação" (várias retentativas somadas).
+    | Evita ultrapassar o read_timeout do Nginx/PHP-FPM (~60–120s em muitos hosts).
+    */
+    'publicacao_max_total_seconds' => max(20, (int) env('PNCP_PUBLICACAO_MAX_TOTAL_SECONDS', 95)),
+
+    /* Timeout HTTP por tentativa só neste endpoint (pode ser menor que timeout_seconds geral). */
+    'publicacao_attempt_timeout_seconds' => max(10, (int) env('PNCP_PUBLICACAO_ATTEMPT_TIMEOUT', 42)),
+
     /*
     | Explorar órgãos via publicações (deduplicação por CNPJ do órgão comprador).
     */

@@ -32,19 +32,20 @@
 
     <div>
         <h2>Especificações Técnicas dos Itens</h2>
-        @foreach($itens as $item)
+        @foreach(($itens_catalogo ?? $itens) as $item)
         @php
-            $orcamentoEscolhido = $item->orcamentos->firstWhere('fornecedor_escolhido', true);
+            $orcamentosItem = data_get($item, 'orcamentos', collect());
+            $orcamentoEscolhido = collect($orcamentosItem)->firstWhere('fornecedor_escolhido', true);
         @endphp
         <div class="item">
             <div class="item-header">
-                Item {{ $item->numero_item }} - {{ $item->especificacao_tecnica }}
+                Item {{ data_get($item, 'numero_item') }} - {{ data_get($item, 'especificacao_tecnica') }}
             </div>
             <div class="item-content">
-                <p><strong>Quantidade:</strong> {{ number_format($item->quantidade, 2, ',', '.') }} {{ $item->unidade }}</p>
+                <p><strong>Quantidade:</strong> {{ number_format((float)data_get($item, 'quantidade', 0), 2, ',', '.') }} {{ data_get($item, 'unidade') }}</p>
                 
-                @if($item->marca_modelo_referencia)
-                <p><strong>Marca/Modelo de Referência:</strong> {{ $item->marca_modelo_referencia }}</p>
+                @if(data_get($item, 'marca_modelo_referencia'))
+                <p><strong>Marca/Modelo de Referência:</strong> {{ data_get($item, 'marca_modelo_referencia') }}</p>
                 @endif
 
                 @if($orcamentoEscolhido && $orcamentoEscolhido->marca_modelo)
@@ -56,22 +57,46 @@
                 @endif
 
                 <p><strong>Especificação Técnica Completa:</strong></p>
-                <p>{{ $item->especificacao_tecnica }}</p>
+                <p>{{ data_get($item, 'especificacao_tecnica') }}</p>
 
-                @if($item->exige_atestado)
+                @if(data_get($item, 'especificacao_detalhada'))
+                <p><strong>Especificação Detalhada:</strong></p>
+                <p>{!! nl2br(e(data_get($item, 'especificacao_detalhada'))) !!}</p>
+                @endif
+
+                @php
+                    $imagens = collect(data_get($item, 'imagens', []))->filter()->values();
+                @endphp
+                @if($imagens->isNotEmpty())
+                <p><strong>Imagens Anexadas:</strong></p>
+                <div style="display: flex; flex-wrap: wrap; gap: 12px;">
+                    @foreach($imagens as $imagem)
+                    <img src="{{ $imagem }}" alt="Imagem do item {{ data_get($item, 'numero_item') }}" style="max-width: 220px; max-height: 220px; border: 1px solid #ddd; border-radius: 6px; object-fit: contain; padding: 6px;" />
+                    @endforeach
+                </div>
+                @endif
+
+                @if(data_get($item, 'exige_atestado'))
                 <p><strong>Exige Atestado de Capacidade Técnica:</strong> Sim</p>
-                @if($item->quantidade_atestado_cap_tecnica)
-                <p><strong>Quantidade Mínima:</strong> {{ $item->quantidade_atestado_cap_tecnica }}</p>
+                @if(data_get($item, 'quantidade_atestado_cap_tecnica'))
+                <p><strong>Quantidade Mínima:</strong> {{ data_get($item, 'quantidade_atestado_cap_tecnica') }}</p>
                 @endif
                 @endif
 
-                @if($item->observacoes)
-                <p><strong>Observações:</strong> {{ $item->observacoes }}</p>
+                @if(data_get($item, 'observacoes'))
+                <p><strong>Observações:</strong> {{ data_get($item, 'observacoes') }}</p>
                 @endif
             </div>
         </div>
         @endforeach
     </div>
+
+    @if(!empty($observacoes_gerais))
+    <div>
+        <h2>Observações Gerais</h2>
+        <p>{!! nl2br(e($observacoes_gerais)) !!}</p>
+    </div>
+    @endif
 
     <div class="footer">
         <p><strong>Empresa:</strong> {{ $nome_empresa ?? 'Empresa não identificada' }}</p>

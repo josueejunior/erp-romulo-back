@@ -29,9 +29,14 @@ class ListarProcessosDTO
      */
     public static function fromRequest(array $requestData, int $empresaId): self
     {
+        $status = $requestData['status'] ?? null;
+        if ($status === '' || $status === []) {
+            $status = null;
+        }
+
         return new self(
             empresaId: $empresaId,
-            status: $requestData['status'] ?? null,
+            status: $status,
             modalidade: $requestData['modalidade'] ?? null,
             orgaoId: isset($requestData['orgao_id']) ? (int) $requestData['orgao_id'] : null,
             search: $requestData['search'] ?? null,

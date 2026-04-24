@@ -16,6 +16,7 @@ use App\Models\Tenant;
 use App\Models\UserLookup;
 use App\Modules\Auth\Models\AdminUser;
 use App\Domain\Exceptions\DomainException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 
@@ -58,7 +59,7 @@ class LoginUseCase
             // 🛡️ CAMADA 1: Resolver Tenant (Estratégia O(1))
             // Este método implementa toda a lógica de resolução de tenant,
             // incluindo busca em users_lookup e tratamento de múltiplos tenants
-            $tenant = $this->resolverTenant($dto, $email->value, $dto->password);
+            [$tenant, $empresaLoginIdResolvido] = $this->resolverTenant($dto, $email->value, $dto->password);
 
             // 🛡️ CAMADA 2: Inicializar Conexão
             // A partir daqui, as queries rodam no banco do cliente
@@ -109,7 +110,8 @@ class LoginUseCase
 
             // 🛡️ CAMADA 3: Resolução de Empresa
             Log::debug('LoginUseCase::executar - Resolvendo empresa ativa');
-            $empresaAtiva = $this->resolverEmpresaAtiva($user, $tenant);
+            $empresaIdPreferida = $dto->empresaId ?? $empresaLoginIdResolvido;
+            $empresaAtiva = $this->resolverEmpresaAtiva($user, $tenant, $empresaIdPreferida);
 
             // 🛡️ CAMADA 3: Geração de Token (Stateless)
             // Garantir que o tenant_id no JWT seja EXATAMENTE o tenant validado
@@ -205,57 +207,52 @@ class LoginUseCase
      * 
      * @param LoginDTO $dto
      * @param string $email
-     * @return Tenant
+     * @return array{0: Tenant, 1: ?int} [tenant, empresa_login_id quando há escolha única]
      * @throws CredenciaisInvalidasException
      * @throws MultiplosTenantsException
      */
-    private function resolverTenant(LoginDTO $dto, string $email, string $password): Tenant
+    private function resolverTenant(LoginDTO $dto, string $email, string $password): array
     {
         // Caso 1: Tenant ID fornecido explicitamente
         if ($dto->tenantId) {
             $tenantId = (int) $dto->tenantId;
             Log::debug('LoginUseCase::resolverTenant - Tenant ID fornecido', ['tenant_id' => $tenantId]);
-            
+
             $tenantDomain = $this->tenantRepository->buscarPorId($tenantId);
-            if (!$tenantDomain) {
+            if (! $tenantDomain) {
                 Log::warning('LoginUseCase::resolverTenant - Tenant não encontrado', [
                     'tenant_id' => $tenantId,
                     'email' => $email,
                 ]);
                 throw new CredenciaisInvalidasException('Empresa não encontrada.');
             }
-            
+
             $tenant = $this->tenantRepository->buscarModeloPorId($tenantId);
-            if (!$tenant) {
+            if (! $tenant) {
                 Log::error('LoginUseCase::resolverTenant - Modelo Tenant não pôde ser carregado', [
                     'tenant_id' => $tenantId,
                 ]);
                 throw new CredenciaisInvalidasException('Erro ao acessar empresa.');
             }
-            
-            return $tenant;
+
+            return [$tenant, null];
         }
 
         // Caso 2: Buscar automaticamente via users_lookup (O(1))
         Log::debug('LoginUseCase::resolverTenant - Buscando tenant via users_lookup', ['email' => $email]);
-        
-        // 🛡️ CAMADA 1: Localização Global (users_lookup)
+
         $lookups = $this->usersLookupService->encontrarPorEmail($email);
-        
+
         if (empty($lookups)) {
-            // Usuário não encontrado no mapa global
-            // Tratar como credenciais inválidas (evitar enumeração)
             Log::debug('LoginUseCase::resolverTenant - Usuário não encontrado em users_lookup, tentando fallback', [
                 'email' => $email,
             ]);
-            
-            // Fallback: Tentar busca antiga (para dados legados)
+
             $tenant = $this->buscarTenantPorEmail($email);
-            if (!$tenant) {
+            if (! $tenant) {
                 throw new CredenciaisInvalidasException();
             }
-            
-            // 🔥 ROBUSTEZ: Se encontrou via fallback, registrar no lookup para a próxima vez
+
             try {
                 tenancy()->initialize($tenant);
                 $user = $this->userRepository->buscarPorEmail($email);
@@ -278,99 +275,130 @@ class LoginUseCase
                 Log::warning('LoginUseCase::resolverTenant - Erro ao registrar lookup via fallback', [
                     'error' => $e->getMessage(),
                 ]);
-                if (tenancy()->initialized) tenancy()->end();
-            }
-            
-            return $tenant;
-        }
-
-        // Caso 3: Múltiplos tenants encontrados
-        if (count($lookups) > 1) {
-            Log::info('LoginUseCase::resolverTenant - Múltiplos tenants encontrados', [
-                'email' => $email,
-                'count' => count($lookups),
-                'tenant_ids' => array_map(fn($l) => $l->tenantId, $lookups),
-            ]);
-
-            // Validar senha em cada tenant ANTES de expor dados das empresas.
-            // Sem isso, qualquer pessoa com um email válido veria razão social e CNPJ.
-            $tenantsValidos = [];
-            foreach ($lookups as $lookup) {
-                try {
-                    $tenantDomain = $this->tenantRepository->buscarPorId($lookup->tenantId);
-                    if (!$tenantDomain) {
-                        Log::warning('LoginUseCase::resolverTenant - Lookup aponta para tenant inexistente', [
-                            'lookup_id' => $lookup->id,
-                            'tenant_id' => $lookup->tenantId,
-                        ]);
-                        continue;
-                    }
-
-                    $senhaValida = $this->validarSenhaNoTenant($tenantDomain, $email, $password);
-
-                    if ($senhaValida) {
-                        $tenantsValidos[] = [
-                            'tenant_id' => $tenantDomain->id,
-                            'razao_social' => $tenantDomain->razaoSocial,
-                            'cnpj' => $tenantDomain->cnpj,
-                            'user_id' => $lookup->userId,
-                        ];
-                    }
-                } catch (\Exception $e) {
-                    Log::error('LoginUseCase::resolverTenant - Erro ao validar senha no tenant', [
-                        'tenant_id' => $lookup->tenantId,
-                        'email' => $email,
-                        'error' => $e->getMessage(),
-                    ]);
-                    // Continuar para os próximos tenants mesmo se um falhar
-                    continue;
+                if (tenancy()->initialized) {
+                    tenancy()->end();
                 }
             }
 
-            if (empty($tenantsValidos)) {
+            return [$tenant, null];
+        }
+
+        $linhas = $this->coletarLinhasSelecaoLogin($email, $password, $lookups);
+
+        if ($linhas === []) {
+            throw new CredenciaisInvalidasException();
+        }
+
+        if (count($linhas) === 1) {
+            $tenantId = (int) $linhas[0]['tenant_id'];
+            $tenant = $this->tenantRepository->buscarModeloPorId($tenantId);
+            if (! $tenant) {
                 throw new CredenciaisInvalidasException();
             }
+            $empresaIdLinha = $linhas[0]['empresa_id'];
 
-            // Apenas 1 tenant com senha válida: retornar direto, sem pedir seleção
-            if (count($tenantsValidos) === 1) {
-                $tenantId = $tenantsValidos[0]['tenant_id'];
-                $tenant = $this->tenantRepository->buscarModeloPorId($tenantId);
-                if (!$tenant) {
-                    throw new CredenciaisInvalidasException();
-                }
-                return $tenant;
-            }
-
-            throw new MultiplosTenantsException(
-                'Este email está associado a múltiplas empresas. Selecione qual deseja acessar.',
-                $tenantsValidos
-            );
+            return [$tenant, $empresaIdLinha !== null ? (int) $empresaIdLinha : null];
         }
 
-        // Caso 4: Um único tenant encontrado
-        $lookup = $lookups[0];
-        $tenantDomain = $this->tenantRepository->buscarPorId($lookup->tenantId);
-        
-        if (!$tenantDomain) {
-            Log::critical('LoginUseCase::resolverTenant - Tenant não encontrado após lookup', [
-                'lookup_tenant_id' => $lookup->tenantId,
-                'email' => $email,
-            ]);
-            throw new CredenciaisInvalidasException();
-        }
-        
-        $tenant = $this->tenantRepository->buscarModeloPorId($lookup->tenantId);
-        if (!$tenant) {
-            throw new CredenciaisInvalidasException();
-        }
-        
-        Log::info('LoginUseCase::resolverTenant - Tenant resolvido', [
-            'tenant_id' => $lookup->tenantId,
-            'user_id' => $lookup->userId,
+        Log::info('LoginUseCase::resolverTenant - Múltiplas opções de acesso (tenants e/ou empresas)', [
             'email' => $email,
+            'linhas' => count($linhas),
         ]);
-        
-        return $tenant;
+
+        throw new MultiplosTenantsException(
+            'Este email está associado a múltiplas empresas. Selecione qual deseja acessar.',
+            $linhas
+        );
+    }
+
+    /**
+     * Uma linha por empresa vinculada ao usuário no tenant (mesmo tenant pode aparecer mais de uma vez).
+     * Só inclui linha após validar senha no tenant (evita vazar dados sem autenticação).
+     *
+     * @param  array<int, \App\Domain\UsersLookup\Entities\UserLookup>  $lookups
+     * @return list<array{tenant_id: int, empresa_id: ?int, razao_social: string, cnpj: string, user_id: int}>
+     */
+    private function coletarLinhasSelecaoLogin(string $email, string $password, array $lookups): array
+    {
+        $linhas = [];
+
+        foreach ($lookups as $lookup) {
+            try {
+                $tenantDomain = $this->tenantRepository->buscarPorId($lookup->tenantId);
+                if (! $tenantDomain) {
+                    Log::warning('LoginUseCase::coletarLinhasSelecaoLogin - Lookup aponta para tenant inexistente', [
+                        'lookup_id' => $lookup->id,
+                        'tenant_id' => $lookup->tenantId,
+                    ]);
+
+                    continue;
+                }
+
+                if (! $this->validarSenhaNoTenant($tenantDomain, $email, $password)) {
+                    continue;
+                }
+
+                $empresaRows = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($lookup) {
+                    return DB::table('empresa_user')
+                        ->join('empresas', 'empresas.id', '=', 'empresa_user.empresa_id')
+                        ->where('empresa_user.user_id', $lookup->userId)
+                        ->orderBy('empresas.id')
+                        ->get([
+                            'empresas.id as empresa_id',
+                            'empresas.razao_social',
+                            'empresas.cnpj',
+                        ]);
+                });
+
+                if ($empresaRows->isNotEmpty()) {
+                    foreach ($empresaRows as $emp) {
+                        $linhas[] = [
+                            'tenant_id' => (int) $tenantDomain->id,
+                            'empresa_id' => (int) $emp->empresa_id,
+                            'razao_social' => (string) $emp->razao_social,
+                            'cnpj' => $this->formatarCnpjParaExibicaoLogin((string) ($emp->cnpj ?? '')),
+                            'user_id' => (int) $lookup->userId,
+                        ];
+                    }
+
+                    continue;
+                }
+
+                if ($lookup->empresaId !== null && $lookup->empresaId > 0) {
+                    $emp = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($lookup) {
+                        return Empresa::query()->find($lookup->empresaId);
+                    });
+                    if ($emp && $emp->razao_social) {
+                        $linhas[] = [
+                            'tenant_id' => (int) $tenantDomain->id,
+                            'empresa_id' => (int) $emp->id,
+                            'razao_social' => (string) $emp->razao_social,
+                            'cnpj' => $this->formatarCnpjParaExibicaoLogin((string) ($emp->cnpj ?? '')),
+                            'user_id' => (int) $lookup->userId,
+                        ];
+
+                        continue;
+                    }
+                }
+
+                $rotulo = $this->rotuloEmpresaParaSelecaoMultipla($tenantDomain, $lookup);
+                $linhas[] = [
+                    'tenant_id' => (int) $tenantDomain->id,
+                    'empresa_id' => null,
+                    'razao_social' => $rotulo['razao_social'],
+                    'cnpj' => $rotulo['cnpj'],
+                    'user_id' => (int) $lookup->userId,
+                ];
+            } catch (\Exception $e) {
+                Log::error('LoginUseCase::coletarLinhasSelecaoLogin - Erro ao montar linhas', [
+                    'tenant_id' => $lookup->tenantId,
+                    'email' => $email,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return $linhas;
     }
 
     /**
@@ -394,12 +422,97 @@ class LoginUseCase
     }
 
     /**
+     * Na seleção de múltiplos tenants, cada linha deve refletir a empresa do vínculo
+     * (users_lookup → empresas no DB do tenant), não só o CNPJ/razão do cadastro do tenant,
+     * que pode ser outra empresa do mesmo ambiente.
+     *
+     * @param  \App\Domain\UsersLookup\Entities\UserLookup  $lookup
+     * @return array{razao_social: string, cnpj: string}
+     */
+    private function rotuloEmpresaParaSelecaoMultipla(
+        \App\Domain\Tenant\Entities\Tenant $tenantDomain,
+        \App\Domain\UsersLookup\Entities\UserLookup $lookup
+    ): array {
+        $razaoFallback = $tenantDomain->razaoSocial;
+        $cnpjFallback = (string) ($tenantDomain->cnpj ?? '');
+
+        try {
+            $info = $this->adminTenancyRunner->runForTenant($tenantDomain, function () use ($lookup) {
+                if ($lookup->empresaId !== null && $lookup->empresaId > 0) {
+                    $emp = Empresa::query()->find($lookup->empresaId);
+                    if ($emp && $emp->razao_social) {
+                        return ['razao' => (string) $emp->razao_social, 'cnpj' => (string) ($emp->cnpj ?? '')];
+                    }
+                }
+                $cnpjLimpo = preg_replace('/\D/', '', $lookup->cnpj) ?? '';
+                if (strlen($cnpjLimpo) === 14) {
+                    $emp = Empresa::query()->where('cnpj', $cnpjLimpo)->first();
+                    if ($emp && $emp->razao_social) {
+                        return ['razao' => (string) $emp->razao_social, 'cnpj' => (string) ($emp->cnpj ?? $cnpjLimpo)];
+                    }
+                }
+
+                return null;
+            });
+
+            if (is_array($info) && ($info['razao'] ?? '') !== '') {
+                return [
+                    'razao_social' => $info['razao'],
+                    'cnpj' => $this->formatarCnpjParaExibicaoLogin((string) ($info['cnpj'] ?? $lookup->cnpj)),
+                ];
+            }
+        } catch (\Throwable $e) {
+            Log::warning('LoginUseCase::rotuloEmpresaParaSelecaoMultipla - usando dados do tenant', [
+                'tenant_id' => $tenantDomain->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return [
+            'razao_social' => $razaoFallback,
+            'cnpj' => $this->formatarCnpjParaExibicaoLogin($cnpjFallback !== '' ? $cnpjFallback : $lookup->cnpj),
+        ];
+    }
+
+    private function formatarCnpjParaExibicaoLogin(string $cnpj): string
+    {
+        $d = preg_replace('/\D/', '', $cnpj) ?? '';
+        if (strlen($d) !== 14) {
+            return $cnpj;
+        }
+
+        return sprintf(
+            '%s.%s.%s/%s-%s',
+            substr($d, 0, 2),
+            substr($d, 2, 3),
+            substr($d, 5, 3),
+            substr($d, 8, 4),
+            substr($d, 12, 2)
+        );
+    }
+
+    /**
      * 🛡️ CAMADA 3: Resolver Empresa Ativa
      *
      * Busca e valida a empresa ativa do usuário, garantindo consistência com o tenant
      */
-    private function resolverEmpresaAtiva($user, Tenant $tenant)
+    private function resolverEmpresaAtiva($user, Tenant $tenant, ?int $empresaIdPreferida = null)
     {
+        if ($empresaIdPreferida !== null && $empresaIdPreferida > 0) {
+            try {
+                $this->userRepository->atualizarEmpresaAtiva($user->id, $empresaIdPreferida);
+
+                return $this->userRepository->buscarEmpresaAtiva($user->id);
+            } catch (DomainException $e) {
+                Log::warning('LoginUseCase::resolverEmpresaAtiva - empresa_id da seleção inválida ou sem acesso', [
+                    'user_id' => $user->id,
+                    'tenant_id' => $tenant->id,
+                    'empresa_id' => $empresaIdPreferida,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
         $empresaAtiva = $this->userRepository->buscarEmpresaAtiva($user->id);
 
         $lookupEmpresaId = UserLookup::query()
